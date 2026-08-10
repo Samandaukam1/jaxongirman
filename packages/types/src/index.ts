@@ -1,3 +1,5 @@
+import type { Json } from "./database.generated";
+
 /**
  * Account roles, ordered from least to most privileged. `super_admin` is a
  * strict superset of `admin`: everywhere an admin is allowed, a super admin is
@@ -73,6 +75,116 @@ export type PresentationStyle = "simple" | "good" | "great" | "super_professiona
 export type PresentationStatus = "draft" | "queued" | "generating" | "ready" | "failed" | "archived";
 export type JobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
 export type ElementType = "text" | "image" | "shape" | "icon" | "chart" | "table" | "line" | "group";
+
+/**
+ * Every presentation surface works in this single 16:9 coordinate space. The
+ * editor, the phone preview and the projector only scale this model to their
+ * own pixels; element positions never become device coordinates.
+ */
+export const SLIDE_MODEL_WIDTH = 1000;
+export const SLIDE_MODEL_HEIGHT = 562.5;
+
+export interface RenderableSlide {
+  id: string;
+  position: number;
+  title?: string | null;
+  layout?: string;
+  background: Json;
+}
+
+export interface RenderableSlideElement {
+  id: string;
+  slide_id: string;
+  type: ElementType;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  z_index: number;
+  opacity: number;
+  locked?: boolean;
+  style: Json;
+  content: Json;
+}
+
+export interface PresentationScreenDeck {
+  title: string;
+  slides: RenderableSlide[];
+  elements: RenderableSlideElement[];
+}
+
+/** Translation is expressed in model units after scale, relative to centre. */
+export interface PresentationViewport {
+  scale: number;
+  translateX: number;
+  translateY: number;
+}
+
+export const MIN_PRESENTATION_SCALE = 1;
+export const MAX_PRESENTATION_SCALE = 4;
+export const RESET_PRESENTATION_VIEWPORT: Readonly<PresentationViewport> = {
+  scale: 1,
+  translateX: 0,
+  translateY: 0,
+};
+
+function finite(value: unknown, fallback: number): number {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function between(value: number, minimum: number, maximum: number): number {
+  return Math.min(Math.max(value, minimum), maximum);
+}
+
+/** Keeps enough of a zoomed slide over the viewport that no blank edge appears. */
+export function clampPresentationViewport(viewport: Partial<PresentationViewport>): PresentationViewport {
+  const scale = between(finite(viewport.scale, 1), MIN_PRESENTATION_SCALE, MAX_PRESENTATION_SCALE);
+  const horizontal = (SLIDE_MODEL_WIDTH * (scale - 1)) / 2;
+  const vertical = (SLIDE_MODEL_HEIGHT * (scale - 1)) / 2;
+  return {
+    scale,
+    translateX: between(finite(viewport.translateX, 0), -horizontal, horizontal),
+    translateY: between(finite(viewport.translateY, 0), -vertical, vertical),
+  };
+}
+
+/**
+ * Pinches around the fingers rather than the middle of the slide. Focal values
+ * are model-space coordinates relative to the slide centre. Supplying a moving
+ * current focal also makes a two-finger drag pan naturally while pinching.
+ */
+export function presentationViewportAfterPinch(
+  initial: PresentationViewport,
+  gestureScale: number,
+  startFocalX: number,
+  startFocalY: number,
+  currentFocalX = startFocalX,
+  currentFocalY = startFocalY,
+): PresentationViewport {
+  const start = clampPresentationViewport(initial);
+  const scale = between(start.scale * finite(gestureScale, 1), MIN_PRESENTATION_SCALE, MAX_PRESENTATION_SCALE);
+  const contentX = (startFocalX - start.translateX) / start.scale;
+  const contentY = (startFocalY - start.translateY) / start.scale;
+  return clampPresentationViewport({
+    scale,
+    translateX: currentFocalX - scale * contentX,
+    translateY: currentFocalY - scale * contentY,
+  });
+}
+
+export function presentationViewportAfterPan(
+  initial: PresentationViewport,
+  deltaX: number,
+  deltaY: number,
+): PresentationViewport {
+  return clampPresentationViewport({
+    ...initial,
+    translateX: initial.translateX + finite(deltaX, 0),
+    translateY: initial.translateY + finite(deltaY, 0),
+  });
+}
 
 export interface VisualDna {
   mood: string;

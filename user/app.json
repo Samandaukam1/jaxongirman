@@ -8,7 +8,10 @@
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "uz.jaxongirman.app"
+      "bundleIdentifier": "uz.jaxongirman.app",
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "Jaxongirman development serverga ulanish uchun mahalliy tarmoqqa kirishga muhtoj."
+      }
     },
     "android": {
       "package": "uz.jaxongirman.app",

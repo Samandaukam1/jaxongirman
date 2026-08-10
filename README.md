@@ -77,7 +77,7 @@ npm run lint
 npm run build:admin
 ```
 
-With local functions running in explicit mock mode, `npm run test:functions:local` creates a disposable authenticated account and verifies generation, AI editing, private PDF export, and credit settlement end to end. The account and its cascaded records are deleted afterward.
+With local functions running in explicit mock mode, `npm run test:functions:local` creates a disposable authenticated account and verifies generation, AI editing, private asynchronous PDF and editable PowerPoint export, authenticated download, and credit settlement end to end. The account, exported objects, and its cascaded records are deleted afterward.
 
 ## Production deployment outline
 

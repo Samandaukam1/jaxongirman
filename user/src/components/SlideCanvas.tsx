@@ -1,21 +1,27 @@
 /* eslint-disable react-hooks/refs -- PanResponder handlers only ever run from a
    touch, never during render. The ref is what lets a drag keep measuring from
    the position the finger started at while React re-renders every frame. */
-import type { Json, Tables } from "@jaxongirman/types";
-import { forwardRef, useMemo, useRef } from "react";
+import {
+  SLIDE_MODEL_HEIGHT,
+  SLIDE_MODEL_WIDTH,
+  type Json,
+  type RenderableSlide,
+  type RenderableSlideElement,
+} from "@jaxongirman/types";
+import { forwardRef, useMemo, useRef, useState } from "react";
 import { Image, PanResponder, StyleSheet, Text, View, type LayoutChangeEvent, type ViewStyle } from "react-native";
 
 import { ChartElement, IconElement, MediaPlaceholder, PlayBadge, ShapeElement } from "@/components/SlideElements";
 import { bag, decorationOf, effectOf, effectTextStyle, verticalAlignOf } from "@/lib/textStyle";
 import { colors } from "@/theme/tokens";
 
-type Slide = Tables<"slides">;
-type Element = Tables<"slide_elements">;
+type Slide = RenderableSlide;
+type Element = RenderableSlideElement;
 type JsonObject = { [key: string]: Json | undefined };
 
 /** The canvas is authored at this size; the parent scales it to fit. */
-export const MODEL_WIDTH = 1000;
-export const MODEL_HEIGHT = 562.5;
+export const MODEL_WIDTH = SLIDE_MODEL_WIDTH;
+export const MODEL_HEIGHT = SLIDE_MODEL_HEIGHT;
 
 /** How much of an element must stay on the slide when it is dragged off-edge. */
 const KEEP_VISIBLE = 24;
@@ -105,6 +111,10 @@ function ElementView(props: ElementViewProps) {
       ? { minHeight: element.height, justifyContent: verticalAlignOf(style) }
       : { height: element.height }),
   };
+  const imageUri = element.type === "image"
+    ? string(content.signedUrl) || string(content.url) || string(content.uri)
+    : "";
+  const [failedImage, setFailedImage] = useState<string | null>(null);
 
   let visual: React.ReactNode;
   if (element.type === "text") {
@@ -139,13 +149,12 @@ function ElementView(props: ElementViewProps) {
   } else if (element.type === "image") {
     // Frames and videos are image elements too — the kind only changes what is
     // drawn while the slot is empty and whether a play badge sits on top.
-    const uri = string(content.signedUrl) || string(content.url) || string(content.uri);
     const kind = string(content.kind) === "video" ? "video" : string(content.kind) === "frame" ? "frame" : "image";
     const cornerRadius = number(style.borderRadius, 0);
     visual = (
       <>
-        {uri
-          ? <Image source={{ uri }} resizeMode={(string(style.objectFit, "cover") as "cover" | "contain")} style={[StyleSheet.absoluteFill, { borderRadius: cornerRadius }]} />
+        {imageUri && failedImage !== imageUri && kind !== "video"
+          ? <Image onError={() => setFailedImage(imageUri)} source={{ uri: imageUri }} resizeMode={(string(style.objectFit, "cover") as "cover" | "contain")} style={[StyleSheet.absoluteFill, { borderRadius: cornerRadius }]} />
           : <MediaPlaceholder kind={kind} width={element.width} height={element.height} borderRadius={cornerRadius} />}
         {kind === "video" ? <PlayBadge width={element.width} height={element.height} /> : null}
       </>

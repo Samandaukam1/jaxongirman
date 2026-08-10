@@ -405,6 +405,12 @@ verify_jwt = false
 [functions.download-marketplace-file]
 verify_jwt = false
 
+# The projector is signed out by design, and on the newer publishable keys the
+# client sends no bearer token at all. The per-session screen capability is what
+# authorises this endpoint, checked in SQL before anything is read.
+[functions.presentation-screen-data]
+verify_jwt = false
+
 [functions.pay-marketplace]
 verify_jwt = false
 

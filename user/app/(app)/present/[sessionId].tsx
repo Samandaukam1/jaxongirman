@@ -1,27 +1,104 @@
-import type { Tables } from "@jaxongirman/types";
+import {
+  RESET_PRESENTATION_VIEWPORT,
+  clampPresentationViewport,
+  type Json,
+  type PresentationViewport,
+  type Tables,
+} from "@jaxongirman/types";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ChevronLeft, ChevronRight, Maximize, Minimize, PowerOff, RotateCcw } from "lucide-react-native";
-import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ChevronLeft, ChevronRight, PowerOff, RotateCcw } from "lucide-react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
+import { PresentationPreview, type PresentationPreviewHandle } from "@/components/PresentationPreview";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { ErrorState, InlineError } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
 import { colors, radius, shadow, spacing, typography } from "@/theme/tokens";
 
-type Session = Tables<"presentation_sessions">;
+type Session = Tables<"presentation_sessions"> & {
+  translate_x?: number;
+  translate_y?: number;
+  realtime_token?: string | null;
+};
+type Slide = Tables<"slides">;
+type Element = Tables<"slide_elements">;
 type Deck = { id: string; title: string; slide_count: number };
+type JsonObject = { [key: string]: Json | undefined };
+type ViewportMessage = {
+  scale: number;
+  translate_x: number;
+  translate_y: number;
+  slide: number;
+};
 
-/**
- * The phone as a remote.
- *
- * Nothing about the presentation lives here: every button calls
- * `presentation_command`, which re-checks that this account is the one that
- * claimed the session and then moves the single row the projector is watching.
- * The screen updates because the row changed, not because this device told it to.
- */
+const DECK_REFRESH_MS = 50 * 60 * 1000;
+
+function object(value: Json): JsonObject {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : {};
+}
+
+function viewportOf(session: Session): PresentationViewport {
+  return clampPresentationViewport({
+    scale: session.zoom,
+    translateX: session.translate_x ?? 0,
+    translateY: session.translate_y ?? 0,
+  });
+}
+
+function viewportMessage(value: unknown): ViewportMessage | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const row = value as Record<string, unknown>;
+  const scale = Number(row.scale);
+  const translateX = Number(row.translate_x);
+  const translateY = Number(row.translate_y);
+  const slide = Number(row.slide);
+  if (![scale, translateX, translateY, slide].every(Number.isFinite)) return null;
+  const safe = clampPresentationViewport({ scale, translateX, translateY });
+  return { scale: safe.scale, translate_x: safe.translateX, translate_y: safe.translateY, slide };
+}
+
+async function hydrateImages(rows: Element[]): Promise<Element[]> {
+  const requested = new Map<string, Set<string>>();
+  for (const element of rows) {
+    if (element.type !== "image") continue;
+    const content = object(element.content);
+    const bucket = typeof content.storageBucket === "string" ? content.storageBucket : null;
+    const path = typeof content.storagePath === "string" ? content.storagePath : null;
+    if (!bucket || !path) continue;
+    const paths = requested.get(bucket) ?? new Set<string>();
+    paths.add(path);
+    requested.set(bucket, paths);
+  }
+
+  const signed = new Map<string, string>();
+  await Promise.all([...requested.entries()].map(async ([bucket, paths]) => {
+    const { data, error } = await supabase.storage.from(bucket).createSignedUrls([...paths], 3600);
+    if (error) throw error;
+    for (const item of data ?? []) {
+      if (item.path && item.signedUrl) signed.set(`${bucket}:${item.path}`, item.signedUrl);
+    }
+  }));
+  for (const [bucket, paths] of requested) {
+    for (const path of paths) {
+      if (!signed.has(`${bucket}:${path}`)) throw new Error("Private slide image could not be signed");
+    }
+  }
+
+  return rows.map((element) => {
+    if (element.type !== "image") return element;
+    const content = object(element.content);
+    const bucket = typeof content.storageBucket === "string" ? content.storageBucket : null;
+    const path = typeof content.storagePath === "string" ? content.storagePath : null;
+    const signedUrl = bucket && path ? signed.get(`${bucket}:${path}`) : null;
+    return signedUrl ? { ...element, content: { ...content, signedUrl } } : element;
+  });
+}
+
+/** The phone renders and manipulates the same deck that the projector follows. */
 export default function RemoteScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ sessionId?: string }>();
@@ -29,9 +106,23 @@ export default function RemoteScreen() {
 
   const [session, setSession] = useState<Session | null>(null);
   const [decks, setDecks] = useState<Deck[]>([]);
+  const [slides, setSlides] = useState<Slide[]>([]);
+  const [elements, setElements] = useState<Element[]>([]);
+  const [viewport, setViewport] = useState<PresentationViewport>({ ...RESET_PRESENTATION_VIEWPORT });
   const [loading, setLoading] = useState(true);
+  const [deckLoading, setDeckLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deckError, setDeckError] = useState<string | null>(null);
   const [commandError, setCommandError] = useState<string | null>(null);
+  const [sessionConnected, setSessionConnected] = useState(false);
+  const [viewportConnected, setViewportConnected] = useState(false);
+  const sessionRef = useRef<Session | null>(null);
+  const viewportChannel = useRef<RealtimeChannel | null>(null);
+  const deckLoadSequence = useRef(0);
+  const previewRef = useRef<PresentationPreviewHandle>(null);
+  const connected = sessionConnected && (!session?.realtime_token || viewportConnected);
+
+  useEffect(() => { sessionRef.current = session; }, [session]);
 
   const load = useCallback(async () => {
     if (!sessionId) return;
@@ -43,7 +134,9 @@ export default function RemoteScreen() {
     if (sessionResult.error || !sessionResult.data) {
       setError(sessionResult.error ? asErrorMessage(sessionResult.error) : "Sessiya topilmadi.");
     } else {
-      setSession(sessionResult.data);
+      const next = sessionResult.data as Session;
+      setSession(next);
+      setViewport(viewportOf(next));
       setError(null);
     }
     setDecks((deckResult.data ?? []).map((row) => ({
@@ -54,20 +147,123 @@ export default function RemoteScreen() {
     setLoading(false);
   }, [sessionId]);
 
+  const loadDeck = useCallback(async (presentationId: string) => {
+    const sequence = ++deckLoadSequence.current;
+    setDeckLoading(true);
+    setDeckError(null);
+    try {
+      const [slideResult, elementResult] = await Promise.all([
+        supabase.from("slides").select("*").eq("presentation_id", presentationId).order("position"),
+        supabase.from("slide_elements").select("*").eq("presentation_id", presentationId).order("z_index"),
+      ]);
+      if (slideResult.error) throw slideResult.error;
+      if (elementResult.error) throw elementResult.error;
+      const hydrated = await hydrateImages(elementResult.data);
+      if (sequence !== deckLoadSequence.current) return;
+      setSlides(slideResult.data);
+      setElements(hydrated);
+    } catch (deckFailure) {
+      if (sequence !== deckLoadSequence.current) return;
+      console.error("presentation preview load failed", deckFailure);
+      setSlides([]);
+      setElements([]);
+      setDeckError("Slayd yuklanmadi.");
+    } finally {
+      if (sequence === deckLoadSequence.current) setDeckLoading(false);
+    }
+  }, []);
+
   useEffect(() => { void load(); }, [load]);
 
-  // The remote follows the same row the screen does, so two phones on one
-  // session — or a slide changed from elsewhere — stay in step.
+  useEffect(() => {
+    if (!session?.presentation_id) {
+      deckLoadSequence.current += 1;
+      setSlides([]);
+      setElements([]);
+      return;
+    }
+    setSlides([]);
+    setElements([]);
+    void loadDeck(session.presentation_id);
+  }, [loadDeck, session?.presentation_id]);
+
+  useEffect(() => {
+    const presentationId = session?.presentation_id;
+    if (!presentationId || session.status !== "active") return;
+    const timer = setInterval(() => void loadDeck(presentationId), DECK_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [loadDeck, session?.presentation_id, session?.status]);
+
+  // Navigation and final viewport snapshots use the session row as their single
+  // durable source of truth.
   useEffect(() => {
     if (!sessionId) return;
+    let subscribed = true;
+    setSessionConnected(false);
     const channel = supabase
-      .channel(`remote-${sessionId}`)
+      .channel(`remote-session-${sessionId}`)
       .on("postgres_changes",
         { event: "UPDATE", schema: "public", table: "presentation_sessions", filter: `id=eq.${sessionId}` },
-        (payload) => setSession(payload.new as Session))
-      .subscribe();
-    return () => { void supabase.removeChannel(channel); };
+        (payload) => {
+          const next = payload.new as Session;
+          setSession(next);
+          setViewport(viewportOf(next));
+        })
+      .subscribe((status) => {
+        if (subscribed) setSessionConnected(status === "SUBSCRIBED");
+      });
+    return () => {
+      subscribed = false;
+      void supabase.removeChannel(channel);
+    };
   }, [sessionId]);
+
+  // Gesture frames travel over an unguessable session topic, never through a DB
+  // write. The final frame is committed separately below.
+  useEffect(() => {
+    const token = session?.realtime_token;
+    if (!token) return;
+    let subscribed = true;
+    setViewportConnected(false);
+    const channel = supabase
+      .channel(`presentation-viewport:${token}`, { config: { broadcast: { self: false } } })
+      .on("broadcast", { event: "viewport" }, ({ payload }) => {
+        const message = viewportMessage(payload);
+        if (!message || message.slide !== sessionRef.current?.current_slide) return;
+        setViewport({ scale: message.scale, translateX: message.translate_x, translateY: message.translate_y });
+      })
+      .subscribe((status) => {
+        if (subscribed) setViewportConnected(status === "SUBSCRIBED");
+      });
+    viewportChannel.current = channel;
+    return () => {
+      subscribed = false;
+      if (viewportChannel.current === channel) viewportChannel.current = null;
+      void supabase.removeChannel(channel);
+    };
+  }, [session?.realtime_token]);
+
+  const currentSlide = useMemo(
+    () => slides.find((slide) => slide.position === session?.current_slide) ?? null,
+    [session?.current_slide, slides],
+  );
+  const currentElements = useMemo(
+    () => currentSlide ? elements.filter((element) => element.slide_id === currentSlide.id) : [],
+    [currentSlide, elements],
+  );
+
+  // Warm the adjacent slides while the current one is on screen.
+  useEffect(() => {
+    if (!session || !slides.length) return;
+    const nearby = new Set(slides
+      .filter((slide) => Math.abs(slide.position - session.current_slide) <= 1)
+      .map((slide) => slide.id));
+    for (const element of elements) {
+      if (element.type !== "image" || !nearby.has(element.slide_id)) continue;
+      const uri = object(element.content).signedUrl;
+      if (typeof uri === "string") void Image.prefetch(uri);
+    }
+  }, [elements, session, slides]);
 
   async function send(command: string, value?: number) {
     setCommandError(null);
@@ -78,18 +274,46 @@ export default function RemoteScreen() {
       p_value: value,
     });
     if (commandFailure) { setCommandError(asErrorMessage(commandFailure)); return; }
-    setSession(data as unknown as Session);
+    const next = data as unknown as Session;
+    setSession(next);
+    setViewport(viewportOf(next));
     if (command === "end") router.replace("/(app)/(tabs)/projects");
   }
 
   async function chooseDeck(deck: Deck) {
-    const { data, error: deckError } = await supabase.rpc("presentation_session_set_deck", {
+    const { data, error: deckFailure } = await supabase.rpc("presentation_session_set_deck", {
       p_session_id: sessionId,
       p_presentation_id: deck.id,
     });
-    if (deckError) setCommandError(asErrorMessage(deckError));
-    else setSession(data as unknown as Session);
+    if (deckFailure) setCommandError(asErrorMessage(deckFailure));
+    else {
+      const next = data as unknown as Session;
+      setSession(next);
+      setViewport(viewportOf(next));
+    }
   }
+
+  const changeViewport = useCallback((next: PresentationViewport, final: boolean) => {
+    const safe = clampPresentationViewport(next);
+    setViewport(safe);
+    const slide = sessionRef.current?.current_slide ?? 0;
+    void viewportChannel.current?.send({
+      type: "broadcast",
+      event: "viewport",
+      payload: { scale: safe.scale, translate_x: safe.translateX, translate_y: safe.translateY, slide },
+    });
+    if (!final) return;
+    void supabase.rpc("presentation_viewport_commit", {
+      p_session_id: sessionId,
+      p_scale: safe.scale,
+      p_translate_x: safe.translateX,
+      p_translate_y: safe.translateY,
+      p_slide: slide,
+    }).then(({ data, error: viewportError }) => {
+      if (viewportError) setCommandError(asErrorMessage(viewportError));
+      else if (data) setSession(data as unknown as Session);
+    });
+  }, [sessionId]);
 
   if (loading) {
     return (
@@ -115,12 +339,13 @@ export default function RemoteScreen() {
     <View style={styles.screen}>
       <ScreenHeader
         title="Taqdimot pulti"
-        subtitle={ended ? "Sessiya yakunlandi" : "Ekran ulangan"}
+        subtitle={ended ? "Sessiya yakunlandi" : connected ? "Ekran ulangan" : "Qayta ulanmoqda…"}
         variant="close"
         onLeave={() => router.replace("/(app)/(tabs)/projects")}
       />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {!connected ? <InlineError message="Ulanish uzildi. Qayta ulanmoqda..." /> : null}
         {session.presentation_id === null ? (
           <>
             <Text style={styles.sectionTitle}>Qaysi taqdimot ko‘rsatilsin?</Text>
@@ -131,56 +356,64 @@ export default function RemoteScreen() {
                   <Text style={styles.deckMeta}>{deck.slide_count} slayd</Text>
                 </Pressable>
               ))}
-              {decks.length === 0 ? (
-                <Text style={styles.hint}>Tayyor taqdimot topilmadi. Avval Loyihalar bo‘limida taqdimot yarating.</Text>
-              ) : null}
+              {decks.length === 0 ? <Text style={styles.hint}>Tayyor taqdimot topilmadi. Avval Loyihalar bo‘limida taqdimot yarating.</Text> : null}
             </View>
           </>
         ) : (
           <>
-            <View style={styles.stage}>
+            <View style={styles.stageHeader}>
               <Text style={styles.stageLabel}>Joriy slayd</Text>
-              <Text style={styles.stageValue}>
-                {session.slide_count > 0 ? `${session.current_slide + 1} / ${session.slide_count}` : "—"}
-              </Text>
-              <Text style={styles.stageZoom}>Masshtab {session.zoom}×</Text>
+              <Text style={styles.stageCount}>{session.slide_count > 0 ? `${session.current_slide + 1} / ${session.slide_count}` : "—"}</Text>
             </View>
+
+            {deckLoading ? (
+              <View style={styles.previewState}><ActivityIndicator color={colors.primary} size="large" /></View>
+            ) : deckError || !currentSlide ? (
+              <View style={styles.previewState}>
+                <ErrorState message="Slayd yuklanmadi." onRetry={() => {
+                  if (session.presentation_id) void loadDeck(session.presentation_id);
+                }} />
+              </View>
+            ) : (
+              <PresentationPreview
+                ref={previewRef}
+                slide={currentSlide}
+                elements={currentElements}
+                viewport={viewport}
+                disabled={ended}
+                onViewportChange={changeViewport}
+              />
+            )}
+
+            <Text style={styles.gestureHint}>Kattalashtirish uchun ikki barmoq bilan suring</Text>
 
             <View style={styles.navRow}>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Oldingi slayd"
-                disabled={ended}
+                disabled={ended || session.current_slide <= 0}
                 onPress={() => void send("previous")}
-                style={({ pressed }) => [styles.navButton, pressed && styles.pressed]}
+                style={({ pressed }) => [styles.navButton, (ended || session.current_slide <= 0) && styles.disabled, pressed && styles.pressed]}
               >
                 <ChevronLeft color={colors.primaryDeep} size={34} strokeWidth={2.4} />
+                <Text style={styles.navText}>Oldingi</Text>
               </Pressable>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Keyingi slayd"
-                disabled={ended}
+                disabled={ended || session.current_slide >= session.slide_count - 1}
                 onPress={() => void send("next")}
-                style={({ pressed }) => [styles.navButton, styles.navPrimary, pressed && styles.pressed]}
+                style={({ pressed }) => [styles.navButton, styles.navPrimary, (ended || session.current_slide >= session.slide_count - 1) && styles.disabled, pressed && styles.pressed]}
               >
                 <ChevronRight color={colors.onPrimary} size={34} strokeWidth={2.4} />
+                <Text style={[styles.navText, styles.navPrimaryText]}>Keyingi</Text>
               </Pressable>
             </View>
 
-            <View style={styles.zoomRow}>
-              <Pressable accessibilityLabel="Kichraytirish" disabled={ended} onPress={() => void send("zoom_out")} style={styles.zoomButton}>
-                <Minimize color={colors.primary} size={18} strokeWidth={2} />
-                <Text style={styles.zoomText}>Kichraytirish</Text>
-              </Pressable>
-              <Pressable accessibilityLabel="Asliga qaytarish" disabled={ended} onPress={() => void send("reset_zoom")} style={styles.zoomButton}>
-                <RotateCcw color={colors.primary} size={18} strokeWidth={2} />
-                <Text style={styles.zoomText}>Asliga</Text>
-              </Pressable>
-              <Pressable accessibilityLabel="Kattalashtirish" disabled={ended} onPress={() => void send("zoom_in")} style={styles.zoomButton}>
-                <Maximize color={colors.primary} size={18} strokeWidth={2} />
-                <Text style={styles.zoomText}>Kattalashtirish</Text>
-              </Pressable>
-            </View>
+            <Pressable accessibilityLabel="Masshtabni asliga qaytarish" disabled={ended} onPress={() => previewRef.current?.reset()} style={styles.resetButton}>
+              <RotateCcw color={colors.primary} size={18} strokeWidth={2} />
+              <Text style={styles.resetText}>Reset</Text>
+            </Pressable>
 
             {commandError ? <InlineError message={commandError} /> : null}
 
@@ -207,31 +440,29 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.canvas },
   centered: { flex: 1, alignItems: "center", justifyContent: "center" },
   content: { paddingHorizontal: spacing.xl, paddingBottom: 60, gap: spacing.lg },
-
   sectionTitle: { ...typography.heading, color: colors.ink },
   deckList: { gap: spacing.sm },
   deckRow: { padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, gap: 2 },
   deckTitle: { ...typography.bodyMedium, color: colors.ink },
   deckMeta: { ...typography.caption, color: colors.inkSoft },
   hint: { ...typography.caption, color: colors.inkSoft, lineHeight: 18 },
-
-  stage: { alignItems: "center", padding: spacing.xl, borderRadius: radius.xl, backgroundColor: colors.primarySoft, gap: 4 },
-  stageLabel: { ...typography.caption, color: colors.primaryDeep },
-  stageValue: { fontFamily: "Manrope_700Bold", fontSize: 56, lineHeight: 64, color: colors.primaryDeep, letterSpacing: -2 },
-  stageZoom: { ...typography.caption, color: colors.inkMuted },
-
+  stageHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  stageLabel: { ...typography.bodyMedium, color: colors.ink },
+  stageCount: { ...typography.caption, color: colors.primary, backgroundColor: colors.primarySoft, paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: radius.pill },
+  previewState: { width: "100%", aspectRatio: 16 / 9, alignItems: "center", justifyContent: "center", borderRadius: radius.lg, backgroundColor: colors.surfaceMuted },
+  gestureHint: { ...typography.caption, color: colors.inkSoft, textAlign: "center", marginTop: -spacing.sm },
   navRow: { flexDirection: "row", gap: spacing.md },
   navButton: {
-    flex: 1, height: 120, borderRadius: radius.xl, alignItems: "center", justifyContent: "center",
+    flex: 1, minHeight: 92, borderRadius: radius.xl, alignItems: "center", justifyContent: "center", gap: 2,
     backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderStrong, ...shadow,
   },
   navPrimary: { backgroundColor: colors.primary, borderColor: colors.primary },
+  navText: { ...typography.caption, color: colors.primaryDeep },
+  navPrimaryText: { color: colors.onPrimary },
   pressed: { opacity: 0.9, transform: [{ scale: 0.98 }] },
-
-  zoomRow: { flexDirection: "row", gap: spacing.sm },
-  zoomButton: { flex: 1, alignItems: "center", justifyContent: "center", gap: 4, paddingVertical: spacing.lg, borderRadius: radius.md, backgroundColor: colors.surfaceMuted },
-  zoomText: { ...typography.caption, fontSize: 11, color: colors.primary },
-
+  disabled: { opacity: 0.35 },
+  resetButton: { alignSelf: "center", minWidth: 132, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderRadius: radius.pill, backgroundColor: colors.surfaceMuted },
+  resetText: { ...typography.bodyMedium, color: colors.primary, fontSize: 14 },
   endButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, height: 52, borderRadius: radius.md, borderWidth: 1, borderColor: colors.dangerSoft, backgroundColor: colors.surface },
   endText: { ...typography.bodyMedium, color: colors.danger, fontSize: 14 },
 });

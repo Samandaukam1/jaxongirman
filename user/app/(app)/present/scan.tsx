@@ -56,8 +56,11 @@ export default function ScanScreen() {
       claimed.current = false;
       return;
     }
-    const result = data as unknown as { session_id: string };
-    router.replace({ pathname: "/(app)/present/[sessionId]", params: { sessionId: result.session_id } });
+    const result = data as unknown as { session_id: string; realtime_token: string };
+    router.replace({
+      pathname: "/(app)/present/[sessionId]",
+      params: { sessionId: result.session_id, realtimeToken: result.realtime_token },
+    });
   }
 
   if (!permission) {

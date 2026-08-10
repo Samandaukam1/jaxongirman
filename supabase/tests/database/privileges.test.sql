@@ -37,7 +37,7 @@ select is(
    where n.nspname = 'public' and p.prosecdef
      and pg_get_function_result(p.oid) <> 'trigger'
      and has_function_privilege('anon', p.oid, 'EXECUTE')),
-  2, 'only the two pairing entry points are callable by a signed-out caller'
+  4, 'only pairing and screen-capability entry points are callable by a signed-out caller'
 );
 
 -- A definer function that does not pin its search_path can be redirected by a

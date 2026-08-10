@@ -1,15 +1,14 @@
 import type { Json, Tables } from "@jaxongirman/types";
 import * as Crypto from "expo-crypto";
 import * as ImagePicker from "expo-image-picker";
-import * as Sharing from "expo-sharing";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ArrowLeft, Check, Download, LoaderCircle, Redo2, Send, Sparkles, Undo2 } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
-import { captureRef } from "react-native-view-shot";
 
 import { AddElementBar, type AddKind } from "@/components/AddElementBar";
 import { ElementToolbar, type ToolPanel } from "@/components/ElementToolbar";
+import { ExportSheet } from "@/components/ExportSheet";
 import { IconChip } from "@/components/IconChip";
 import { SelectionOverlay } from "@/components/SelectionOverlay";
 import { MODEL_HEIGHT, MODEL_WIDTH, SlideCanvas } from "@/components/SlideCanvas";
@@ -82,13 +81,13 @@ export default function PresentationEditorScreen() {
   const [saving, setSaving] = useState(false);
   const [aiCommand, setAiCommand] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [past, setPast] = useState<Element[][]>([]);
   const [future, setFuture] = useState<Element[][]>([]);
   const dragStart = useRef<Element[] | null>(null);
   const textHeights = useRef<Record<string, number>>({});
   /** The text element whose box should track its rewrapped copy right now. */
   const fitTarget = useRef<string | null>(null);
-  const canvasRef = useRef<View>(null);
 
   const canvasWidth = Math.min(screenWidth - spacing.xl * 2, 760);
   const displayScale = canvasWidth / MODEL_WIDTH;
@@ -433,22 +432,6 @@ export default function PresentationEditorScreen() {
     }
   }
 
-  async function exportPresentation(format: "pdf" | "png") {
-    try {
-      if (format === "png") {
-        if (!canvasRef.current) throw new Error("Slayd hali tayyor emas");
-        const uri = await captureRef(canvasRef, { format: "png", quality: 1, result: "tmpfile" });
-        if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(uri, { mimeType: "image/png", dialogTitle: "Slaydni ulashish" });
-        return;
-      }
-      const { data, error } = await supabase.functions.invoke("export-presentation", { body: { presentationId, format: "pdf" } });
-      if (error) throw error;
-      Alert.alert("Eksport boshlandi", data?.message ?? "PDF serverda tayyorlanmoqda. Tayyor bo‘lganda yuklab olish mumkin bo‘ladi.");
-    } catch (error) {
-      Alert.alert("Eksport amalga oshmadi", await asFunctionErrorMessage(error));
-    }
-  }
-
   if (loading || !presentation || !currentSlide) return <View style={styles.loading}><ActivityIndicator color={colors.primary} size="large" /></View>;
 
   return (
@@ -456,7 +439,7 @@ export default function PresentationEditorScreen() {
       <View style={styles.header}>
         <Pressable onPress={() => router.replace("/(app)/(tabs)/projects")} style={styles.iconButton}><ArrowLeft color={colors.ink} size={icon.md} strokeWidth={icon.stroke} /></Pressable>
         <View style={styles.headerCenter}><Text numberOfLines={1} style={styles.title}>{presentation.title}</Text><View style={styles.saveRow}>{saving ? <LoaderCircle color={colors.inkSoft} size={12} strokeWidth={icon.stroke} /> : <Check color={colors.success} size={12} strokeWidth={icon.strokeBold} />}<Text style={styles.saved}>{saving ? "Saqlanmoqda" : "Saqlandi"}</Text></View></View>
-        <Pressable onPress={() => Alert.alert("Eksport", "Formatni tanlang", [{ text: "PDF", onPress: () => void exportPresentation("pdf") }, { text: "Joriy slayd — PNG", onPress: () => void exportPresentation("png") }, { text: "Bekor qilish", style: "cancel" }])} style={styles.iconButton}><Download color={colors.ink} size={icon.md} strokeWidth={icon.stroke} /></Pressable>
+        <Pressable onPress={() => setExportOpen(true)} style={styles.iconButton}><Download color={colors.ink} size={icon.md} strokeWidth={icon.stroke} /></Pressable>
       </View>
 
       <ScrollView contentContainerStyle={[styles.editorScroll, { paddingBottom: dockHeight + spacing.xl }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
@@ -465,7 +448,6 @@ export default function PresentationEditorScreen() {
           <View style={[styles.canvasFrame, StyleSheet.absoluteFill]}>
             <View style={{ width: MODEL_WIDTH, height: MODEL_HEIGHT, transform: [{ scale: displayScale }], transformOrigin: "top left" }}>
               <SlideCanvas
-                ref={canvasRef}
                 slide={currentSlide}
                 elements={currentElements}
                 displayScale={displayScale}
@@ -556,6 +538,12 @@ export default function PresentationEditorScreen() {
           <Pressable disabled={aiLoading || !aiCommand.trim()} onPress={() => void runAiEdit()} style={[styles.sendButton, (!aiCommand.trim() || aiLoading) && styles.disabled]}>{aiLoading ? <ActivityIndicator color={colors.onPrimary} size="small" /> : <Send color={colors.onPrimary} size={icon.sm} strokeWidth={icon.stroke} />}</Pressable>
         </View>
       </View>
+      <ExportSheet
+        visible={exportOpen}
+        presentationId={presentation.id}
+        presentationTitle={presentation.title}
+        onClose={() => setExportOpen(false)}
+      />
     </KeyboardAvoidingView>
   );
 }

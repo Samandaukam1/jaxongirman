@@ -1,3 +1,13 @@
+@font-face { font-family: "Manrope_400Regular"; src: url("/fonts/Manrope_400Regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Manrope_500Medium"; src: url("/fonts/Manrope_500Medium.ttf") format("truetype"); font-weight: 500; font-display: swap; }
+@font-face { font-family: "Manrope_600SemiBold"; src: url("/fonts/Manrope_600SemiBold.ttf") format("truetype"); font-weight: 600; font-display: swap; }
+@font-face { font-family: "Manrope_700Bold"; src: url("/fonts/Manrope_700Bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
+@font-face { font-family: "LeagueSpartan_700Bold"; src: url("/fonts/LeagueSpartan_700Bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
+@font-face { font-family: "LeagueSpartan_800ExtraBold"; src: url("/fonts/LeagueSpartan_800ExtraBold.ttf") format("truetype"); font-weight: 800; font-display: swap; }
+@font-face { font-family: "Arimo_400Regular"; src: url("/fonts/Arimo_400Regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Arimo_700Bold"; src: url("/fonts/Arimo_700Bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
+@font-face { font-family: "PinyonScript_400Regular"; src: url("/fonts/PinyonScript_400Regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+
 /*
  * The same palette the mobile app uses, expressed as custom properties.
  *
@@ -186,3 +196,115 @@ a { color: inherit; text-decoration: none; }
 .stage-eyebrow { color: var(--primary-bright); letter-spacing: 3px; font-size: 13px; margin: 0 0 20px; }
 .stage-slide { color: var(--on-primary); font-size: clamp(64px, 14vw, 180px); font-weight: 800; letter-spacing: -4px; margin: 0; line-height: 1; }
 .stage-hint { color: rgba(255,255,255,.5); margin: 28px 0 0; font-size: 15px; }
+
+/* ---------------------------------------------------- real presentation mode */
+body.presentation-live { overflow: hidden; background: #08070b; }
+body.presentation-live > .site-header,
+body.presentation-live > .site-footer { display: none; }
+
+.presentation-stage {
+  position: fixed; inset: 0; z-index: 100;
+  display: grid; place-items: center;
+  width: 100vw; height: 100dvh; overflow: hidden;
+  background: #08070b;
+}
+.presentation-slide-wrap {
+  position: relative; overflow: hidden;
+  width: min(100vw, 177.7778dvh); aspect-ratio: 16 / 9;
+  background: #000;
+  box-shadow: 0 32px 90px rgba(0,0,0,.55);
+}
+.presentation-fit,
+.presentation-translate,
+.presentation-zoom,
+.web-slide-canvas {
+  position: absolute; left: 0; top: 0;
+  width: 1000px; height: 562.5px;
+}
+.presentation-fit { transform-origin: top left; }
+.presentation-translate { transform-origin: center; }
+.presentation-zoom { transform-origin: center; will-change: transform; }
+.web-slide-canvas { overflow: hidden; transform: translateZ(0); }
+.slide-element { position: absolute; box-sizing: border-box; transform-origin: center; }
+
+.slide-media-placeholder {
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  color: #8C7BB4; background: #EFE9F9;
+  border: 3px dashed #C9BAE6; border-radius: inherit;
+}
+.slide-play {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  display: grid; place-items: center; width: 24%; aspect-ratio: 1; border-radius: 50%;
+  color: white; background: rgba(21,14,36,.62);
+}
+.slide-play svg { width: 46%; height: 46%; }
+.slide-chart-labels {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  display: flex; justify-content: space-between;
+  font-family: "Manrope_500Medium", Manrope, sans-serif; font-size: 11px; text-align: center;
+}
+.slide-chart-labels span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.slide-table { width: 100%; height: 100%; display: flex; flex-direction: column; border: 1px solid rgba(21,26,24,.18); }
+.slide-table-row { flex: 1; display: flex; border-bottom: 1px solid rgba(21,26,24,.12); }
+.slide-table-row span {
+  flex: 1; min-width: 0; padding: 4px; overflow: hidden;
+  color: #150E24; border-right: 1px solid rgba(21,26,24,.12);
+  font-family: "Manrope_400Regular", Manrope, sans-serif; font-size: 12px;
+}
+
+.presentation-waiting {
+  display: grid; justify-items: center; gap: 14px; max-width: 620px; padding: 48px;
+  color: white; text-align: center;
+}
+.presentation-waiting h1 { margin: 0; font-size: clamp(28px, 5vw, 52px); letter-spacing: -1.2px; }
+.presentation-waiting p { margin: 0; color: rgba(255,255,255,.62); font-size: 17px; line-height: 1.6; }
+.presentation-waiting svg { width: 36px; height: 36px; color: var(--primary-bright); }
+.presentation-spinner {
+  width: 42px; height: 42px; border-radius: 50%;
+  border: 4px solid rgba(255,255,255,.18); border-top-color: white;
+  animation: presentation-spin .8s linear infinite;
+}
+@keyframes presentation-spin { to { transform: rotate(360deg); } }
+
+.presentation-overlay,
+.presentation-fullscreen,
+.presentation-connection,
+.presentation-command-error {
+  position: fixed; z-index: 110;
+  color: white; background: rgba(10,8,14,.72); border: 1px solid rgba(255,255,255,.16);
+  box-shadow: 0 12px 30px rgba(0,0,0,.28); backdrop-filter: blur(14px);
+}
+.presentation-overlay {
+  left: 50%; bottom: max(24px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+  display: flex; align-items: center; gap: 14px; padding: 7px; border-radius: 999px;
+  font: 700 14px/1 "Manrope_700Bold", Manrope, sans-serif;
+}
+.presentation-overlay button,
+.presentation-fullscreen {
+  display: grid; place-items: center; padding: 0; color: inherit; cursor: pointer;
+}
+.presentation-overlay button { width: 38px; height: 38px; border: 0; border-radius: 50%; background: rgba(255,255,255,.11); }
+.presentation-overlay button:disabled { opacity: .28; cursor: default; }
+.presentation-overlay svg { width: 21px; height: 21px; }
+.presentation-fullscreen {
+  right: max(22px, env(safe-area-inset-right)); top: max(22px, env(safe-area-inset-top));
+  width: 48px; height: 48px; border-radius: 50%;
+}
+.presentation-fullscreen svg { width: 21px; height: 21px; }
+.presentation-connection,
+.presentation-command-error {
+  left: 50%; top: max(22px, env(safe-area-inset-top)); transform: translateX(-50%);
+  padding: 11px 18px; border-radius: 999px; font-size: 13px;
+}
+.presentation-command-error { top: auto; bottom: 86px; color: #FFD7DD; }
+
+@media (max-width: 640px) {
+  .presentation-fullscreen { right: 12px; top: 12px; }
+  .presentation-overlay { bottom: 12px; }
+  .presentation-connection { top: 12px; max-width: calc(100vw - 140px); text-align: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .presentation-spinner { animation-duration: 1.6s; }
+}

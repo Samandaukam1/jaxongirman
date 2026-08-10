@@ -374,12 +374,14 @@ export type Database = {
           created_at: string
           error_message: string | null
           expires_at: string | null
+          file_name: string | null
           format: Database["public"]["Enums"]["export_format"]
           id: string
           options: Json
           owner_id: string
           presentation_id: string
           progress: number
+          size_bytes: number | null
           started_at: string | null
           status: Database["public"]["Enums"]["job_status"]
           storage_path: string | null
@@ -390,12 +392,14 @@ export type Database = {
           created_at?: string
           error_message?: string | null
           expires_at?: string | null
+          file_name?: string | null
           format: Database["public"]["Enums"]["export_format"]
           id?: string
           options?: Json
           owner_id: string
           presentation_id: string
           progress?: number
+          size_bytes?: number | null
           started_at?: string | null
           status?: Database["public"]["Enums"]["job_status"]
           storage_path?: string | null
@@ -406,12 +410,14 @@ export type Database = {
           created_at?: string
           error_message?: string | null
           expires_at?: string | null
+          file_name?: string | null
           format?: Database["public"]["Enums"]["export_format"]
           id?: string
           options?: Json
           owner_id?: string
           presentation_id?: string
           progress?: number
+          size_bytes?: number | null
           started_at?: string | null
           status?: Database["public"]["Enums"]["job_status"]
           storage_path?: string | null
@@ -1553,6 +1559,7 @@ export type Database = {
         Row: {
           created_at: string
           current_slide: number
+          deck_revision: number
           ended_at: string | null
           expires_at: string
           host_user_id: string | null
@@ -1560,13 +1567,19 @@ export type Database = {
           last_command_at: string | null
           paired_at: string | null
           presentation_id: string | null
+          realtime_token: string
+          screen_token_hash: string
           slide_count: number
+          state_version: number
           status: Database["public"]["Enums"]["presentation_session_status"]
+          translate_x: number
+          translate_y: number
           zoom: number
         }
         Insert: {
           created_at?: string
           current_slide?: number
+          deck_revision?: number
           ended_at?: string | null
           expires_at?: string
           host_user_id?: string | null
@@ -1574,13 +1587,19 @@ export type Database = {
           last_command_at?: string | null
           paired_at?: string | null
           presentation_id?: string | null
+          realtime_token: string
+          screen_token_hash: string
           slide_count?: number
+          state_version?: number
           status?: Database["public"]["Enums"]["presentation_session_status"]
+          translate_x?: number
+          translate_y?: number
           zoom?: number
         }
         Update: {
           created_at?: string
           current_slide?: number
+          deck_revision?: number
           ended_at?: string | null
           expires_at?: string
           host_user_id?: string | null
@@ -1588,8 +1607,13 @@ export type Database = {
           last_command_at?: string | null
           paired_at?: string | null
           presentation_id?: string | null
+          realtime_token?: string
+          screen_token_hash?: string
           slide_count?: number
+          state_version?: number
           status?: Database["public"]["Enums"]["presentation_session_status"]
+          translate_x?: number
+          translate_y?: number
           zoom?: number
         }
         Relationships: [
@@ -3508,11 +3532,12 @@ export type Database = {
         Args: { p_source_name: string; p_title: string }
         Returns: string
       }
-      presentation_command: {
+      presentation_apply_command: {
         Args: { p_command: string; p_session_id: string; p_value?: number }
         Returns: {
           created_at: string
           current_slide: number
+          deck_revision: number
           ended_at: string | null
           expires_at: string
           host_user_id: string | null
@@ -3520,8 +3545,42 @@ export type Database = {
           last_command_at: string | null
           paired_at: string | null
           presentation_id: string | null
+          realtime_token: string
+          screen_token_hash: string
           slide_count: number
+          state_version: number
           status: Database["public"]["Enums"]["presentation_session_status"]
+          translate_x: number
+          translate_y: number
+          zoom: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "presentation_sessions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      presentation_command: {
+        Args: { p_command: string; p_session_id: string; p_value?: number }
+        Returns: {
+          created_at: string
+          current_slide: number
+          deck_revision: number
+          ended_at: string | null
+          expires_at: string
+          host_user_id: string | null
+          id: string
+          last_command_at: string | null
+          paired_at: string | null
+          presentation_id: string | null
+          realtime_token: string
+          screen_token_hash: string
+          slide_count: number
+          state_version: number
+          status: Database["public"]["Enums"]["presentation_session_status"]
+          translate_x: number
+          translate_y: number
           zoom: number
         }
         SetofOptions: {
@@ -3540,12 +3599,26 @@ export type Database = {
         Args: { p_current_token: string; p_session_id: string }
         Returns: Json
       }
+      presentation_screen_command: {
+        Args: {
+          p_command: string
+          p_screen_token: string
+          p_session_id: string
+          p_value?: number
+        }
+        Returns: Json
+      }
+      presentation_screen_snapshot: {
+        Args: { p_screen_token: string; p_session_id: string }
+        Returns: Json
+      }
       presentation_session_open: { Args: never; Returns: Json }
       presentation_session_set_deck: {
         Args: { p_presentation_id: string; p_session_id: string }
         Returns: {
           created_at: string
           current_slide: number
+          deck_revision: number
           ended_at: string | null
           expires_at: string
           host_user_id: string | null
@@ -3553,8 +3626,48 @@ export type Database = {
           last_command_at: string | null
           paired_at: string | null
           presentation_id: string | null
+          realtime_token: string
+          screen_token_hash: string
           slide_count: number
+          state_version: number
           status: Database["public"]["Enums"]["presentation_session_status"]
+          translate_x: number
+          translate_y: number
+          zoom: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "presentation_sessions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      presentation_viewport_commit: {
+        Args: {
+          p_scale: number
+          p_session_id: string
+          p_slide?: number
+          p_translate_x: number
+          p_translate_y: number
+        }
+        Returns: {
+          created_at: string
+          current_slide: number
+          deck_revision: number
+          ended_at: string | null
+          expires_at: string
+          host_user_id: string | null
+          id: string
+          last_command_at: string | null
+          paired_at: string | null
+          presentation_id: string | null
+          realtime_token: string
+          screen_token_hash: string
+          slide_count: number
+          state_version: number
+          status: Database["public"]["Enums"]["presentation_session_status"]
+          translate_x: number
+          translate_y: number
           zoom: number
         }
         SetofOptions: {
@@ -4076,4 +4189,3 @@ export const Constants = {
     },
   },
 } as const
-

@@ -26,7 +26,7 @@ flowchart LR
 
 ## Application surfaces
 
-The mobile flow is email/password auth → recent presentations and wallet → topic/file create form → live generation steps → element editor → PDF/current-slide PNG export. The editor persists atomic operations and inverse history, while local state provides immediate interaction.
+The mobile flow is email/password auth → recent presentations and wallet → topic/file create form → live generation steps → element editor → asynchronous PDF or editable PowerPoint export. Export jobs report progress, write to private Storage, and are downloaded through short-lived authenticated URLs. The editor persists atomic operations and inverse history, while local state provides immediate interaction.
 
 The admin flow is email/password auth → server role check → operational dashboard. It exposes user credit/status controls, presentation diagnostics, AI usage/cost, style/package/operation pricing, runtime settings and audit history.
 
