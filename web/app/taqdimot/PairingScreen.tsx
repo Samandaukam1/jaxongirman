@@ -47,7 +47,14 @@ export function PairingScreen() {
     void (async () => {
       const { data, error: openError } = await supabase.rpc("presentation_session_open");
       if (!active) return;
-      if (openError) { setError(openError.message); return; }
+      if (openError) {
+        // The visitor is shown something they can act on; the transport's own
+        // wording ("Expected 3 parts in JWT") describes a misconfiguration on
+        // our side and means nothing to the person standing at the projector.
+        console.error("presentation_session_open failed", openError);
+        setError("Sessiya ochilmadi. Sahifani yangilang — muammo takrorlansa, biroz kutib qayta urinib ko‘ring.");
+        return;
+      }
       const payload = data as unknown as { session_id: string; token: string };
       setSessionId(payload.session_id);
       await drawToken(payload.token);
