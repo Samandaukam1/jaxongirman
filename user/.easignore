@@ -1,0 +1,37 @@
+# Dependencies / cache
+node_modules
+.expo
+.expo-shared
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Native build outputs
+ios/build
+android/build
+android/.gradle
+
+# OS / editor
+.DS_Store
+.vscode
+.idea
+
+# Git
+.git
+.gitignore
+
+# Env files
+.env
+.env.*
+!.env.example
+
+# Parent / system folders should never be included
+.Trash
+**/.Trash
+Library
+**/Library
+
+# Temporary files
+tmp
+temp
+*.log

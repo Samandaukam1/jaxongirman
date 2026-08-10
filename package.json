@@ -1,0 +1,40 @@
+{
+  "name": "jaxongirman-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Jaxongirman mobile, admin and Supabase production system",
+  "workspaces": [
+    "user",
+    "admin",
+    "web",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:mobile": "npm run start --workspace=@jaxongirman/user",
+    "dev:admin": "npm run dev --workspace=@jaxongirman/admin",
+    "build:admin": "npm run build --workspace=@jaxongirman/admin",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "supabase:status": "supabase status",
+    "supabase:db:lint": "supabase db lint --local",
+    "supabase:types": "supabase gen types typescript --local --schema public > packages/types/src/database.generated.ts",
+    "test:db": "supabase test db",
+    "test:functions:local": "node supabase/tests/function-smoke.mjs",
+    "test:templates": "node supabase/tests/template-engine.test.mjs",
+    "templates:build": "node supabase/scripts/build-template-seed.mjs",
+    "verify": "npm run typecheck && npm run lint && npm run test:templates && npm run build:admin && npm run build:web",
+    "test:survey": "node supabase/tests/survey-smoke.mjs",
+    "test:marketplace": "node supabase/tests/marketplace-smoke.mjs",
+    "test:pptx": "node supabase/tests/pptx-import-smoke.mjs",
+    "dev:web": "npm run dev --workspace=@jaxongirman/web",
+    "build:web": "npm run build --workspace=@jaxongirman/web"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "supabase": "^2.111.0"
+  }
+}

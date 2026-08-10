@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "Jaxongirman",
+    "slug": "jaxongirman",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "jaxongirman",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "uz.jaxongirman.app"
+    },
+    "android": {
+      "package": "uz.jaxongirman.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#F8F9FB"
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-document-picker",
+        {
+          "iCloudContainerEnvironment": "Production"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Prezentatsiyadagi rasmlarni almashtirish uchun galereyaga kirish kerak."
+        }
+      ],
+      "expo-status-bar"
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "8b8d05c9-d62f-4acd-9598-16ef588710e5"
+      }
+    },
+    "icon": "./assets/icon.png",
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}

@@ -1,0 +1,397 @@
+import type { MarketplaceQuote } from "@jaxongirman/types";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { BookOpenText, CheckCircle2, Flag, Heart, Star, Store } from "lucide-react-native";
+import { useCallback, useEffect, useState } from "react";
+import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+
+import { PrimaryButton } from "@/components/PrimaryButton";
+import { ScreenHeader } from "@/components/ScreenHeader";
+import { ErrorState, InlineError, SkeletonCard } from "@/components/StateBlocks";
+import { formatShortDateTime } from "@/lib/datetime";
+import { asErrorMessage } from "@/lib/format";
+import { signPaths, toggleFavorite } from "@/lib/marketplace";
+import { formatSom } from "@/lib/money";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/providers/AuthProvider";
+import { colors, icon, radius, shadow, spacing, typography } from "@/theme/tokens";
+
+type Detail = {
+  product: {
+    id: string; title: string; description: string; status: string;
+    material_type: string; material_label: string | null; supports_editor_import: boolean;
+    base_price: number; currency: string; cover_path: string | null;
+    content_units: number | null; file_format: string | null; has_study_guide: boolean;
+    sales_count: number; rating: number | null; rating_count: number;
+    created_at: string; updated_at: string; is_own: boolean;
+  };
+  seller: { id: string; name: string; username: string | null; avatar_url: string | null; product_count: number } | null;
+  previews: { path: string; mime_type: string }[];
+  tags: { slug: string; label: string }[];
+  reviews: { id: string; rating: number; body: string; created_at: string; author: string }[];
+  quote: MarketplaceQuote;
+  owned: boolean;
+  is_favorite: boolean;
+};
+
+const REPORT_REASONS = [
+  { code: "copyright", label: "Mualliflik huquqi" },
+  { code: "plagiarism", label: "Plagiat" },
+  { code: "inappropriate", label: "Nomaqbul kontent" },
+  { code: "fraud", label: "Aldov" },
+  { code: "other", label: "Boshqa" },
+] as const;
+
+/**
+ * One listing.
+ *
+ * The payable total comes from the server's own quote, never from arithmetic
+ * done here — the platform's fee is configuration an admin can change while
+ * this screen is open.
+ */
+export default function ProductDetailScreen() {
+  const router = useRouter();
+  const { user } = useAuth();
+  const params = useLocalSearchParams<{ id?: string }>();
+  const productId = typeof params.id === "string" ? params.id : "";
+
+  const [detail, setDetail] = useState<Detail | null>(null);
+  const [images, setImages] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportReason, setReportReason] = useState<string>("copyright");
+  const [reportDetail, setReportDetail] = useState("");
+
+  const load = useCallback(async () => {
+    if (!productId) return;
+    setLoading(true);
+    const { data, error: requestError } = await supabase.rpc("marketplace_product_detail", { p_product_id: productId });
+    if (requestError) {
+      setError(asErrorMessage(requestError));
+    } else {
+      const next = data as unknown as Detail;
+      setDetail(next);
+      setError(null);
+      const paths = [next.product.cover_path, ...next.previews.map((preview) => preview.path)]
+        .filter((path): path is string => Boolean(path));
+      if (paths.length > 0) setImages(await signPaths("marketplace-previews", paths));
+    }
+    setLoading(false);
+  }, [productId]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  async function onFavorite() {
+    if (!user || !detail) return;
+    const next = !detail.is_favorite;
+    setDetail({ ...detail, is_favorite: next });
+    try {
+      await toggleFavorite(productId, user.id, next);
+    } catch {
+      setDetail({ ...detail, is_favorite: !next });
+    }
+  }
+
+  async function buy() {
+    if (!detail) return;
+    setBusy(true);
+    setActionError(null);
+    const { data, error: checkoutError } = await supabase.rpc("marketplace_create_checkout", {
+      p_product_id: productId,
+      // One key per press, so a double tap is one attempt rather than two.
+      p_idempotency_key: `${productId}:${Date.now()}`,
+    });
+    setBusy(false);
+    if (checkoutError) { setActionError(asErrorMessage(checkoutError)); return; }
+    const result = data as unknown as { transaction_id: string };
+    router.push({ pathname: "/(app)/marketplace/checkout", params: { transactionId: result.transaction_id } });
+  }
+
+  async function submitReport() {
+    if (!user) return;
+    setBusy(true);
+    const { error: reportError } = await supabase.from("marketplace_reports").insert({
+      product_id: productId,
+      reporter_id: user.id,
+      reason: reportReason as "copyright",
+      detail: reportDetail.trim(),
+    });
+    setBusy(false);
+    setReportOpen(false);
+    if (reportError) {
+      Alert.alert("Yuborilmadi", reportError.code === "23505" ? "Siz bu mahsulot haqida allaqachon shikoyat qilgansiz." : asErrorMessage(reportError));
+    } else {
+      setReportDetail("");
+      Alert.alert("Yuborildi", "Shikoyatingiz moderatsiyaga tushdi. Rahmat.");
+    }
+  }
+
+  if (loading) {
+    return (
+      <View style={styles.screen}>
+        <ScreenHeader title="Mahsulot" />
+        <View style={styles.content}><SkeletonCard lines={3} /><SkeletonCard lines={3} /></View>
+      </View>
+    );
+  }
+
+  if (error || !detail) {
+    return (
+      <View style={styles.screen}>
+        <ScreenHeader title="Mahsulot" />
+        <View style={styles.content}><ErrorState message={error ?? "Mahsulot topilmadi"} onRetry={() => void load()} /></View>
+      </View>
+    );
+  }
+
+  const { product, seller, quote } = detail;
+  const cover = product.cover_path ? images[product.cover_path] : undefined;
+
+  return (
+    <View style={styles.screen}>
+      <ScreenHeader
+        title={product.material_label ?? "Mahsulot"}
+        action={
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={detail.is_favorite ? "Sevimlilardan olib tashlash" : "Sevimlilarga qo‘shish"}
+            onPress={() => void onFavorite()}
+            style={styles.headerAction}
+          >
+            <Heart
+              color={detail.is_favorite ? colors.danger : colors.ink}
+              fill={detail.is_favorite ? colors.danger : "transparent"}
+              size={icon.sm}
+              strokeWidth={2}
+            />
+          </Pressable>
+        }
+      />
+
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.coverFrame}>
+          {cover ? (
+            <Image source={{ uri: cover }} style={styles.cover} resizeMode="cover" />
+          ) : (
+            <View style={styles.coverFallback}><Store color={colors.borderStrong} size={40} strokeWidth={1.6} /></View>
+          )}
+        </View>
+
+        {detail.previews.length > 0 ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.previewStrip}>
+            {detail.previews.map((preview) => (
+              <Image key={preview.path} source={{ uri: images[preview.path] }} style={styles.previewImage} resizeMode="cover" />
+            ))}
+          </ScrollView>
+        ) : null}
+
+        <Text style={styles.title}>{product.title}</Text>
+
+        {seller ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push({ pathname: "/(app)/(tabs)/marketplace" })}
+            style={styles.sellerRow}
+          >
+            <Text style={styles.sellerName}>{seller.name}</Text>
+            <Text style={styles.sellerMeta}>· {seller.product_count} ta material</Text>
+          </Pressable>
+        ) : null}
+
+        <View style={styles.statRow}>
+          {product.rating !== null ? (
+            <View style={styles.stat}>
+              <Star color={colors.warning} fill={colors.warning} size={14} strokeWidth={2} />
+              <Text style={styles.statValue}>{product.rating.toFixed(1)}</Text>
+              <Text style={styles.statLabel}>({product.rating_count})</Text>
+            </View>
+          ) : null}
+          <View style={styles.stat}><Text style={styles.statValue}>{product.sales_count}</Text><Text style={styles.statLabel}>sotilgan</Text></View>
+          {product.content_units ? (
+            <View style={styles.stat}><Text style={styles.statValue}>{product.content_units}</Text><Text style={styles.statLabel}>bet/slayd</Text></View>
+          ) : null}
+          {product.file_format ? (
+            <View style={styles.stat}><Text style={styles.statValue}>{product.file_format.toUpperCase()}</Text></View>
+          ) : null}
+        </View>
+
+        {product.has_study_guide ? (
+          <View style={styles.guideCard}>
+            <BookOpenText color={colors.primary} size={18} strokeWidth={2} />
+            <Text style={styles.guideText}>
+              Qo‘shimcha o‘quv materiali biriktirilgan. Xariddan so‘ng yuklab olish mumkin.
+            </Text>
+          </View>
+        ) : null}
+
+        {product.description ? <Text style={styles.description}>{product.description}</Text> : null}
+
+        {/* The breakdown is the server's, shown in full so the total is never a
+            surprise at the payment step. */}
+        <View style={styles.priceCard}>
+          <View style={styles.priceLine}>
+            <Text style={styles.priceLabel}>Mahsulot</Text>
+            <Text style={styles.priceValue}>{formatSom(quote.base_price)}</Text>
+          </View>
+          <View style={styles.priceLine}>
+            <Text style={styles.priceLabel}>Xizmat haqi ({quote.buyer_fee_rate}%)</Text>
+            <Text style={styles.priceValue}>{formatSom(quote.buyer_fee_amount)}</Text>
+          </View>
+          <View style={styles.priceDivider} />
+          <View style={styles.priceLine}>
+            <Text style={styles.priceTotalLabel}>Jami</Text>
+            <Text style={styles.priceTotal}>{formatSom(quote.buyer_total)}</Text>
+          </View>
+        </View>
+
+        {actionError ? <InlineError message={actionError} /> : null}
+
+        {detail.owned ? (
+          <View style={styles.ownedCard}>
+            <CheckCircle2 color={colors.success} size={20} strokeWidth={2} />
+            <Text style={styles.ownedText}>Bu mahsulot sizda bor.</Text>
+            <Pressable onPress={() => router.push("/(app)/marketplace/library")}>
+              <Text style={styles.ownedLink}>Kutubxonaga o‘tish</Text>
+            </Pressable>
+          </View>
+        ) : product.is_own ? (
+          <View style={styles.ownedCard}>
+            <Text style={styles.ownedText}>Bu sizning mahsulotingiz.</Text>
+          </View>
+        ) : (
+          <PrimaryButton label={`${formatSom(quote.buyer_total)} — sotib olish`} loading={busy} onPress={() => void buy()} />
+        )}
+
+        {detail.reviews.length > 0 ? (
+          <>
+            <Text style={styles.sectionTitle}>Sharhlar</Text>
+            <View style={styles.reviewList}>
+              {detail.reviews.map((review) => (
+                <View key={review.id} style={styles.review}>
+                  <View style={styles.reviewHead}>
+                    <Text style={styles.reviewAuthor}>{review.author}</Text>
+                    <View style={styles.reviewStars}>
+                      {Array.from({ length: 5 }, (_, index) => (
+                        <Star
+                          key={index}
+                          color={index < review.rating ? colors.warning : colors.border}
+                          fill={index < review.rating ? colors.warning : "transparent"}
+                          size={11}
+                          strokeWidth={2}
+                        />
+                      ))}
+                    </View>
+                  </View>
+                  {review.body ? <Text style={styles.reviewBody}>{review.body}</Text> : null}
+                  <Text style={styles.reviewDate}>{formatShortDateTime(review.created_at)}</Text>
+                </View>
+              ))}
+            </View>
+          </>
+        ) : null}
+
+        {!product.is_own ? (
+          <Pressable accessibilityRole="button" onPress={() => setReportOpen(true)} style={styles.reportButton}>
+            <Flag color={colors.inkSoft} size={14} strokeWidth={2} />
+            <Text style={styles.reportText}>Shikoyat qilish</Text>
+          </Pressable>
+        ) : null}
+      </ScrollView>
+
+      <Modal visible={reportOpen} transparent animationType="fade" onRequestClose={() => setReportOpen(false)}>
+        <Pressable accessibilityLabel="Yopish" onPress={() => setReportOpen(false)} style={styles.backdrop}>
+          <Pressable style={styles.sheet} onPress={() => undefined}>
+            <Text style={styles.sheetTitle}>Shikoyat qilish</Text>
+            <View style={styles.reasonRow}>
+              {REPORT_REASONS.map((reason) => (
+                <Pressable
+                  key={reason.code}
+                  onPress={() => setReportReason(reason.code)}
+                  style={[styles.chip, reportReason === reason.code && styles.chipActive]}
+                >
+                  <Text style={[styles.chipText, reportReason === reason.code && styles.chipTextActive]}>{reason.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <TextInput
+              value={reportDetail}
+              onChangeText={(value) => setReportDetail(value.slice(0, 1000))}
+              placeholder="Qisqacha tushuntiring (ixtiyoriy)"
+              placeholderTextColor={colors.inkSoft}
+              multiline
+              style={styles.reportInput}
+            />
+            <PrimaryButton label="Yuborish" loading={busy} onPress={() => void submitReport()} />
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.canvas },
+  content: { paddingHorizontal: spacing.xl, paddingBottom: 60, gap: spacing.md },
+  headerAction: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+
+  coverFrame: { aspectRatio: 16 / 10, borderRadius: radius.lg, overflow: "hidden", backgroundColor: colors.surfaceMuted },
+  cover: { width: "100%", height: "100%" },
+  coverFallback: { flex: 1, alignItems: "center", justifyContent: "center" },
+  previewStrip: { gap: spacing.sm, paddingVertical: 2 },
+  previewImage: { width: 96, height: 72, borderRadius: radius.md, backgroundColor: colors.surfaceMuted },
+
+  title: { ...typography.title, color: colors.ink, fontSize: 22 },
+  sellerRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  sellerName: { ...typography.bodyMedium, color: colors.primary, fontSize: 14 },
+  sellerMeta: { ...typography.caption, color: colors.inkSoft },
+
+  statRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.lg, paddingVertical: spacing.sm },
+  stat: { flexDirection: "row", alignItems: "center", gap: 4 },
+  statValue: { ...typography.bodyMedium, color: colors.ink, fontSize: 14 },
+  statLabel: { ...typography.caption, color: colors.inkSoft },
+
+  guideCard: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.primarySoft },
+  guideText: { ...typography.caption, color: colors.primaryDeep, flex: 1, lineHeight: 18 },
+
+  description: { ...typography.body, color: colors.inkMuted, lineHeight: 22 },
+
+  priceCard: { padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, gap: spacing.sm, ...shadow },
+  priceLine: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  priceLabel: { ...typography.caption, color: colors.inkMuted },
+  priceValue: { ...typography.caption, color: colors.ink },
+  priceDivider: { height: 1, backgroundColor: colors.border, marginVertical: 2 },
+  priceTotalLabel: { ...typography.bodyMedium, color: colors.ink },
+  priceTotal: { ...typography.heading, color: colors.primaryDeep },
+
+  ownedCard: { flexDirection: "row", alignItems: "center", gap: spacing.sm, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.successSoft, borderWidth: 1, borderColor: "#BEE7DA" },
+  ownedText: { ...typography.caption, color: colors.ink, flex: 1 },
+  ownedLink: { ...typography.caption, color: colors.primary, fontFamily: "Manrope_600SemiBold" },
+
+  sectionTitle: { ...typography.heading, color: colors.ink, marginTop: spacing.md },
+  reviewList: { gap: spacing.sm },
+  review: { padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, gap: 4 },
+  reviewHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  reviewAuthor: { ...typography.bodyMedium, color: colors.ink, fontSize: 13 },
+  reviewStars: { flexDirection: "row", gap: 1 },
+  reviewBody: { ...typography.caption, color: colors.inkMuted, lineHeight: 18 },
+  reviewDate: { ...typography.caption, fontSize: 10, color: colors.inkSoft },
+
+  reportButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: spacing.lg },
+  reportText: { ...typography.caption, color: colors.inkSoft },
+
+  backdrop: { flex: 1, backgroundColor: "rgba(21,14,36,.45)", alignItems: "center", justifyContent: "center", padding: spacing.xl },
+  sheet: { alignSelf: "stretch", gap: spacing.md, padding: spacing.xl, borderRadius: radius.lg, backgroundColor: colors.surface },
+  sheetTitle: { ...typography.heading, color: colors.ink },
+  reasonRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  chip: { paddingHorizontal: spacing.md, paddingVertical: 7, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipText: { ...typography.caption, color: colors.inkMuted },
+  chipTextActive: { color: colors.onPrimary },
+  reportInput: {
+    ...typography.body, color: colors.ink, minHeight: 90, textAlignVertical: "top",
+    backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border,
+    borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
+  },
+});

@@ -1,0 +1,13 @@
+node_modules/
+.DS_Store
+*.log
+.cache/
+.external-*-link
+.expo/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+supabase/.branches/
+supabase/.temp/
