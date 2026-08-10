@@ -11,3 +11,6 @@ coverage/
 !.env.example
 supabase/.branches/
 supabase/.temp/
+.vercel/
+.vercel
+.env*
