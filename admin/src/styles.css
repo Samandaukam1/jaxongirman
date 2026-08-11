@@ -255,3 +255,15 @@ td small { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; 
   color: #7A4A05; background: #FFF8EC; border: 1px solid #F0DCB4;
 }
 .warning-banner strong { display: block; margin-bottom: 4px; color: #5C3703; }
+
+/* Provider connection state. Says whether Payme is reachable and never what
+ * the credential is — the key lives in the server environment. */
+.provider-state {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 18px; border-radius: 14px; border: 1px solid var(--border);
+}
+.provider-state > div { display: flex; flex-direction: column; }
+.provider-state strong { font-size: 15px; }
+.provider-state span { font-size: 12px; color: var(--ink-muted); }
+.provider-state.is-ready { color: #0B7F5C; background: #F4FBF8; border-color: #C9E7DC; }
+.provider-state.is-pending { color: #7A4A05; background: #FFFBF2; border-color: #F0DCB4; }

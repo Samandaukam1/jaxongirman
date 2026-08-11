@@ -1,13 +1,15 @@
 import type { Tables } from "@jaxongirman/types";
+import { useRouter } from "expo-router";
 import { CreditCard, Info, PackageOpen } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
-import { Image, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import coinIcon from "../../../assets/coin/coin-icon.png";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { EmptyState, ErrorState, SkeletonCard } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
 import { formatCoins, formatNumber, formatPrice } from "@/lib/money";
+import { createJcoinOrder } from "@/lib/orders";
 import { supabase } from "@/lib/supabase";
 import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
 import { useAccount } from "@/providers/AccountProvider";
@@ -25,6 +27,7 @@ type PaymentConfig = { provider: string | null; configured: boolean };
  * be a lie about money, and the balance it implied would never arrive.
  */
 export default function BuyCoinsScreen() {
+  const router = useRouter();
   const { balance } = useAccount();
   const [packages, setPackages] = useState<Package[]>([]);
   const [payments, setPayments] = useState<PaymentConfig>({ provider: null, configured: false });
@@ -32,6 +35,24 @@ export default function BuyCoinsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [opening, setOpening] = useState<string | null>(null);
+
+  /**
+   * Opens an order and hands off to checkout. The package id is all that is
+   * sent: the price on the next screen is the one the server wrote.
+   */
+  async function buy(packageId: string) {
+    setOpening(packageId);
+    setError(null);
+    try {
+      const order = await createJcoinOrder(packageId);
+      router.push({ pathname: "/(app)/checkout/[orderId]", params: { orderId: order.order_id } });
+    } catch (failure) {
+      setError(asErrorMessage(failure));
+    } finally {
+      setOpening(null);
+    }
+  }
 
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true); else setLoading(true);
@@ -111,7 +132,15 @@ export default function BuyCoinsScreen() {
 
         <View style={styles.list}>
           {(policy.paymentsEnabled ? packages : []).map((item) => (
-            <View key={item.id} style={styles.package}>
+            <Pressable
+              key={item.id}
+              // Pressable only where a purchase is actually possible: an inert
+              // row that highlights on touch promises something it cannot do.
+              disabled={!payments.configured || opening !== null}
+              onPress={() => void buy(item.id)}
+              style={({ pressed }) => [styles.package, pressed && payments.configured && styles.packagePressed]}
+              accessibilityRole={payments.configured ? "button" : undefined}
+            >
               <Image source={coinIcon} resizeMode="contain" style={styles.packageCoin} />
               <View style={styles.packageCopy}>
                 <Text style={styles.packageLabel}>{item.label}</Text>
@@ -124,13 +153,17 @@ export default function BuyCoinsScreen() {
               <View style={styles.packagePrice}>
                 <Text style={styles.priceValue}>{formatPrice(Number(item.price_amount), item.currency)}</Text>
                 <View style={[styles.priceState, payments.configured ? styles.priceStateReady : styles.priceStateLocked]}>
-                  <CreditCard color={payments.configured ? colors.success : colors.inkSoft} size={13} strokeWidth={2} />
+                  {opening === item.id ? (
+                    <ActivityIndicator color={colors.success} size="small" />
+                  ) : (
+                    <CreditCard color={payments.configured ? colors.success : colors.inkSoft} size={13} strokeWidth={2} />
+                  )}
                   <Text style={[styles.priceStateText, payments.configured ? styles.priceStateTextReady : null]}>
-                    {payments.configured ? "To‘lovga tayyor" : "Kutilmoqda"}
+                    {opening === item.id ? "Ochilmoqda…" : payments.configured ? "Sotib olish" : "Kutilmoqda"}
                   </Text>
                 </View>
               </View>
-            </View>
+            </Pressable>
           ))}
         </View>
 
@@ -156,6 +189,7 @@ const styles = StyleSheet.create({
   noticeBody: { ...typography.caption, color: colors.inkMuted, lineHeight: 18 },
 
   list: { gap: spacing.md },
+  packagePressed: { transform: [{ scale: 0.985 }], opacity: 0.94 },
   package: {
     flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.lg,
     borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, ...shadow,
