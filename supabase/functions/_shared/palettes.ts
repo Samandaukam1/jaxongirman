@@ -1,7 +1,7 @@
 import type { PaletteFamily } from "./design-types.ts";
 
 /**
- * Six curated colour families. Every family fills the same role set, so any
+ * Seven curated colour families. Every family fills the same role set, so any
  * template renders correctly with any family — that is the whole contract.
  *
  * `contrast` is the deep block colour used for full-bleed accent slides;
@@ -132,6 +132,65 @@ export const paletteFamilies: readonly PaletteFamily[] = [
       textOnContrast: "#FFFFFF",
       border: "#E8DAC6",
       chartSeries: ["#C2410C", "#E7D3B8", "#2B1A10", "#D98A5B"],
+    },
+  },
+  {
+    code: "toza_osmon",
+    name: "Toza osmon",
+    sortOrder: 7,
+    tokens: {
+      // The sky itself is the background, so `background` is the only family
+      // value in the set that is a saturated colour rather than a near-white.
+      background: "#4FC3E8",
+      surface: "#FFFFFF",
+      // The lighter wash the ground uses for its vertical lift, and the tone the
+      // clouds are built from.
+      surfaceAlt: "#7FD6F0",
+      contrast: "#000000",
+      primary: "#000000",
+      // Warm paper, for the second sticky note. Never a random colour.
+      secondary: "#F6EFD9",
+      accent: "#E4F577",
+      textPrimary: "#000000",
+      // Body copy sits a shade off black, as the brief specifies.
+      textSecondary: "#161616",
+      textOnPrimary: "#FFFFFF",
+      // Lime is a light ground: type on it must stay black.
+      textOnAccent: "#000000",
+      textOnContrast: "#FFFFFF",
+      border: "#BFE9F7",
+      chartSeries: ["#E4F577", "#000000", "#FFFFFF", "#7FD6F0"],
+    },
+  },
+  {
+    code: "eski_klassika",
+    name: "Eski klassika",
+    sortOrder: 8,
+    tokens: {
+      // Royal cobalt on every slide, so `background` and `contrast` are the same
+      // colour: this family has no light ground to switch to.
+      background: "#1738C5",
+      surface: "#FFFFFF",
+      // One step up from the ground. The print texture is built from it, which is
+      // why it must stay within a few percent of the background.
+      surfaceAlt: "#2044CF",
+      contrast: "#1738C5",
+      primary: "#1230B4",
+      // The ghosted rows of the repeated-announcement composition. Readable as
+      // type, but clearly a step behind the solid row.
+      secondary: "#6F86DE",
+      // Lime is decoration only — a rule, a marker. Never a word.
+      accent: "#E4F577",
+      // Both typographic voices are white, the script as much as the display.
+      textPrimary: "#FFFFFF",
+      // Body copy: white cooled by a trace of the ground, so it sits behind the
+      // headline without ever reading as grey.
+      textSecondary: "#DDE4FF",
+      textOnPrimary: "#FFFFFF",
+      textOnAccent: "#000000",
+      textOnContrast: "#FFFFFF",
+      border: "#4A63D6",
+      chartSeries: ["#FFFFFF", "#E4F577", "#8FA3E8", "#DDE4FF"],
     },
   },
 ];

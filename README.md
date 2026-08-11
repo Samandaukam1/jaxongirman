@@ -103,7 +103,7 @@ Also available: `npm run test:marketplace`, `npm run test:pairing`,
    landing page instead of the app; the six-digit code on that page still works.
 7. Build the mobile apps with EAS and deploy the admin and web bundles to the chosen hosts.
 
-See [architecture](docs/architecture.md), [database](docs/database.md), [AI pipeline](docs/ai-pipeline.md), [data collection](docs/data-collection.md) and [deploying the web site](docs/deploy-web.md) for the implementation contracts.
+See [architecture](docs/architecture.md), [database](docs/database.md), [AI pipeline](docs/ai-pipeline.md), [data collection](docs/data-collection.md), [Toza osmon](docs/toza-osmon.md) and [deploying the web site](docs/deploy-web.md) for the implementation contracts.
 
 ## Products
 

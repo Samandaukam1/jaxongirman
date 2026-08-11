@@ -172,11 +172,44 @@ function manrope(weight: number): string {
   return "Manrope_400Regular";
 }
 
+/**
+ * Faces a template may ask for that are not bundled, and the closest thing that
+ * is.
+ *
+ * Toza osmon is designed around Metworkland and Helvetica Now Display, both
+ * licensed and neither redistributable, so the blueprint names them and this map
+ * stands in until the files are added. The substitutes are chosen for shape
+ * rather than convenience: League Spartan ExtraBold is the only bundled face
+ * heavy enough to carry an ultra-bold uppercase headline, and Pinyon Script is
+ * the only informal one — it is more calligraphic than a marker pen, so the
+ * accent reads as handwriting but not yet as the reference.
+ *
+ * Dropping the real files into `user/assets/fonts` and `web/public/fonts`, then
+ * removing the entry here, is the whole of what it takes to get the intended
+ * face. See docs/toza-osmon.md.
+ */
+const FONT_FALLBACKS: Record<string, string> = {
+  Metworkland: "PinyonScript_400Regular",
+  "HelveticaNowDisplay-Bold": "LeagueSpartan_800ExtraBold",
+  HelveticaNowDisplay: "Manrope_400Regular",
+};
+
+/** Faces that ship with the apps, so an unbundled name is never emitted blind. */
+const BUNDLED = new Set([
+  "Manrope_400Regular", "Manrope_500Medium", "Manrope_600SemiBold", "Manrope_700Bold",
+  "LeagueSpartan_700Bold", "LeagueSpartan_800ExtraBold",
+  "Arimo_400Regular", "Arimo_700Bold",
+  "PinyonScript_400Regular",
+]);
+
 function fontFamily(slot: TextSlot, blueprint: Blueprint): string {
   const role = slot.family ?? "body";
   const named = blueprint.fonts?.[role];
-  if (named) return named;
-  return manrope(slot.weight ?? 400);
+  if (!named) return manrope(slot.weight ?? 400);
+  if (BUNDLED.has(named)) return named;
+  // A licensed face the deployment may or may not have. Substitute rather than
+  // emit a name the renderer would silently fail to find.
+  return FONT_FALLBACKS[named] ?? manrope(slot.weight ?? 400);
 }
 
 function renderText(slot: TextSlot, frame: Frame, context: SlideContext, template: SlideTemplate, colors: (role: ColorRole) => string): ElementRow | null {

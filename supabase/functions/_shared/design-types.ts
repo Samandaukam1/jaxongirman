@@ -173,11 +173,12 @@ export type Blueprint = {
 
 /**
  * Which slides get a generated background image.
+ *  - `none`       no slide does; the design is typographic and pays for nothing
  *  - `cover`      only the opening slide
  *  - `contextual` the opening slide plus any slide the writer asked for one
  *  - `all`        every slide that carries a visual prompt
  */
-export type ImagePolicy = "cover" | "contextual" | "all";
+export type ImagePolicy = "none" | "cover" | "contextual" | "all";
 
 export type ArtDirection = {
   /** Fed verbatim into the image-generation prompt. */

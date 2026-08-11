@@ -325,6 +325,9 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
       // without one falls back to the palette ground, which several templates
       // treat as a deliberate composition rather than a missing asset.
       const policy = template.artDirection.imagePolicy ?? "all";
+      // A typographic design has nowhere to put a photograph, so it must not be
+      // charged for one either.
+      if (policy === "none") return [] as GeneratedImage[];
       const indexed = plan.slides.map((slide, index) => ({ slide, index }));
       const targets = policy === "cover"
         ? indexed.filter(({ index }) => index === 0)

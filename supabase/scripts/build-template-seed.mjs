@@ -12,7 +12,7 @@ import { buildEdgeModules, repoRoot } from "./build-edge.mjs";
  */
 
 const dir = buildEdgeModules();
-const { slideTemplates } = await import(`${dir}/templates/index.js`);
+const { slideTemplates, retiredTemplateCodes } = await import(`${dir}/templates/index.js`);
 const { paletteFamilies } = await import(`${dir}/palettes.js`);
 const { renderPreview } = await import(`${dir}/template-engine.js`);
 
@@ -27,6 +27,20 @@ const templateRows = slideTemplates.map((template) => {
   const preview = renderPreview(template);
   return `  (${quote(template.code)}, ${quote(template.style)}, ${quote(template.name)}, ${quote(template.tagline)}, ${template.sortOrder}, ${json(template.artDirection)}, ${json(preview)})`;
 }).join(",\n");
+
+/**
+ * Withdrawing a design is a deactivation, not a delete.
+ *
+ * The upsert above only ever marks what it emits active, so a design dropped
+ * from the TypeScript source would keep its old row and stay in the picker.
+ * Deactivating by name is what actually removes it. The row survives because
+ * presentations generated while it was live still reference the code, and a
+ * foreign key with history behind it is not something to break for tidiness.
+ */
+const retiredSql = retiredTemplateCodes.length === 0 ? "" : `
+update public.slide_templates set is_active = false, updated_at = now()
+  where code in (${retiredTemplateCodes.map(quote).join(", ")});
+`;
 
 /** The idempotent upserts, shared by the base migration and catalogue refreshes. */
 const catalogueSql = `insert into public.palette_families (code, name, sort_order, tokens) values
@@ -49,7 +63,7 @@ on conflict (code) do update set
   preview = excluded.preview,
   is_active = true,
   updated_at = now();
-`;
+${retiredSql}`;
 
 const sql = `-- GENERATED FILE — do not edit by hand.
 -- Source: supabase/functions/_shared/templates/*.ts and palettes.ts

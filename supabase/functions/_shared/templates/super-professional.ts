@@ -1,5 +1,6 @@
 import type { SlideTemplate } from "../design-types.ts";
 import { klassik } from "./klassik.ts";
+import { tozaOsmon } from "./toza-osmon.ts";
 import { bleed, chart, circle, defaultScale, img, rule, scaffold, shape, txt } from "./kit.ts";
 
 /**
@@ -420,4 +421,15 @@ kinematikQatlam.blueprint.layouts = {
   ...kinematikQatlam.blueprint.layouts,
 };
 
-export const superProfessionalTemplates = [futuristikLimon, kechaStudiyasi, editorialOyna, kinematikQatlam, klassik];
+/**
+ * Klassik and Toza osmon are the two Premium designs. The four that used to sit
+ * here — Futuristik limon, Kecha studiyasi, Editorial oyna, Kinematik qatlam —
+ * were withdrawn on request. Their blueprints stay in this file rather than
+ * being deleted outright: a deck generated while they were live still names its
+ * template, and `resolveTemplate()` needs somewhere to look before it falls back.
+ * They are simply no longer offered.
+ */
+export const superProfessionalTemplates = [klassik, tozaOsmon];
+
+/** Withdrawn from the picker, kept resolvable for decks already generated. */
+export const retiredSuperProfessionalTemplates = [futuristikLimon, kechaStudiyasi, editorialOyna, kinematikQatlam];
