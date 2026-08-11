@@ -242,19 +242,24 @@ function redactDigits(message: string): string {
 /**
  * The stand-in.
  *
- * Deterministic rather than random: the verification code is always `111111`,
- * so a test run is repeatable, and a card whose number ends in `0000` always
- * fails so the failure path can be exercised too.
+ * Deterministic rather than random: the verification code is always `111111`, so
+ * a test run is repeatable, and a card whose number ends in `0000` is always
+ * declined so the failure path can be exercised too.
+ *
+ * The decline is encoded in the token rather than held in a field, because a
+ * function instance does not survive between the request that creates the card
+ * and the request that charges it. Instance state made the failure path
+ * untestable — the very thing the sandbox exists for.
  */
 class SandboxProvider implements PaymentProvider {
   readonly name = "mock" as const;
   static readonly CODE = "111111";
-
-  private failing = new Set<string>();
+  /** Tokens carrying this marker are declined at charge time. */
+  private static readonly DECLINE = "decline";
 
   async createCard(pan: string, expiry: string): Promise<CardHandle> {
-    const token = `sandbox_${crypto.randomUUID()}`;
-    if (pan.endsWith("0000")) this.failing.add(token);
+    const marker = pan.endsWith("0000") ? `${SandboxProvider.DECLINE}_` : "";
+    const token = `sandbox_${marker}${crypto.randomUUID()}`;
     // Masked the way Payme masks, so the display path is exercised identically.
     return await Promise.resolve({
       token,
@@ -272,6 +277,8 @@ class SandboxProvider implements PaymentProvider {
     if (code !== SandboxProvider.CODE) {
       throw new PaymentFailed("invalid_code", "Tasdiqlash kodi noto‘g‘ri.");
     }
+    // Verification issues a new token, as Payme does — and carries the marker
+    // across, so a declining card still declines after being verified.
     return await Promise.resolve({ token, verified: true, maskedNumber: null, expiryHint: null });
   }
 
@@ -280,7 +287,7 @@ class SandboxProvider implements PaymentProvider {
   }
 
   async payReceipt(_receiptId: string, token: string): Promise<PayResult> {
-    if (this.failing.has(token)) {
+    if (token.includes(SandboxProvider.DECLINE)) {
       throw new PaymentFailed("insufficient_funds", "Kartada mablag‘ yetarli emas.");
     }
     return await Promise.resolve({ paid: true, providerCost: 0, maskedNumber: null });

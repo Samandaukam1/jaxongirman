@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(40);
+select plan(42);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -52,8 +52,14 @@ select ok(not has_table_privilege('authenticated', 'public.orders', 'INSERT'),
   'a client cannot create an order row directly');
 select ok(not has_table_privilege('authenticated', 'public.orders', 'UPDATE'),
   'nor edit one — so no amount and no status is theirs to write');
-select ok(has_table_privilege('authenticated', 'public.orders', 'SELECT'),
-  'reading their own is all a client gets');
+-- Reading is granted column by column rather than table-wide, so the provider's
+-- one-time card token is not merely filtered — it is not askable for.
+select ok(has_column_privilege('authenticated', 'public.orders', 'total_amount', 'SELECT'),
+  'a client can read what it owes');
+select ok(not has_column_privilege('authenticated', 'public.orders', 'provider_card_token', 'SELECT'),
+  'and can never read the provider token');
+select ok(not has_table_privilege('authenticated', 'public.orders', 'SELECT'),
+  'the grant is columns, not the table — a table-wide grant would make that list decorative');
 select ok(not has_function_privilege('authenticated', 'public.order_fulfil(uuid, text, text, integer)', 'EXECUTE'),
   'fulfilment is unreachable from a client: only the code holding the provider answer may grant');
 select ok(not has_function_privilege('authenticated', 'public.order_advance(uuid, public.order_status, text, text)', 'EXECUTE'),
