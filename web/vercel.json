@@ -1,0 +1,32 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "npm run build --workspace=@jaxongirman/web",
+  "installCommand": "npm install",
+  "headers": [
+    {
+      "comment": "iOS refuses the association unless it arrives as JSON. The file deliberately has no extension, so nothing can guess the type for it.",
+      "source": "/.well-known/apple-app-site-association",
+      "headers": [{ "key": "Content-Type", "value": "application/json" }]
+    },
+    {
+      "source": "/.well-known/assetlinks.json",
+      "headers": [{ "key": "Content-Type", "value": "application/json" }]
+    },
+    {
+      "comment": "A join link belongs to one room for a few hours. Nothing here should be cached or indexed.",
+      "source": "/join/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store" },
+        { "key": "X-Robots-Tag", "value": "noindex" }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+      ]
+    }
+  ]
+}
