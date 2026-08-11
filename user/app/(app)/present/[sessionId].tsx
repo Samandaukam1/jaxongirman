@@ -8,7 +8,7 @@ import {
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ChevronLeft, ChevronRight, PowerOff, RotateCcw } from "lucide-react-native";
+import { ChevronLeft, ChevronRight, Gamepad2, PowerOff, RotateCcw } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
@@ -16,6 +16,7 @@ import { PresentationPreview, type PresentationPreviewHandle } from "@/component
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { ErrorState, InlineError } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
+import { launchPresentationGame, presentationHasGame } from "@/lib/games";
 import { supabase } from "@/lib/supabase";
 import { colors, radius, shadow, spacing, typography } from "@/theme/tokens";
 
@@ -114,6 +115,9 @@ export default function RemoteScreen() {
   const [error, setError] = useState<string | null>(null);
   const [deckError, setDeckError] = useState<string | null>(null);
   const [commandError, setCommandError] = useState<string | null>(null);
+  /** Whether a ready O‘yingoh is linked to the deck on screen. */
+  const [hasGame, setHasGame] = useState(false);
+  const [launching, setLaunching] = useState(false);
   const [sessionConnected, setSessionConnected] = useState(false);
   const [viewportConnected, setViewportConnected] = useState(false);
   const sessionRef = useRef<Session | null>(null);
@@ -243,6 +247,19 @@ export default function RemoteScreen() {
     };
   }, [session?.realtime_token]);
 
+
+  // Whether the launch button belongs on screen at all. Re-asked when the deck
+  // changes, because a different deck has a different answer.
+  useEffect(() => {
+    const presentationId = session?.presentation_id;
+    if (!presentationId) { setHasGame(false); return; }
+    let active = true;
+    void presentationHasGame(presentationId)
+      .then((answer) => { if (active) setHasGame(Boolean(answer)); })
+      .catch(() => { if (active) setHasGame(false); });
+    return () => { active = false; };
+  }, [session?.presentation_id]);
+
   const currentSlide = useMemo(
     () => slides.find((slide) => slide.position === session?.current_slide) ?? null,
     [session?.current_slide, slides],
@@ -278,6 +295,33 @@ export default function RemoteScreen() {
     setSession(next);
     setViewport(viewportOf(next));
     if (command === "end") router.replace("/(app)/(tabs)/projects");
+  }
+
+
+  /**
+   * Hands the projector over to O‘yingoh.
+   *
+   * The new match carries its own capabilities; the raw screen token travels on
+   * the presentation's private broadcast channel — the one channel only this
+   * phone and that projector know the name of — so the screen can authorise its
+   * own reads without anybody signing in on it.
+   */
+  async function launchGame() {
+    setLaunching(true);
+    setCommandError(null);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    try {
+      const match = await launchPresentationGame(sessionId);
+      await viewportChannel.current?.send({
+        type: "broadcast",
+        event: "oyingoh",
+        payload: { session_id: match.game_session_id, screen_token: match.screen_token },
+      });
+      router.replace({ pathname: "/(app)/oyingoh/host/[sessionId]", params: { sessionId: match.game_session_id } });
+    } catch (failure) {
+      setCommandError(asErrorMessage(failure));
+      setLaunching(false);
+    }
   }
 
   async function chooseDeck(deck: Deck) {
@@ -417,6 +461,22 @@ export default function RemoteScreen() {
 
             {commandError ? <InlineError message={commandError} /> : null}
 
+            {hasGame && !ended ? (
+              <Pressable
+                accessibilityRole="button"
+                disabled={launching}
+                onPress={() => void launchGame()}
+                style={({ pressed }) => [styles.launchButton, pressed && styles.pressed, launching && styles.disabled]}
+              >
+                {launching
+                  ? <ActivityIndicator color={colors.onPrimary} size="small" />
+                  : <Gamepad2 color={colors.onPrimary} size={22} strokeWidth={2.2} />}
+                <Text style={styles.launchText}>
+                  {launching ? "O‘yingoh ochilmoqda…" : "O‘yingohni ishga tushirish"}
+                </Text>
+              </Pressable>
+            ) : null}
+
             <Pressable
               accessibilityRole="button"
               disabled={ended}
@@ -463,6 +523,11 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.35 },
   resetButton: { alignSelf: "center", minWidth: 132, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderRadius: radius.pill, backgroundColor: colors.surfaceMuted },
   resetText: { ...typography.bodyMedium, color: colors.primary, fontSize: 14 },
+  launchButton: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm,
+    minHeight: 60, borderRadius: radius.lg, backgroundColor: colors.primary, ...shadow,
+  },
+  launchText: { ...typography.bodyMedium, color: colors.onPrimary, fontSize: 16 },
   endButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, height: 52, borderRadius: radius.md, borderWidth: 1, borderColor: colors.dangerSoft, backgroundColor: colors.surface },
   endText: { ...typography.bodyMedium, color: colors.danger, fontSize: 14 },
 });

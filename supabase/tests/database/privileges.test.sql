@@ -27,17 +27,19 @@ select ok(not has_function_privilege('anon', 'public.admin_adjust_credits(uuid, 
 select ok(not has_function_privilege('anon', 'public.start_generation(uuid, text, text, public.presentation_style, integer, text, text, text[], text, text, text)', 'EXECUTE'),
   'a signed-out caller cannot start a generation');
 
--- The projector opens and refreshes its own pairing code while signed out, and
--- those two are the whole of what `anon` is meant to be able to call. Trigger
--- functions are excluded: they return `trigger`, so PostgREST will not expose
--- them as RPCs and the trigger machinery, not a caller, invokes them.
+-- What a signed-out caller may reach, and nothing else: a presentation screen
+-- (open, rotate, snapshot, command), an O‘yingoh projector (open, rotate,
+-- snapshot), and the universal join landing (join_info, which answers only what
+-- is already painted on the projector). Trigger functions are excluded: they
+-- return `trigger`, so PostgREST will not expose them as RPCs and the trigger
+-- machinery, not a caller, invokes them.
 select is(
   (select count(*)::integer
    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public' and p.prosecdef
      and pg_get_function_result(p.oid) <> 'trigger'
      and has_function_privilege('anon', p.oid, 'EXECUTE')),
-  4, 'only pairing and screen-capability entry points are callable by a signed-out caller'
+  8, 'only pairing, screen-capability and join-landing entry points are callable by a signed-out caller'
 );
 
 -- A definer function that does not pin its search_path can be redirected by a

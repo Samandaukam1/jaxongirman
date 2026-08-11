@@ -2,18 +2,20 @@ import type { MarketplaceMaterialType } from "@jaxongirman/types";
 import * as Crypto from "expo-crypto";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { BookOpenText, FileUp, Image as ImageIcon, Send, X } from "lucide-react-native";
 import { useMemo, useState } from "react";
 import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { PaymentUnavailable } from "@/components/PaymentUnavailable";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { InlineError } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
 import { useMaterialTypes, useQuote } from "@/lib/marketplace";
 import { formatBytes, formatSom } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
+import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
 import { useAuth } from "@/providers/AuthProvider";
 import { colors, radius, shadow, spacing, typography } from "@/theme/tokens";
 
@@ -39,9 +41,18 @@ export default function SellScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { types } = useMaterialTypes();
+  /**
+   * Arriving from the O‘yingoh editor's "Do‘konda sotish" button. A game
+   * listing carries no file — the product references the game row, and the
+   * purchase grants an entitlement to host it — so the type is fixed and the
+   * upload fields are not offered.
+   */
+  const params = useLocalSearchParams<{ gameId?: string; gameTitle?: string }>();
+  const gameId = typeof params.gameId === "string" ? params.gameId : null;
+  const policy = usePaymentPolicy();
 
-  const [materialType, setMaterialType] = useState<string | null>(null);
-  const [title, setTitle] = useState("");
+  const [materialType, setMaterialType] = useState<string | null>(gameId ? "game" : null);
+  const [title, setTitle] = useState(typeof params.gameTitle === "string" ? params.gameTitle : "");
   const [description, setDescription] = useState("");
   const [priceText, setPriceText] = useState("");
   const [units, setUnits] = useState("");
@@ -64,7 +75,7 @@ export default function SellScreen() {
     !materialType ? "Material turini tanlang."
     : title.trim().length < 3 ? "Nom kamida 3 ta belgidan iborat bo‘lsin."
     : price <= 0 ? "Narxni kiriting."
-    : !mainFile ? "Asosiy faylni yuklang."
+    : !gameId && !mainFile ? "Asosiy faylni yuklang."
     : null;
 
   async function pickImage(kind: "cover" | "preview") {
@@ -136,6 +147,7 @@ export default function SellScreen() {
         p_content_units: Number.parseInt(units.replace(/[^0-9]/g, ""), 10) || undefined,
         p_file_format: mainFile ? extensionFor(mainFile.mimeType, mainFile.name) : undefined,
         p_submit: false,
+        ...(gameId ? { p_game_id: gameId } : {}),
       });
       if (saveError) throw saveError;
       const id = productId as string;
@@ -154,6 +166,7 @@ export default function SellScreen() {
           p_content_units: Number.parseInt(units.replace(/[^0-9]/g, ""), 10) || undefined,
           p_file_format: mainFile ? extensionFor(mainFile.mimeType, mainFile.name) : undefined,
           p_submit: false,
+          ...(gameId ? { p_game_id: gameId } : {}),
         });
       }
 
@@ -197,6 +210,7 @@ export default function SellScreen() {
         p_content_units: Number.parseInt(units.replace(/[^0-9]/g, ""), 10) || undefined,
         p_file_format: mainFile ? extensionFor(mainFile.mimeType, mainFile.name) : undefined,
         p_submit: true,
+        ...(gameId ? { p_game_id: gameId } : {}),
       });
       if (submitError) throw submitError;
 
@@ -212,6 +226,18 @@ export default function SellScreen() {
     }
   }
 
+  // Selling is the other half of a storefront: if the shop is closed on this
+  // platform, listing a price into it is closed too.
+  if (!policy.loading && !policy.paymentsEnabled) {
+    return (
+      <PaymentUnavailable
+        title={policy.unavailableMessage("marketplace")}
+        message="Mavjud e’lonlaringiz o‘zgarishsiz qoladi."
+        onLeave={() => router.back()}
+      />
+    );
+  }
+
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.screen}>
       <ScreenHeader title="Material sotish" variant="close" onLeave={() => router.back()} />
@@ -219,18 +245,29 @@ export default function SellScreen() {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <View style={styles.block}>
           <Text style={styles.label}>Material turi</Text>
-          <View style={styles.typeRow}>
-            {types.map((type) => (
-              <Pressable
-                key={type.code}
-                onPress={() => { setMaterialType(type.code); setMainFile(null); setGuideFile(null); }}
-                style={[styles.typeChip, materialType === type.code && styles.typeChipActive]}
-              >
-                <Text style={[styles.typeText, materialType === type.code && styles.typeTextActive]}>{type.label}</Text>
-              </Pressable>
-            ))}
-          </View>
-          {selectedType ? <Text style={styles.hint}>{selectedType.description}</Text> : null}
+          {gameId ? (
+            <View style={[styles.typeChip, styles.typeChipActive, { alignSelf: "flex-start" }]}>
+              <Text style={[styles.typeText, styles.typeTextActive]}>O‘yin</Text>
+            </View>
+          ) : (
+            <View style={styles.typeRow}>
+              {types.filter((type) => type.code !== "game").map((type) => (
+                <Pressable
+                  key={type.code}
+                  onPress={() => { setMaterialType(type.code); setMainFile(null); setGuideFile(null); }}
+                  style={[styles.typeChip, materialType === type.code && styles.typeChipActive]}
+                >
+                  <Text style={[styles.typeText, materialType === type.code && styles.typeTextActive]}>{type.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+          {gameId ? (
+            <Text style={styles.hint}>
+              O‘yin fayl sifatida yuklanmaydi. Xaridor uni o‘z kutubxonasidan boshlab o‘tkazadi,
+              o‘yin esa sizning nomingizda qoladi.
+            </Text>
+          ) : selectedType ? <Text style={styles.hint}>{selectedType.description}</Text> : null}
         </View>
 
         <View style={styles.block}>
@@ -358,6 +395,8 @@ export default function SellScreen() {
           </ScrollView>
         </View>
 
+        {/* A game has no bytes to upload: the listing references the game row. */}
+        {!gameId ? (<>
         <View style={styles.block}>
           <Text style={styles.label}>Asosiy fayl</Text>
           {mainFile ? (
@@ -410,6 +449,7 @@ export default function SellScreen() {
         ) : null}
 
         {error ? <InlineError message={error} /> : null}
+        </>) : null}
 
         <PrimaryButton
           label="Moderatsiyaga yuborish"

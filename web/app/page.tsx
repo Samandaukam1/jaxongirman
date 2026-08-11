@@ -32,6 +32,9 @@ export default function HomePage() {
             <Link className="action secondary animate-in delay-4" href="/oyingoh">
               O&lsquo;YINGOHNI OCHISH
             </Link>
+            <Link className="action secondary animate-in delay-4" href="/tarif">
+              TARIF OLISH
+            </Link>
           </div>
         </div>
       </section>

@@ -47,6 +47,15 @@ export const gradients = {
   soft: ["#F3ECFE", "#E3D6FA"] as const,
   success: ["#17B283", "#0B7F5C"] as const,
   danger: ["#D9455F", "#9E2036"] as const,
+  /**
+   * O‘yingoh reads louder than the rest of the app on purpose: it is the one
+   * place where a phone competes with a lit projector for attention. Each
+   * action gets its own hue so the row is legible at a glance and never
+   * depends on colour alone — every button carries an icon and a label too.
+   */
+  create: ["#9A5CF5", "#5B21B6"] as const,
+  join: ["#12B0C8", "#0A6E86"] as const,
+  host: ["#F0A93C", "#C2610C"] as const,
 } as const;
 
 export const radius = { sm: 10, md: 16, lg: 22, xl: 30, pill: 999 } as const;

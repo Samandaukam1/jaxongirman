@@ -1,5 +1,23 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-  <dict/>
+  <dict>
+    <!--
+      Associated Domains: what makes a scanned https://<domain>/join/<token> QR
+      open this app instead of Safari.
+
+      Kept here rather than only in app.json because this project has a checked-in
+      ios/ folder, and EAS Build does not sync app.json's `ios` block into an
+      existing native project. Both places carry the same two domains, so a later
+      `expo prebuild` produces this same file.
+
+      The web side must serve /.well-known/apple-app-site-association naming
+      <TeamID>.uz.jaxongirman.app — see web/public/.well-known/README.md.
+    -->
+    <key>com.apple.developer.associated-domains</key>
+    <array>
+      <string>applinks:jaxongirman.uz</string>
+      <string>applinks:jaxongirman.app</string>
+    </array>
+  </dict>
 </plist>

@@ -1,7 +1,7 @@
 import * as Crypto from "expo-crypto";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
-import { Camera, Check, ChevronRight, Coins, CreditCard, LogOut, Store, User as UserIcon, Wallet } from "lucide-react-native";
+import { Camera, Check, ChevronRight, Coins, CreditCard, LogOut, Receipt, Store, User as UserIcon, Wallet } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
@@ -193,6 +193,7 @@ export default function ProfileScreen() {
           {[
             { label: "Mahsulotlarim", detail: "Do‘konga qo‘yganlaringiz", icon: Store, href: "/(app)/marketplace/seller" as const },
             { label: "Daromadlar", detail: "Sotuvlar va to‘lovlar", icon: Wallet, href: "/(app)/earnings" as const },
+            { label: "To‘lovlar tarixi", detail: "Buyurtmalar va cheklar", icon: Receipt, href: "/(app)/orders" as const },
             { label: "Chala kartalar", detail: "To‘lovda ishlatilgan kartalar", icon: CreditCard, href: "/(app)/cards" as const },
           ].map((row) => (
             <Pressable

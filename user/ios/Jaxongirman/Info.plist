@@ -56,7 +56,7 @@
 		<string>_expo._tcp</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>Allow $(PRODUCT_NAME) to access your camera</string>
+	<string>Proyektordagi QR kodni skanerlash uchun kameraga kirish kerak.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Jaxongirman development serverga ulanish uchun mahalliy tarmoqqa kirishga muhtoj.</string>
 	<key>NSMicrophoneUsageDescription</key>

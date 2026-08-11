@@ -28,7 +28,47 @@ flowchart LR
 
 The mobile flow is email/password auth → recent presentations and wallet → topic/file create form → live generation steps → element editor → asynchronous PDF or editable PowerPoint export. Export jobs report progress, write to private Storage, and are downloaded through short-lived authenticated URLs. The editor persists atomic operations and inverse history, while local state provides immediate interaction.
 
-The admin flow is email/password auth → server role check → operational dashboard. It exposes user credit/status controls, presentation diagnostics, AI usage/cost, style/package/operation pricing, runtime settings and audit history.
+## O‘yingoh surfaces
+
+A live match spans three devices, and the trust model is the presentation
+pairing model reused rather than reinvented. A projector opens an unclaimed
+session while signed out and receives three independent capabilities exactly
+once: a rotating single-use pairing code, a screen token stored only as a
+SHA-256 digest, and a private realtime channel name. The phone that scans the
+pairing code becomes the only device that can drive the match. The room scans a
+*different* QR — an `https://<domain>/join/<token>` universal link, public to
+everyone physically present and unguessable to everyone else.
+
+```mermaid
+flowchart LR
+  P[Projector: signed out] -->|game_screen_open| S[Supabase]
+  P -->|pairing QR| H[Host phone: signed in]
+  H -->|game_pairing_claim| S
+  P -->|join QR: https://.../join/token| R[Player phones]
+  R -->|game_join, game_submit_answer| S
+  H -->|game_session_advance| S
+  S -->|session row UPDATE| P
+  S -->|session row UPDATE| R
+  H -.->|screen_token over private channel| P
+```
+
+Realtime publishes only `game_sessions`. Every screen refetches its own
+sanitised state when `state_version` moves, so a hundred phones carry a hundred
+small payloads rather than one broadcast that would have to contain answers.
+
+A deck that finishes becomes a match: `presentation_launch_game()` mints a game
+session, and the host's phone hands the raw screen token to the projector over
+the presentation's private broadcast channel — the same projector, a different
+show, with nobody signing in on it.
+
+The public domain is configuration, not a literal: `NEXT_PUBLIC_APP_URL`
+(see `web/lib/public-url.ts`) decides what the join QR points at, so moving to
+`jaxongirman.app` is an env change plus the two association files under
+`web/public/.well-known/`. Because the association can silently fail — a wrong
+Team ID, a CDN cache, an OS that ignores it — the landing page always prints the
+six-digit join code, and typing it is a first-class path rather than a fallback.
+
+The admin flow is email/password auth → server role check → operational dashboard. It exposes user credit/status controls, presentation diagnostics, AI usage/cost, style/package/operation pricing, runtime settings, O‘yingoh curation and live-match supervision, and audit history.
 
 ## Release synchronization
 

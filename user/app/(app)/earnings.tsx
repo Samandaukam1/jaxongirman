@@ -5,12 +5,14 @@ import { useCallback, useState } from "react";
 import { Alert, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { PaymentUnavailable } from "@/components/PaymentUnavailable";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { EmptyState, ErrorState, InlineError, SkeletonCard } from "@/components/StateBlocks";
 import { formatDate, formatShortDateTime } from "@/lib/datetime";
 import { asErrorMessage } from "@/lib/format";
 import { formatSom } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
+import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
 import { useAuth } from "@/providers/AuthProvider";
 import { colors, radius, shadow, spacing, typography } from "@/theme/tokens";
 
@@ -49,6 +51,7 @@ type Summary = {
  * status chip.
  */
 export default function EarningsScreen() {
+  const policy = usePaymentPolicy();
   const { user } = useAuth();
   const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -109,6 +112,19 @@ export default function EarningsScreen() {
         <ScreenHeader title="Daromadlar" />
         <View style={styles.content}><ErrorState message={error ?? "Ma’lumot topilmadi"} onRetry={() => void load()} /></View>
       </View>
+    );
+  }
+
+  // The payout side of a shop that is closed on this platform. Balances are not
+  // hidden because they are secret — they are hidden because a marketplace that
+  // cannot transact here should not present its accounting either.
+  if (!policy.loading && !policy.paymentsEnabled) {
+    return (
+      <PaymentUnavailable
+        title={policy.unavailableMessage("marketplace")}
+        message="Hisob-kitob ma’lumotlaringiz saqlanib qoladi."
+        onLeave={undefined}
+      />
     );
   }
 

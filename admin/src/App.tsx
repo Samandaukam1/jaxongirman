@@ -6,12 +6,14 @@ import { AccessDeniedPage } from "@/pages/AccessDeniedPage";
 import { AuditPage } from "@/pages/AuditPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { FinancePage } from "@/pages/FinancePage";
+import { GamesPage } from "@/pages/GamesPage";
 import { GiftsPage } from "@/pages/GiftsPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { PresentationsPage } from "@/pages/PresentationsPage";
 import { MarketplaceFinancePage } from "@/pages/MarketplaceFinancePage";
 import { MarketplacePage } from "@/pages/MarketplacePage";
 import { ModulesPage } from "@/pages/ModulesPage";
+import { OrdersPage } from "@/pages/OrdersPage";
 import { PricingPage } from "@/pages/PricingPage";
 import { SurveysPage } from "@/pages/SurveysPage";
 import { UsagePage } from "@/pages/UsagePage";
@@ -32,6 +34,8 @@ const pages: Record<string, ReactNode> = {
   "/surveys": <SurveysPage />,
   "/marketplace": <MarketplacePage />,
   "/marketplace-finance": <MarketplaceFinancePage />,
+  "/games": <GamesPage />,
+  "/orders": <OrdersPage />,
 };
 
 export default function App() {

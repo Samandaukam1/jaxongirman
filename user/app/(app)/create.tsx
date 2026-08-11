@@ -4,8 +4,9 @@ import { decode } from "base64-arraybuffer";
 import * as Crypto from "expo-crypto";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
+import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import { ArrowLeft, ChartColumnBig, Check, ChevronRight, Clock3, Crown, FileText, Paperclip, Palette, Sparkles, Type, X, type LucideIcon } from "lucide-react-native";
+import { ArrowLeft, ChartColumnBig, Check, ChevronRight, Clock3, Crown, FileText, Gamepad2, Paperclip, Palette, Sparkles, Type, X, type LucideIcon } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, BackHandler, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -55,6 +56,8 @@ export default function CreatePresentationScreen() {
   const [templates, setTemplates] = useState<SlideTemplateRow[]>([]);
   const [palettes, setPalettes] = useState<PaletteFamilyRow[]>([]);
   const [templateCode, setTemplateCode] = useState<string | null>(null);
+  /** When on, the finished deck is followed by an AI-written O‘yingoh match. */
+  const [withGame, setWithGame] = useState(false);
   const [paletteCode, setPaletteCode] = useState<string | null>(null);
   const insets = useSafeAreaInsets();
 
@@ -179,7 +182,10 @@ export default function CreatePresentationScreen() {
       });
       if (error) throw error;
       if (!data?.jobId) throw new Error("Generation job yaratilmadi");
-      router.replace({ pathname: "/(app)/generation/[id]", params: { id: presentationId } });
+      router.replace({
+        pathname: "/(app)/generation/[id]",
+        params: { id: presentationId, withGame: withGame ? "1" : "0" },
+      });
     } catch (error) {
       if (uploadedPaths.length) await supabase.storage.from("user-uploads").remove(uploadedPaths);
       Alert.alert("Yaratish boshlanmadi", await asFunctionErrorMessage(error));
@@ -276,6 +282,32 @@ export default function CreatePresentationScreen() {
         <FormField label="Kim tomonidan tayyorlandi" hint="Ixtiyoriy" placeholder="Jahongir Qurbonnazarov" value={authorName} onChangeText={setAuthorName} />
         <FormField label="O‘qituvchi" hint="Ixtiyoriy" placeholder="D. Karimova" value={teacherName} onChangeText={setTeacherName} />
 
+        {/* The flagship cross-sell: one switch here is what turns a finished deck
+            into a match the room plays. The questions come from the slides, so
+            the toggle cannot be offered before there is a deck to read. */}
+        <Pressable
+          accessibilityRole="switch"
+          accessibilityState={{ checked: withGame }}
+          onPress={() => { setWithGame((value) => !value); void Haptics.selectionAsync(); }}
+          style={[styles.gameCard, withGame && styles.gameCardOn]}
+        >
+          <View style={styles.gameCardHead}>
+            <IconChip icon={Gamepad2} variant={withGame ? "brand" : "soft"} size="md" />
+            <View style={styles.gameCardCopy}>
+              <Text style={styles.gameCardTitle}>O‘yingoh qo‘shib yaratish</Text>
+              <Text style={styles.gameCardBody}>
+                AI taqdimotingiz asosida interaktiv o‘yin yaratadi. Slaydlar tugagach,
+                pultdagi bitta tugma bilan ishga tushiradi.
+              </Text>
+            </View>
+          </View>
+          <View style={[styles.gameSwitch, withGame && styles.gameSwitchOn]}>
+            <Text style={[styles.gameSwitchText, withGame && styles.gameSwitchTextOn]}>
+              {withGame ? "YOQILGAN" : "YOQISH"}
+            </Text>
+          </View>
+        </Pressable>
+
         <View style={styles.estimateCard}>
           <View style={styles.estimateTop}><View><Text style={styles.estimateLabel}>Taxminiy xarajat</Text><View style={styles.estimateValueRow}>{estimating ? <ActivityIndicator color={colors.primary} size="small" /> : <Text style={styles.estimateValue}>{estimate ?? "—"}</Text>}<Text style={styles.estimateUnit}> kredit</Text></View></View><IconChip icon={Sparkles} variant="brand" size="md" /></View>
           {estimateError ? <Text style={styles.estimateError}>{estimateError}</Text> : null}
@@ -332,6 +364,22 @@ const styles = StyleSheet.create({
   chipTextSelected: { color: colors.surface },
   customInput: { ...typography.body, minHeight: 50, paddingHorizontal: spacing.lg, color: colors.ink, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
   sourceNotice: { ...typography.caption, color: colors.inkMuted, marginTop: -spacing.xl },
+  gameCard: {
+    backgroundColor: colors.surface, padding: spacing.xl, borderRadius: radius.lg,
+    borderWidth: 1.5, borderColor: colors.border, gap: spacing.lg,
+  },
+  gameCardOn: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
+  gameCardHead: { flexDirection: "row", gap: spacing.md },
+  gameCardCopy: { flex: 1, gap: 4 },
+  gameCardTitle: { ...typography.heading, color: colors.ink, fontSize: 17 },
+  gameCardBody: { ...typography.caption, color: colors.inkMuted, lineHeight: 18 },
+  gameSwitch: {
+    alignSelf: "flex-end", paddingHorizontal: spacing.lg, paddingVertical: spacing.sm,
+    borderRadius: radius.pill, backgroundColor: colors.surfaceMuted,
+  },
+  gameSwitchOn: { backgroundColor: colors.primary },
+  gameSwitchText: { ...typography.caption, color: colors.inkMuted, letterSpacing: 1.2 },
+  gameSwitchTextOn: { color: colors.onPrimary },
   estimateCard: { backgroundColor: colors.surface, padding: spacing.xl, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, ...shadow },
   estimateTop: { flexDirection: "row", justifyContent: "space-between" },
   estimateLabel: { ...typography.caption, color: colors.inkMuted },

@@ -1,34 +1,19 @@
 import type { Metadata } from "next";
 
+import { ArenaScreen } from "./ArenaScreen";
+
 export const metadata: Metadata = {
   title: "O'yingoh — Jaxongirman",
-  description: "Jaxongirman o'yingohi tayyorlanmoqda.",
+  description: "Jaxongirman O'yingoh: katta ekranda bilim bellashuvi o'tkazing.",
 };
 
 /**
- * The games surface.
+ * The projector's page.
  *
- * Nothing in the database describes a game yet, so this route exists and says
- * what it is for rather than showing a quiz that does not run. When the module
- * lands, the host flow replaces this card and the URL stays the same.
+ * A browser here is signed out and stays that way: it opens an unclaimed match,
+ * shows a rotating pairing code, and the phone that scans it becomes the only
+ * device that can drive what happens next.
  */
 export default function ArenaPage() {
-  return (
-    <main className="notice-page">
-      <div className="shell">
-        <div className="notice-card">
-          <div className="glyph" style={{ margin: "0 auto" }}>◎</div>
-          <h1>O&lsquo;yingoh tayyorlanmoqda</h1>
-          <p>
-            Bilim musobaqalari — savollar, ball va natijalar jadvali — ustida ish ketmoqda.
-            Ishga tushganda shu sahifadan o&lsquo;yin boshlash va qatnashchilarni QR orqali
-            taklif qilish mumkin bo&lsquo;ladi.
-          </p>
-          <div className="store-row">
-            <a className="store-button ghost" href="/">Bosh sahifaga qaytish</a>
-          </div>
-        </div>
-      </div>
-    </main>
-  );
+  return <ArenaScreen />;
 }

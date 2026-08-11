@@ -221,3 +221,58 @@ td small { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; 
 .switch-row span:first-child { font-size: 13px; color: var(--ink-muted); }
 .finance-form .switch-row { margin-top: 0; }
 .finance-form .finance-hint { flex-basis: 100%; }
+
+/* --------------------------------------------------------------- O'yingoh --
+ * Three additions the module needs, all of them variants of shapes that
+ * already exist rather than new ones: a destructive tint on the secondary
+ * button, the pill that says a match is running right now, and a checkbox row
+ * whose label sits beside the box instead of above it.
+ */
+.secondary-button.danger { color: #A32036; border-color: #EBC8CF; background: #FEF6F7; }
+.secondary-button.danger:hover:not(:disabled) { border-color: #D9455F; background: #FDEBEF; }
+.secondary-button.is-active { color: var(--on-primary); border-color: var(--primary); background: var(--primary); }
+
+.live-pill {
+  display: inline-flex; align-items: center; gap: 7px; margin-left: auto;
+  padding: 8px 14px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  color: #0B7F5C; background: #E4F6F0; border: 1px solid #C9E7DC;
+}
+.live-pill svg { animation: live-pulse 1.8s ease-in-out infinite; }
+@keyframes live-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+
+.switch-row { display: flex; align-items: center; gap: 10px; margin-top: 14px; font-weight: 600; }
+.switch-row input { width: 18px; height: 18px; flex: 0 0 auto; }
+.switch-row span { font-weight: 500; color: var(--ink-muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  .live-pill svg { animation: none; }
+}
+
+/* A statement of consequence, not a hint. Used where a setting is legitimate
+ * but easy to misuse in a way that costs the developer account. */
+.warning-banner {
+  padding: 16px 18px; border-radius: 14px; font-size: 13px; line-height: 1.65;
+  color: #7A4A05; background: #FFF8EC; border: 1px solid #F0DCB4;
+}
+.warning-banner strong { display: block; margin-bottom: 4px; color: #5C3703; }
+
+/* Provider connection state. Says whether Payme is reachable and never what
+ * the credential is — the key lives in the server environment. */
+.provider-state {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 18px; border-radius: 14px; border: 1px solid var(--border);
+}
+.provider-state > div { display: flex; flex-direction: column; }
+.provider-state strong { font-size: 15px; }
+.provider-state span { font-size: 12px; color: var(--ink-muted); }
+.provider-state.is-ready { color: #0B7F5C; background: #F4FBF8; border-color: #C9E7DC; }
+.provider-state.is-pending { color: #7A4A05; background: #FFFBF2; border-color: #F0DCB4; }
+
+/* One tariff per row: six small fields read better side by side than stacked. */
+.plan-row {
+  display: grid; gap: 10px; align-items: end; width: 100%;
+  grid-template-columns: 1fr 1.4fr 1fr 0.8fr auto auto;
+  padding: 14px; border: 1px solid var(--border); border-radius: 14px; background: #fff;
+}
+.plan-row .switch-row { margin-top: 0; }
+@media (max-width: 900px) { .plan-row { grid-template-columns: 1fr 1fr; } }

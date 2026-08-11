@@ -10,6 +10,7 @@ import {
 } from "react-native";
 
 import { BOTTOM_NAV_SPACE } from "@/components/BottomNav";
+import { PrimaryButton } from "@/components/PrimaryButton";
 import { EmptyState, ErrorState, SkeletonCard } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
 import {
@@ -18,6 +19,7 @@ import {
 } from "@/lib/marketplace";
 import { formatNumber, formatSom } from "@/lib/money";
 import { useAuth } from "@/providers/AuthProvider";
+import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
 import { colors, icon, radius, shadow, spacing, typography } from "@/theme/tokens";
 
 const SORTS: MarketplaceSort[] = ["newest", "popular", "rating", "price_asc", "price_desc"];
@@ -46,6 +48,7 @@ export default function MarketplaceScreen() {
   const [error, setError] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [priceDraft, setPriceDraft] = useState({ min: "", max: "" });
+  const policy = usePaymentPolicy();
 
   // Guards the pager: a fast scroll can fire onEndReached several times before
   // the first page has landed.
@@ -116,6 +119,37 @@ export default function MarketplaceScreen() {
       maxPrice: Number.isFinite(max) ? max : null,
     }));
     setFiltersOpen(false);
+  }
+
+  // The shop is a storefront for digital goods sold outside in-app purchase, so
+  // on a platform that may not offer them it is closed rather than browsable
+  // with the buttons quietly removed. Purchases already made stay reachable from
+  // the library — access to acquired content, which 3.1.3(b) permits.
+  if (!policy.loading && !policy.paymentsEnabled) {
+    return (
+      <View style={styles.safe}>
+        <View style={styles.header}>
+          <View style={styles.headerTop}>
+            <View>
+              <Text style={styles.eyebrow}>JAXONGIRMAN</Text>
+              <Text style={styles.title}>Do‘kon</Text>
+            </View>
+          </View>
+        </View>
+        <View style={styles.closedWrap}>
+          <EmptyState
+            icon={Store}
+            title={policy.unavailableMessage("marketplace")}
+            message="Sotib olgan materiallaringiz kutubxonangizda ochiq turadi."
+          />
+          <PrimaryButton
+            label="Kutubxonaga o‘tish"
+            tone="secondary"
+            onPress={() => router.push("/(app)/marketplace/library")}
+          />
+        </View>
+      </View>
+    );
   }
 
   return (
@@ -343,6 +377,7 @@ export default function MarketplaceScreen() {
 }
 
 const styles = StyleSheet.create({
+  closedWrap: { flex: 1, justifyContent: "center", paddingHorizontal: spacing.xl, gap: spacing.lg },
   safe: { flex: 1, backgroundColor: colors.canvas, paddingTop: 58 },
   header: { paddingHorizontal: spacing.xl, gap: spacing.md },
   headerTop: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" },

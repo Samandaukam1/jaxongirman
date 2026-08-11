@@ -1,6 +1,7 @@
-import type { MarketplaceQuote } from "@jaxongirman/types";
+import type { GameQuestionType, MarketplaceQuote } from "@jaxongirman/types";
+import { GAME_DIFFICULTY_LABELS, GAME_TYPE_LABELS } from "@jaxongirman/types";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { BookOpenText, CheckCircle2, Flag, Heart, Star, Store } from "lucide-react-native";
+import { BookOpenText, CheckCircle2, Flag, Gamepad2, Heart, Star, Store } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
@@ -9,10 +10,12 @@ import { ScreenHeader } from "@/components/ScreenHeader";
 import { ErrorState, InlineError, SkeletonCard } from "@/components/StateBlocks";
 import { formatShortDateTime } from "@/lib/datetime";
 import { asErrorMessage } from "@/lib/format";
+import { createSession } from "@/lib/games";
 import { signPaths, toggleFavorite } from "@/lib/marketplace";
 import { formatSom } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
+import { clientPlatform, usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
 import { colors, icon, radius, shadow, spacing, typography } from "@/theme/tokens";
 
 type Detail = {
@@ -60,6 +63,16 @@ export default function ProductDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  /**
+   * The shape of a game listing — how many questions, of which kinds — without
+   * a single question text. Correct answers stay behind the purchase; so do the
+   * prompts, because a shopper who could read them would not need to buy.
+   */
+  const policy = usePaymentPolicy();
+  const [hosting, setHosting] = useState(false);
+  const [gamePreview, setGamePreview] = useState<{
+    game_id: string; question_count: number; difficulty: string; types: Record<string, number>;
+  } | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportReason, setReportReason] = useState<string>("copyright");
   const [reportDetail, setReportDetail] = useState("");
@@ -77,11 +90,30 @@ export default function ProductDetailScreen() {
       const paths = [next.product.cover_path, ...next.previews.map((preview) => preview.path)]
         .filter((path): path is string => Boolean(path));
       if (paths.length > 0) setImages(await signPaths("marketplace-previews", paths));
+
+      if (next.product.material_type === "game") {
+        const { data: preview } = await supabase.rpc("game_listing_preview", { p_product_id: productId });
+        if (preview) setGamePreview(preview as unknown as typeof gamePreview);
+      }
     }
     setLoading(false);
   }, [productId]);
 
   useEffect(() => { void load(); }, [load]);
+
+  /** Hosting a bought game: the entitlement is what game_can_host() checks. */
+  async function hostGame(gameId: string) {
+    setHosting(true);
+    setActionError(null);
+    try {
+      const session = await createSession(gameId);
+      router.push({ pathname: "/(app)/oyingoh/host/[sessionId]", params: { sessionId: session.session_id } });
+    } catch (failure) {
+      setActionError(asErrorMessage(failure));
+    } finally {
+      setHosting(false);
+    }
+  }
 
   async function onFavorite() {
     if (!user || !detail) return;
@@ -99,6 +131,7 @@ export default function ProductDetailScreen() {
     setBusy(true);
     setActionError(null);
     const { data, error: checkoutError } = await supabase.rpc("marketplace_create_checkout", {
+      p_platform: clientPlatform,
       p_product_id: productId,
       // One key per press, so a double tap is one attempt rather than two.
       p_idempotency_key: `${productId}:${Date.now()}`,
@@ -226,10 +259,31 @@ export default function ProductDetailScreen() {
           </View>
         ) : null}
 
+        {gamePreview ? (
+          <View style={styles.guideCard}>
+            <Gamepad2 color={colors.primary} size={18} strokeWidth={2} />
+            <Text style={styles.guideText}>
+              {gamePreview.question_count} savol · {GAME_DIFFICULTY_LABELS[gamePreview.difficulty] ?? gamePreview.difficulty}
+              {Object.keys(gamePreview.types).length > 0
+                ? ` · ${Object.entries(gamePreview.types)
+                    .map(([type, count]) => `${GAME_TYPE_LABELS[type as GameQuestionType] ?? type} (${count})`)
+                    .join(", ")}`
+                : ""}
+            </Text>
+          </View>
+        ) : null}
+
         {product.description ? <Text style={styles.description}>{product.description}</Text> : null}
+
+        {!policy.paymentsEnabled && !detail.owned && !product.is_own ? (
+          <View style={styles.guideCard}>
+            <Text style={styles.guideText}>{policy.unavailableMessage("marketplace")}</Text>
+          </View>
+        ) : null}
 
         {/* The breakdown is the server's, shown in full so the total is never a
             surprise at the payment step. */}
+        {policy.showPrices ? (
         <View style={styles.priceCard}>
           <View style={styles.priceLine}>
             <Text style={styles.priceLabel}>Mahsulot</Text>
@@ -245,8 +299,18 @@ export default function ProductDetailScreen() {
             <Text style={styles.priceTotal}>{formatSom(quote.buyer_total)}</Text>
           </View>
         </View>
+        ) : null}
 
         {actionError ? <InlineError message={actionError} /> : null}
+
+        {(detail.owned || product.is_own) && gamePreview ? (
+          <PrimaryButton
+            label="O‘yinni boshlash"
+            icon={Gamepad2}
+            loading={hosting}
+            onPress={() => void hostGame(gamePreview.game_id)}
+          />
+        ) : null}
 
         {detail.owned ? (
           <View style={styles.ownedCard}>
@@ -260,9 +324,9 @@ export default function ProductDetailScreen() {
           <View style={styles.ownedCard}>
             <Text style={styles.ownedText}>Bu sizning mahsulotingiz.</Text>
           </View>
-        ) : (
+        ) : policy.paymentsEnabled ? (
           <PrimaryButton label={`${formatSom(quote.buyer_total)} — sotib olish`} loading={busy} onPress={() => void buy()} />
-        )}
+        ) : null}
 
         {detail.reviews.length > 0 ? (
           <>

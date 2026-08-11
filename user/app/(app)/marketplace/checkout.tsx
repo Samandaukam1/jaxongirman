@@ -14,6 +14,7 @@ import { ErrorState, InlineError } from "@/components/StateBlocks";
 import { asFunctionErrorMessage } from "@/lib/format";
 import { formatSom } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
+import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
 import { colors, radius, shadow, spacing, typography } from "@/theme/tokens";
 
 type Transaction = Tables<"payment_transactions">;
@@ -41,6 +42,7 @@ function groupDigits(value: string): string {
  * is a fresh card, a fresh code and a fresh receipt.
  */
 export default function CheckoutScreen() {
+  const policy = usePaymentPolicy();
   const router = useRouter();
   const params = useLocalSearchParams<{ transactionId?: string }>();
   const transactionId = typeof params.transactionId === "string" ? params.transactionId : "";
@@ -182,6 +184,22 @@ export default function CheckoutScreen() {
       <View style={styles.screen}>
         <ScreenHeader title="To‘lov" />
         <View style={styles.content}><ErrorState message={loadError ?? "To‘lov topilmadi"} onRetry={() => void load()} /></View>
+      </View>
+    );
+  }
+
+  // A hard stop rather than a hidden button. Reaching this screen at all on a
+  // platform that may not pay means a stale navigation or a deep link, and the
+  // server would refuse the charge anyway — saying so here is kinder than
+  // letting somebody type a card number into a form that cannot submit.
+  if (!policy.loading && !policy.paymentsEnabled) {
+    return (
+      <View style={styles.screen}>
+        <ScreenHeader title="To‘lov" variant="close" onLeave={() => router.back()} />
+        <View style={styles.blockedWrap}>
+          <Text style={styles.blockedTitle}>{policy.unavailableMessage("marketplace")}</Text>
+          <PrimaryButton label="Ortga" tone="secondary" onPress={() => router.back()} />
+        </View>
       </View>
     );
   }
@@ -400,6 +418,8 @@ export default function CheckoutScreen() {
 }
 
 const styles = StyleSheet.create({
+  blockedWrap: { flex: 1, justifyContent: "center", paddingHorizontal: spacing.xl, gap: spacing.lg },
+  blockedTitle: { ...typography.heading, color: colors.ink, textAlign: "center" },
   screen: { flex: 1, backgroundColor: colors.canvas },
   centered: { flex: 1, alignItems: "center", justifyContent: "center" },
   content: { paddingHorizontal: spacing.xl, paddingBottom: 60, gap: spacing.lg },

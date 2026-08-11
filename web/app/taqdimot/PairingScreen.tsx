@@ -16,6 +16,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { supabase } from "@/lib/supabase";
 
+import { ArenaScreen } from "@/app/oyingoh/ArenaScreen";
+
 import { WebSlideCanvas } from "./SlideRenderer";
 
 const ROTATE_MS = 30_000;
@@ -112,6 +114,13 @@ export function PairingScreen() {
   const [databaseConnected, setDatabaseConnected] = useState(false);
   const [broadcastConnected, setBroadcastConnected] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  /**
+   * Set when the paired phone launches O‘yingoh. The new match's screen
+   * capability arrives on the same private channel this screen already follows,
+   * which is why the projector can authorise its own game reads without anybody
+   * signing in on it.
+   */
+  const [handoff, setHandoff] = useState<{ sessionId: string; screenToken: string } | null>(null);
   const rotating = useRef(false);
   const currentToken = useRef<string | null>(null);
   const sessionRef = useRef<Session | null>(null);
@@ -260,6 +269,11 @@ export function PairingScreen() {
         if (!message || message.slide !== sessionRef.current?.current_slide) return;
         setViewport({ scale: message.scale, translateX: message.translate_x, translateY: message.translate_y });
       })
+      .on("broadcast", { event: "oyingoh" }, ({ payload }) => {
+        const message = payload as { session_id?: unknown; screen_token?: unknown } | null;
+        if (typeof message?.session_id !== "string" || typeof message?.screen_token !== "string") return;
+        setHandoff({ sessionId: message.session_id, screenToken: message.screen_token });
+      })
       .subscribe((status) => {
         if (subscribed) setBroadcastConnected(status === "SUBSCRIBED");
       });
@@ -389,6 +403,13 @@ export function PairingScreen() {
       console.error("fullscreen request failed", fullscreenError);
       setError("To‘liq ekran ochilmadi. Brauzer ruxsatini tekshirib qayta urinib ko‘ring.");
     }
+  }
+
+  // The talk is over and the room is playing: the same projector, a different
+  // show. Rendered before every other branch so an expiring presentation
+  // session cannot pull the match off the screen.
+  if (handoff) {
+    return <ArenaScreen handoff={handoff} />;
   }
 
   if (error && !active) {
