@@ -1,4 +1,4 @@
-import { Blocks, ClipboardList, Coins, Cpu, Gift, LayoutDashboard, LogOut, Menu, Presentation, ScrollText, Store, TrendingUp, Users, Wallet, X } from "lucide-react";
+import { Blocks, ClipboardList, Coins, Cpu, Gamepad2, Gift, LayoutDashboard, LogOut, Menu, Presentation, ScrollText, Store, TrendingUp, Users, Wallet, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { AppLink } from "@/lib/router";
@@ -12,6 +12,7 @@ const navigation = [
   { to: "/pricing", label: "Kredit va narxlar", icon: Coins },
   { to: "/modules", label: "Modullar va tangalar", icon: Blocks },
   { to: "/surveys", label: "So‘rovnomalar", icon: ClipboardList },
+  { to: "/games", label: "O‘yingoh", icon: Gamepad2 },
   { to: "/marketplace", label: "Do‘kon", icon: Store },
   { to: "/marketplace-finance", label: "Do‘kon moliyasi", icon: TrendingUp },
   { to: "/gifts", label: "Sovg‘alar", icon: Gift },

@@ -30,7 +30,8 @@
     "test:pptx": "node supabase/tests/pptx-import-smoke.mjs",
     "test:pairing": "node supabase/tests/pairing-smoke.mjs",
     "dev:web": "npm run dev --workspace=@jaxongirman/web",
-    "build:web": "npm run build --workspace=@jaxongirman/web"
+    "build:web": "npm run build --workspace=@jaxongirman/web",
+    "test:oyingoh": "node supabase/tests/oyingoh-smoke.mjs"
   },
   "engines": {
     "node": ">=20"

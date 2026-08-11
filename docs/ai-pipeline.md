@@ -38,3 +38,28 @@ User uploads stay in private Storage. For supported text documents, the worker c
 ## Mock and production modes
 
 Mock generation is enabled only when the server environment explicitly sets `GENERATION_MODE=mock`. It exercises the real database, credits, progress, editor and export paths without provider calls. `GENERATION_MODE=real` fails safely when `OPENAI_API_KEY` is absent; it never silently substitutes fake content in production.
+
+
+## O‘yingoh question generation
+
+`generate-game` is a single structured call rather than a staged job: a quiz is
+small enough to write at once, and the editor — not a progress bar — is where the
+value is added. One flat JSON schema covers every authorable type, and a mapper
+turns each row into the per-type `config` the grader understands, rejecting rows
+whose fields contradict their type. `image_quiz` and `hotspot` are deliberately
+absent from the schema: they need a picture the model does not have, so they are
+added by hand.
+
+Every generated question lands as an editable draft and the game as `draft`
+status. There is no path that puts model output in front of a room without a
+person having been able to change it.
+
+`mode: "regenerate"` rewrites exactly one question, keyed by id, so re-rolling a
+bad question costs one question rather than twenty. Both modes log to `ai_usage`
+under `game_generation` / `game_question_regeneration`, which is where the admin
+console reads O‘yingoh cost from, and both are rate limited per account through
+`api_rate_limits`.
+
+Games generated from a presentation pass the deck's own text as the source with
+an instruction to use nothing else, which is the whole reason that flow exists:
+the questions have to be about what the room just watched.

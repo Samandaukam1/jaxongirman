@@ -1,0 +1,15 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["TEAMID.uz.jaxongirman.app"],
+        "components": [
+          {
+            "/": "/join/*",
+            "comment": "A scanned O'yingoh join link opens the app straight into the room."
+          }
+        ]
+      }
+    ]
+  }
+}

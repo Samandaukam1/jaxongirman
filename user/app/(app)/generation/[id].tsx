@@ -1,13 +1,14 @@
 import type { Tables } from "@jaxongirman/types";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { AlertCircle, ArrowLeft, Check, ChevronRight, Clock3, LoaderCircle, RefreshCw, Sparkles } from "lucide-react-native";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { AlertCircle, ArrowLeft, Check, ChevronRight, Clock3, Gamepad2, LoaderCircle, RefreshCw, Sparkles } from "lucide-react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { IconChip } from "@/components/IconChip";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { asErrorMessage, asFunctionErrorMessage } from "@/lib/format";
+import { generateGame } from "@/lib/games";
 import { supabase } from "@/lib/supabase";
 import { colors, gradients, icon, radius, shadow, shadowLifted, spacing, typography } from "@/theme/tokens";
 
@@ -16,7 +17,7 @@ type Step = Tables<"generation_steps">;
 type Presentation = Tables<"presentations">;
 
 export default function GenerationScreen() {
-  const params = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string; withGame?: string }>();
   const presentationId = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
   const [job, setJob] = useState<Job | null>(null);
@@ -25,6 +26,11 @@ export default function GenerationScreen() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
+  /** null while the deck is still being written, then the linked game's id. */
+  const [gameId, setGameId] = useState<string | null>(null);
+  const [gameError, setGameError] = useState<string | null>(null);
+  const wantsGame = params.withGame === "1";
+  const gameStarted = useRef(false);
 
   const load = useCallback(async () => {
     if (!presentationId) return;
@@ -62,6 +68,26 @@ export default function GenerationScreen() {
     const poll = setInterval(() => void load(), 5000);
     return () => { clearInterval(poll); void supabase.removeChannel(channel); };
   }, [load, presentationId]);
+
+
+  /**
+   * The deck finishing is what makes an O‘yingoh possible: the questions come
+   * from the slides, so generation cannot start before they exist. Guarded by a
+   * ref rather than by state so a re-render mid-request cannot bill twice.
+   */
+  useEffect(() => {
+    if (!wantsGame || !presentationId || gameStarted.current) return;
+    if (presentation?.status !== "ready") return;
+    gameStarted.current = true;
+    void (async () => {
+      try {
+        const result = await generateGame({ mode: "presentation", presentationId });
+        setGameId(result.gameId);
+      } catch (failure) {
+        setGameError(await asFunctionErrorMessage(failure));
+      }
+    })();
+  }, [presentation?.status, presentationId, wantsGame]);
 
   const progress = job?.progress ?? (presentation?.status === "ready" ? 100 : 0);
   const state = useMemo(() => {
@@ -147,6 +173,25 @@ export default function GenerationScreen() {
             onPress={() => router.replace({ pathname: "/(app)/presentation/[id]", params: { id: presentationId } })}
           />
         ) : null}
+        {state === "ready" && wantsGame ? (
+          gameError ? (
+            <Text style={styles.gameNote}>O‘yingoh yaratilmadi: {gameError}</Text>
+          ) : gameId ? (
+            <PrimaryButton
+              tone="secondary"
+              icon={Gamepad2}
+              trailingIcon={ChevronRight}
+              label="O‘yingoh savollarini ko‘rish"
+              style={styles.action}
+              onPress={() => router.push({ pathname: "/(app)/oyingoh/[id]", params: { id: gameId } })}
+            />
+          ) : (
+            <View style={styles.gameWaiting}>
+              <ActivityIndicator color={colors.primary} size="small" />
+              <Text style={styles.gameNote}>O‘yingoh tayyorlanmoqda…</Text>
+            </View>
+          )
+        ) : null}
         {state === "failed" ? (
           <PrimaryButton tone="secondary" icon={RefreshCw} label="Qayta urinish" loading={retrying} style={styles.action} onPress={() => void retry()} />
         ) : null}
@@ -157,6 +202,8 @@ export default function GenerationScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.canvas },
+  gameWaiting: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, marginTop: spacing.md },
+  gameNote: { ...typography.caption, color: colors.inkMuted, textAlign: "center", marginTop: spacing.sm },
   loading: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.canvas },
   header: { paddingTop: 58, paddingHorizontal: spacing.xl, paddingBottom: spacing.lg, flexDirection: "row", alignItems: "center", gap: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
   back: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },

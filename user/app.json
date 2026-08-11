@@ -9,6 +9,10 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "uz.jaxongirman.app",
+      "associatedDomains": [
+        "applinks:jaxongirman.uz",
+        "applinks:jaxongirman.app"
+      ],
       "infoPlist": {
         "NSLocalNetworkUsageDescription": "Jaxongirman development serverga ulanish uchun mahalliy tarmoqqa kirishga muhtoj."
       }
@@ -21,6 +25,17 @@
       },
       "permissions": [
         "android.permission.RECORD_AUDIO"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            { "scheme": "https", "host": "jaxongirman.uz", "pathPrefix": "/join" },
+            { "scheme": "https", "host": "jaxongirman.app", "pathPrefix": "/join" }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
       ]
     },
     "plugins": [
@@ -35,6 +50,12 @@
         "expo-image-picker",
         {
           "photosPermission": "Prezentatsiyadagi rasmlarni almashtirish uchun galereyaga kirish kerak."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Proyektordagi QR kodni skanerlash uchun kameraga kirish kerak."
         }
       ],
       "expo-status-bar"

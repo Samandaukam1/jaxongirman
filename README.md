@@ -1,6 +1,6 @@
 # Jaxongirman
 
-Jaxongirman is a connected production system built on one account, one wallet and one set of roles. It carries two products today — **Jaxongir Slides**, an AI presentation generator, and **Ma'lumotlarni yig'ish**, a survey and data-collection module — behind a shared home screen. The repository contains the Expo iOS/Android user app, the web admin console, shared database types, and the complete Supabase backend.
+Jaxongirman is a connected production system built on one account, one wallet and one set of roles. It carries three products today — **Jaxongir Slides**, an AI presentation generator, **Ma'lumotlarni yig'ish**, a survey and data-collection module, and **O'yingoh**, a live knowledge-competition module — behind a shared home screen, plus a marketplace they all sell into. The repository contains the Expo iOS/Android user app, the web admin console, shared database types, and the complete Supabase backend.
 
 ## Repository map
 
@@ -79,21 +79,36 @@ npm run build:admin
 
 With local functions running in explicit mock mode, `npm run test:functions:local` creates a disposable authenticated account and verifies generation, AI editing, private asynchronous PDF and editable PowerPoint export, authenticated download, and credit settlement end to end. The account, exported objects, and its cascaded records are deleted afterward.
 
+`npm run test:oyingoh` runs a whole match against the real database: a projector
+opens it, a host claims it, thirty-one accounts join at once, every question is
+answered, and the reward coins are checked to move exactly once. It is the test
+that proves the two invariants worth losing sleep over — that a correct answer is
+unreachable by anyone playing, and that a match can never end owing coins the
+host does not have. All disposable accounts are deleted afterward.
+
+Also available: `npm run test:marketplace`, `npm run test:pairing`,
+`npm run test:survey`, `npm run test:pptx`, `npm run test:templates`.
+
 ## Production deployment outline
 
 1. Link the intended Supabase project and review pending migrations.
 2. Push forward-only migrations.
 3. Set `OPENAI_API_KEY` and model configuration with Supabase secrets.
-4. Deploy `generate-presentation`, `edit-presentation` and `export-presentation`.
-5. Configure the client-safe hosted URL and anon/publishable key in Expo and Vite build environments.
-6. Build the mobile apps with EAS and deploy the admin bundle to the chosen web host.
+4. Deploy the Edge Functions, `generate-game` among them.
+5. Configure the client-safe hosted URL and anon/publishable key in Expo, Vite and Next build environments, plus `NEXT_PUBLIC_APP_URL` for the domain the O'yingoh join QR points at.
+6. Fill in the two universal-link placeholders described in
+   [web/public/.well-known/README.md](web/public/.well-known/README.md) — the
+   Apple Team ID and the Android release SHA-256 — and confirm both files are
+   served as JSON with no redirect. Until they are, a scanned join QR opens the
+   landing page instead of the app; the six-digit code on that page still works.
+7. Build the mobile apps with EAS and deploy the admin and web bundles to the chosen hosts.
 
 See [architecture](docs/architecture.md), [database](docs/database.md), [AI pipeline](docs/ai-pipeline.md), and [data collection](docs/data-collection.md) for the implementation contracts.
 
 ## Products
 
 The user app opens on a dashboard with five destinations: **Bosh sahifa**,
-**Loyihalar** (the presentation generator), **Marketplace**, **O'yinlar** and
+**Loyihalar** (the presentation generator), **Do'kon**, **O'yingoh** and
 **Profil**. The home screen answers three things at a glance — the J Coin
 balance, the way into Ma'lumotlarni yig'ish, and whether anything is waiting in
 the inbox.
@@ -104,6 +119,15 @@ wallets in id order, refuses to overdraw and is idempotent per sender key; a
 client never writes a balance. Purchases are listed from the admin-owned
 `coin_packages` catalogue, and while `app_settings.payments.config` reports
 `configured: false` the app says so rather than simulating a payment.
+
+**O'yingoh** is a live match played on a projector and a room full of phones.
+Eleven question shapes plus a team mode; questions written by AI from a topic, a
+pasted text or a finished presentation, and every one of them editable down to
+its answer key before anyone plays it. The host may stake J Coin on the result,
+in which case the coins are held before the first question and settled at the
+podium — see the reward lifecycle in [docs/database.md](docs/database.md). A game
+can be listed in the Do'kon; the purchase grants the right to host it, and the
+creator keeps the only copy. `npm run test:oyingoh` exercises all of this.
 
 **Ma'lumotlarni yig'ish** is documented in full in
 [docs/data-collection.md](docs/data-collection.md): its privacy model (an

@@ -469,6 +469,437 @@ export type Database = {
         }
         Relationships: []
       }
+      game_answers: {
+        Row: {
+          ai_confidence: number | null
+          id: string
+          is_correct: boolean | null
+          payload: Json
+          player_id: string
+          question_id: string
+          question_index: number
+          response_ms: number
+          reviewed_by_host: boolean
+          score_awarded: number
+          session_id: string
+          submitted_at: string
+        }
+        Insert: {
+          ai_confidence?: number | null
+          id?: string
+          is_correct?: boolean | null
+          payload?: Json
+          player_id: string
+          question_id: string
+          question_index: number
+          response_ms?: number
+          reviewed_by_host?: boolean
+          score_awarded?: number
+          session_id: string
+          submitted_at?: string
+        }
+        Update: {
+          ai_confidence?: number | null
+          id?: string
+          is_correct?: boolean | null
+          payload?: Json
+          player_id?: string
+          question_id?: string
+          question_index?: number
+          response_ms?: number
+          reviewed_by_host?: boolean
+          score_awarded?: number
+          session_id?: string
+          submitted_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_answers_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "game_players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "game_answers_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "game_questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "game_answers_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "game_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      game_categories: {
+        Row: {
+          code: string
+          created_at: string
+          icon: string
+          id: string
+          is_active: boolean
+          label: string
+          parent_id: string | null
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          icon?: string
+          id?: string
+          is_active?: boolean
+          label: string
+          parent_id?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          icon?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          parent_id?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_categories_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "game_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      game_pairing_tokens: {
+        Row: {
+          consumed_at: string | null
+          consumed_by: string | null
+          created_at: string
+          expires_at: string
+          session_id: string
+          token: string
+        }
+        Insert: {
+          consumed_at?: string | null
+          consumed_by?: string | null
+          created_at?: string
+          expires_at: string
+          session_id: string
+          token: string
+        }
+        Update: {
+          consumed_at?: string | null
+          consumed_by?: string | null
+          created_at?: string
+          expires_at?: string
+          session_id?: string
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_pairing_tokens_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "game_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      game_players: {
+        Row: {
+          avatar_id: number
+          correct_count: number
+          id: string
+          joined_at: string
+          last_seen_at: string
+          nickname: string
+          rank: number | null
+          reward_eligible: boolean
+          session_id: string
+          status: Database["public"]["Enums"]["game_player_status"]
+          team: string | null
+          total_score: number
+          user_id: string
+        }
+        Insert: {
+          avatar_id?: number
+          correct_count?: number
+          id?: string
+          joined_at?: string
+          last_seen_at?: string
+          nickname: string
+          rank?: number | null
+          reward_eligible?: boolean
+          session_id: string
+          status?: Database["public"]["Enums"]["game_player_status"]
+          team?: string | null
+          total_score?: number
+          user_id: string
+        }
+        Update: {
+          avatar_id?: number
+          correct_count?: number
+          id?: string
+          joined_at?: string
+          last_seen_at?: string
+          nickname?: string
+          rank?: number | null
+          reward_eligible?: boolean
+          session_id?: string
+          status?: Database["public"]["Enums"]["game_player_status"]
+          team?: string | null
+          total_score?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_players_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "game_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      game_questions: {
+        Row: {
+          base_points: number
+          config: Json
+          created_at: string
+          explanation: string
+          game_id: string
+          id: string
+          media_path: string | null
+          owner_id: string
+          position: number
+          prompt: string
+          time_limit_seconds: number
+          type: Database["public"]["Enums"]["game_question_type"]
+          updated_at: string
+        }
+        Insert: {
+          base_points?: number
+          config?: Json
+          created_at?: string
+          explanation?: string
+          game_id: string
+          id?: string
+          media_path?: string | null
+          owner_id: string
+          position?: number
+          prompt?: string
+          time_limit_seconds?: number
+          type: Database["public"]["Enums"]["game_question_type"]
+          updated_at?: string
+        }
+        Update: {
+          base_points?: number
+          config?: Json
+          created_at?: string
+          explanation?: string
+          game_id?: string
+          id?: string
+          media_path?: string | null
+          owner_id?: string
+          position?: number
+          prompt?: string
+          time_limit_seconds?: number
+          type?: Database["public"]["Enums"]["game_question_type"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_questions_game_owner_fkey"
+            columns: ["game_id", "owner_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["id", "owner_id"]
+          },
+        ]
+      }
+      game_sessions: {
+        Row: {
+          created_at: string
+          current_index: number
+          ended_at: string | null
+          expires_at: string
+          game_id: string | null
+          host_user_id: string | null
+          id: string
+          join_code: string
+          join_token: string
+          last_advance_at: string | null
+          phase_deadline: string | null
+          player_count: number
+          question_ids: string[]
+          question_started_at: string | null
+          realtime_token: string
+          reward_plan: Json
+          reward_reserved: number
+          reward_state: string
+          screen_token_hash: string | null
+          show_on_phones: boolean
+          sound_enabled: boolean
+          started_at: string | null
+          state_version: number
+          status: Database["public"]["Enums"]["game_session_status"]
+          team_mode: boolean
+          teams: Json
+        }
+        Insert: {
+          created_at?: string
+          current_index?: number
+          ended_at?: string | null
+          expires_at?: string
+          game_id?: string | null
+          host_user_id?: string | null
+          id?: string
+          join_code: string
+          join_token: string
+          last_advance_at?: string | null
+          phase_deadline?: string | null
+          player_count?: number
+          question_ids?: string[]
+          question_started_at?: string | null
+          realtime_token: string
+          reward_plan?: Json
+          reward_reserved?: number
+          reward_state?: string
+          screen_token_hash?: string | null
+          show_on_phones?: boolean
+          sound_enabled?: boolean
+          started_at?: string | null
+          state_version?: number
+          status?: Database["public"]["Enums"]["game_session_status"]
+          team_mode?: boolean
+          teams?: Json
+        }
+        Update: {
+          created_at?: string
+          current_index?: number
+          ended_at?: string | null
+          expires_at?: string
+          game_id?: string | null
+          host_user_id?: string | null
+          id?: string
+          join_code?: string
+          join_token?: string
+          last_advance_at?: string | null
+          phase_deadline?: string | null
+          player_count?: number
+          question_ids?: string[]
+          question_started_at?: string | null
+          realtime_token?: string
+          reward_plan?: Json
+          reward_reserved?: number
+          reward_state?: string
+          screen_token_hash?: string | null
+          show_on_phones?: boolean
+          sound_enabled?: boolean
+          started_at?: string | null
+          state_version?: number
+          status?: Database["public"]["Enums"]["game_session_status"]
+          team_mode?: boolean
+          teams?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_sessions_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      games: {
+        Row: {
+          audience: string
+          category_id: string | null
+          cover_path: string | null
+          created_at: string
+          description: string
+          difficulty: string
+          failure_reason: string | null
+          featured_at: string | null
+          id: string
+          is_free: boolean
+          owner_id: string
+          question_count: number
+          sessions_count: number
+          source_presentation_id: string | null
+          source_type: Database["public"]["Enums"]["game_source"]
+          status: Database["public"]["Enums"]["game_status"]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          audience?: string
+          category_id?: string | null
+          cover_path?: string | null
+          created_at?: string
+          description?: string
+          difficulty?: string
+          failure_reason?: string | null
+          featured_at?: string | null
+          id?: string
+          is_free?: boolean
+          owner_id: string
+          question_count?: number
+          sessions_count?: number
+          source_presentation_id?: string | null
+          source_type?: Database["public"]["Enums"]["game_source"]
+          status?: Database["public"]["Enums"]["game_status"]
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          audience?: string
+          category_id?: string | null
+          cover_path?: string | null
+          created_at?: string
+          description?: string
+          difficulty?: string
+          failure_reason?: string | null
+          featured_at?: string | null
+          id?: string
+          is_free?: boolean
+          owner_id?: string
+          question_count?: number
+          sessions_count?: number
+          source_presentation_id?: string | null
+          source_type?: Database["public"]["Enums"]["game_source"]
+          status?: Database["public"]["Enums"]["game_status"]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "games_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "game_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "games_source_presentation_id_fkey"
+            columns: ["source_presentation_id"]
+            isOneToOne: false
+            referencedRelation: "presentations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       generation_jobs: {
         Row: {
           actual_credits: number
@@ -801,6 +1232,7 @@ export type Database = {
           currency: string
           description: string
           file_format: string | null
+          game_id: string | null
           has_study_guide: boolean
           id: string
           material_type: string
@@ -826,6 +1258,7 @@ export type Database = {
           currency?: string
           description?: string
           file_format?: string | null
+          game_id?: string | null
           has_study_guide?: boolean
           id?: string
           material_type: string
@@ -851,6 +1284,7 @@ export type Database = {
           currency?: string
           description?: string
           file_format?: string | null
+          game_id?: string | null
           has_study_guide?: boolean
           id?: string
           material_type?: string
@@ -873,6 +1307,13 @@ export type Database = {
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "marketplace_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketplace_products_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
             referencedColumns: ["id"]
           },
           {
@@ -2764,7 +3205,9 @@ export type Database = {
       admin_dashboard_metrics: { Args: never; Returns: Json }
       admin_delete_coin_package: { Args: { p_code: string }; Returns: boolean }
       admin_delete_finance_entry: { Args: { p_id: string }; Returns: boolean }
+      admin_delete_game_category: { Args: { p_id: string }; Returns: boolean }
       admin_finance_overview: { Args: never; Returns: Json }
+      admin_game_overview: { Args: { p_days?: number }; Returns: Json }
       admin_gift_credits: {
         Args: {
           p_amount: number
@@ -2818,6 +3261,38 @@ export type Database = {
           occurred_on: string
           period: Database["public"]["Enums"]["finance_period"]
           source: Database["public"]["Enums"]["finance_source"]
+        }[]
+      }
+      admin_list_game_sessions: {
+        Args: { p_live_only?: boolean }
+        Returns: {
+          created_at: string
+          current_index: number
+          game_title: string
+          host_email: string
+          id: string
+          player_count: number
+          question_count: number
+          reward_reserved: number
+          started_at: string
+          status: Database["public"]["Enums"]["game_session_status"]
+        }[]
+      }
+      admin_list_games: {
+        Args: { p_limit?: number; p_offset?: number; p_search?: string }
+        Returns: {
+          category_label: string
+          created_at: string
+          featured: boolean
+          id: string
+          is_free: boolean
+          marketplace_status: string
+          owner_email: string
+          question_count: number
+          sessions_count: number
+          source_type: Database["public"]["Enums"]["game_source"]
+          status: Database["public"]["Enums"]["game_status"]
+          title: string
         }[]
       }
       admin_list_marketplace_products: {
@@ -2975,6 +3450,10 @@ export type Database = {
         }
       }
       admin_marketplace_finance: { Args: never; Returns: Json }
+      admin_moderate_game: {
+        Args: { p_action: string; p_game_id: string; p_reason?: string }
+        Returns: Json
+      }
       admin_moderate_product: {
         Args: { p_action: string; p_product_id: string; p_reason?: string }
         Returns: {
@@ -2986,6 +3465,7 @@ export type Database = {
           currency: string
           description: string
           file_format: string | null
+          game_id: string | null
           has_study_guide: boolean
           id: string
           material_type: string
@@ -3061,6 +3541,18 @@ export type Database = {
       admin_revoke_module_access: {
         Args: { p_module_code: string; p_reason?: string; p_user_id: string }
         Returns: Json
+      }
+      admin_save_game_category: {
+        Args: {
+          p_code: string
+          p_icon?: string
+          p_id?: string
+          p_is_active?: boolean
+          p_label: string
+          p_parent_id?: string
+          p_sort_order?: number
+        }
+        Returns: string
       }
       admin_set_commission: {
         Args: {
@@ -3144,6 +3636,10 @@ export type Database = {
         }
       }
       admin_settle_ai_cost: { Args: { p_note?: string }; Returns: Json }
+      admin_terminate_game_session: {
+        Args: { p_reason: string; p_session_id: string }
+        Returns: boolean
+      }
       admin_update_app_setting: {
         Args: { p_key: string; p_reason: string; p_value: Json }
         Returns: {
@@ -3272,6 +3768,144 @@ export type Database = {
         }
         Returns: number
       }
+      game_can_host: {
+        Args: { p_game_id: string; p_user_id?: string }
+        Returns: boolean
+      }
+      game_grade_answer: {
+        Args: {
+          p_payload: Json
+          p_question: Database["public"]["Tables"]["game_questions"]["Row"]
+          p_response_ms: number
+        }
+        Returns: {
+          is_correct: boolean
+          score: number
+        }[]
+      }
+      game_host_review_answer: {
+        Args: { p_answer_id: string; p_is_correct: boolean }
+        Returns: Json
+      }
+      game_host_state: { Args: { p_session_id: string }; Returns: Json }
+      game_hostable_list: {
+        Args: never
+        Returns: {
+          category_label: string
+          difficulty: string
+          id: string
+          question_count: number
+          source: string
+          title: string
+        }[]
+      }
+      game_is_host: {
+        Args: { p_session_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      game_is_participant: {
+        Args: { p_session_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      game_join: {
+        Args: { p_avatar_id?: number; p_join_token: string; p_nickname: string }
+        Returns: Json
+      }
+      game_join_by_code: {
+        Args: { p_avatar_id?: number; p_code: string; p_nickname: string }
+        Returns: Json
+      }
+      game_join_info: { Args: { p_join_token: string }; Returns: Json }
+      game_leaderboard_rows: { Args: { p_session_id: string }; Returns: Json }
+      game_listing_preview: { Args: { p_product_id: string }; Returns: Json }
+      game_my_stats: { Args: never; Returns: Json }
+      game_new_join_code: { Args: never; Returns: string }
+      game_normalize_text: { Args: { p_value: string }; Returns: string }
+      game_pairing_claim: {
+        Args: { p_game_id?: string; p_token: string }
+        Returns: Json
+      }
+      game_pairing_rotate: {
+        Args: { p_current_token: string; p_session_id: string }
+        Returns: Json
+      }
+      game_player_state: { Args: { p_session_id: string }; Returns: Json }
+      game_question_stats: {
+        Args: { p_question_index: number; p_session_id: string }
+        Returns: Json
+      }
+      game_reward_liability: {
+        Args: { p_plan: Json; p_player_count: number }
+        Returns: number
+      }
+      game_reward_pay: {
+        Args: {
+          p_amount: number
+          p_kind: string
+          p_session: Database["public"]["Tables"]["game_sessions"]["Row"]
+          p_user_id: string
+        }
+        Returns: boolean
+      }
+      game_reward_plan_check: { Args: { p_plan: Json }; Returns: Json }
+      game_rewards_refund: { Args: { p_session_id: string }; Returns: number }
+      game_rewards_reserve: {
+        Args: {
+          p_session: Database["public"]["Tables"]["game_sessions"]["Row"]
+        }
+        Returns: number
+      }
+      game_rewards_settle: { Args: { p_session_id: string }; Returns: Json }
+      game_sanitized_question: {
+        Args: {
+          p_question: Database["public"]["Tables"]["game_questions"]["Row"]
+          p_session_id: string
+        }
+        Returns: Json
+      }
+      game_screen_open: { Args: never; Returns: Json }
+      game_screen_snapshot: {
+        Args: { p_screen_token: string; p_session_id: string }
+        Returns: Json
+      }
+      game_session_advance: {
+        Args: { p_action?: string; p_session_id: string }
+        Returns: Json
+      }
+      game_session_configure: {
+        Args: {
+          p_game_id?: string
+          p_reward_plan?: Json
+          p_session_id: string
+          p_show_on_phones?: boolean
+          p_sound_enabled?: boolean
+          p_team_mode?: boolean
+          p_teams?: Json
+        }
+        Returns: Json
+      }
+      game_session_create: { Args: { p_game_id: string }; Returns: Json }
+      game_set_status: {
+        Args: {
+          p_game_id: string
+          p_status: Database["public"]["Enums"]["game_status"]
+        }
+        Returns: Json
+      }
+      game_submit_answer: {
+        Args: {
+          p_payload: Json
+          p_question_index: number
+          p_session_id: string
+        }
+        Returns: Json
+      }
+      game_to_result: {
+        Args: {
+          p_session: Database["public"]["Tables"]["game_sessions"]["Row"]
+        }
+        Returns: undefined
+      }
       has_module_access: {
         Args: { p_module_code: string; p_user_id?: string }
         Returns: boolean
@@ -3354,6 +3988,7 @@ export type Database = {
           p_cover_path?: string
           p_description?: string
           p_file_format?: string
+          p_game_id?: string
           p_material_type: string
           p_product_id: string
           p_submit?: boolean
@@ -3590,6 +4225,14 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      presentation_has_game: {
+        Args: { p_presentation_id: string }
+        Returns: boolean
+      }
+      presentation_launch_game: {
+        Args: { p_presentation_session_id: string }
+        Returns: Json
+      }
       presentation_new_token: { Args: never; Returns: string }
       presentation_pairing_claim: {
         Args: { p_presentation_id?: string; p_token: string }
@@ -3677,6 +4320,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      purge_expired_game_sessions: { Args: never; Returns: number }
       purge_expired_presentation_sessions: { Args: never; Returns: number }
       purge_expired_survey_responses: {
         Args: { p_limit?: number }
@@ -3860,6 +4504,9 @@ export type Database = {
         | "transfer_out"
         | "marketplace_spend"
         | "marketplace_earn"
+        | "game_reward_reserve"
+        | "game_reward"
+        | "game_reward_refund"
       element_type:
         | "text"
         | "image"
@@ -3879,6 +4526,30 @@ export type Database = {
         | "subscription"
         | "credit_sale"
         | "other"
+      game_player_status: "joined" | "disconnected" | "left" | "kicked"
+      game_question_type:
+        | "single_choice"
+        | "true_false"
+        | "multiple_choice"
+        | "ordering"
+        | "matching"
+        | "fill_blank"
+        | "word_cloud"
+        | "poll"
+        | "open_answer"
+        | "image_quiz"
+        | "hotspot"
+      game_session_status:
+        | "lobby"
+        | "countdown"
+        | "question"
+        | "question_result"
+        | "leaderboard"
+        | "finished"
+        | "cancelled"
+        | "expired"
+      game_source: "manual" | "ai" | "text" | "file" | "presentation"
+      game_status: "generating" | "draft" | "ready" | "archived" | "failed"
       job_status: "queued" | "running" | "succeeded" | "failed" | "cancelled"
       marketplace_file_kind: "main" | "study_guide" | "preview"
       marketplace_product_status:
@@ -3913,6 +4584,8 @@ export type Database = {
         | "settlement_upcoming"
         | "settlement_paid"
         | "refund"
+        | "game_reward"
+        | "game_result"
       payment_state:
         | "created"
         | "card_created"
@@ -4089,6 +4762,9 @@ export const Constants = {
         "transfer_out",
         "marketplace_spend",
         "marketplace_earn",
+        "game_reward_reserve",
+        "game_reward",
+        "game_reward_refund",
       ],
       element_type: [
         "text",
@@ -4111,6 +4787,32 @@ export const Constants = {
         "credit_sale",
         "other",
       ],
+      game_player_status: ["joined", "disconnected", "left", "kicked"],
+      game_question_type: [
+        "single_choice",
+        "true_false",
+        "multiple_choice",
+        "ordering",
+        "matching",
+        "fill_blank",
+        "word_cloud",
+        "poll",
+        "open_answer",
+        "image_quiz",
+        "hotspot",
+      ],
+      game_session_status: [
+        "lobby",
+        "countdown",
+        "question",
+        "question_result",
+        "leaderboard",
+        "finished",
+        "cancelled",
+        "expired",
+      ],
+      game_source: ["manual", "ai", "text", "file", "presentation"],
+      game_status: ["generating", "draft", "ready", "archived", "failed"],
       job_status: ["queued", "running", "succeeded", "failed", "cancelled"],
       marketplace_file_kind: ["main", "study_guide", "preview"],
       marketplace_product_status: [
@@ -4147,6 +4849,8 @@ export const Constants = {
         "settlement_upcoming",
         "settlement_paid",
         "refund",
+        "game_reward",
+        "game_result",
       ],
       payment_state: [
         "created",
@@ -4189,3 +4893,4 @@ export const Constants = {
     },
   },
 } as const
+

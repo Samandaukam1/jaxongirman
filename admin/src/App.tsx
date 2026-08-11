@@ -6,6 +6,7 @@ import { AccessDeniedPage } from "@/pages/AccessDeniedPage";
 import { AuditPage } from "@/pages/AuditPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { FinancePage } from "@/pages/FinancePage";
+import { GamesPage } from "@/pages/GamesPage";
 import { GiftsPage } from "@/pages/GiftsPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { PresentationsPage } from "@/pages/PresentationsPage";
@@ -32,6 +33,7 @@ const pages: Record<string, ReactNode> = {
   "/surveys": <SurveysPage />,
   "/marketplace": <MarketplacePage />,
   "/marketplace-finance": <MarketplaceFinancePage />,
+  "/games": <GamesPage />,
 };
 
 export default function App() {
