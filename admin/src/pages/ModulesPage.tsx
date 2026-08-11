@@ -24,8 +24,6 @@ type ModuleConfig = {
 };
 
 type PaymentConfig = { provider: string | null; configured: boolean };
-type IosCopy = { subscription?: string; jcoin?: string; marketplace?: string; module?: string };
-type IosPolicy = { review_mode: boolean; copy: IosCopy };
 type Plan = { code: string; label: string; price_amount: number; duration_months: number; is_active?: boolean };
 type TestMode = { enabled: boolean; max_amount: number; emails: string[] };
 
@@ -45,8 +43,6 @@ const EMPTY_PACKAGE = { code: "", label: "", coins: "", bonus: "0", price: "", c
 export function ModulesPage() {
   const [config, setConfig] = useState<ModuleConfig | null>(null);
   const [payments, setPayments] = useState<PaymentConfig>({ provider: null, configured: false });
-  const [ios, setIos] = useState<IosPolicy>({ review_mode: false, copy: {} });
-  const [iosReason, setIosReason] = useState("");
   const [plans, setPlans] = useState<Plan[]>([]);
   const [planCurrency, setPlanCurrency] = useState("UZS");
   const [testMode, setTestMode] = useState<TestMode>({ enabled: false, max_amount: 0, emails: [] });
@@ -61,7 +57,7 @@ export function ModulesPage() {
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     const [settingsResult, testModeResult, packagesResult] = await Promise.all([
-      supabase.from("app_settings").select("key,value").in("key", ["modules.data_collection", "payments.config", "payments.ios_policy", "subscription.plans"]),
+      supabase.from("app_settings").select("key,value").in("key", ["modules.data_collection", "payments.config", "subscription.plans"]),
       supabase.rpc("admin_payment_test_mode"),
       supabase.from("coin_packages").select("*").order("sort_order").order("coins"),
     ]);
@@ -81,12 +77,6 @@ export function ModulesPage() {
         const value = planRow.value as unknown as { currency?: string; plans?: Plan[] };
         setPlans(value?.plans ?? []);
         setPlanCurrency(value?.currency ?? "UZS");
-      }
-
-      const iosRow = (settingsResult.data ?? []).find((row) => row.key === "payments.ios_policy");
-      if (iosRow) {
-        const value = iosRow.value as unknown as IosPolicy;
-        setIos({ review_mode: Boolean(value?.review_mode), copy: value?.copy ?? {} });
       }
 
       const paymentRow = (settingsResult.data ?? []).find((row) => row.key === "payments.config");
@@ -142,24 +132,6 @@ export function ModulesPage() {
     });
     if (failure) setError(errorMessage(failure));
     else { setMessage("Sinov rejimi yangilandi."); await load(); }
-    setSaving(null);
-  }
-
-  async function saveIosPolicy(nextReviewMode: boolean) {
-    setSaving("ios"); setError(null); setMessage(null);
-    const { error: failure } = await supabase.rpc("admin_set_ios_payment_policy", {
-      p_review_mode: nextReviewMode,
-      p_copy: ios.copy as unknown as Json,
-      p_reason: iosReason.trim(),
-    });
-    if (failure) setError(errorMessage(failure));
-    else {
-      setIos((current) => ({ ...current, review_mode: nextReviewMode }));
-      setMessage(nextReviewMode
-        ? "iOS Review Mode yoqildi. iOS ilovada tashqi to‘lovlar endi ko‘rinmaydi va server ularni rad etadi."
-        : "iOS Review Mode o‘chirildi. iOS ilovada to‘lovlar yana ochiq.");
-      setIosReason("");
-    }
     setSaving(null);
   }
 
@@ -378,57 +350,9 @@ export function ModulesPage() {
       </div>
     </section>
 
-    <section className="panel">
-      <div className="panel-heading"><div><p className="eyebrow">APP STORE</p><h2>iOS Review Mode</h2></div></div>
-      <div className="finance-form">
-        <label className="switch-row">
-          <span>iOS ilovada tashqi to‘lovlar yopilgan</span>
-          <span className="switch">
-            <input
-              type="checkbox"
-              checked={ios.review_mode}
-              disabled={saving === "ios"}
-              onChange={(event) => void saveIosPolicy(event.target.checked)}
-            />
-            <span />
-          </span>
-        </label>
-
-        <p className="finance-hint">
-          Faqat iOS’ga ta’sir qiladi. Android va web hech qachon o‘zgarmaydi. Yoqilganda iOS
-          ilovada tarif, J Coin, do‘kon va modul xaridi ko‘rinmaydi, narxlar yashiriladi va
-          server iOS mijozdan kelgan to‘lov so‘rovini rad etadi. Ilovani qayta build qilish
-          shart emas — o‘zgarish darhol kuchga kiradi.
-        </p>
-
-        <div className="warning-banner">
-          <strong>Bu review paytidagi vaqtinchalik niqob emas.</strong> App Store Review
-          Guideline 3.1.1 bo‘yicha ilova ichida ochiladigan kontent in-app purchase orqali
-          sotilishi kerak, 2.3.1(a) esa “yashirin yoki uxlab yotgan” funksiyani taqiqlaydi.
-          Review paytida qanday bo‘lsa, keyin ham shundayligicha qolishi kerak: keyin
-          o‘chirilsa, bu ilovaning olib tashlanishiga va developer akkaunt bekor qilinishiga
-          asos bo‘ladi. To‘g‘ri yechim — iOS uchun StoreKit in-app purchase qo‘shish.
-        </div>
-
-        <label>
-          Sabab <span className="muted" style={{ fontWeight: 400 }}>(audit jurnaliga yoziladi)</span>
-          <input
-            value={iosReason}
-            placeholder="Masalan: 1.4.0 App Store review uchun"
-            onChange={(event) => setIosReason(event.target.value)}
-          />
-        </label>
-
-        <p className="finance-hint">
-          Ko‘rsatiladigan matnlar hech qanday boshqa to‘lov usulini nomlamaydi. Guideline
-          3.1.1(a) AQSh storefront’idan tashqari hamma joyda in-app purchase’dan boshqa
-          xaridga yo‘naltiruvchi matn va tugmalarni taqiqlaydi — “jaxongirman.uz saytida
-          xarid qiling” kabi matn O‘zbekiston storefront’ida rad etilish sababi bo‘ladi.
-          Bunday matn faqat StoreKit External Purchase Link entitlement bo‘lsa qo‘shilsin.
-        </p>
-      </div>
-    </section>
-
+    {/* The iOS payment switch used to live here as a fifth panel and nobody
+        could find it. It has its own page now — "iOS to‘lov siyosati" — so the
+        setting has one home rather than two writers. */}
     <section className="panel">
       <div className="panel-heading"><div><p className="eyebrow">TANGA PAKETLARI</p><h2>Sotuvdagi paketlar</h2></div></div>
 

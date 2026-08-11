@@ -3,6 +3,7 @@ import { useEffect, type ReactNode } from "react";
 import { AdminLayout } from "@/components/AdminLayout";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { AccessDeniedPage } from "@/pages/AccessDeniedPage";
+import { AppStorePage } from "@/pages/AppStorePage";
 import { AuditPage } from "@/pages/AuditPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { FinancePage } from "@/pages/FinancePage";
@@ -36,6 +37,7 @@ const pages: Record<string, ReactNode> = {
   "/marketplace-finance": <MarketplaceFinancePage />,
   "/games": <GamesPage />,
   "/orders": <OrdersPage />,
+  "/app-store": <AppStorePage />,
 };
 
 export default function App() {

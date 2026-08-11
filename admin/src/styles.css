@@ -276,3 +276,16 @@ td small { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; 
 }
 .plan-row .switch-row { margin-top: 0; }
 @media (max-width: 900px) { .plan-row { grid-template-columns: 1fr 1fr; } }
+
+/* The switch's own state, stated once and large: somebody reaching for this is
+ * about to submit to App Review and needs to see the answer, not read for it. */
+.ios-state {
+  display: flex; align-items: center; gap: 16px;
+  margin: 0 22px 18px; padding: 18px 22px; border-radius: 16px; border: 1px solid;
+}
+.ios-state > div { display: flex; flex-direction: column; gap: 3px; }
+.ios-state strong { font-size: 15px; letter-spacing: .06em; }
+.ios-state span { font-size: 13px; line-height: 1.55; }
+.ios-state.is-on { color: #0B7F5C; background: #F4FBF8; border-color: #C9E7DC; }
+.ios-state.is-off { color: #7A4A05; background: #FFFBF2; border-color: #F0DCB4; }
+.ios-actions { display: flex; flex-wrap: wrap; gap: 12px; }
