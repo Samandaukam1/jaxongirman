@@ -41,7 +41,12 @@ type Body = {
  * code — so it leaves the attempt exactly where it was and the buyer types
  * again. Only the provider genuinely refusing the money is terminal.
  */
-const RECOVERABLE = new Set(["invalid_code", "not_verified", "invalid_pan", "invalid_expiry", "invalid_request"]);
+const RECOVERABLE = new Set([
+  "invalid_code", "not_verified", "invalid_pan", "invalid_expiry", "invalid_request",
+  // Provider verdicts the buyer can act on: a different card, a correct code.
+  // `provider_auth` is deliberately absent — that is our misconfiguration.
+  "card_invalid", "card_expired", "card_blocked", "card_not_found", "code_expired",
+]);
 
 /** Strips anything that looks like a card number before a string is written. */
 function redact(value: string): string {

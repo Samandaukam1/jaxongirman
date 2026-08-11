@@ -62,6 +62,44 @@ export class PaymentFailed extends Error {
   }
 }
 
+/**
+ * Payme's numeric codes, mapped to a name and a sentence a buyer can act on.
+ *
+ * Observed against the live merchant rather than guessed: -31300, -31602 and
+ * -32504 came back from production during credential verification. The rest are
+ * from the published reference. An unmapped code keeps the provider's own
+ * message, which is already in Uzbek or Russian and is better than a generic
+ * apology.
+ *
+ * -32504 is worth a comment: it means the caller was refused, which for this
+ * integration means the wrong credential was sent for the method class. It is a
+ * configuration fault, never something a buyer can fix, so it is deliberately
+ * not in RECOVERABLE and the buyer is told the system is unavailable rather than
+ * being invited to re-type a card that was never the problem.
+ */
+const PAYME_ERRORS: Record<string, { code: string; message: string }> = {
+  "-31300": { code: "card_invalid", message: "Karta raqami noto‘g‘ri." },
+  "-31301": { code: "card_expired", message: "Kartaning amal qilish muddati tugagan." },
+  "-31302": { code: "card_blocked", message: "Karta bloklangan. Bankingizga murojaat qiling." },
+  "-31303": { code: "card_not_found", message: "Bunday karta topilmadi." },
+  "-31400": { code: "insufficient_funds", message: "Kartada mablag‘ yetarli emas." },
+  "-31601": { code: "receipt_invalid", message: "To‘lov cheki yaroqsiz. Qaytadan boshlang." },
+  "-31602": { code: "receipt_not_found", message: "To‘lov cheki topilmadi yoki allaqachon to‘langan." },
+  "-31610": { code: "invalid_code", message: "Tasdiqlash kodi noto‘g‘ri." },
+  "-31611": { code: "code_expired", message: "Tasdiqlash kodining muddati tugadi. Yangi kod so‘rang." },
+  "-32504": { code: "provider_auth", message: "To‘lov tizimi vaqtincha ishlamayapti. Keyinroq urinib ko‘ring." },
+};
+
+/** Turns a provider code and message into our normalised failure. */
+export function paymeFailure(code: string, providerMessage: string): PaymentFailed {
+  const known = PAYME_ERRORS[code];
+  if (known) return new PaymentFailed(known.code, known.message);
+  return new PaymentFailed(
+    `payme_${code.replace("-", "")}`,
+    providerMessage || "To‘lov tizimi so‘rovni rad etdi.",
+  );
+}
+
 /** Som are whole; Payme counts in tiyin. One conversion, in one place. */
 export function somToTiyin(som: number): number {
   return Math.round(som) * 100;
@@ -134,13 +172,11 @@ class PaymeProvider implements PaymentProvider {
         : raw && typeof raw === "object"
           ? String((raw as Record<string, unknown>).uz ?? (raw as Record<string, unknown>).ru ?? "")
           : "";
-      throw new PaymentFailed(
-        String(payload.error.code),
-        // Redacted by construction: a provider message that contained a card
-        // number would be stored, and the column constraint would reject the
-        // whole write.
-        redactDigits(message) || "To‘lov tizimi so‘rovni rad etdi.",
-      );
+      // Normalised to our own codes so a screen can branch on meaning rather
+      // than on a provider's numbering. The message is redacted either way: one
+      // containing a card number would be stored, and the column constraint
+      // would then reject the whole write.
+      throw paymeFailure(String(payload.error.code), redactDigits(message));
     }
     if (!payload.result) throw new PaymentFailed("empty_result", "To‘lov tizimi javob qaytarmadi.");
     return payload.result;
