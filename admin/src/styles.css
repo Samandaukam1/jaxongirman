@@ -267,3 +267,12 @@ td small { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; 
 .provider-state span { font-size: 12px; color: var(--ink-muted); }
 .provider-state.is-ready { color: #0B7F5C; background: #F4FBF8; border-color: #C9E7DC; }
 .provider-state.is-pending { color: #7A4A05; background: #FFFBF2; border-color: #F0DCB4; }
+
+/* One tariff per row: six small fields read better side by side than stacked. */
+.plan-row {
+  display: grid; gap: 10px; align-items: end; width: 100%;
+  grid-template-columns: 1fr 1.4fr 1fr 0.8fr auto auto;
+  padding: 14px; border: 1px solid var(--border); border-radius: 14px; background: #fff;
+}
+.plan-row .switch-row { margin-top: 0; }
+@media (max-width: 900px) { .plan-row { grid-template-columns: 1fr 1fr; } }

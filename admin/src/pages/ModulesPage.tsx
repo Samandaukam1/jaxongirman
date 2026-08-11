@@ -26,6 +26,8 @@ type ModuleConfig = {
 type PaymentConfig = { provider: string | null; configured: boolean };
 type IosCopy = { subscription?: string; jcoin?: string; marketplace?: string; module?: string };
 type IosPolicy = { review_mode: boolean; copy: IosCopy };
+type Plan = { code: string; label: string; price_amount: number; duration_months: number; is_active?: boolean };
+type TestMode = { enabled: boolean; max_amount: number; emails: string[] };
 
 const EMPTY_PACKAGE = { code: "", label: "", coins: "", bonus: "0", price: "", currency: "UZS", description: "", sort: "0" };
 
@@ -45,6 +47,10 @@ export function ModulesPage() {
   const [payments, setPayments] = useState<PaymentConfig>({ provider: null, configured: false });
   const [ios, setIos] = useState<IosPolicy>({ review_mode: false, copy: {} });
   const [iosReason, setIosReason] = useState("");
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [planCurrency, setPlanCurrency] = useState("UZS");
+  const [testMode, setTestMode] = useState<TestMode>({ enabled: false, max_amount: 0, emails: [] });
+  const [testEmails, setTestEmails] = useState("");
   const [packages, setPackages] = useState<CoinPackage[]>([]);
   const [draft, setDraft] = useState(EMPTY_PACKAGE);
   const [loading, setLoading] = useState(true);
@@ -54,8 +60,9 @@ export function ModulesPage() {
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
-    const [settingsResult, packagesResult] = await Promise.all([
-      supabase.from("app_settings").select("key,value").in("key", ["modules.data_collection", "payments.config", "payments.ios_policy"]),
+    const [settingsResult, testModeResult, packagesResult] = await Promise.all([
+      supabase.from("app_settings").select("key,value").in("key", ["modules.data_collection", "payments.config", "payments.ios_policy", "subscription.plans"]),
+      supabase.rpc("admin_payment_test_mode"),
       supabase.from("coin_packages").select("*").order("sort_order").order("coins"),
     ]);
     const requestError = settingsResult.error ?? packagesResult.error;
@@ -63,6 +70,19 @@ export function ModulesPage() {
       setError(errorMessage(requestError));
     } else {
       const moduleRow = (settingsResult.data ?? []).find((row) => row.key === "modules.data_collection");
+      if (testModeResult.data) {
+        const value = testModeResult.data as unknown as TestMode;
+        setTestMode(value);
+        setTestEmails((value.emails ?? []).join(", "));
+      }
+
+      const planRow = (settingsResult.data ?? []).find((row) => row.key === "subscription.plans");
+      if (planRow) {
+        const value = planRow.value as unknown as { currency?: string; plans?: Plan[] };
+        setPlans(value?.plans ?? []);
+        setPlanCurrency(value?.currency ?? "UZS");
+      }
+
       const iosRow = (settingsResult.data ?? []).find((row) => row.key === "payments.ios_policy");
       if (iosRow) {
         const value = iosRow.value as unknown as IosPolicy;
@@ -96,6 +116,32 @@ export function ModulesPage() {
     });
     if (saveError) setError(errorMessage(saveError));
     else setMessage("Modul sozlamalari saqlandi va audit jurnaliga yozildi.");
+    setSaving(null);
+  }
+
+  async function savePlans() {
+    setSaving("plans"); setError(null); setMessage(null);
+    const { error: failure } = await supabase.rpc("admin_set_subscription_plans", {
+      p_plans: plans as unknown as Json,
+      p_currency: planCurrency,
+      p_reason: "Tariff catalogue update",
+    });
+    if (failure) setError(errorMessage(failure));
+    else setMessage("Tariflar saqlandi va ilovada darhol ko‘rinadi.");
+    setSaving(null);
+  }
+
+  async function saveTestMode(next: Partial<TestMode> & { enabled: boolean }) {
+    setSaving("test"); setError(null); setMessage(null);
+    const emails = testEmails.split(/[\s,;]+/).map((value) => value.trim()).filter(Boolean);
+    const { error: failure } = await supabase.rpc("admin_set_payment_test_mode", {
+      p_enabled: next.enabled,
+      p_max_amount: next.max_amount ?? testMode.max_amount,
+      p_emails: emails.length > 0 ? emails : undefined,
+      p_reason: "Production payment testing",
+    });
+    if (failure) setError(errorMessage(failure));
+    else { setMessage("Sinov rejimi yangilandi."); await load(); }
     setSaving(null);
   }
 
@@ -234,6 +280,100 @@ export function ModulesPage() {
         </p>
         <button className="primary-button" type="button" disabled={saving === "payments"} onClick={() => void savePayments()}>
           <CreditCard size={16} /> To‘lov sozlamalarini saqlash
+        </button>
+      </div>
+    </section>
+
+    <section className="panel">
+      <div className="panel-heading">
+        <div><p className="eyebrow">TARIFLAR</p><h2>Sotuvdagi tariflar</h2></div>
+        <button className="secondary-button compact" type="button"
+          onClick={() => setPlans((current) => [...current, { code: "", label: "", price_amount: 0, duration_months: 1, is_active: true }])}>
+          Yangi tarif
+        </button>
+      </div>
+      <div className="finance-form">
+        {plans.length === 0 ? (
+          <p className="finance-hint">
+            Hozircha tarif e’lon qilinmagan, shuning uchun ilovada tarif sotib olish taklif qilinmaydi.
+            Bu ataylab: narxi yoki muddati bo‘lmagan tarif ochilib, keyin to‘lanmasligidan ko‘ra
+            umuman ko‘rinmasligi to‘g‘ri.
+          </p>
+        ) : plans.map((plan, index) => (
+          <div className="plan-row" key={index}>
+            <label>Kod
+              <input value={plan.code} placeholder="oylik"
+                onChange={(event) => setPlans((current) => current.map((row, i) =>
+                  i === index ? { ...row, code: event.target.value } : row))} />
+            </label>
+            <label>Nom
+              <input value={plan.label} placeholder="Oylik tarif"
+                onChange={(event) => setPlans((current) => current.map((row, i) =>
+                  i === index ? { ...row, label: event.target.value } : row))} />
+            </label>
+            <label>Narx ({planCurrency})
+              <input type="number" min="1" value={plan.price_amount}
+                onChange={(event) => setPlans((current) => current.map((row, i) =>
+                  i === index ? { ...row, price_amount: Number(event.target.value) } : row))} />
+            </label>
+            <label>Muddat (oy)
+              <input type="number" min="1" value={plan.duration_months}
+                onChange={(event) => setPlans((current) => current.map((row, i) =>
+                  i === index ? { ...row, duration_months: Number(event.target.value) } : row))} />
+            </label>
+            <label className="switch-row">
+              <input type="checkbox" checked={plan.is_active !== false}
+                onChange={(event) => setPlans((current) => current.map((row, i) =>
+                  i === index ? { ...row, is_active: event.target.checked } : row))} />
+              <span>Faol</span>
+            </label>
+            <button className="secondary-button compact danger" type="button"
+              onClick={() => setPlans((current) => current.filter((_, i) => i !== index))}>
+              O‘chirish
+            </button>
+          </div>
+        ))}
+        <p className="finance-hint">
+          Narx va muddat server tomonida tekshiriladi: noldagi narx yoki muddatsiz tarif saqlanmaydi.
+          Kod o‘zgarmas identifikator — allaqachon sotilgan tarifning kodini o‘zgartirmang.
+        </p>
+        <button className="primary-button" type="button" disabled={saving === "plans"} onClick={() => void savePlans()}>
+          <Save size={16} /> Tariflarni saqlash
+        </button>
+      </div>
+    </section>
+
+    <section className="panel">
+      <div className="panel-heading"><div><p className="eyebrow">PRODUCTION TEST</p><h2>Sinov to‘lovlari</h2></div></div>
+      <div className="finance-form">
+        <div className="warning-banner">
+          <strong>Bu haqiqiy karta va haqiqiy pul.</strong>
+          Payme Subscribe uchun alohida sandbox yo‘q, shuning uchun jonli integratsiyani faqat
+          real to‘lov bilan tekshirish mumkin. Shu sababli uchta to‘siq bor: default o‘chirilgan,
+          faqat ro‘yxatdagi hisoblar, va summa cheklangan. Narx <em>o‘zgartirilmaydi</em> —
+          e’lon qilingan narx chekdan yuqori bo‘lsa, sinov buyurtmasi ochilmaydi.
+        </div>
+        <label className="switch-row">
+          <input type="checkbox" checked={testMode.enabled} disabled={saving === "test"}
+            onChange={(event) => void saveTestMode({ enabled: event.target.checked })} />
+          <span>Sinov rejimi yoqilgan</span>
+        </label>
+        <label>Eng ko‘p summa (so‘m)
+          <input type="number" min="0" max="50000" value={testMode.max_amount}
+            onChange={(event) => setTestMode((current) => ({ ...current, max_amount: Number(event.target.value) }))} />
+        </label>
+        <label>Ruxsat etilgan hisoblar <span className="muted" style={{ fontWeight: 400 }}>(email, vergul bilan)</span>
+          <textarea value={testEmails} placeholder="tester@jaxongirman.uz, admin@jaxongirman.uz"
+            onChange={(event) => setTestEmails(event.target.value)} />
+        </label>
+        <p className="finance-hint">
+          Sinov buyurtmasi haqiqiy yozuv sifatida saqlanadi va <code>SINOV</code> deb belgilanadi:
+          moliyaviy jamlanmalarga kirmaydi, lekin yashirilmaydi ham — pul haqiqatda o‘tgan.
+          Bu switch super admin huquqini talab qiladi.
+        </p>
+        <button className="primary-button" type="button" disabled={saving === "test"}
+          onClick={() => void saveTestMode({ enabled: testMode.enabled })}>
+          <Save size={16} /> Sinov sozlamalarini saqlash
         </button>
       </div>
     </section>

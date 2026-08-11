@@ -537,3 +537,35 @@ body:has(.arena) .arena { min-height: 100vh; }
 .arena-team-name { font-size: clamp(16px, 1.8vw, 26px); font-weight: 700; }
 .arena-team-meta { font-size: clamp(12px, 1.1vw, 15px); color: rgba(255,255,255,.55); }
 .arena-team-score { font-size: clamp(22px, 2.4vw, 38px); font-weight: 800; font-variant-numeric: tabular-nums; }
+
+/* ------------------------------------------------------------- checkout --
+ * A transactional card: wider than a notice, and every field full width so a
+ * card number is never split across a line break.
+ */
+.checkout-card { max-width: 520px; text-align: left; }
+.checkout-card h1 { text-align: left; font-size: clamp(24px, 3vw, 32px); }
+.checkout-total { font-size: 17px; color: var(--ink-muted); }
+.checkout-field { display: grid; gap: 6px; margin: 0 0 18px; font-size: 14px; font-weight: 600; }
+.checkout-field input {
+  width: 100%; padding: 14px 16px; font-size: 17px; font-family: inherit;
+  border: 1px solid var(--border-strong); border-radius: 14px;
+  background: var(--surface-muted); color: var(--ink);
+}
+.checkout-field input:focus { outline: 2px solid var(--primary); outline-offset: 1px; }
+.checkout-code { letter-spacing: 10px; text-align: center; font-size: 24px !important; }
+.checkout-error {
+  margin: 16px 0 0; padding: 12px 14px; border-radius: 12px; font-size: 14px;
+  color: #A32036; background: #FEF6F7; border: 1px solid #EBC8CF;
+}
+.plan-list { display: grid; gap: 12px; margin: 8px 0 20px; }
+.plan-option {
+  display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; align-items: center;
+  padding: 18px 20px; text-align: left; font-family: inherit; cursor: pointer;
+  border: 1px solid var(--border-strong); border-radius: 16px; background: #fff;
+  transition: border-color 160ms ease, transform 160ms ease;
+}
+.plan-option:hover:not(:disabled) { border-color: var(--primary); transform: translateY(-1px); }
+.plan-option:disabled { opacity: .6; cursor: default; }
+.plan-name { font-size: 17px; font-weight: 700; }
+.plan-price { font-size: 19px; font-weight: 800; color: var(--primary-deep); grid-row: span 2; }
+.plan-meta { font-size: 13px; color: var(--ink-muted); }

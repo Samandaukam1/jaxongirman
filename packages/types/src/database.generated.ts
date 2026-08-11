@@ -1610,6 +1610,7 @@ export type Database = {
       }
       orders: {
         Row: {
+          attempt_expires_at: string | null
           buyer_fee: number
           buyer_fee_rate: number
           cancelled_at: string | null
@@ -1628,6 +1629,7 @@ export type Database = {
           payme_transaction_id: string | null
           platform_revenue: number
           product_id: string | null
+          provider_card_token: string | null
           purpose: Database["public"]["Enums"]["order_purpose"]
           reference_code: string | null
           seller_fee: number
@@ -1641,6 +1643,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          attempt_expires_at?: string | null
           buyer_fee?: number
           buyer_fee_rate?: number
           cancelled_at?: string | null
@@ -1659,6 +1662,7 @@ export type Database = {
           payme_transaction_id?: string | null
           platform_revenue?: number
           product_id?: string | null
+          provider_card_token?: string | null
           purpose: Database["public"]["Enums"]["order_purpose"]
           reference_code?: string | null
           seller_fee?: number
@@ -1672,6 +1676,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          attempt_expires_at?: string | null
           buyer_fee?: number
           buyer_fee_rate?: number
           cancelled_at?: string | null
@@ -1690,6 +1695,7 @@ export type Database = {
           payme_transaction_id?: string | null
           platform_revenue?: number
           product_id?: string | null
+          provider_card_token?: string | null
           purpose?: Database["public"]["Enums"]["order_purpose"]
           reference_code?: string | null
           seller_fee?: number
@@ -3625,6 +3631,7 @@ export type Database = {
           user_email: string
         }[]
       }
+      admin_payment_test_mode: { Args: never; Returns: Json }
       admin_pending_payouts: {
         Args: never
         Returns: {
@@ -3713,6 +3720,19 @@ export type Database = {
       }
       admin_set_ios_payment_policy: {
         Args: { p_copy?: Json; p_reason?: string; p_review_mode: boolean }
+        Returns: Json
+      }
+      admin_set_payment_test_mode: {
+        Args: {
+          p_emails?: string[]
+          p_enabled: boolean
+          p_max_amount?: number
+          p_reason?: string
+        }
+        Returns: Json
+      }
+      admin_set_subscription_plans: {
+        Args: { p_currency?: string; p_plans: Json; p_reason?: string }
         Returns: Json
       }
       admin_set_survey_status: {
@@ -4189,6 +4209,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      order_clear_attempt_token: {
+        Args: { p_order_id: string }
+        Returns: undefined
+      }
       order_create_jcoin: {
         Args: { p_package_id: string; p_platform?: string }
         Returns: Json
@@ -4218,6 +4242,7 @@ export type Database = {
           p_user_id: string
         }
         Returns: {
+          attempt_expires_at: string | null
           buyer_fee: number
           buyer_fee_rate: number
           cancelled_at: string | null
@@ -4236,6 +4261,7 @@ export type Database = {
           payme_transaction_id: string | null
           platform_revenue: number
           product_id: string | null
+          provider_card_token: string | null
           purpose: Database["public"]["Enums"]["order_purpose"]
           reference_code: string | null
           seller_fee: number
@@ -4264,13 +4290,22 @@ export type Database = {
         }
         Returns: Json
       }
+      order_mark_test: { Args: { p_order_id: string }; Returns: undefined }
       order_purpose_for_material: {
         Args: { p_material_type: string }
         Returns: Database["public"]["Enums"]["order_purpose"]
       }
+      order_set_attempt_token: {
+        Args: { p_minutes?: number; p_order_id: string; p_token: string }
+        Returns: undefined
+      }
       order_summary: {
         Args: { p_order: Database["public"]["Tables"]["orders"]["Row"] }
         Returns: Json
+      }
+      order_take_attempt_token: {
+        Args: { p_order_id: string }
+        Returns: string
       }
       order_transition_allowed: {
         Args: {
@@ -4378,6 +4413,10 @@ export type Database = {
       payment_take_attempt_token: {
         Args: { p_transaction_id: string }
         Returns: string
+      }
+      payment_test_mode_for: {
+        Args: { p_amount: number; p_user_id: string }
+        Returns: boolean
       }
       payment_transition_allowed: {
         Args: {

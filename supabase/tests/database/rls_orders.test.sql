@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(42);
+select plan(53);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -175,6 +175,56 @@ select throws_ok(
   '23514', null,
   'the arithmetic is a constraint: a total that does not equal subtotal plus fee is rejected'
 );
+
+-- ------------------------------------------------- subscription plans --
+-- A plan a client could open but never pay is worse than no plan, so the
+-- publisher refuses the shapes that would produce one.
+reset role;
+insert into public.user_roles (user_id, role) values ('cc330000-0000-0000-0000-0000000000d3', 'admin')
+  on conflict do nothing;
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'cc330000-0000-0000-0000-0000000000d3', true);
+
+select throws_ok(
+  $$select public.admin_set_subscription_plans('[{"code":"oy","label":"Oylik","price_amount":0,"duration_months":1}]'::jsonb)$$,
+  '22023', null, 'a plan priced at zero is refused');
+select throws_ok(
+  $$select public.admin_set_subscription_plans('[{"code":"oy","label":"Oylik","price_amount":49000,"duration_months":0}]'::jsonb)$$,
+  '22023', null, 'and one with no duration');
+select throws_ok(
+  $$select public.admin_set_subscription_plans('[{"code":"Oy Lik","label":"X","price_amount":1,"duration_months":1}]'::jsonb)$$,
+  '22023', null, 'and one whose code is not a code');
+select throws_ok(
+  $$select public.admin_set_subscription_plans('[{"code":"oy","label":"A","price_amount":1,"duration_months":1},{"code":"oy","label":"B","price_amount":2,"duration_months":1}]'::jsonb)$$,
+  '22023', null, 'and a duplicated code');
+select is(
+  (public.admin_set_subscription_plans('[{"code":"oylik","label":"Oylik tarif","price_amount":49000,"duration_months":1}]'::jsonb)) -> 'plans' -> 0 ->> 'code',
+  'oylik', 'a well-formed plan is published');
+
+-- Now that a plan exists, an order can be opened against it — and only it.
+select set_config('request.jwt.claim.sub', 'aa110000-0000-0000-0000-0000000000d1', true);
+select is(
+  (public.order_create_subscription('oylik', 'android')) ->> 'total_amount',
+  '49000', 'a subscription order is priced from the published plan');
+select throws_ok(
+  $$select public.order_create_subscription('yoq_bunday', 'android')$$,
+  'P0002', null, 'and an unpublished plan cannot be bought');
+
+-- ------------------------------------------------------- test mode --
+-- Off by default, so a fresh deployment cannot charge a small amount by accident.
+reset role;
+select ok(not public.payment_test_mode_for('aa110000-0000-0000-0000-0000000000d1', 500),
+  'test mode is off by default');
+update public.app_settings set value = jsonb_build_object(
+  'enabled', true, 'max_amount', 1000,
+  'user_ids', jsonb_build_array('aa110000-0000-0000-0000-0000000000d1')
+) where key = 'payments.test_mode';
+select ok(public.payment_test_mode_for('aa110000-0000-0000-0000-0000000000d1', 500),
+  'a listed account under the cap may test');
+select ok(not public.payment_test_mode_for('aa110000-0000-0000-0000-0000000000d1', 5000),
+  'but not above the cap — a published price is never discounted to fit');
+select ok(not public.payment_test_mode_for('bb220000-0000-0000-0000-0000000000d2', 500),
+  'and an unlisted account never may');
 
 select finish();
 rollback;
