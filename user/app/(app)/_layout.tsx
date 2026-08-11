@@ -1,6 +1,7 @@
 import { Redirect, Stack } from "expo-router";
 
 import { AccountProvider } from "@/providers/AccountProvider";
+import { PaymentPolicyProvider } from "@/providers/PaymentPolicyProvider";
 import { useAuth } from "@/providers/AuthProvider";
 import { colors } from "@/theme/tokens";
 
@@ -12,39 +13,73 @@ export default function AppLayout() {
     // subscriptions only ever exist for a signed-in person, and tear down with
     // the session rather than outliving it.
     <AccountProvider>
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.canvas } }}>
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="notifications" options={{ presentation: "modal" }} />
-        {/* A full screen rather than a sheet, and no swipe-to-dismiss: a
-            half-filled form should only be abandoned on purpose, through the
-            button in its own header. */}
-        <Stack.Screen name="create" options={{ presentation: "fullScreenModal", gestureEnabled: false }} />
-        <Stack.Screen name="generation/[id]" options={{ gestureEnabled: false }} />
-        <Stack.Screen name="presentation/[id]" />
-        <Stack.Screen name="coins/send" />
-        <Stack.Screen name="coins/buy" />
-        <Stack.Screen name="survey/index" />
-        {/* The survey builder and the response form are both long forms whose
-            in-progress state lives only in memory — the same rule as `create`. */}
-        <Stack.Screen name="survey/create" options={{ presentation: "fullScreenModal", gestureEnabled: false }} />
-        <Stack.Screen name="survey/templates" />
-        <Stack.Screen name="survey/access" />
-        <Stack.Screen name="survey/[id]" options={{ gestureEnabled: false }} />
-        <Stack.Screen name="survey/results/[id]" />
-        <Stack.Screen name="marketplace/[id]" />
-        {/* Checkout and the seller form are both flows a person should leave on
-            purpose, through their own header button, rather than by swiping. */}
-        <Stack.Screen name="marketplace/checkout" options={{ presentation: "fullScreenModal", gestureEnabled: false }} />
-        <Stack.Screen name="marketplace/sell" options={{ presentation: "fullScreenModal", gestureEnabled: false }} />
-        <Stack.Screen name="marketplace/seller" />
-        <Stack.Screen name="marketplace/library" />
-        <Stack.Screen name="earnings" />
-        <Stack.Screen name="cards" />
-        {/* The scanner is a camera surface; leaving it should be deliberate. */}
-        <Stack.Screen name="present/scan" options={{ presentation: "fullScreenModal", gestureEnabled: false }} />
-        <Stack.Screen name="present/[sessionId]" options={{ gestureEnabled: false }} />
-        <Stack.Screen name="pair/[token]" />
-      </Stack>
+      <PaymentPolicyProvider>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: colors.canvas },
+            }}
+          >
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen
+              name="notifications"
+              options={{ presentation: "modal" }}
+            />
+            {/* A full screen rather than a sheet, and no swipe-to-dismiss: a
+              half-filled form should only be abandoned on purpose, through the
+              button in its own header. */}
+            <Stack.Screen
+              name="create"
+              options={{ presentation: "fullScreenModal", gestureEnabled: false }}
+            />
+            <Stack.Screen
+              name="generation/[id]"
+              options={{ gestureEnabled: false }}
+            />
+            <Stack.Screen name="presentation/[id]" />
+            <Stack.Screen name="coins/send" />
+            <Stack.Screen name="coins/buy" />
+            <Stack.Screen name="survey/index" />
+            {/* The survey builder and the response form are both long forms whose
+              in-progress state lives only in memory — the same rule as `create`. */}
+            <Stack.Screen
+              name="survey/create"
+              options={{ presentation: "fullScreenModal", gestureEnabled: false }}
+            />
+            <Stack.Screen name="survey/templates" />
+            <Stack.Screen name="survey/access" />
+            <Stack.Screen
+              name="survey/[id]"
+              options={{ gestureEnabled: false }}
+            />
+            <Stack.Screen name="survey/results/[id]" />
+            <Stack.Screen name="marketplace/[id]" />
+            {/* Checkout and the seller form are both flows a person should leave on
+              purpose, through their own header button, rather than by swiping. */}
+            <Stack.Screen
+              name="marketplace/checkout"
+              options={{ presentation: "fullScreenModal", gestureEnabled: false }}
+            />
+            <Stack.Screen
+              name="marketplace/sell"
+              options={{ presentation: "fullScreenModal", gestureEnabled: false }}
+            />
+            <Stack.Screen name="marketplace/seller" />
+            <Stack.Screen name="marketplace/library" />
+            <Stack.Screen name="earnings" />
+            <Stack.Screen name="cards" />
+            {/* The scanner is a camera surface; leaving it should be deliberate. */}
+            <Stack.Screen
+              name="present/scan"
+              options={{ presentation: "fullScreenModal", gestureEnabled: false }}
+            />
+            <Stack.Screen
+              name="present/[sessionId]"
+              options={{ gestureEnabled: false }}
+            />
+            <Stack.Screen name="pair/[token]" />
+          </Stack>
+      </PaymentPolicyProvider>
     </AccountProvider>
   );
 }

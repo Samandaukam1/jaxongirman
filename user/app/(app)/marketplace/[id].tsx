@@ -15,6 +15,7 @@ import { signPaths, toggleFavorite } from "@/lib/marketplace";
 import { formatSom } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
+import { clientPlatform, usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
 import { colors, icon, radius, shadow, spacing, typography } from "@/theme/tokens";
 
 type Detail = {
@@ -67,6 +68,7 @@ export default function ProductDetailScreen() {
    * a single question text. Correct answers stay behind the purchase; so do the
    * prompts, because a shopper who could read them would not need to buy.
    */
+  const policy = usePaymentPolicy();
   const [hosting, setHosting] = useState(false);
   const [gamePreview, setGamePreview] = useState<{
     game_id: string; question_count: number; difficulty: string; types: Record<string, number>;
@@ -129,6 +131,7 @@ export default function ProductDetailScreen() {
     setBusy(true);
     setActionError(null);
     const { data, error: checkoutError } = await supabase.rpc("marketplace_create_checkout", {
+      p_platform: clientPlatform,
       p_product_id: productId,
       // One key per press, so a double tap is one attempt rather than two.
       p_idempotency_key: `${productId}:${Date.now()}`,
@@ -272,8 +275,15 @@ export default function ProductDetailScreen() {
 
         {product.description ? <Text style={styles.description}>{product.description}</Text> : null}
 
+        {!policy.paymentsEnabled && !detail.owned && !product.is_own ? (
+          <View style={styles.guideCard}>
+            <Text style={styles.guideText}>{policy.unavailableMessage("marketplace")}</Text>
+          </View>
+        ) : null}
+
         {/* The breakdown is the server's, shown in full so the total is never a
             surprise at the payment step. */}
+        {policy.showPrices ? (
         <View style={styles.priceCard}>
           <View style={styles.priceLine}>
             <Text style={styles.priceLabel}>Mahsulot</Text>
@@ -289,6 +299,7 @@ export default function ProductDetailScreen() {
             <Text style={styles.priceTotal}>{formatSom(quote.buyer_total)}</Text>
           </View>
         </View>
+        ) : null}
 
         {actionError ? <InlineError message={actionError} /> : null}
 
@@ -313,9 +324,9 @@ export default function ProductDetailScreen() {
           <View style={styles.ownedCard}>
             <Text style={styles.ownedText}>Bu sizning mahsulotingiz.</Text>
           </View>
-        ) : (
+        ) : policy.paymentsEnabled ? (
           <PrimaryButton label={`${formatSom(quote.buyer_total)} — sotib olish`} loading={busy} onPress={() => void buy()} />
-        )}
+        ) : null}
 
         {detail.reviews.length > 0 ? (
           <>

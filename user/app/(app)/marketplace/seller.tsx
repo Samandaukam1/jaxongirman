@@ -5,12 +5,14 @@ import { useCallback, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { PaymentUnavailable } from "@/components/PaymentUnavailable";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { EmptyState, ErrorState, SkeletonCard } from "@/components/StateBlocks";
 import { formatShortDateTime } from "@/lib/datetime";
 import { asErrorMessage } from "@/lib/format";
 import { formatSom } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
+import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
 import { colors, icon, radius, shadow, spacing, typography } from "@/theme/tokens";
 
 type Product = {
@@ -23,6 +25,7 @@ type Summary = { sales_count: number; net_total: number; pending_total: number; 
 
 /** The seller's shelf: what is listed, what state each listing is in, what it earned. */
 export default function SellerDashboardScreen() {
+  const policy = usePaymentPolicy();
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -51,6 +54,19 @@ export default function SellerDashboardScreen() {
   }, []);
 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
+
+  // The payout side of a shop that is closed on this platform. Balances are not
+  // hidden because they are secret — they are hidden because a marketplace that
+  // cannot transact here should not present its accounting either.
+  if (!policy.loading && !policy.paymentsEnabled) {
+    return (
+      <PaymentUnavailable
+        title={policy.unavailableMessage("marketplace")}
+        message="Hisob-kitob ma’lumotlaringiz saqlanib qoladi."
+        onLeave={() => router.back()}
+      />
+    );
+  }
 
   return (
     <View style={styles.screen}>

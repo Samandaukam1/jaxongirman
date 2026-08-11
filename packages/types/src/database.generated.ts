@@ -3576,6 +3576,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      admin_set_ios_payment_policy: {
+        Args: { p_copy?: Json; p_reason?: string; p_review_mode: boolean }
+        Returns: Json
+      }
       admin_set_survey_status: {
         Args: {
           p_form_id: string
@@ -3734,6 +3738,10 @@ export type Database = {
       }
       assert_module_access: {
         Args: { p_module_code: string; p_role: string }
+        Returns: undefined
+      }
+      assert_payment_allowed: {
+        Args: { p_context?: string; p_platform?: string }
         Returns: undefined
       }
       create_survey_from_template: {
@@ -3934,6 +3942,7 @@ export type Database = {
         Args: {
           p_idempotency_key: string
           p_partial_card_id?: string
+          p_platform?: string
           p_product_id: string
         }
         Returns: Json
@@ -4111,6 +4120,7 @@ export type Database = {
         Args: { p_transaction_id: string }
         Returns: undefined
       }
+      payment_policy: { Args: { p_platform?: string }; Returns: Json }
       payment_set_attempt_token: {
         Args: { p_minutes?: number; p_token: string; p_transaction_id: string }
         Returns: undefined
@@ -4124,6 +4134,10 @@ export type Database = {
           p_from: Database["public"]["Enums"]["payment_state"]
           p_to: Database["public"]["Enums"]["payment_state"]
         }
+        Returns: boolean
+      }
+      payments_blocked_for_platform: {
+        Args: { p_platform?: string }
         Returns: boolean
       }
       pptx_import_fail: {

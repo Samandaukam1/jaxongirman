@@ -8,12 +8,14 @@ import { useMemo, useState } from "react";
 import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { PaymentUnavailable } from "@/components/PaymentUnavailable";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { InlineError } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
 import { useMaterialTypes, useQuote } from "@/lib/marketplace";
 import { formatBytes, formatSom } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
+import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
 import { useAuth } from "@/providers/AuthProvider";
 import { colors, radius, shadow, spacing, typography } from "@/theme/tokens";
 
@@ -47,6 +49,7 @@ export default function SellScreen() {
    */
   const params = useLocalSearchParams<{ gameId?: string; gameTitle?: string }>();
   const gameId = typeof params.gameId === "string" ? params.gameId : null;
+  const policy = usePaymentPolicy();
 
   const [materialType, setMaterialType] = useState<string | null>(gameId ? "game" : null);
   const [title, setTitle] = useState(typeof params.gameTitle === "string" ? params.gameTitle : "");
@@ -221,6 +224,18 @@ export default function SellScreen() {
     } finally {
       setBusy(false);
     }
+  }
+
+  // Selling is the other half of a storefront: if the shop is closed on this
+  // platform, listing a price into it is closed too.
+  if (!policy.loading && !policy.paymentsEnabled) {
+    return (
+      <PaymentUnavailable
+        title={policy.unavailableMessage("marketplace")}
+        message="Mavjud e’lonlaringiz o‘zgarishsiz qoladi."
+        onLeave={() => router.back()}
+      />
+    );
   }
 
   return (

@@ -247,3 +247,11 @@ td small { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; 
 @media (prefers-reduced-motion: reduce) {
   .live-pill svg { animation: none; }
 }
+
+/* A statement of consequence, not a hint. Used where a setting is legitimate
+ * but easy to misuse in a way that costs the developer account. */
+.warning-banner {
+  padding: 16px 18px; border-radius: 14px; font-size: 13px; line-height: 1.65;
+  color: #7A4A05; background: #FFF8EC; border: 1px solid #F0DCB4;
+}
+.warning-banner strong { display: block; margin-bottom: 4px; color: #5C3703; }

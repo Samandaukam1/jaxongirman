@@ -9,6 +9,7 @@ import { EmptyState, ErrorState, SkeletonCard } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
 import { formatCoins, formatNumber, formatPrice } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
+import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
 import { useAccount } from "@/providers/AccountProvider";
 import { colors, radius, shadow, spacing, typography } from "@/theme/tokens";
 
@@ -27,6 +28,7 @@ export default function BuyCoinsScreen() {
   const { balance } = useAccount();
   const [packages, setPackages] = useState<Package[]>([]);
   const [payments, setPayments] = useState<PaymentConfig>({ provider: null, configured: false });
+  const policy = usePaymentPolicy();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,9 +65,24 @@ export default function BuyCoinsScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={colors.primary} />}
       >
+        {/* Nothing about buying is drawn on a platform that may not buy — not
+            the packages, not the prices. A price with no way to pay it is an
+            advertisement for a purchase this build cannot make. */}
+        {!loading && !policy.paymentsEnabled ? (
+          <View style={[styles.notice, styles.noticePending]}>
+            <Info color={colors.warning} size={18} strokeWidth={2} />
+            <View style={styles.noticeCopy}>
+              <Text style={styles.noticeTitle}>{policy.unavailableMessage("jcoin")}</Text>
+              <Text style={styles.noticeBody}>
+                Mavjud J Coin balansingizdan ilovada odatdagidek foydalanishingiz mumkin.
+              </Text>
+            </View>
+          </View>
+        ) : null}
+
         {/* The provider state is stated once, at the top, so it frames every
             price below it rather than surprising someone at the last tap. */}
-        {!loading ? (
+        {!loading && policy.paymentsEnabled ? (
           <View style={[styles.notice, payments.configured ? styles.noticeReady : styles.noticePending]}>
             <Info color={payments.configured ? colors.success : colors.warning} size={18} strokeWidth={2} />
             <View style={styles.noticeCopy}>
@@ -84,7 +101,7 @@ export default function BuyCoinsScreen() {
         {loading ? <><SkeletonCard /><SkeletonCard /></> : null}
         {error && !loading ? <ErrorState message={error} onRetry={() => void load()} /> : null}
 
-        {!loading && !error && packages.length === 0 ? (
+        {!loading && policy.paymentsEnabled && !error && packages.length === 0 ? (
           <EmptyState
             icon={PackageOpen}
             title="Paketlar hali e’lon qilinmagan"
@@ -93,7 +110,7 @@ export default function BuyCoinsScreen() {
         ) : null}
 
         <View style={styles.list}>
-          {packages.map((item) => (
+          {(policy.paymentsEnabled ? packages : []).map((item) => (
             <View key={item.id} style={styles.package}>
               <Image source={coinIcon} resizeMode="contain" style={styles.packageCoin} />
               <View style={styles.packageCopy}>

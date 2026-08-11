@@ -7,6 +7,7 @@ import { ErrorState } from "@/components/StateBlocks";
 import { formatDate, formatRemainingWindow } from "@/lib/datetime";
 import { useModuleAccess } from "@/lib/modules";
 import { formatPrice } from "@/lib/money";
+import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
 import { colors, radius, shadow, spacing, typography } from "@/theme/tokens";
 
 /**
@@ -18,6 +19,7 @@ import { colors, radius, shadow, spacing, typography } from "@/theme/tokens";
  * been granted, and nothing offers a purchase that cannot be completed.
  */
 export default function SurveyAccessScreen() {
+  const policy = usePaymentPolicy();
   const { state, loading, error, reload } = useModuleAccess(DATA_COLLECTION_MODULE);
 
   if (loading) {
@@ -72,7 +74,9 @@ export default function SurveyAccessScreen() {
           <View style={styles.row}>
             <Info color={colors.primary} size={18} strokeWidth={2} />
             <Text style={styles.rowLabel}>Narx</Text>
-            <Text style={styles.rowValue}>{formatPrice(state.price_amount, state.currency)}</Text>
+            <Text style={styles.rowValue}>
+              {policy.showPrices ? formatPrice(state.price_amount, state.currency) : "—"}
+            </Text>
           </View>
           <View style={styles.row}>
             <Timer color={colors.primary} size={18} strokeWidth={2} />
@@ -99,14 +103,19 @@ export default function SurveyAccessScreen() {
           </View>
         </View>
 
-        <View style={[styles.notice, state.payment_configured ? styles.noticeReady : styles.noticePending]}>
+        <View style={[styles.notice, !policy.paymentsEnabled ? styles.noticePending
+          : state.payment_configured ? styles.noticeReady : styles.noticePending]}>
           <Text style={styles.noticeTitle}>
-            {state.payment_configured ? `To‘lov tizimi: ${state.payment_provider ?? "ulangan"}` : "To‘lov tizimi ulanmagan"}
+            {!policy.paymentsEnabled
+              ? policy.unavailableMessage("module")
+              : state.payment_configured ? `To‘lov tizimi: ${state.payment_provider ?? "ulangan"}` : "To‘lov tizimi ulanmagan"}
           </Text>
           <Text style={styles.noticeBody}>
-            {state.payment_configured
-              ? "Kirish huquqini to‘lov orqali rasmiylashtirish mumkin."
-              : "Ilova orqali to‘lov hali qabul qilinmaydi. Kirish huquqi hozircha administrator tomonidan beriladi va u haqiqiy yozuv sifatida saqlanadi."}
+            {!policy.paymentsEnabled
+              ? "Sizga berilgan kirish huquqi amal qiladi va modul odatdagidek ishlaydi."
+              : state.payment_configured
+                ? "Kirish huquqini to‘lov orqali rasmiylashtirish mumkin."
+                : "Ilova orqali to‘lov hali qabul qilinmaydi. Kirish huquqi hozircha administrator tomonidan beriladi va u haqiqiy yozuv sifatida saqlanadi."}
           </Text>
         </View>
 
