@@ -17,7 +17,8 @@ import { supabase } from "@/lib/supabase";
 import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
 import { colors, radius, shadow, spacing, typography } from "@/theme/tokens";
 
-type Transaction = Tables<"payment_transactions">;
+/** The columns a buyer is granted; the provider token and order id are not. */
+type Transaction = Omit<Tables<"payment_transactions">, "provider_card_token" | "order_id">;
 type PartialCard = Tables<"partial_cards">;
 type PaymentConfig = { provider: string | null; configured: boolean };
 
@@ -71,7 +72,9 @@ export default function CheckoutScreen() {
     if (!transactionId) { setLoadError("To‘lov topilmadi."); setLoading(false); return; }
     setLoading(true);
     const [transactionResult, cardsResult, settingsResult] = await Promise.all([
-      supabase.from("payment_transactions").select("*").eq("id", transactionId).single(),
+      // Column-granted, like `orders`: the provider token is not askable for,
+      // so `*` would be refused outright rather than trimmed.
+      supabase.from("payment_transactions").select("id, buyer_id, product_id, seller_id, state, provider, provider_receipt_id, provider_error_code, provider_error_message, base_price, currency, buyer_fee_rate, buyer_fee_amount, buyer_total, seller_fee_rate, seller_fee_amount, seller_net, platform_gross, provider_cost, partial_card_id, idempotency_key, paid_at, failed_at, created_at, updated_at, is_sandbox, attempt_expires_at").eq("id", transactionId).single(),
       supabase.from("partial_cards").select("*").eq("is_active", true).order("last_used_at", { ascending: false, nullsFirst: false }),
       supabase.from("app_settings").select("value").eq("key", "payments.config").maybeSingle(),
     ]);

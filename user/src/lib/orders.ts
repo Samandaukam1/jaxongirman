@@ -13,7 +13,16 @@ import { clientPlatform } from "@/providers/PaymentPolicyProvider";
  * to land.
  */
 
-export type Order = Tables<"orders">;
+/**
+ * An order as a client may see it.
+ *
+ * `orders` is granted column by column: the provider's one-time card token and
+ * the attempt window belong to the server alone. Naming that here rather than
+ * using the full row means the type says what a client can actually read, and a
+ * screen that reaches for a withheld column stops compiling instead of failing
+ * at run time with `permission denied`.
+ */
+export type Order = Omit<Tables<"orders">, "provider_card_token" | "attempt_expires_at">;
 
 export type OrderSummary = {
   order_id: string;
@@ -128,10 +137,21 @@ export const payVerify = (orderId: string, code: string) =>
  * The recovery path: an app closed mid-payment reopens and asks. If the order is
  * already paid, nothing is charged again — the answer is simply the truth.
  */
+/**
+ * Every column of an order a client may read.
+ *
+ * `orders` is granted column by column, not table-wide: the provider's one-time
+ * card token is not merely filtered out, it is not askable for. `select("*")`
+ * asks for it anyway, and Postgres refuses the whole statement rather than
+ * trimming it — which is why the checkout screen answered "Buyurtma yuklanmadi"
+ * for every order ever opened.
+ */
+const ORDER_COLUMNS = "id, order_number, user_id, purpose, status, product_id, coin_package_id, reference_code, seller_id, currency, subtotal, buyer_fee, total_amount, seller_fee, seller_net, platform_revenue, buyer_fee_rate, seller_fee_rate, payme_receipt_id, payme_transaction_id, is_test, failure_code, failure_message, metadata, created_at, updated_at, paid_at, cancelled_at, expires_at";
+
 export const orderStatus = async (orderId: string): Promise<Order | null> => {
   const { data, error } = await supabase
     .from("orders")
-    .select("*")
+    .select(ORDER_COLUMNS)
     .eq("id", orderId)
     .maybeSingle();
   if (error) throw error;

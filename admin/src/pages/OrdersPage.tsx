@@ -6,7 +6,9 @@ import { EmptyState, ErrorState, PageHeader, StatusBadge, TableSkeleton } from "
 import { errorMessage, stamp } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
 
-type OrderRow = Database["public"]["Tables"]["orders"]["Row"];
+// An admin is `authenticated` too, so the same column grant applies: the
+// provider token is not readable from a browser by anyone.
+type OrderRow = Omit<Database["public"]["Tables"]["orders"]["Row"], "provider_card_token" | "attempt_expires_at">;
 type ReconciliationRow = Database["public"]["Functions"]["admin_order_reconciliation"]["Returns"][number];
 
 const PURPOSE_LABELS: Record<string, string> = {
@@ -70,7 +72,8 @@ export function OrdersPage() {
 
     let ordersQuery = supabase
       .from("orders")
-      .select("*")
+      // An admin is `authenticated` too, so the same column grant applies.
+      .select("id, order_number, user_id, purpose, status, product_id, coin_package_id, reference_code, seller_id, currency, subtotal, buyer_fee, total_amount, seller_fee, seller_net, platform_revenue, buyer_fee_rate, seller_fee_rate, payme_receipt_id, payme_transaction_id, is_test, failure_code, failure_message, metadata, created_at, updated_at, paid_at, cancelled_at, expires_at")
       .order("created_at", { ascending: false })
       .limit(200);
     if (tab !== "all") ordersQuery = ordersQuery.eq("status", tab);
