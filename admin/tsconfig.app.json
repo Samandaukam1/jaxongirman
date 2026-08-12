@@ -20,9 +20,7 @@
     "allowImportingTsExtensions": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"],
-      "@jaxongirman/types": ["../packages/types/src/index.ts"],
-      "@jaxongirman/slide-dom": ["../packages/slide-dom/src/index.tsx"]
+      "@/*": ["src/*"]
     }
   },
   "include": ["src"]

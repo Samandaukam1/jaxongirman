@@ -1,12 +1,12 @@
 import PptxGenJS from "pptxgenjs";
 
 import { ExportAssetLoader, type ExportAsset } from "./export-assets.ts";
+import { pptxFace } from "./fonts.ts";
 import {
   applyTextTransform,
   boolean,
   bytesToBase64,
   clamp,
-  fontFace,
   fontPoints,
   inch,
   interpolateHex,
@@ -92,7 +92,7 @@ function addText(slide: PptxGenJS.Slide, element: ExportElement, style: JsonObje
   slide.addText(text, {
     ...frame(element),
     margin: 0,
-    fontFace: fontFace(style.fontFamily),
+    fontFace: pptxFace(style),
     fontSize: fontPoints(number(style.fontSize, 30)),
     bold: isBold(style),
     italic: style.fontStyle === "italic",
@@ -206,7 +206,7 @@ function addTable(slide: PptxGenJS.Slide, element: ExportElement, style: JsonObj
   slide.addTable(rows, {
     ...frame(element),
     margin: 3,
-    fontFace: fontFace(style.fontFamily),
+    fontFace: pptxFace(style),
     fontSize: Math.max(6, fontPoints(number(style.fontSize, 12))),
     color: pptxColor(style.color, "#151A18"),
     border: { type: "solid", color: pptxColor(style.stroke, "#C9D2CF"), pt: Math.max(0.5, number(style.strokeWidth, 0.75)) },

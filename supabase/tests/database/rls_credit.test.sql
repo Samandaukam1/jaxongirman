@@ -5,7 +5,7 @@ select plan(19);
 
 select has_table('public', 'presentations', 'presentations table exists');
 select has_table('public', 'credit_transactions', 'credit ledger exists');
-select has_function('public', 'start_generation', array['uuid', 'text', 'text', 'presentation_style', 'integer', 'text', 'text', 'text[]', 'text', 'text', 'text'], 'generation RPC exists');
+select has_function('public', 'start_generation', array['uuid', 'text', 'text', 'presentation_style', 'integer', 'text', 'text', 'text[]', 'text', 'text', 'text', 'text'], 'generation RPC exists');
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,

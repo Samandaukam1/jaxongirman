@@ -1,4 +1,5 @@
 import type { SlideTemplate } from "../design-types.ts";
+import { eskiKlassika } from "./eski-klassika.ts";
 import { klassik } from "./klassik.ts";
 import { tozaOsmon } from "./toza-osmon.ts";
 import { bleed, chart, circle, defaultScale, img, rule, scaffold, shape, txt } from "./kit.ts";
@@ -429,7 +430,7 @@ kinematikQatlam.blueprint.layouts = {
  * template, and `resolveTemplate()` needs somewhere to look before it falls back.
  * They are simply no longer offered.
  */
-export const superProfessionalTemplates = [klassik, tozaOsmon];
+export const superProfessionalTemplates = [klassik, tozaOsmon, eskiKlassika];
 
 /** Withdrawn from the picker, kept resolvable for decks already generated. */
 export const retiredSuperProfessionalTemplates = [futuristikLimon, kechaStudiyasi, editorialOyna, kinematikQatlam];

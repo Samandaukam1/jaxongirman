@@ -89,6 +89,12 @@ export type TextSlot = {
   weight?: 400 | 500 | 600 | 700;
   align?: "left" | "center" | "right";
   letterSpacing?: number;
+  /**
+   * Leading as a multiple of the font size. Defaults to the engine's 1.22 (1.34
+   * for script), which is right for reading copy and far too loose for a poster
+   * headline — a stacked display line wants to close up to nearly its own height.
+   */
+  leading?: number;
   transform?: "none" | "upper";
   when?: SlotCondition;
   fit?: FitRule;

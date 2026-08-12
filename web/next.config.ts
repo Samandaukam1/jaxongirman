@@ -8,7 +8,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   // The shared types package is TypeScript source rather than a build artefact.
-  transpilePackages: ["@jaxongirman/types"],
+  transpilePackages: ["@jaxongirman/types", "@jaxongirman/slide-dom"],
 };
 
 export default nextConfig;

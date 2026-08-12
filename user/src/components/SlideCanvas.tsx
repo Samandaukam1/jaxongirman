@@ -8,11 +8,13 @@ import {
   type RenderableSlide,
   type RenderableSlideElement,
 } from "@jaxongirman/types";
+import { LinearGradient } from "expo-linear-gradient";
 import { forwardRef, useMemo, useRef, useState } from "react";
 import { Image, PanResponder, StyleSheet, Text, View, type LayoutChangeEvent, type ViewStyle } from "react-native";
 
-import { ChartElement, IconElement, MediaPlaceholder, PlayBadge, ShapeElement } from "@/components/SlideElements";
-import { bag, decorationOf, effectOf, effectTextStyle, verticalAlignOf } from "@/lib/textStyle";
+import { ChartElement, IconElement, MediaPlaceholder, PlayBadge, ShapeElement, TableElement } from "@/components/SlideElements";
+import { bag, decorationOf, verticalAlignOf } from "@/lib/textStyle";
+import { cornersOf, faceOf, gradientOf, textEffectOf } from "@/lib/slideStyle";
 import { colors } from "@/theme/tokens";
 
 type Slide = RenderableSlide;
@@ -130,7 +132,9 @@ function ElementView(props: ElementViewProps) {
         onTextLayout={measure ? (event) => measure(element.id, event.nativeEvent.lines.reduce((total, line) => total + line.height, 0)) : undefined}
         style={{
           color,
-          fontFamily: string(style.fontFamily, style.fontWeight === "700" ? "Manrope_700Bold" : "Manrope_400Regular"),
+          // The design's own face once it has loaded, and the fallback it
+          // nominated until then — never a face this canvas chose (§78).
+          fontFamily: faceOf(style),
           fontSize,
           lineHeight: number(style.lineHeight, fontSize * 1.2),
           textAlign: (string(style.textAlign, "left") as "left" | "center" | "right" | "justify"),
@@ -140,7 +144,10 @@ function ElementView(props: ElementViewProps) {
           textDecorationLine: decorationOf(bag(element.style)),
           textDecorationColor: color,
           includeFontPadding: false,
-          ...effectTextStyle(effectOf(bag(element.style)), color),
+          ...(string(style.textEffect) === "highlight" && typeof style.highlight === "string"
+            ? { backgroundColor: style.highlight }
+            : {}),
+          ...textEffectOf(style, color),
         }}
       >
         {string(content.text, "Matn")}
@@ -154,7 +161,7 @@ function ElementView(props: ElementViewProps) {
     visual = (
       <>
         {imageUri && failedImage !== imageUri && kind !== "video"
-          ? <Image onError={() => setFailedImage(imageUri)} source={{ uri: imageUri }} resizeMode={(string(style.objectFit, "cover") as "cover" | "contain")} style={[StyleSheet.absoluteFill, { borderRadius: cornerRadius }]} />
+          ? <Image onError={() => setFailedImage(imageUri)} source={{ uri: imageUri }} resizeMode={(string(style.objectFit, "cover") as "cover" | "contain")} style={[StyleSheet.absoluteFill, cornersOf(style)]} />
           : <MediaPlaceholder kind={kind} width={element.width} height={element.height} borderRadius={cornerRadius} />}
         {kind === "video" ? <PlayBadge width={element.width} height={element.height} /> : null}
       </>
@@ -168,8 +175,7 @@ function ElementView(props: ElementViewProps) {
   } else if (element.type === "chart") {
     visual = <ChartElement style={style} content={content} width={element.width} height={element.height} />;
   } else if (element.type === "table") {
-    const rows = Array.isArray(content.rows) ? content.rows.slice(0, 5) : [];
-    visual = <View style={styles.table}>{rows.map((row, rowIndex) => <View key={rowIndex} style={styles.tableRow}>{Array.isArray(row) ? row.slice(0, 4).map((cell, cellIndex) => <Text key={cellIndex} numberOfLines={2} style={[styles.cell, { fontSize: 12 }]}>{String(cell ?? "")}</Text>) : null}</View>)}</View>;
+    visual = <TableElement style={style} content={content} width={element.width} height={element.height} />;
   } else {
     visual = <View style={[StyleSheet.absoluteFill, { backgroundColor: string(style.fill, colors.surfaceMuted), borderRadius: 8 }]} />;
   }
@@ -199,6 +205,7 @@ export const SlideCanvas = forwardRef<View, Props>(function SlideCanvas(
   ref,
 ) {
   const background = object(slide.background);
+  const groundGradient = gradientOf(background as Record<string, unknown>);
 
   // Elements claim the responder first, so the canvas only becomes responder for
   // taps that land on bare background — which is the one gesture that clears the
@@ -212,6 +219,15 @@ export const SlideCanvas = forwardRef<View, Props>(function SlideCanvas(
       onStartShouldSetResponder={interactive ? () => true : undefined}
       onResponderRelease={interactive ? () => onSelect?.(null) : undefined}
     >
+      {groundGradient ? (
+        <LinearGradient
+          colors={groundGradient.colors as [string, string, ...string[]]}
+          locations={groundGradient.locations as [number, number, ...number[]]}
+          start={groundGradient.start}
+          end={groundGradient.end}
+          style={StyleSheet.absoluteFill}
+        />
+      ) : null}
       {elements.map((element) => (
         <ElementView
           key={element.id}

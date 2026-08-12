@@ -2030,6 +2030,178 @@ export type Database = {
           },
         ]
       }
+      presentation_design_fonts: {
+        Row: {
+          asset_path: string | null
+          byte_size: number | null
+          checksum: string | null
+          created_at: string
+          design_id: string
+          fallback: string
+          font_id: string
+          format: string | null
+          id: string
+          italic: boolean
+          name: string
+          roles: string[]
+          weight: number
+        }
+        Insert: {
+          asset_path?: string | null
+          byte_size?: number | null
+          checksum?: string | null
+          created_at?: string
+          design_id: string
+          fallback?: string
+          font_id: string
+          format?: string | null
+          id?: string
+          italic?: boolean
+          name?: string
+          roles?: string[]
+          weight?: number
+        }
+        Update: {
+          asset_path?: string | null
+          byte_size?: number | null
+          checksum?: string | null
+          created_at?: string
+          design_id?: string
+          fallback?: string
+          font_id?: string
+          format?: string | null
+          id?: string
+          italic?: boolean
+          name?: string
+          roles?: string[]
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "presentation_design_fonts_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "presentation_designs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      presentation_design_versions: {
+        Row: {
+          compiled_config: Json
+          content_hash: string
+          design_id: string
+          health_score: number | null
+          id: string
+          published_at: string
+          published_by: string | null
+          source_prompt: string
+          version: number
+        }
+        Insert: {
+          compiled_config: Json
+          content_hash: string
+          design_id: string
+          health_score?: number | null
+          id?: string
+          published_at?: string
+          published_by?: string | null
+          source_prompt?: string
+          version: number
+        }
+        Update: {
+          compiled_config?: Json
+          content_hash?: string
+          design_id?: string
+          health_score?: number | null
+          id?: string
+          published_at?: string
+          published_by?: string | null
+          source_prompt?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "presentation_design_versions_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "presentation_designs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      presentation_designs: {
+        Row: {
+          compiled_config: Json | null
+          content_hash: string | null
+          created_at: string
+          created_by: string | null
+          description: string
+          format_version: string
+          health_score: number | null
+          id: string
+          is_featured: boolean
+          is_premium: boolean
+          name: string
+          preview: Json
+          published_at: string | null
+          published_version: number
+          slug: string
+          sort_order: number
+          source_prompt: string
+          status: Database["public"]["Enums"]["jslayd_design_status"]
+          thumbnail_path: string | null
+          tier: Database["public"]["Enums"]["presentation_style"]
+          updated_at: string
+        }
+        Insert: {
+          compiled_config?: Json | null
+          content_hash?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          format_version?: string
+          health_score?: number | null
+          id?: string
+          is_featured?: boolean
+          is_premium?: boolean
+          name: string
+          preview?: Json
+          published_at?: string | null
+          published_version?: number
+          slug: string
+          sort_order?: number
+          source_prompt?: string
+          status?: Database["public"]["Enums"]["jslayd_design_status"]
+          thumbnail_path?: string | null
+          tier: Database["public"]["Enums"]["presentation_style"]
+          updated_at?: string
+        }
+        Update: {
+          compiled_config?: Json | null
+          content_hash?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          format_version?: string
+          health_score?: number | null
+          id?: string
+          is_featured?: boolean
+          is_premium?: boolean
+          name?: string
+          preview?: Json
+          published_at?: string | null
+          published_version?: number
+          slug?: string
+          sort_order?: number
+          source_prompt?: string
+          status?: Database["public"]["Enums"]["jslayd_design_status"]
+          thumbnail_path?: string | null
+          tier?: Database["public"]["Enums"]["presentation_style"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
       presentation_edit_history: {
         Row: {
           actor_id: string
@@ -2244,6 +2416,8 @@ export type Database = {
           author_name: string | null
           created_at: string
           current_version: number
+          design_id: string | null
+          design_version: number | null
           error_message: string | null
           estimated_credits: number
           generated_slide_count: number
@@ -2268,6 +2442,8 @@ export type Database = {
           author_name?: string | null
           created_at?: string
           current_version?: number
+          design_id?: string | null
+          design_version?: number | null
           error_message?: string | null
           estimated_credits?: number
           generated_slide_count?: number
@@ -2292,6 +2468,8 @@ export type Database = {
           author_name?: string | null
           created_at?: string
           current_version?: number
+          design_id?: string | null
+          design_version?: number | null
           error_message?: string | null
           estimated_credits?: number
           generated_slide_count?: number
@@ -2312,6 +2490,13 @@ export type Database = {
           visual_dna?: Json
         }
         Relationships: [
+          {
+            foreignKeyName: "presentations_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "presentation_designs"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "presentations_palette_code_fkey"
             columns: ["palette_code"]
@@ -3297,6 +3482,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      admin_archive_design: {
+        Args: { p_design_id: string; p_reason?: string }
+        Returns: undefined
+      }
       admin_create_settlement: {
         Args: {
           p_period_end: string
@@ -3331,8 +3520,16 @@ export type Database = {
       }
       admin_dashboard_metrics: { Args: never; Returns: Json }
       admin_delete_coin_package: { Args: { p_code: string }; Returns: boolean }
+      admin_delete_design_font: {
+        Args: { p_design_id: string; p_font_id: string }
+        Returns: undefined
+      }
       admin_delete_finance_entry: { Args: { p_id: string }; Returns: boolean }
       admin_delete_game_category: { Args: { p_id: string }; Returns: boolean }
+      admin_duplicate_design: {
+        Args: { p_design_id: string; p_name: string; p_slug: string }
+        Returns: string
+      }
       admin_finance_overview: { Args: never; Returns: Json }
       admin_game_overview: { Args: { p_days?: number }; Returns: Json }
       admin_gift_credits: {
@@ -3375,6 +3572,35 @@ export type Database = {
           p_reason?: string
         }
         Returns: Json
+      }
+      admin_list_designs: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_query?: string
+          p_status?: Database["public"]["Enums"]["jslayd_design_status"]
+          p_tier?: Database["public"]["Enums"]["presentation_style"]
+        }
+        Returns: {
+          archetype_count: number
+          created_at: string
+          description: string
+          font_count: number
+          health_score: number
+          id: string
+          is_featured: boolean
+          is_premium: boolean
+          name: string
+          published_at: string
+          published_version: number
+          slug: string
+          sort_order: number
+          status: Database["public"]["Enums"]["jslayd_design_status"]
+          thumbnail_path: string
+          tier: Database["public"]["Enums"]["presentation_style"]
+          updated_at: string
+          used_by: number
+        }[]
       }
       admin_list_finance_entries: {
         Args: { p_limit?: number; p_offset?: number }
@@ -3644,6 +3870,7 @@ export type Database = {
           telegram_username: string
         }[]
       }
+      admin_publish_design: { Args: { p_design_id: string }; Returns: number }
       admin_record_finance_entry: {
         Args: {
           p_amount_usd: number
@@ -3680,9 +3907,45 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      admin_restore_design: {
+        Args: { p_design_id: string }
+        Returns: undefined
+      }
       admin_revoke_module_access: {
         Args: { p_module_code: string; p_reason?: string; p_user_id: string }
         Returns: Json
+      }
+      admin_save_design: {
+        Args: {
+          p_compiled_config?: Json
+          p_content_hash?: string
+          p_description?: string
+          p_health_score?: number
+          p_is_premium?: boolean
+          p_name: string
+          p_preview?: Json
+          p_slug: string
+          p_source_prompt?: string
+          p_thumbnail_path?: string
+          p_tier: Database["public"]["Enums"]["presentation_style"]
+        }
+        Returns: string
+      }
+      admin_save_design_font: {
+        Args: {
+          p_byte_size?: number
+          p_checksum?: string
+          p_design_id: string
+          p_fallback?: string
+          p_file_name: string
+          p_font_id: string
+          p_format: string
+          p_italic?: boolean
+          p_name: string
+          p_roles: string[]
+          p_weight?: number
+        }
+        Returns: string
       }
       admin_save_game_category: {
         Args: {
@@ -4440,6 +4703,8 @@ export type Database = {
           author_name: string | null
           created_at: string
           current_version: number
+          design_id: string | null
+          design_version: number | null
           error_message: string | null
           estimated_credits: number
           generated_slide_count: number
@@ -4739,6 +5004,7 @@ export type Database = {
       start_generation: {
         Args: {
           p_author_name?: string
+          p_design_slug?: string
           p_idempotency_key?: string
           p_palette_code?: string
           p_presentation_id: string
@@ -4856,6 +5122,7 @@ export type Database = {
       game_source: "manual" | "ai" | "text" | "file" | "presentation"
       game_status: "generating" | "draft" | "ready" | "archived" | "failed"
       job_status: "queued" | "running" | "succeeded" | "failed" | "cancelled"
+      jslayd_design_status: "draft" | "published" | "archived"
       marketplace_file_kind: "main" | "study_guide" | "preview"
       marketplace_product_status:
         | "draft"
@@ -5140,6 +5407,7 @@ export const Constants = {
       game_source: ["manual", "ai", "text", "file", "presentation"],
       game_status: ["generating", "draft", "ready", "archived", "failed"],
       job_status: ["queued", "running", "succeeded", "failed", "cancelled"],
+      jslayd_design_status: ["draft", "published", "archived"],
       marketplace_file_kind: ["main", "study_guide", "preview"],
       marketplace_product_status: [
         "draft",

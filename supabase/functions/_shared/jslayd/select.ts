@@ -1,0 +1,130 @@
+// GENERATED FILE — do not edit by hand.
+// Source: packages/jslayd/src/select.ts
+// Regenerate with: node supabase/scripts/build-jslayd-runtime.mjs
+//
+// The JSLAYD runtime, projected into the Edge tree. Edit the package, not this.
+
+import { textVolume, type SlideData } from "./content.ts";
+import type { Archetype, JslaydDocument } from "./document.ts";
+import { LEGACY_LAYOUT_TO_PURPOSE, type ArchetypePurpose } from "./spec.ts";
+
+/**
+ * Archetype selection (§42, §45).
+ *
+ * The writer produces content and a purpose; this picks the slide the design
+ * drew for it. Deterministic throughout — same deck in, same layouts out — and
+ * variant-aware, so a seven-slide deck that is four `text_image` slides in a
+ * row gets `text_image_01`, `_02`, `_03`, `_01` rather than the same
+ * composition four times (§41).
+ */
+
+export type Selection = {
+  archetype: Archetype;
+  /** True when nothing matched the requested purpose and a relative was used. */
+  substituted: boolean;
+};
+
+/**
+ * Purposes that can stand in for one another, in order of preference.
+ *
+ * A design is not required to draw all seventeen archetypes, so the generator
+ * has to know which slide is the honest second choice — a `title_content` for a
+ * missing `text_image` keeps the deck reading correctly, whereas a `cover`
+ * would not.
+ */
+const SUBSTITUTES: Record<ArchetypePurpose, readonly ArchetypePurpose[]> = {
+  cover: ["section", "title_content"],
+  section: ["cover", "title_content"],
+  title_content: ["text_image", "two_column", "image_text"],
+  text_image: ["image_text", "title_content", "two_column"],
+  image_text: ["text_image", "title_content", "two_column"],
+  full_image: ["text_image", "image_text", "section"],
+  quote: ["section", "title_content"],
+  statistics: ["title_content", "chart", "two_column"],
+  chart: ["statistics", "title_content", "two_column"],
+  table: ["two_column", "title_content", "comparison"],
+  comparison: ["two_column", "table", "title_content"],
+  timeline: ["process", "three_column", "title_content"],
+  process: ["timeline", "three_column", "title_content"],
+  two_column: ["title_content", "comparison", "three_column"],
+  three_column: ["two_column", "title_content"],
+  agenda: ["title_content", "two_column"],
+  conclusion: ["section", "title_content", "thank_you"],
+  thank_you: ["conclusion", "section", "cover"],
+  references: ["title_content", "conclusion"],
+  custom: ["title_content"],
+};
+
+/** The purpose a legacy `LayoutName` maps to, for decks the old writer produced. */
+export function purposeForLayout(layout: string): ArchetypePurpose {
+  return LEGACY_LAYOUT_TO_PURPOSE[layout] ?? "title_content";
+}
+
+/**
+ * Picks one archetype per slide.
+ *
+ * Selection runs over the whole deck at once rather than slide by slide,
+ * because avoiding repetition is a property of the sequence: a chooser that
+ * only sees one slide has no way to know it already used that composition.
+ */
+export function selectArchetypes(document: JslaydDocument, slides: readonly SlideData[]): Selection[] {
+  const used = new Map<string, number>();
+  return slides.map((slide) => {
+    const chosen = selectOne(document, slide, used);
+    used.set(chosen.archetype.id, (used.get(chosen.archetype.id) ?? 0) + 1);
+    return chosen;
+  });
+}
+
+export function selectOne(document: JslaydDocument, slide: SlideData, used: ReadonlyMap<string, number>): Selection {
+  const wanted = [slide.purpose, ...(SUBSTITUTES[slide.purpose] ?? [])];
+  for (const [rank, purpose] of wanted.entries()) {
+    const fitting = document.archetypes.filter((archetype) => archetype.purpose === purpose && suits(archetype, slide));
+    const best = rank === 0 ? fitting : fitting.length ? fitting : [];
+    if (best.length > 0) return { archetype: pick(best, used), substituted: rank > 0 };
+  }
+
+  // Nothing of the right shape exists. Rather than force content into a slide
+  // that cannot hold it, take whatever can hold it, and only then fall back to
+  // the design's first archetype so a deck is never left without a slide.
+  const anySuitable = document.archetypes.filter((archetype) => suits(archetype, slide));
+  if (anySuitable.length > 0) return { archetype: pick(anySuitable, used), substituted: true };
+  return { archetype: document.archetypes[0]!, substituted: true };
+}
+
+/**
+ * Can this archetype carry what the slide is *for*?
+ *
+ * Only the slide's purpose is binding. A writer fills in a quotation and a
+ * figure on most slides whether or not they are the point of one, so treating
+ * "carries a quote" as "must display a quote" disqualified almost every
+ * archetype and dropped whole decks onto their cover composition. The built-in
+ * engine never behaved that way either: it simply does not draw a quote on a
+ * timeline, and neither does this.
+ */
+function suits(archetype: Archetype, slide: SlideData): boolean {
+  const rules = archetype.selection;
+  if (slide.purpose === "chart" && !rules.supportsChart) return false;
+  if (slide.purpose === "table" && !rules.supportsTable) return false;
+  if (slide.purpose === "statistics" && !rules.supportsStats) return false;
+  if (slide.purpose === "quote" && !rules.supportsQuote) return false;
+  const volume = textVolume(slide);
+  return volume >= rules.minText && volume <= rules.maxText;
+}
+
+/**
+ * Highest priority wins; among equals, the least-used variant.
+ *
+ * The id is the final tiebreak so the choice never depends on the order the
+ * archetypes happen to sit in the document — two compiles of one design must
+ * lay out a deck identically.
+ */
+function pick(candidates: readonly Archetype[], used: ReadonlyMap<string, number>): Archetype {
+  return [...candidates].sort((first, second) => {
+    const byUse = (used.get(first.id) ?? 0) - (used.get(second.id) ?? 0);
+    if (byUse !== 0) return byUse;
+    const byPriority = second.selection.priority - first.selection.priority;
+    if (byPriority !== 0) return byPriority;
+    return first.id < second.id ? -1 : 1;
+  })[0]!;
+}

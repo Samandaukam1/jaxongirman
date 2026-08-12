@@ -459,6 +459,9 @@ export default function PresentationEditorScreen() {
                 onRequestEdit={(id) => {
                   const target = elements.find((element) => element.id === id);
                   if (target?.type === "text") setToolPanel("text");
+                  // A double tap on a chart or a table opens the thing a reader
+                  // actually wants to change on it: the numbers.
+                  else if (target?.type === "chart" || target?.type === "table") setToolPanel("data");
                   else if (target?.type === "image") void replaceMedia(target);
                 }}
                 onTextMeasure={measureText}

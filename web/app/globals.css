@@ -569,3 +569,9 @@ body:has(.arena) .arena { min-height: 100vh; }
 .plan-name { font-size: 17px; font-weight: 700; }
 .plan-price { font-size: 19px; font-weight: 800; color: var(--primary-deep); grid-row: span 2; }
 .plan-meta { font-size: 13px; color: var(--ink-muted); }
+
+/* Toza osmon's two faces. Both SIL Open Font License, so they ship with the
+ * bundle rather than being fetched at render time. */
+@font-face { font-family: "Inter_400Regular"; src: url("/fonts/Inter_400Regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Inter_900Black"; src: url("/fonts/Inter_900Black.ttf") format("truetype"); font-weight: 900; font-display: swap; }
+@font-face { font-family: "CaveatBrush_400Regular"; src: url("/fonts/CaveatBrush_400Regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }

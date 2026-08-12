@@ -48,6 +48,12 @@ export type SemanticSlide = {
   quote: { text: string; attribution: string } | null;
   statistic: { value: string; label: string } | null;
   chart: { type: "bar" | "line" | "donut"; labels: string[]; values: number[] } | null;
+  /**
+   * Tabular data the writer researched. Only a JSLAYD design draws one — the
+   * built-in blueprints have no table slot — so a deck on the built-in path
+   * simply carries it unused.
+   */
+  table: { columns: string[]; rows: string[][] } | null;
   visualPrompt: string | null;
 };
 

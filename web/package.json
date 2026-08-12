@@ -17,7 +17,8 @@
     "next": "latest",
     "qrcode": "^1.5.4",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "@jaxongirman/slide-dom": "*"
   },
   "devDependencies": {
     "@eslint/js": "latest",

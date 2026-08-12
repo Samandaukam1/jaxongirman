@@ -22,41 +22,64 @@ The accent is bound to `subtitle` and the headline to `title`, so a slide with n
 accent still composes correctly — the handwriting simply does not render and the
 headline keeps its place.
 
-## Fonts — one thing is not finished
+## Fonts
 
-The design is built for **Metworkland** (the handwritten accent) and **Helvetica
-Now Display** (headlines and body). Both are commercially licensed and neither
-can be committed here, so the blueprint names them and the renderer substitutes
-until the files exist:
+The design uses exactly two faces and nothing else touches a slide:
 
-| Intended | Substitute now | Why that one |
+| Voice | Face | Where |
 | --- | --- | --- |
-| `Metworkland` | `PinyonScript_400Regular` | The only informal face bundled. It is calligraphic rather than marker-pen, so the accent reads as handwriting but **not yet as the reference.** |
-| `HelveticaNowDisplay-Bold` | `LeagueSpartan_800ExtraBold` | The only bundled face heavy enough for an ultra-bold uppercase headline. Close in weight, wider in tracking. |
-| `HelveticaNowDisplay` | `Manrope_400Regular` | Neutral grotesque, near enough at body size. |
+| Handwritten accent | `CaveatBrush_400Regular` | The lime word over every headline |
+| Headline | `Inter_900Black` | Every black uppercase title, and the numbers in lime markers |
+| Body | `Inter_400Regular` | Micro headers, copy, bullets, captions |
 
-The substitution lives in `FONT_FALLBACKS` in
-[template-engine.ts](../supabase/functions/_shared/template-engine.ts).
+### Why not the faces in the brief
 
-### To get the intended faces
+The brief names **Metworkland** and **Helvetica Now Display**. Both are
+commercially licensed — Helvetica Now is Monotype, per-weight; Metworkland is a
+small-foundry display face — and neither can be committed to a repository or
+fetched from a package registry. Downloading them from a free-font aggregator
+would be redistributing licensed software.
 
-1. Add the `.ttf` files to **both**:
-   - `user/assets/fonts/` — and register them in the app's font loader
-   - `web/public/fonts/` — and add `@font-face` blocks in `web/app/globals.css`
+So the design ships the closest Open Font License equivalents, chosen for shape
+rather than convenience:
 
-   Name them exactly as the blueprint does: `Metworkland`,
-   `HelveticaNowDisplay-Bold`, `HelveticaNowDisplay`.
-2. Add those names to `BUNDLED` in `template-engine.ts` and delete their
-   `FONT_FALLBACKS` entries.
-3. `npm run templates:build -- --catalogue <YYYYMMDDHHMM>_toza_osmon_fonts` and
-   push the migration, so the stored previews are regenerated with the real
-   faces.
-4. PDF export loads its own fonts from a URL
-   ([pdf-export.ts](../supabase/functions/_shared/pdf-export.ts)) and still uses
-   Manrope. Point it at the new files if exported PDFs must match the deck.
+- **Caveat Brush** for Metworkland. A slanted marker hand with the same loose,
+  energetic stroke the accent needs. It is a brush rather than a felt pen, so the
+  terminals are softer than the reference.
+- **Inter** for Helvetica Now Display. Both are neo-grotesques designed for
+  screens; Inter's Black is heavy enough for the ultra-bold uppercase the design
+  is built around, and using one family for headline and body mirrors the original
+  pairing exactly.
 
-Until step 1, decks render and export correctly — they simply do not have the
-reference's handwriting.
+Both are SIL OFL, free for commercial use and redistributable, which is why the
+`.ttf` files sit in `web/public/fonts/` rather than being fetched at render time.
+
+### Swapping in the licensed faces
+
+If the real files are bought, it is three edits:
+
+1. Add the `.ttf` files to `web/public/fonts/` with `@font-face` blocks in
+   [globals.css](../web/app/globals.css), and load them in
+   [user/app/_layout.tsx](../user/app/_layout.tsx).
+2. Rename the three values in `blueprint.fonts` in
+   [toza-osmon.ts](../supabase/functions/_shared/templates/toza-osmon.ts), and add
+   the names to `BUNDLED` in
+   [template-engine.ts](../supabase/functions/_shared/template-engine.ts).
+3. Add them to `fontFace()` in
+   [export-model.ts](../supabase/functions/_shared/export-model.ts) so PowerPoint
+   asks for them by name.
+
+Then `npm run templates:build -- --catalogue <YYYYMMDDHHMM>_toza_osmon_fonts` and
+push, so the stored previews are regenerated.
+
+### One export gap, and it is not new
+
+PDF export draws everything in a single regular/bold pair — it has no font-role
+model, so the handwritten accent and the ultra-bold headline both come out as
+Manrope. This predates Toza osmon: Klassik's Pinyon Script eyebrow has always
+exported the same way. PowerPoint export and on-screen rendering both use the real
+faces. Fixing the PDF means threading a face through its whole text path, which is
+a change worth making deliberately rather than as a side effect of adding a design.
 
 ## Rotation, and why the polaroids are built the way they are
 

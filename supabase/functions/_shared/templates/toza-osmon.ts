@@ -461,12 +461,14 @@ export const tozaOsmon: SlideTemplate = {
     type: { mega: 112, display: 62, title: 40, heading: 26, body: 19, caption: 14, micro: 10 },
     radius: { card: 4, image: 3 },
     fonts: {
-      // The brief's faces. Neither ships with the repo — both are licensed — so
-      // `FONT_FALLBACKS` in the renderer maps them to the closest bundled face
-      // until the files are added. See docs/toza-osmon.md.
-      script: "Metworkland",
-      display: "HelveticaNowDisplay-Bold",
-      body: "HelveticaNowDisplay",
+      // The brief named Metworkland and Helvetica Now; both are licensed and
+      // neither ships with the apps. Caveat Brush and Inter are the bundled
+      // faces closest to them, and naming them here rather than mapping them in
+      // the renderer keeps the blueprint honest about what will actually draw.
+      // See docs/toza-osmon.md.
+      script: "CaveatBrush_400Regular",
+      display: "Inter_900Black",
+      body: "Inter_400Regular",
     },
     fallback: titleWithPhoto,
     layouts: {

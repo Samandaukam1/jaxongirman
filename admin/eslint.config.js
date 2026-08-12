@@ -5,7 +5,10 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist", "node_modules"] },
+  // `packages/` here is a vendored copy of the shared workspace packages, kept so
+  // this app can be built from its own repository. It is authored and linted in
+  // the monorepo; linting the copy would only report the same findings twice.
+  { ignores: ["dist", "node_modules", "packages"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],

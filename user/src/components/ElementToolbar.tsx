@@ -1,12 +1,13 @@
 import type { Json, Tables } from "@jaxongirman/types";
 import {
   ArrowUpDown, Blend, Bold, Check, ChevronDown, ChevronsDown, ChevronsUp, Image as ImageIcon, Italic, Layers, List,
-  Minus, Plus, SquareRoundCorner, Strikethrough, TextAlignCenter, TextAlignEnd, TextAlignJustify, TextAlignStart, Type,
+  Minus, Plus, Sheet, SquareRoundCorner, Strikethrough, TextAlignCenter, TextAlignEnd, TextAlignJustify, TextAlignStart, Type,
   Underline, WandSparkles, type LucideIcon,
 } from "lucide-react-native";
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
+import { ChartDataEditor, TableDataEditor } from "@/components/DataEditor";
 import {
   BASE_SWATCHES, DEFAULT_FONT_SIZE, FONTS, TEXT_EFFECTS, alignmentOf, bag, effectOf, effectTextStyle,
   fontOptionOf, formatSize, hasBullets, isBoldStyle, isItalic, isStrikethrough, isUnderline, lineHeightRatio,
@@ -17,7 +18,7 @@ import { colors, icon, radius, shadow, spacing, typography } from "@/theme/token
 
 type Element = Tables<"slide_elements">;
 
-export type ToolPanel = "text" | "font" | "color" | "spacing" | "opacity" | "effects" | "layer" | "corner" | null;
+export type ToolPanel = "text" | "font" | "color" | "spacing" | "opacity" | "effects" | "layer" | "corner" | "data" | null;
 
 type Props = {
   element: Element;
@@ -76,6 +77,9 @@ export function ElementToolbar({ element, swatches, panel, onPanel, onStyle, onC
   const maxRadius = Math.round(Math.min(element.width, element.height) / 2);
   const cornerRadius = Math.min(num(style.borderRadius, 0), maxRadius);
   const isVideo = str(content.kind) === "video";
+  // A chart's numbers and a table's cells are the two things a reader will want
+  // to correct on the slide itself rather than by regenerating the deck.
+  const hasData = element.type === "chart" || element.type === "table";
 
   const toggle = (key: ToolPanel) => onPanel(panel === key ? null : key);
   const patch = (next: StyleBag) => onStyle(next);
@@ -87,6 +91,14 @@ export function ElementToolbar({ element, swatches, panel, onPanel, onStyle, onC
         <View style={styles.panel}>
           {panel === "text" ? (
             <TextPanel key={element.id} value={text} onChange={(next) => onContent({ ...content, text: next })} onDone={() => onPanel(null)} />
+          ) : null}
+
+          {panel === "data" && element.type === "chart" ? (
+            <ChartDataEditor content={content} onChange={onContent} />
+          ) : null}
+
+          {panel === "data" && element.type === "table" ? (
+            <TableDataEditor content={content} onChange={onContent} />
           ) : null}
 
           {panel === "font" ? (
@@ -191,6 +203,15 @@ export function ElementToolbar({ element, swatches, panel, onPanel, onStyle, onC
       ) : null}
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.bar}>
+        {hasData ? (
+          <Tool
+            icon={Sheet}
+            label={element.type === "chart" ? "Diagramma ma’lumoti" : "Jadval ma’lumoti"}
+            active={panel === "data"}
+            onPress={() => toggle("data")}
+          />
+        ) : null}
+
         {isText ? (
           <>
             <Tool icon={Type} label="Matnni tahrirlash" active={panel === "text"} onPress={() => toggle("text")} />

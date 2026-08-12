@@ -39,6 +39,15 @@ export function buildEdgeModules() {
       path.join(shared, "palettes.ts"),
       path.join(shared, "template-engine.ts"),
       path.join(shared, "templates", "*.ts"),
+      // `layout.ts` and the JSLAYD bridge are dependency-free on purpose — the
+      // Supabase client never reaches them — so they can be type-checked and
+      // unit-tested here without a Deno toolchain, which no developer machine
+      // in this repo has.
+      path.join(shared, "export-model.ts"),
+      path.join(shared, "fonts.ts"),
+      path.join(shared, "layout.ts"),
+      path.join(shared, "jslayd-layout.ts"),
+      path.join(shared, "jslayd", "*.ts"),
     ],
   }, null, 2));
 

@@ -12,8 +12,12 @@
   },
   "dependencies": {
     "@expo-google-fonts/arimo": "^0.4.3",
+    "@expo-google-fonts/bebas-neue": "^0.4.1",
+    "@expo-google-fonts/caveat-brush": "^0.4.1",
+    "@expo-google-fonts/inter": "^0.4.2",
     "@expo-google-fonts/league-spartan": "^0.4.2",
     "@expo-google-fonts/manrope": "latest",
+    "@expo-google-fonts/parisienne": "^0.4.1",
     "@expo-google-fonts/pinyon-script": "^0.4.1",
     "@expo/metro-runtime": "~57.0.8",
     "@jaxongirman/types": "*",

@@ -20,7 +20,6 @@ import {
   boolean,
   clamp,
   interpolateHex,
-  isBold,
   MODEL_HEIGHT,
   MODEL_WIDTH,
   number,
@@ -31,44 +30,81 @@ import {
   type ExportElement,
   type JsonObject,
 } from "./export-model.ts";
+import { DEFAULT_FACE, bundledUrl, faceRequest, type FaceRequest } from "./fonts.ts";
 
-const REGULAR_FONT_URL = "https://unpkg.com/@expo-google-fonts/manrope@0.4.2/400Regular/Manrope_400Regular.ttf";
-const BOLD_FONT_URL = "https://unpkg.com/@expo-google-fonts/manrope@0.4.2/700Bold/Manrope_700Bold.ttf";
+/**
+ * The faces a deck actually needs, embedded once each.
+ *
+ * The export used to draw every deck in one Manrope regular/bold pair, which
+ * meant a design's typography — the whole point of choosing one — never
+ * survived to PDF. Now each text row names the face it is set in, a custom
+ * upload is embedded from Storage when there is one, and the design's own
+ * declared fallback covers the rest. Nothing is substituted without the
+ * substitution being the one the design asked for (§78).
+ */
+class FontBook {
+  private readonly embedded = new Map<string, PDFFont>();
+  private constructor(private readonly pdf: PDFDocument, readonly custom: boolean, private readonly base: PDFFont) {}
 
-type Fonts = { regular: PDFFont; bold: PDFFont; custom: boolean };
+  static async open(pdf: PDFDocument, styles: readonly JsonObject[]): Promise<FontBook> {
+    let base: PDFFont;
+    let custom = false;
+    try {
+      pdf.registerFontkit(fontkit);
+      base = await pdf.embedFont(await fetchFont(bundledUrl(DEFAULT_FACE)!), { subset: true });
+      custom = true;
+    } catch {
+      // No network, or a face that will not parse. Helvetica keeps the export
+      // producing a readable document rather than failing outright.
+      base = await pdf.embedFont(StandardFonts.Helvetica);
+    }
+    const book = new FontBook(pdf, custom, base);
+    if (custom) await book.preload(styles);
+    return book;
+  }
 
-let fontBytesPromise: Promise<{ regular: Uint8Array; bold: Uint8Array }> | null = null;
+  /**
+   * Embeds every distinct face the deck uses, before any page is drawn.
+   *
+   * pdf-lib embeds asynchronously and the drawing pass is synchronous, so the
+   * work has to happen up front. Downloading them together also means a deck
+   * with four faces waits once rather than four times.
+   */
+  private async preload(styles: readonly JsonObject[]): Promise<void> {
+    const wanted = new Map<string, FaceRequest>();
+    for (const style of styles) {
+      const request = faceRequest(style);
+      if (!wanted.has(request.key)) wanted.set(request.key, request);
+    }
+    await Promise.all([...wanted.values()].map(async (request) => {
+      for (const url of [request.url, bundledUrl(request.fallback)]) {
+        if (!url) continue;
+        try {
+          const font = await this.pdf.embedFont(await fetchFont(url), { subset: true });
+          this.embedded.set(request.key, font);
+          return;
+        } catch (error) {
+          // A face that will not download or parse is reported and skipped; the
+          // row then draws in the base face rather than taking the deck down.
+          console.warn("pdf font unavailable", url, error instanceof Error ? error.message : error);
+        }
+      }
+    }));
+  }
+
+  /** The embedded face for a text row, or the base face when it never arrived. */
+  faceFor(style: JsonObject): PDFFont {
+    if (!this.custom) return this.base;
+    return this.embedded.get(faceRequest(style).key) ?? this.base;
+  }
+}
 
 async function fetchFont(url: string): Promise<Uint8Array> {
-  const response = await fetch(url, { signal: AbortSignal.timeout(8_000) });
-  if (!response.ok) throw new Error("PDF font download failed");
+  // Several faces are fetched once per export, and a cold CDN edge is slow;
+  // eight seconds was tuned for a single small file and timed the rest out.
+  const response = await fetch(url, { signal: AbortSignal.timeout(20_000) });
+  if (!response.ok) throw new Error(`font download failed: ${response.status}`);
   return new Uint8Array(await response.arrayBuffer());
-}
-
-function fontBytes(): Promise<{ regular: Uint8Array; bold: Uint8Array }> {
-  fontBytesPromise ??= Promise.all([
-    fetchFont(Deno.env.get("PDF_FONT_REGULAR_URL") ?? REGULAR_FONT_URL),
-    fetchFont(Deno.env.get("PDF_FONT_BOLD_URL") ?? BOLD_FONT_URL),
-  ]).then(([regular, bold]) => ({ regular, bold }));
-  return fontBytesPromise;
-}
-
-async function embedFonts(pdf: PDFDocument): Promise<Fonts> {
-  try {
-    pdf.registerFontkit(fontkit);
-    const bytes = await fontBytes();
-    return {
-      regular: await pdf.embedFont(bytes.regular, { subset: true }),
-      bold: await pdf.embedFont(bytes.bold, { subset: true }),
-      custom: true,
-    };
-  } catch {
-    return {
-      regular: await pdf.embedFont(StandardFonts.Helvetica),
-      bold: await pdf.embedFont(StandardFonts.HelveticaBold),
-      custom: false,
-    };
-  }
 }
 
 function safeText(value: string, custom: boolean): string {
@@ -182,8 +218,8 @@ function drawLine(page: PDFPage, element: ExportElement, style: JsonObject) {
   });
 }
 
-function drawText(page: PDFPage, element: ExportElement, style: JsonObject, content: JsonObject, fonts: Fonts) {
-  const font = isBold(style) ? fonts.bold : fonts.regular;
+function drawText(page: PDFPage, element: ExportElement, style: JsonObject, content: JsonObject, fonts: FontBook) {
+  const font = fonts.faceFor(style);
   const size = Math.max(4, number(style.fontSize, 30));
   const lineHeight = Math.max(size, number(style.lineHeight, size * 1.2));
   const raw = applyTextTransform(string(content.text, ""), style);
@@ -330,7 +366,7 @@ function drawChart(page: PDFPage, element: ExportElement, style: JsonObject, con
   });
 }
 
-function drawTable(page: PDFPage, element: ExportElement, style: JsonObject, content: JsonObject, fonts: Fonts) {
+function drawTable(page: PDFPage, element: ExportElement, style: JsonObject, content: JsonObject, fonts: FontBook) {
   const rows = Array.isArray(content.rows) ? content.rows.filter(Array.isArray).slice(0, 20) as unknown[][] : [];
   if (!rows.length) return;
   const columns = Math.max(...rows.map((row) => row.length), 1);
@@ -357,7 +393,10 @@ export async function renderPdf(deck: ExportDeck, assets: ExportAssetLoader): Pr
   pdf.setTitle(deck.presentation.title);
   pdf.setCreator("Jaxongirman");
   pdf.setProducer("Jaxongirman PDF export");
-  const fonts = await embedFonts(pdf);
+  // Every text row in the deck, so each distinct face is embedded exactly once.
+  const fonts = await FontBook.open(pdf, deck.elements
+    .filter((element) => element.type === "text" || element.type === "table")
+    .map((element) => object(element.style)));
 
   for (const slide of deck.slides) {
     const page = pdf.addPage([MODEL_WIDTH, MODEL_HEIGHT]);

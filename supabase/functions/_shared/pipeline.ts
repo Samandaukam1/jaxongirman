@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PaletteFamily, SlideTemplate } from "./design-types.ts";
+import { familyOf } from "./jslayd/index.ts";
+import { buildJslaydSlides, readDesign, type ResolvedDesign } from "./jslayd-layout.ts";
 import { buildSlides } from "./layout.ts";
 import { OpenAIClient } from "./openai.ts";
 import { resolvePalette } from "./palettes.ts";
@@ -33,6 +35,84 @@ function composeVisualDna(model: ModelDna, template: SlideTemplate, palette: Pal
     templateCode: template.code,
     paletteCode: palette.code,
   };
+}
+
+/**
+ * Swaps a JSLAYD design's own colours into the direction the image provider
+ * reads, so a generated photograph is lit for the design it will sit inside
+ * rather than for a palette family the deck never uses.
+ */
+function applyJslaydColors(dna: VisualDna, design: ResolvedDesign, paletteCode: string | null): VisualDna {
+  const colors = familyOf(design.document, paletteCode).colors;
+  return {
+    ...dna,
+    palette: {
+      background: colors.background,
+      surface: colors.surface,
+      primary: colors.primary,
+      secondary: colors.secondary,
+      accent: colors.accent,
+      textPrimary: colors.text,
+      textSecondary: colors.textSecondary,
+      border: colors.border,
+    },
+    templateCode: design.document.design.slug,
+  };
+}
+
+/**
+ * Reads the JSLAYD design a deck should be laid out with.
+ *
+ * A deck records both the design and the version it was generated against, and
+ * the pinned version is what is read — an admin publishing v2 must not silently
+ * relayout a deck that shipped on v1 (§59). A deck being generated now carries
+ * no pin yet and gets the current published document.
+ *
+ * Every failure returns null and says why in the log. The caller falls back to
+ * the built-in blueprint, so the worst case is a deck that looks like it did
+ * before JSLAYD existed rather than a deck that does not exist (§99).
+ */
+async function loadJslaydDesign(
+  service: SupabaseClient,
+  designId: string,
+  version: number | null,
+): Promise<ResolvedDesign | null> {
+  const current = await service
+    .from("presentation_designs")
+    .select("id, slug, published_version, compiled_config")
+    .eq("id", designId)
+    .maybeSingle();
+  if (current.error || !current.data) {
+    console.error("jslayd design lookup failed", designId, current.error?.message ?? "not found");
+    return null;
+  }
+
+  let row = {
+    id: current.data.id,
+    slug: current.data.slug,
+    version: current.data.published_version,
+    compiled_config: current.data.compiled_config as unknown,
+  };
+
+  if (version !== null && version !== current.data.published_version) {
+    const pinned = await service
+      .from("presentation_design_versions")
+      .select("version, compiled_config")
+      .eq("design_id", designId)
+      .eq("version", version)
+      .maybeSingle();
+    if (pinned.error || !pinned.data) {
+      console.error("jslayd pinned version missing", designId, version, pinned.error?.message ?? "not found");
+      return null;
+    }
+    row = { ...row, version: pinned.data.version, compiled_config: pinned.data.compiled_config as unknown };
+  }
+
+  const { design, reason } = readDesign(row);
+  if (!design) {
+    console.error("jslayd design unusable, falling back to the built-in blueprint", designId, reason);
+  }
+  return design;
 }
 
 /** Cover, agenda, bibliography and closing — assembled here, never by the model. */
@@ -105,6 +185,7 @@ function mockContent(outline: Outline): Content {
     quote: null,
     statistic: slide.layout === "statistic" ? { value: "3", label: "mavzuni tushunishga yordam beradigan asosiy yo‘nalish" } : null,
     chart: null,
+    table: null,
   })) };
 }
 
@@ -114,7 +195,7 @@ function userInput(text: string, fileIds: string[]) {
 
 /** A slide with nothing on it but its own headline. */
 function bareSlide(title: string, purpose: string, layout: LayoutName, subtitle: string | null = null, bullets: string[] = []): SemanticSlide {
-  return { title, subtitle, purpose, layout, bullets, body: null, quote: null, statistic: null, chart: null, visualPrompt: null };
+  return { title, subtitle, purpose, layout, bullets, body: null, quote: null, statistic: null, chart: null, table: null, visualPrompt: null };
 }
 
 /** Who prepared the deck and for whom, which is what a title page is asked for. */
@@ -257,12 +338,19 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
     const contentResult = await runStage(input.service, input, "writing_content", async () => {
       if (mode === "mock") return { data: mockContent(outlineResult.data), usage: {}, requestId: null };
       const system = "You are an expert Uzbek Latin academic presentation writer. Follow the supplied outline exactly and ground every sentence in the supplied research. Write specific, checkable content: real numbers, dates, names and definitions instead of generalities. Grammar must be flawless Uzbek Latin. Never fabricate a quotation, statistic or date — if the research does not support it, write something the research does support instead. Return only the required schema.";
-      const prompt = `Mavzu: ${prepared.presentation.topic}\nReja:\n${JSON.stringify(outlineResult.data.slides)}\n\nAynan ${contentCount} ta slayd uchun matn yozing.\n- subtitle: sarlavhani ochib beruvchi bitta qisqa jumla (bezakli yozuv). Har slaydda bo'lsin.\n- bullets: 3–5 ta band. Har biri to'liq, aniq fikr: raqam, sana, ism yoki aniq ta'rif bo'lsin. "Muhim ahamiyatga ega" kabi quruq iboralarni yozmang.\n- body: bandlarni bog'lovchi 1–2 jumlalik izoh, agar slayd shuni talab qilsa.\n- statistic: faqat tadqiqotda haqiqatan uchragan raqamni yozing.\n- chart: faqat tadqiqotdagi haqiqiy qiymatlar bilan to'ldiring.\nBibliografiya yozmang — uni server alohida qo'shadi.${researchBrief}`;
+      const prompt = `Mavzu: ${prepared.presentation.topic}\nReja:\n${JSON.stringify(outlineResult.data.slides)}\n\nAynan ${contentCount} ta slayd uchun matn yozing.\n- subtitle: sarlavhani ochib beruvchi bitta qisqa jumla (bezakli yozuv). Har slaydda bo'lsin.\n- bullets: 3–5 ta band. Har biri to'liq, aniq fikr: raqam, sana, ism yoki aniq ta'rif bo'lsin. "Muhim ahamiyatga ega" kabi quruq iboralarni yozmang.\n- body: bandlarni bog'lovchi 1–2 jumlalik izoh, agar slayd shuni talab qilsa.\n- statistic: faqat tadqiqotda haqiqatan uchragan raqamni yozing.\n- chart: faqat tadqiqotdagi haqiqiy qiymatlar bilan to'ldiring.\n- table: faqat tadqiqotda haqiqatan jadval ko'rinishidagi ma'lumot bo'lsa to'ldiring; 2-6 ustun, 2-8 qator.\nBibliografiya yozmang — uni server alohida qo'shadi.${researchBrief}`;
       return openai.structured<Content>([{ role: "system", content: system }, ...userInput(prompt, context.fileIds)], "presentation_content", contentSchema(contentCount), input.safetyIdentifier);
     }, () => "Slayd matnlari yozildi va manbalarga bog‘landi");
 
     const template = resolveTemplate(prepared.presentation.template_code, prepared.presentation.style as PresentationStyle);
     const palette = resolvePalette(prepared.presentation.palette_code);
+
+    // The design the user picked, when they picked a JSLAYD one. Resolved here
+    // rather than at build time so a design that cannot be read is known before
+    // a single credit is spent on imagery for a layout it will not use.
+    const jslayd: ResolvedDesign | null = prepared.presentation.design_id
+      ? await loadJslaydDesign(input.service, prepared.presentation.design_id, prepared.presentation.design_version)
+      : null;
 
     // User-entered labels come first — they are what the author explicitly cited —
     // then every page the research actually opened, deduplicated by address.
@@ -295,9 +383,17 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
         outline: outlineResult.data,
         content: contentResult.data,
         sources: deckSources,
-        visualDna: composeVisualDna(outlineResult.data.visualDna, template, palette),
+        // A JSLAYD deck's imagery has to match the design it will be laid into,
+        // so the design's own colours replace the picked palette family in the
+        // direction the image provider reads. Everything else the model wrote —
+        // mood, era, texture — is untouched.
+        visualDna: jslayd
+          ? applyJslaydColors(composeVisualDna(outlineResult.data.visualDna, template, palette), jslayd, prepared.presentation.palette_code)
+          : composeVisualDna(outlineResult.data.visualDna, template, palette),
       }),
-      () => `«${template.name}» shabloni va «${palette.name}» rang oilasi qo‘llandi`,
+      () => jslayd
+        ? `«${jslayd.document.design.name}» JSLAYD dizayni (v${jslayd.version}) qo‘llandi`
+        : `«${template.name}» shabloni va «${palette.name}» rang oilasi qo‘llandi`,
     );
     const pricing = await providerPricing(input.service, openai.textModel, openai.imageModel);
     const researchCost = usageCost(research.usage, pricing);
@@ -349,7 +445,28 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
     }, (value) => value.length ? `${value.length} ta professional vizual yaratildi` : "Qo‘shimcha generativ rasm talab qilinmadi");
 
     const built = await runStage(input.service, input, "building_slides", async () => {
-      const rows = buildSlides({ presentationId: input.presentationId, ownerId: input.ownerId, template, palette, slides: plan.slides, sources: deckSources.map(citationLine), generatedImages, uploadedImages: assets.uploadedImages });
+      const shared = {
+        presentationId: input.presentationId,
+        ownerId: input.ownerId,
+        slides: plan.slides,
+        sources: deckSources.map(citationLine),
+        generatedImages,
+        uploadedImages: assets.uploadedImages,
+      };
+      // A deck laid out by a published JSLAYD design, or — when the user never
+      // chose one, or the design turns out to be unreadable — by the built-in
+      // blueprint that has always built this deck. The fallback is the whole
+      // point: a broken remote design costs a deck its new look, never its
+      // existence (§72, §99).
+      const rows = jslayd
+        ? buildJslaydSlides({
+            ...shared,
+            design: jslayd,
+            authorName: prepared.presentation.author_name,
+            teacherName: prepared.presentation.teacher_name,
+            paletteCode: prepared.presentation.palette_code,
+          })
+        : buildSlides({ ...shared, template, palette });
       const deleteResult = await input.service.from("slides").delete().eq("presentation_id", input.presentationId);
       if (deleteResult.error) throw deleteResult.error;
       const slideInsert = await input.service.from("slides").insert(rows.slides);
@@ -369,7 +486,14 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
       const { data: styleConfig, error: styleError } = await input.service.from("style_configs").select("base_credits,credits_per_slide,credits_per_image").eq("style", prepared.presentation.style as PresentationStyle).single();
       if (styleError) throw styleError;
       const actualCredits = Math.ceil(styleConfig.base_credits + prepared.presentation.requested_slide_count * Number(styleConfig.credits_per_slide) + generatedImages.length * styleConfig.credits_per_image);
-      const updateResult = await input.service.from("presentations").update({ visual_dna: plan.visualDna, generated_slide_count: built.slides.length }).eq("id", input.presentationId);
+      const updateResult = await input.service.from("presentations").update({
+        visual_dna: plan.visualDna,
+        generated_slide_count: built.slides.length,
+        // Pin the deck to the version it was actually laid out with, so a later
+        // publish of the same design cannot change what this deck looks like.
+        // Left alone when the JSLAYD path was not taken.
+        ...(jslayd ? { design_version: jslayd.version } : {}),
+      }).eq("id", input.presentationId);
       if (updateResult.error) throw updateResult.error;
       const { error } = await input.service.rpc("settle_generation", { p_job_id: input.jobId, p_actual_credits: actualCredits, p_provider_cost_usd: totalCost });
       if (error) throw error;

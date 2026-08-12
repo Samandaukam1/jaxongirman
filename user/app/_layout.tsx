@@ -1,4 +1,6 @@
 import { Arimo_400Regular, Arimo_700Bold } from "@expo-google-fonts/arimo";
+import { CaveatBrush_400Regular } from "@expo-google-fonts/caveat-brush";
+import { Inter_400Regular, Inter_900Black } from "@expo-google-fonts/inter";
 import { LeagueSpartan_700Bold, LeagueSpartan_800ExtraBold } from "@expo-google-fonts/league-spartan";
 import { Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold, useFonts } from "@expo-google-fonts/manrope";
 import { PinyonScript_400Regular } from "@expo-google-fonts/pinyon-script";
@@ -15,12 +17,16 @@ import { colors } from "@/theme/tokens";
 void SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  // Manrope carries the app chrome; the other three are slide-template voices.
+  // Manrope carries the app chrome; the rest are slide-template voices. Inter
+  // and Caveat Brush are Toza osmon's only two faces — that design uses nothing
+  // else, so both must be present before a slide renders.
   const [loaded] = useFonts({
     Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold,
     LeagueSpartan_700Bold, LeagueSpartan_800ExtraBold,
     PinyonScript_400Regular,
     Arimo_400Regular, Arimo_700Bold,
+    Inter_400Regular, Inter_900Black,
+    CaveatBrush_400Regular,
   });
 
   useEffect(() => {

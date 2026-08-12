@@ -2,7 +2,9 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as LucideIcons from "lucide-react-native";
 import { Image as ImageGlyph, Play, Video as VideoGlyph, type LucideIcon } from "lucide-react-native";
 import { StyleSheet, Text, View } from "react-native";
-import Svg, { Circle, Path, Polyline, Rect } from "react-native-svg";
+import Svg, { Circle, Path, Polyline, Rect, Text as SvgText } from "react-native-svg";
+
+import { borderOf, cornersOf, faceOf, gradientOf, num, shadowOf, str } from "@/lib/slideStyle";
 
 /**
  * Renderers for the element vocabulary the template engine emits. Kept apart
@@ -11,42 +13,101 @@ import Svg, { Circle, Path, Polyline, Rect } from "react-native-svg";
 
 type Style = Record<string, unknown>;
 
-function num(value: unknown, fallback: number): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
-function str(value: unknown, fallback = ""): string {
-  return typeof value === "string" ? value : fallback;
-}
-
-/** Angle in degrees → the start/end points expo-linear-gradient expects. */
-function gradientPoints(angle: number) {
-  const radians = ((angle - 90) * Math.PI) / 180;
-  const x = Math.cos(radians) / 2;
-  const y = Math.sin(radians) / 2;
-  return { start: { x: 0.5 - x, y: 0.5 - y }, end: { x: 0.5 + x, y: 0.5 + y } };
-}
-
+/**
+ * A filled box.
+ *
+ * Reads the same style bag the DOM painter does, through the same helpers, so a
+ * shape with three gradient stops and a shadow object draws the same on a phone
+ * as it does in the admin preview (§77, §85).
+ */
 export function ShapeElement({ style, width, height }: { style: Style; width: number; height: number }) {
-  const fill = str(style.fill, "#EEEEEE");
-  const gradientTo = typeof style.gradientTo === "string" ? style.gradientTo : null;
-  const radius = num(style.borderRadius, 0);
-  const stroke = typeof style.stroke === "string" ? style.stroke : null;
-  const shadow = style.shadow === true;
+  const box = { ...cornersOf(style), ...borderOf(style), ...shadowOf(style) };
+  const gradient = gradientOf(style);
 
-  const box = {
-    borderRadius: radius,
-    ...(stroke ? { borderColor: stroke, borderWidth: num(style.strokeWidth, 1) } : {}),
-    // Shadows are drawn by the platform; the colour follows the fill so a card
-    // on a dark ground does not get a grey halo.
-    ...(shadow ? { shadowColor: "#1A1030", shadowOpacity: 0.16, shadowRadius: 22, shadowOffset: { width: 0, height: 10 }, elevation: 5 } : {}),
-  };
-
-  if (gradientTo) {
-    const { start, end } = gradientPoints(num(style.gradientAngle, 135));
-    return <LinearGradient colors={[fill, gradientTo]} start={start} end={end} style={[StyleSheet.absoluteFill, box]} />;
+  if (gradient) {
+    return (
+      <LinearGradient
+        colors={gradient.colors as [string, string, ...string[]]}
+        locations={gradient.locations as [number, number, ...number[]]}
+        start={gradient.start}
+        end={gradient.end}
+        style={[StyleSheet.absoluteFill, box]}
+      />
+    );
   }
-  return <View style={[StyleSheet.absoluteFill, box, { backgroundColor: fill, width, height }]} />;
+  return <View style={[StyleSheet.absoluteFill, box, { backgroundColor: str(style.fill, "#EEEEEE"), width, height }]} />;
+}
+
+/**
+ * A table drawn from its own style bag.
+ *
+ * The old canvas capped every table at five rows and four columns in fixed
+ * 12pt grey, which is not a table so much as a hint that one existed. A JSLAYD
+ * design specifies its header, its zebra rows, its column widths and its type,
+ * and all of it has to arrive here or the phone shows a different slide from
+ * everywhere else.
+ */
+export function TableElement({ style, content, width, height }: { style: Style; content: Style; width: number; height: number }) {
+  const rows = Array.isArray(content.rows) ? content.rows.map((row) => (Array.isArray(row) ? row.map((cell) => String(cell ?? "")) : [])) : [];
+  if (rows.length === 0) return null;
+
+  const columns = Array.isArray(content.columns) ? content.columns.map((column) => String(column ?? "")) : [];
+  const header = content.header === true && columns.length > 0;
+  const count = Math.max(columns.length, ...rows.map((row) => row.length), 1);
+  const widths = Array.isArray(style.columnWidths) && style.columnWidths.length === count
+    ? style.columnWidths.map((value) => num(value, 1 / count))
+    : Array.from({ length: count }, () => 1 / count);
+  const padding = num(style.padding, 6);
+  const rowHeight = num(style.rowHeight, height / (rows.length + (header ? 1 : 0)));
+  const stroke = typeof style.stroke === "string" ? style.stroke : null;
+  const divider = stroke ? { borderBottomWidth: num(style.strokeWidth, 1), borderBottomColor: stroke } : {};
+  const align = str(style.align, "left") as "left" | "center" | "right";
+
+  const cell = (text: string, index: number, isHeader: boolean) => (
+    <Text
+      key={index}
+      numberOfLines={2}
+      style={{
+        width: widths[index] !== undefined ? width * widths[index]! : width / count,
+        paddingHorizontal: padding,
+        paddingVertical: padding / 2,
+        textAlign: align,
+        color: str(isHeader ? style.headerColor : style.cellColor, "#111111"),
+        fontSize: num(isHeader ? style.headerSize : style.cellSize, 12),
+        fontFamily: faceOf({
+          fontFamily: isHeader ? style.headerFontFamily : style.cellFontFamily,
+          fontFallback: isHeader ? style.headerFontFallback : style.cellFontFallback,
+          fontWeight: isHeader ? "700" : "400",
+        }),
+      }}
+    >
+      {text}
+    </Text>
+  );
+
+  return (
+    <View style={[StyleSheet.absoluteFill, { overflow: "hidden" }, cornersOf(style), borderOf(style)]}>
+      {header ? (
+        <View style={{ flexDirection: "row", height: rowHeight, alignItems: "center", backgroundColor: str(style.headerBackground) || undefined, ...divider }}>
+          {Array.from({ length: count }, (_, index) => cell(columns[index] ?? "", index, true))}
+        </View>
+      ) : null}
+      {rows.map((row, rowIndex) => (
+        <View
+          key={rowIndex}
+          style={{
+            flexDirection: "row",
+            height: rowHeight,
+            alignItems: "center",
+            backgroundColor: str(rowIndex % 2 === 1 ? style.cellAltBackground : style.cellBackground) || undefined,
+            ...divider,
+          }}
+        >
+          {Array.from({ length: count }, (_, index) => cell(row[index] ?? "", index, false))}
+        </View>
+      ))}
+    </View>
+  );
 }
 
 export function IconElement({ style, content, width, height }: { style: Style; content: Style; width: number; height: number }) {
@@ -100,21 +161,27 @@ export function ChartElement({ style, content, width, height }: ChartProps) {
   const values = Array.isArray(content.values) ? content.values.filter((value): value is number => typeof value === "number") : [];
   const labels = Array.isArray(content.labels) ? content.labels.map((label) => String(label)) : [];
   const type = str(content.chartType, "bar");
+  const horizontal = str(content.chartKind) === "horizontalBar";
   const series = Array.isArray(style.series) ? style.series.map((color) => String(color)) : [];
   const primary = str(style.color, "#333333");
   const track = str(style.trackColor, "#E5E5E5");
   const labelColor = str(style.labelColor, "#777777");
+  const labelSize = num(style.labelSize, 11);
+  const showLabels = style.showLabels !== false && labels.length > 0;
+  const showValues = style.showValues === true;
   if (!values.length || width <= 0 || height <= 0) return null;
 
   const colorAt = (index: number) => series[index % Math.max(1, series.length)] ?? primary;
   const max = Math.max(...values, 1);
-  const labelBand = labels.length ? 20 : 0;
+  const labelBand = showLabels && !horizontal ? Math.max(16, labelSize * 1.5) : 0;
   const plotHeight = Math.max(4, height - labelBand);
 
   if (type === "donut") {
     const total = values.reduce((sum, value) => sum + value, 0) || 1;
     const size = Math.min(width, plotHeight);
-    const radius = size / 2 - size * 0.11;
+    // The design's declared ring thickness, bounded so it cannot swallow the hole.
+    const thickness = Math.min(num(style.strokeWidth, size * 0.19), size / 2);
+    const radius = size / 2 - thickness / 2;
     const cx = width / 2;
     const cy = plotHeight / 2;
     // Arcs are laid out before render so nothing mutates during the JSX pass.
@@ -127,9 +194,9 @@ export function ChartElement({ style, content, width, height }: ChartProps) {
     }
     return (
       <Svg width={width} height={height}>
-        <Circle cx={cx} cy={cy} r={radius} stroke={track} strokeWidth={size * 0.19} fill="none" />
+        <Circle cx={cx} cy={cy} r={radius} stroke={track} strokeWidth={thickness} fill="none" />
         {arcs.map((arc, index) => (
-          <Path key={index} d={arc.path} stroke={arc.color} strokeWidth={size * 0.19} strokeLinecap="butt" fill="none" />
+          <Path key={index} d={arc.path} stroke={arc.color} strokeWidth={thickness} strokeLinecap="butt" fill="none" />
         ))}
       </Svg>
     );
@@ -141,7 +208,7 @@ export function ChartElement({ style, content, width, height }: ChartProps) {
     return (
       <Svg width={width} height={height}>
         <Polyline points={`0,${plotHeight} ${points} ${width},${plotHeight}`} fill={primary} fillOpacity={0.12} stroke="none" />
-        <Polyline points={points} fill="none" stroke={primary} strokeWidth={Math.max(2, height * 0.012)} strokeLinejoin="round" strokeLinecap="round" />
+        <Polyline points={points} fill="none" stroke={primary} strokeWidth={Math.max(2, num(style.strokeWidth, height * 0.012))} strokeLinejoin="round" strokeLinecap="round" />
         {values.map((value, index) => (
           <Circle key={index} cx={index * step} cy={plotHeight - (value / max) * plotHeight * 0.92} r={Math.max(3, height * 0.016)} fill={primary} />
         ))}
@@ -149,7 +216,28 @@ export function ChartElement({ style, content, width, height }: ChartProps) {
     );
   }
 
-  const gap = width / (values.length * 4);
+  const gap = num(style.gap, width / (values.length * 4));
+  const corner = num(style.cornerRadius, 6);
+
+  if (horizontal) {
+    const barHeight = (height - gap * (values.length - 1)) / values.length;
+    return (
+      <Svg width={width} height={height}>
+        {values.map((value, index) => (
+          <Rect
+            key={index}
+            x={0}
+            y={index * (barHeight + gap)}
+            width={Math.max(2, (value / max) * width * 0.94)}
+            height={barHeight}
+            rx={Math.min(barHeight / 2, corner)}
+            fill={colorAt(index)}
+          />
+        ))}
+      </Svg>
+    );
+  }
+
   const barWidth = (width - gap * (values.length - 1)) / values.length;
   return (
     <>
@@ -163,16 +251,31 @@ export function ChartElement({ style, content, width, height }: ChartProps) {
               y={plotHeight - barHeight}
               width={barWidth}
               height={barHeight}
-              rx={Math.min(barWidth / 2, 6)}
+              rx={Math.min(barWidth / 2, corner)}
               fill={colorAt(index)}
             />
           );
         })}
+        {showValues ? values.map((value, index) => {
+          const barHeight = Math.max(2, (value / max) * plotHeight * 0.94);
+          return (
+            <SvgText
+              key={`v${index}`}
+              x={index * (barWidth + gap) + barWidth / 2}
+              y={plotHeight - barHeight - 4}
+              fill={labelColor}
+              fontSize={labelSize}
+              textAnchor="middle"
+            >
+              {String(value)}
+            </SvgText>
+          );
+        }) : null}
       </Svg>
-      {labels.length ? (
+      {showLabels ? (
         <View style={[styles.labels, { width, height: labelBand }]}>
           {values.map((_, index) => (
-            <Text key={index} numberOfLines={1} style={[styles.label, { color: labelColor, width: barWidth }]}>
+            <Text key={index} numberOfLines={1} style={[styles.label, { color: labelColor, width: barWidth, fontSize: labelSize }]}>
               {labels[index] ?? ""}
             </Text>
           ))}
@@ -186,5 +289,5 @@ const styles = StyleSheet.create({
   center: { alignItems: "center", justifyContent: "center" },
   placeholder: { backgroundColor: "#EFE9F9", borderColor: "#C9BAE6", borderStyle: "dashed" },
   labels: { flexDirection: "row", justifyContent: "space-between", position: "absolute", bottom: 0, left: 0 },
-  label: { fontFamily: "Manrope_500Medium", fontSize: 11, textAlign: "center" },
+  label: { fontFamily: "Manrope_500Medium", textAlign: "center" },
 });

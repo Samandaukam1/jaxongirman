@@ -96,6 +96,17 @@ function bulletBlock(bullets: readonly string[], maxItems = 5): string {
 const MIN_FONT = 12;
 
 /**
+ * Script faces need more leading than a grotesque; a template may override both.
+ *
+ * A display slot that sets its own leading means it: type stacked at nearly its
+ * own height is the whole point of a poster headline, and the engine's reading
+ * default would open it back out into a paragraph.
+ */
+function leadingOf(slot: TextSlot): number {
+  return slot.leading ?? (slot.family === "script" ? 1.34 : LINE_HEIGHT_RATIO);
+}
+
+/**
  * Shrinks the font until the text fits, and never cuts a word: text deleted
  * here is gone from the deck for good, whereas a denser block is something the
  * author can still restyle in the editor.
@@ -109,14 +120,15 @@ function fitText(value: string, slot: TextSlot, blueprint: Blueprint): { text: s
   const [, , width, height] = slot.frame;
   const start = blueprint.type[slot.font];
   const design = Math.max(MIN_FONT, slot.fit?.minFont ?? Math.round(start * 0.6));
-  const hardLines = slot.fit?.maxLines ?? Math.max(1, Math.floor(height / (start * LINE_HEIGHT_RATIO)));
+  const leading = leadingOf(slot);
+  const hardLines = slot.fit?.maxLines ?? Math.max(1, Math.floor(height / (start * leading)));
 
   const explicitLines = value.split("\n");
   const linesAt = (fontSize: number) => {
     const perLine = Math.max(1, Math.floor(width / (fontSize * AVERAGE_GLYPH_RATIO)));
     return explicitLines.reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / perLine)), 0);
   };
-  const roomAt = (fontSize: number) => Math.max(1, Math.floor(height / (fontSize * LINE_HEIGHT_RATIO)));
+  const roomAt = (fontSize: number) => Math.max(1, Math.floor(height / (fontSize * leading)));
 
   for (let fontSize = start; fontSize >= design; fontSize -= 2) {
     const allowed = Math.min(hardLines, roomAt(fontSize));
@@ -200,6 +212,8 @@ const BUNDLED = new Set([
   "LeagueSpartan_700Bold", "LeagueSpartan_800ExtraBold",
   "Arimo_400Regular", "Arimo_700Bold",
   "PinyonScript_400Regular",
+  // Toza osmon's two faces.
+  "Inter_400Regular", "Inter_900Black", "CaveatBrush_400Regular",
 ]);
 
 function fontFamily(slot: TextSlot, blueprint: Blueprint): string {
@@ -217,8 +231,7 @@ function renderText(slot: TextSlot, frame: Frame, context: SlideContext, templat
   if (!value) return null;
   const shaped = fitText(slot.transform === "upper" ? value.toLocaleUpperCase("uz") : value, { ...slot, frame }, template.blueprint);
   const weight = slot.weight ?? 400;
-  // Script faces need more leading than a grotesque at the same size.
-  const lineHeight = Math.round(shaped.fontSize * (slot.family === "script" ? 1.34 : LINE_HEIGHT_RATIO));
+  const lineHeight = Math.round(shaped.fontSize * leadingOf(slot));
   return baseRow(context, "text", frame, slot.z ?? 5, {
     color: colors(slot.color),
     fontSize: shaped.fontSize,
@@ -326,6 +339,8 @@ export function renderPreview(template: SlideTemplate): { background: ColorRole;
     quote: { text: "Yaxshi dizayn — ko'rinmaydigan tartib.", attribution: "Dieter Rams" },
     statistic: { value: "68%", label: "auditoriya yaxshi eslab qoladi" },
     chart: { type: "donut", labels: ["A", "B", "C"], values: [48, 32, 20] },
+    // No blueprint draws a table, so the built-in previews never show one.
+    table: null,
     visualPrompt: null,
   };
 

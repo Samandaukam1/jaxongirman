@@ -18,10 +18,19 @@ type BuildInput = {
  * clamped into the canvas; decorative shapes and icons are left alone because
  * bleeding past the edge is a deliberate motif in several templates.
  */
-function validateAndRepair(rows: ElementRow[]): { rows: ElementRow[]; score: number; report: Record<string, unknown> } {
+export function validateAndRepair(
+  rows: ElementRow[],
+  options: { authoredGeometry?: boolean } = {},
+): { rows: ElementRow[]; score: number; report: Record<string, unknown> } {
   const issues: string[] = [];
   const repaired = rows.map((row) => {
     if (row.type === "shape" || row.type === "icon") return row;
+    // A JSLAYD design places every box itself, and its compiler already refuses
+    // a chart or a table that leaves the canvas. Only text changes size with the
+    // content, so only text can overflow at render time — clamping the rest
+    // would drag a deliberately bleeding photograph into the middle of a slide
+    // the designer composed around it.
+    if (options.authoredGeometry && row.type !== "text") return row;
     const next = { ...row };
     if (next.x < 0 || next.y < 0 || next.x + next.width > MODEL_WIDTH || next.y + next.height > MODEL_HEIGHT) issues.push(`bounds:${next.id}`);
     next.width = Math.max(10, Math.min(next.width, MODEL_WIDTH - 40));

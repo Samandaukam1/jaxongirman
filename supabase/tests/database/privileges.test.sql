@@ -24,7 +24,7 @@ select is(
 -- grant to `authenticated` adds to that rather than replacing it.
 select ok(not has_function_privilege('anon', 'public.admin_adjust_credits(uuid, integer, text, text)', 'EXECUTE'),
   'a signed-out caller cannot reach the credit adjuster');
-select ok(not has_function_privilege('anon', 'public.start_generation(uuid, text, text, public.presentation_style, integer, text, text, text[], text, text, text)', 'EXECUTE'),
+select ok(not has_function_privilege('anon', 'public.start_generation(uuid, text, text, public.presentation_style, integer, text, text, text[], text, text, text, text)', 'EXECUTE'),
   'a signed-out caller cannot start a generation');
 
 -- What a signed-out caller may reach, and nothing else: a presentation screen

@@ -11,15 +11,17 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@jaxongirman/jslayd": "*",
+    "@jaxongirman/slide-dom": "*",
     "@jaxongirman/types": "*",
     "@supabase/supabase-js": "latest",
     "lucide-react": "latest",
     "react": "19.2.3",
-    "react-dom": "19.2.3",
-    "@jaxongirman/slide-dom": "*"
+    "react-dom": "19.2.3"
   },
   "devDependencies": {
     "@eslint/js": "latest",
+    "@types/node": "^26.2.0",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "@vitejs/plugin-react": "^6.0.5",
@@ -30,5 +32,8 @@
     "typescript": "^5.9.2",
     "typescript-eslint": "latest",
     "vite": "latest"
-  }
+  },
+  "workspaces": [
+    "packages/*"
+  ]
 }

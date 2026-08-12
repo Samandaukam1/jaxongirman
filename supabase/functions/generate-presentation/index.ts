@@ -19,17 +19,25 @@ type RequestBody = {
   idempotencyKey?: string;
   templateCode?: string;
   paletteCode?: string;
+  designSlug?: string;
   retry?: boolean;
 };
 
 const styles = new Set<PresentationStyle>(["simple", "good", "great", "super_professional"]);
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const codePattern = /^[a-z0-9_]{3,40}$/;
+/** JSLAYD slugs are hyphenated rather than underscored. */
+const slugPattern = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
 
 /** Unknown codes are passed as null; the RPC then falls back to the defaults. */
 function designCode(value: string | undefined): string | null {
   const trimmed = value?.trim();
   return trimmed && codePattern.test(trimmed) ? trimmed : null;
+}
+
+function designSlug(value: string | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length <= 64 && slugPattern.test(trimmed) ? trimmed : null;
 }
 
 Deno.serve(async (request) => {
@@ -67,6 +75,9 @@ Deno.serve(async (request) => {
         p_idempotency_key: body.idempotencyKey?.trim() || body.presentationId,
         p_template_code: designCode(body.templateCode),
         p_palette_code: designCode(body.paletteCode),
+        // An unknown or unpublished slug resolves to nothing and the deck
+        // takes the built-in path, exactly as an unknown template code does.
+        p_design_slug: designSlug(body.designSlug),
       });
       if (error) throw new HttpError(error.code === "P0001" ? 402 : 400, error.message, error.code ?? "generation_start_failed");
       job = data?.[0] as typeof job;

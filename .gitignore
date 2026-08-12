@@ -14,3 +14,8 @@ supabase/.temp/
 .vercel/
 .vercel
 .env*
+
+# The admin app is also published from its own repository, which cannot reach
+# `../packages`. Its build vendors a copy into `admin/packages/`; here that copy
+# is an artefact, and `packages/` is the source.
+admin/packages/

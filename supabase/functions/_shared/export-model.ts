@@ -115,14 +115,6 @@ export function applyTextTransform(text: string, style: JsonObject): string {
   return text;
 }
 
-export function fontFace(value: unknown): string {
-  const name = string(value, "Manrope");
-  if (name.startsWith("LeagueSpartan")) return "League Spartan";
-  if (name.startsWith("Arimo")) return "Arimo";
-  if (name.startsWith("PinyonScript")) return "Pinyon Script";
-  return "Manrope";
-}
-
 export function isBold(style: JsonObject): boolean {
   const family = string(style.fontFamily);
   const weight = number(style.fontWeight, 400);

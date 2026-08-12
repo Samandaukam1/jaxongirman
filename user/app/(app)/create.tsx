@@ -15,8 +15,10 @@ import { FormField } from "@/components/FormField";
 import { IconChip } from "@/components/IconChip";
 import { PalettePicker } from "@/components/PalettePicker";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { DesignPicker } from "@/components/DesignPicker";
 import { TemplatePicker } from "@/components/TemplatePicker";
 import { loadDesignCatalogue, type PaletteFamilyRow, type SlideTemplateRow } from "@/lib/design";
+import { loadRemoteDesigns, type RemoteDesign } from "@/lib/jslayd-designs";
 import { asFunctionErrorMessage } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
@@ -59,6 +61,8 @@ export default function CreatePresentationScreen() {
   /** When on, the finished deck is followed by an AI-written O‘yingoh match. */
   const [withGame, setWithGame] = useState(false);
   const [paletteCode, setPaletteCode] = useState<string | null>(null);
+  const [remoteDesigns, setRemoteDesigns] = useState<RemoteDesign[]>([]);
+  const [designSlug, setDesignSlug] = useState<string | null>(null);
   const insets = useSafeAreaInsets();
 
   // The header's back button is the only way out of this screen, so Android's
@@ -69,6 +73,7 @@ export default function CreatePresentationScreen() {
   }, []);
 
   const styleTemplates = useMemo(() => templates.filter((template) => template.style === style), [style, templates]);
+  const styleDesigns = useMemo(() => remoteDesigns.filter((design) => design.row.tier === style), [remoteDesigns, style]);
   const activePalette = useMemo(() => palettes.find((family) => family.code === paletteCode) ?? palettes[0] ?? null, [paletteCode, palettes]);
 
   useEffect(() => {
@@ -86,10 +91,27 @@ export default function CreatePresentationScreen() {
     return () => { active = false; };
   }, []);
 
+  // Published JSLAYD designs. Their absence is not a failure: the built-in
+  // catalogue above is what the deck falls back to, and always has been.
+  useEffect(() => {
+    let active = true;
+    void loadRemoteDesigns()
+      .then((designs) => { if (active) setRemoteDesigns(designs); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
+
   // Templates belong to one style, so the choice resets when the style changes.
   useEffect(() => {
     setTemplateCode((current) => (styleTemplates.some((template) => template.code === current) ? current : styleTemplates[0]?.code ?? null));
   }, [styleTemplates]);
+
+  // A design belongs to one tier too, so switching tier drops a choice that no
+  // longer applies rather than silently sending it to a generator that would
+  // ignore it.
+  useEffect(() => {
+    setDesignSlug((current) => (styleDesigns.some((design) => design.row.slug === current) ? current : null));
+  }, [styleDesigns]);
 
   const effectiveCount = useMemo(() => {
     const custom = Number(customCount);
@@ -177,6 +199,7 @@ export default function CreatePresentationScreen() {
           uploadPaths: uploadedPaths,
           templateCode,
           paletteCode: activePalette?.code ?? null,
+          designSlug,
           idempotencyKey: presentationId,
         },
       });
@@ -244,7 +267,14 @@ export default function CreatePresentationScreen() {
           </View>
         </View>
 
-        {styleTemplates.length ? (
+        {styleDesigns.length ? (
+          <View style={styles.group}>
+            <View style={styles.labelRow}><Text style={styles.label}>Premium dizaynlar</Text><Text style={styles.hint}>{styleDesigns.length} ta</Text></View>
+            <DesignPicker designs={styleDesigns} selected={designSlug} onSelect={setDesignSlug} />
+          </View>
+        ) : null}
+
+        {styleTemplates.length && !designSlug ? (
           <View style={styles.group}>
             <View style={styles.labelRow}><Text style={styles.label}>Namunaviy dizayn</Text><Text style={styles.hint}>{styleTemplates.length} ta</Text></View>
             <TemplatePicker templates={styleTemplates} palette={activePalette} selected={templateCode} onSelect={setTemplateCode} />

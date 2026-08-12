@@ -1,0 +1,25 @@
+{
+  "name": "@jaxongirman/slide-dom",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The DOM slide painter shared by the web viewer and the admin console.",
+  "main": "src/index.tsx",
+  "types": "src/index.tsx",
+  "exports": {
+    ".": "./src/index.tsx"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@jaxongirman/types": "*"
+  },
+  "peerDependencies": {
+    "lucide-react": "*",
+    "react": ">=19"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  }
+}
