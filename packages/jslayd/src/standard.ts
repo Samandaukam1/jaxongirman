@@ -405,6 +405,12 @@ Bir dizayn bir nechta rang oilasini tashishi mumkin (chegara ${LIMITS.colorFamil
   background: #F5F7FF
   ...
 
+Oila o'z diagramma ranglarini ham olib yura oladi:
+
+  chartPalette: #1B4DE4, #FFB020, #7FA0F5, #0B1B44
+
+Yozilmasa, oila [CHART_PALETTE] dagi umumiy palitrani oladi.
+
 Har bir oila AYNI rol to'plamini to'ldiradi. Aynan shu bir xillik tufayli
 bitta dizayn sakkizta ko'rinishda chiqa oladi va biror element hech qachon
 aniq rang yozmaydi. Oila faqat bo'yoqni almashtiradi — joylashuvni emas.
@@ -455,6 +461,10 @@ decorationDensity    none, low, medium, high
 Generator matnni sig'dirish uchun kichik moslashtirish qilishi mumkin, lekin
 shu chegaralardan chiqmaydi. Bo'lim yozilmasa, chegaralar dizaynning o'zidan
 o'lchab olinadi.
+
+cornerRadiusFamily, shadowFamily va spacingScale uchun \`none\` deb yozish
+mumkin: bu "bu dizaynda bunday oila yo'q" degani. Qatorni umuman yozmaslik
+esa "o'zing o'lchab ol" degani — bu ikkisi bir xil emas.
 
 9. [SLIDE <id>]
 ---------------

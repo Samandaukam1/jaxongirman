@@ -2,6 +2,7 @@ import {
   analyze,
   compile,
   contentHash,
+  decompile,
   readDocument,
   renderAllPreviews,
   renderPreview,
@@ -103,6 +104,8 @@ export async function loadDesign(id: string) {
 }
 
 export type SaveInput = {
+  /** The design being edited, when there is one — so a rename stays one design. */
+  id: string | null;
   slug: string;
   name: string;
   tier: Tier;
@@ -115,6 +118,7 @@ export type SaveInput = {
 
 export async function saveDesign(input: SaveInput): Promise<string> {
   const { data, error } = await supabase.rpc("admin_save_design", {
+    p_id: input.id ?? undefined,
     p_slug: input.slug,
     p_name: input.name,
     p_tier: input.tier,
@@ -210,6 +214,32 @@ export async function uploadThumbnail(slug: string, file: File): Promise<string>
 export function publicAssetUrl(bucket: string, path: string | null): string | null {
   if (!path) return null;
   return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+}
+
+/**
+ * The text an admin edits a stored design through.
+ *
+ * A design saved from this console keeps the prompt that produced it, and that
+ * prompt is what comes back — the admin sees their own words, comments and all.
+ *
+ * The designs translated from the old TypeScript templates never had a prompt,
+ * and neither does an imported `.jslayd`. Those are recovered from the compiled
+ * document instead. The decompiler is an exact inverse — every built-in design
+ * is checked to compile back byte for byte — so editing a recovered design
+ * changes what the admin changed and nothing else.
+ */
+export function editableSource(design: {
+  source_prompt: string | null;
+  compiled_config: unknown;
+}): { source: string; recovered: boolean } {
+  const stored = design.source_prompt?.trim();
+  if (stored) return { source: design.source_prompt as string, recovered: false };
+  // Postgres does not keep jsonb key order, so the stored document is read back
+  // through the same validator an imported file goes through rather than
+  // trusted as it arrives.
+  const { document } = readDocument(design.compiled_config);
+  if (!document) return { source: "", recovered: false };
+  return { source: decompile(document), recovered: true };
 }
 
 /** Reads an imported `.jslayd`, refusing anything this build cannot render (§81). */

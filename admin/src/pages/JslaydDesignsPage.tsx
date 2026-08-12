@@ -1,4 +1,4 @@
-import { SAMPLE_PROMPT, TIERS, TIER_LABELS, type Tier } from "@jaxongirman/jslayd";
+import { decompile, SAMPLE_PROMPT, TIERS, TIER_LABELS, type Tier } from "@jaxongirman/jslayd";
 import { ScaledSlide } from "@jaxongirman/slide-dom";
 import { Download, Plus, Search, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -13,6 +13,7 @@ import {
   compilePrompt,
   downloadDocument,
   duplicateDesign,
+  editableSource,
   importDocument,
   listDesigns,
   loadDesign,
@@ -29,6 +30,7 @@ import {
   type DesignRow,
   type DesignStatus,
 } from "@/lib/jslayd";
+import { forgetDraft, keepDraft, recallDraft, sameDraft, type KeptDraft } from "@/lib/workbench-draft";
 
 /**
  * JSLAYD dizaynlar — the console an admin creates a design from (§4, §47).
@@ -51,6 +53,8 @@ type Draft = {
   description: string;
   premium: boolean;
   source: string;
+  /** True when the text was recovered from the compiled design, not authored. */
+  recovered: boolean;
   thumbnailPath: string | null;
 };
 
@@ -62,6 +66,7 @@ const BLANK: Draft = {
   description: "",
   premium: false,
   source: SAMPLE_PROMPT,
+  recovered: false,
   thumbnailPath: null,
 };
 
@@ -248,6 +253,14 @@ async function duplicate(item: DesignRow, reload: () => Promise<void>, onError: 
 async function openDesign(id: string, setDraft: (draft: Draft) => void, onError: (message: string) => void) {
   try {
     const { design } = await loadDesign(id);
+    // Every design is editable, including the fifteen translated from the old
+    // templates, which carry no prompt. Handing those the sample prompt would
+    // have let one save overwrite a real design with the example.
+    const { source, recovered } = editableSource(design);
+    if (!source) {
+      onError("Bu dizaynning manbasi o‘qilmadi — kompilyatsiya qilingan hujjat buzuq ko‘rinadi.");
+      return;
+    }
     setDraft({
       id: design.id,
       slug: design.slug,
@@ -255,7 +268,8 @@ async function openDesign(id: string, setDraft: (draft: Draft) => void, onError:
       tier: design.tier as Tier,
       description: design.description,
       premium: design.is_premium,
-      source: design.source_prompt || SAMPLE_PROMPT,
+      source,
+      recovered,
       thumbnailPath: design.thumbnail_path,
     });
   } catch (error) {
@@ -274,9 +288,8 @@ function ImportButton({ onImported }: { onImported: (draft: Draft) => void }) {
       return;
     }
     setProblem(null);
-    // An imported document carries no prompt — it was compiled elsewhere. The
-    // admin gets the design's identity and an empty editor rather than a
-    // decompiled approximation nobody could trust.
+    // An imported document carries no prompt — it was compiled elsewhere — so
+    // the editable text is recovered from the document itself.
     onImported({
       id: null,
       slug: document.design.slug,
@@ -284,7 +297,8 @@ function ImportButton({ onImported }: { onImported: (draft: Draft) => void }) {
       tier: document.design.tier,
       description: document.design.description,
       premium: document.design.premium,
-      source: "",
+      source: decompile(document),
+      recovered: true,
       thumbnailPath: null,
     });
   }
@@ -319,8 +333,48 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [family, setFamily] = useState<string | null>(null);
+  const [kept, setKept] = useState<KeptDraft<Draft> | null>(() => recallDraft(draft.id, draft));
+  const [saved, setSaved] = useState(false);
 
-  const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setForm((current) => ({ ...current, [key]: value }));
+  const set = <K extends keyof Draft>(key: K, value: Draft[K]) => {
+    setSaved(false);
+    setForm((current) => ({ ...current, [key]: value }));
+  };
+
+  // Every keystroke is kept locally, so nothing is riding on the tab staying
+  // open. Writing on a short delay keeps a long prompt from touching storage on
+  // each character.
+  useEffect(() => {
+    if (saved) return;
+    const timer = window.setTimeout(() => keepDraft(form), 400);
+    return () => window.clearTimeout(timer);
+  }, [form, saved]);
+
+  // A reload with work in hand still deserves the browser's own warning: the
+  // local copy is a safety net, not a reason to lose the admin's place.
+  useEffect(() => {
+    const dirty = () => !saved && !sameDraft(form, draft);
+    const warn = (event: BeforeUnloadEvent) => {
+      if (!dirty()) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [draft, form, saved]);
+
+  function restoreKept() {
+    if (!kept) return;
+    setForm(kept.draft);
+    setOutcome(null);
+    setKept(null);
+    setMessage("Saqlanmagan tahrir tiklandi. Ko‘rinishni yangilash uchun qayta tekshiring.");
+  }
+
+  function discardKept() {
+    forgetDraft(draft.id);
+    setKept(null);
+  }
 
   async function validate() {
     setBusy(true);
@@ -347,6 +401,7 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
     setError(null);
     try {
       const id = await saveDesign({
+        id: form.id,
         slug: form.slug || outcome.document.design.slug,
         name: form.name || outcome.document.design.name,
         tier: form.tier,
@@ -357,6 +412,11 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
         thumbnailPath: form.thumbnailPath,
       });
       set("id", id);
+      // The server now holds this text, so the local copy has nothing left to
+      // protect and must not resurface as an "unsaved edit" next time.
+      forgetDraft(draft.id);
+      forgetDraft(id);
+      setSaved(true);
       if (thenPublish) {
         const version = await publishDesign(id);
         setMessage(`Chop etildi — v${version}. Foydalanuvchilar uni ilovani yangilamasdan ko‘radi.`);
@@ -391,6 +451,31 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
 
       {error ? <ErrorState message={error} /> : null}
       {message ? <p className="jslayd-message">{message}</p> : null}
+
+      {kept ? (
+        <div className="jslayd-notice" role="status">
+          <div>
+            <strong>Saqlanmagan tahrir topildi</strong>
+            <span>{describeWhen(kept.savedAt)} shu brauzerda qoldirilgan matn bor. Tiklaysizmi?</span>
+          </div>
+          <div className="jslayd-notice-actions">
+            <button className="primary-button" type="button" onClick={restoreKept}>Tiklash</button>
+            <button className="secondary-button" type="button" onClick={discardKept}>O‘chirish</button>
+          </div>
+        </div>
+      ) : null}
+
+      {form.recovered ? (
+        <div className="jslayd-notice muted" role="status">
+          <div>
+            <strong>Manba kompilyatsiya qilingan dizayndan tiklandi</strong>
+            <span>
+              Bu dizayn prompt bilan saqlanmagan edi. Quyidagi matn uning aynan o‘zi — tekshirib saqlasangiz,
+              dizayn o‘zgarmaydi, faqat siz o‘zgartirgan joyi o‘zgaradi.
+            </span>
+          </div>
+        </div>
+      ) : null}
 
       <section className="panel">
         <h3>1. Asosiy</h3>
@@ -597,4 +682,13 @@ function FontSlot({
       />
     </div>
   );
+}
+
+/** "12 daqiqa oldin" — enough for the admin to recognise their own work. */
+function describeWhen(at: number): string {
+  const minutes = Math.max(1, Math.round((Date.now() - at) / 60000));
+  if (minutes < 60) return `${minutes} daqiqa oldin`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} soat oldin`;
+  return `${Math.round(hours / 24)} kun oldin`;
 }

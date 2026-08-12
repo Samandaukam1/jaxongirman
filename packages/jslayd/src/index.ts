@@ -115,6 +115,7 @@ export {
 } from "./diagnostics.ts";
 
 export { compile, type CompileResult } from "./compile.ts";
+export { decompile } from "./decompile.ts";
 export { parse, type ParseNode, type ParseResult, type ParseSection } from "./parser.ts";
 export {
   contentHash,

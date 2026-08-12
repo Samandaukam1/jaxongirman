@@ -3921,6 +3921,7 @@ export type Database = {
           p_content_hash?: string
           p_description?: string
           p_health_score?: number
+          p_id?: string
           p_is_premium?: boolean
           p_name: string
           p_preview?: Json

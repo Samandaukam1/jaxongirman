@@ -1,6 +1,6 @@
 import { can, isAdminRole, isAppRole, isSuperAdminRole, type AdminPermission, type AppRole } from "@jaxongirman/types";
 import type { Session } from "@supabase/supabase-js";
-import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from "react";
 
 import { supabase } from "@/lib/supabase";
 
@@ -31,8 +31,23 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [role, setRole] = useState<AppRole>("user");
   const [accessChecked, setAccessChecked] = useState(false);
 
+  /**
+   * Who this console has already established a rank for.
+   *
+   * Supabase re-emits a sign-in on every token refresh, and a refresh happens
+   * whenever the tab is brought back to the front. Clearing `accessChecked`
+   * each time swapped the whole console for the loading screen, and since that
+   * unmounts every page, an admin who tabbed away to fetch a font file came
+   * back to an empty JSLAYD workbench. A refresh for the same account is not a
+   * new sign-in: re-check the rank quietly and leave the screen alone.
+   */
+  const checkedFor = useRef<string | null | undefined>(undefined);
+
   async function checkAccess(nextSession: Session | null) {
-    setAccessChecked(false);
+    const account = nextSession?.user.id ?? null;
+    const firstTime = checkedFor.current !== account;
+    checkedFor.current = account;
+    if (firstTime) setAccessChecked(false);
     if (!nextSession) {
       setRole("user");
       setAccessChecked(true);

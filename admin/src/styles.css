@@ -334,6 +334,12 @@ td small { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; 
 .jslayd-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
 .jslayd-message { margin: 0; padding: 10px 14px; border-radius: 10px; background: rgba(90, 200, 140, .14); border: 1px solid rgba(90, 200, 140, .3); }
 
+.jslayd-notice { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; padding: 14px 16px; border-radius: 12px; background: rgba(255, 206, 106, .12); border: 1px solid rgba(255, 206, 106, .32); }
+.jslayd-notice.muted { background: rgba(134, 200, 255, .1); border-color: rgba(134, 200, 255, .28); }
+.jslayd-notice > div:first-child { display: grid; gap: 4px; max-width: 68ch; }
+.jslayd-notice span { opacity: .82; font-size: 13.5px; line-height: 1.5; }
+.jslayd-notice-actions { display: flex; gap: 10px; flex: none; }
+
 .jslayd-diagnostics { list-style: none; margin: 16px 0 0; padding: 0; display: grid; gap: 8px; max-height: 320px; overflow: auto; }
 .jslayd-diagnostic { display: flex; gap: 12px; padding: 10px 12px; border-radius: 10px; background: rgba(255, 255, 255, .04); }
 .jslayd-diagnostic p { margin: 2px 0 0; opacity: .85; }

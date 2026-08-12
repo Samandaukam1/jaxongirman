@@ -236,11 +236,22 @@ function compileColorFamilies(sections: readonly ParseSection[], bag: Diagnostic
     seen.add(code);
     const colors = compileColorFamily(section, bag);
     if (!colors) continue;
+    // A family may carry its own chart colours: a deck recoloured to a cold
+    // palette should not keep the warm design's series.
+    const paletteNode = findNode(section.properties, "chartPalette");
+    const chartPalette: string[] = [];
+    if (paletteNode) {
+      for (const part of splitList(paletteNode.value)) {
+        const color = coerceColor(part, "chartPalette", paletteNode.line, bag);
+        if (!color) continue;
+        chartPalette.push("role" in color ? colors[color.role] : color.hex);
+      }
+    }
     families.push({
       code,
       name: readString(section.properties, "name", bag, 80) ?? (index === 0 ? "Asosiy" : code),
       colors,
-      chartPalette: [],
+      chartPalette,
     });
   }
   return families;
@@ -248,7 +259,7 @@ function compileColorFamilies(sections: readonly ParseSection[], bag: Diagnostic
 
 function compileColorFamily(section: ParseSection, bag: DiagnosticBag): ColorFamily | null {
   return bag.within(`[COLOR_FAMILY${section.arg ? ` ${section.arg}` : ""}]`, () => {
-    rejectUnknownKeys(section.properties, [...COLOR_ROLES, "name"], "[COLOR_FAMILY]", bag);
+    rejectUnknownKeys(section.properties, [...COLOR_ROLES, "name", "chartPalette"], "[COLOR_FAMILY]", bag);
     rejectDuplicateKeys(section.properties, [], bag);
 
     const authored: Partial<Record<ColorRole, string>> = {};
@@ -568,6 +579,9 @@ function compileVisualDNA(section: ParseSection | undefined, archetypes: readonl
     const numbers = (key: string, fallback: readonly number[]) => {
       const node = findNode(section.properties, key);
       if (!node) return fallback;
+      // A design that truly has no radii must be able to say so: staying silent
+      // means "infer it from the slides", which is a different design.
+      if (node.value.trim().toLowerCase() === "none") return [];
       const values = splitList(node.value)
         .map((part) => coerceNumber(part, key, node.line, bag))
         .filter((value): value is number => value !== undefined);
@@ -575,12 +589,14 @@ function compileVisualDNA(section: ParseSection | undefined, archetypes: readonl
     };
     const declaredShadows = readShadows(section.properties.filter((node) => node.key !== "shadowFamily"), bag);
     const familyNode = findNode(section.properties, "shadowFamily");
-    const familyShadows = familyNode ? readShadows([{ ...familyNode, key: "shadow" }], bag) : [];
+    const noShadows = familyNode?.value.trim().toLowerCase() === "none";
+    const familyShadows = familyNode && !noShadows ? readShadows([{ ...familyNode, key: "shadow" }], bag) : [];
+    const shadowFamily = [...familyShadows, ...declaredShadows];
 
     return {
       rotationRange: range("rotationRange", observed.rotationRange),
       cornerRadiusFamily: numbers("cornerRadiusFamily", observed.cornerRadiusFamily),
-      shadowFamily: [...familyShadows, ...declaredShadows].length ? [...familyShadows, ...declaredShadows] : observed.shadowFamily,
+      shadowFamily: shadowFamily.length || noShadows ? shadowFamily : observed.shadowFamily,
       spacingScale: numbers("spacingScale", observed.spacingScale),
       titleScale: range("titleScale", observed.titleScale),
       bodyScale: range("bodyScale", observed.bodyScale),

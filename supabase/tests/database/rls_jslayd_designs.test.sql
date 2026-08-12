@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(40);
+select plan(45);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -18,7 +18,7 @@ insert into public.user_roles (user_id, role) values
 -- ------------------------------------------------------------- privileges --
 
 select ok(not has_function_privilege('anon',
-  'public.admin_save_design(text, text, public.presentation_style, text, boolean, text, jsonb, jsonb, text, integer, text)', 'EXECUTE'),
+  'public.admin_save_design(text, text, public.presentation_style, text, boolean, text, jsonb, jsonb, text, integer, text, uuid)', 'EXECUTE'),
   'a signed-out caller cannot save a design');
 select ok(not has_function_privilege('anon', 'public.admin_publish_design(uuid)', 'EXECUTE'),
   'a signed-out caller cannot publish a design');
@@ -140,6 +140,76 @@ select is(
   'and the earlier version is kept so old decks still render'
 );
 
+-- ------------------------------------------------------------- renaming --
+--
+-- Every design is editable now, including the ones translated from the old
+-- templates. Matching an existing design by slug alone meant that correcting a
+-- slug wrote a second design and left the first one published under the old
+-- name, with nobody told.
+create temporary table renamed on commit drop as
+  select id from public.presentation_designs where slug = 'sinov-dizayn';
+
+select public.admin_save_design(
+  'sinov-dizayn-yangi', 'Sinov dizayn', 'simple', 'Nomi tuzatildi', false, 'JSLAYD-DESIGN 1.0',
+  '{"format":"JSLAYD","version":"1.0","kind":"design"}'::jsonb, '{}'::jsonb, 'hash-v3', 95, null,
+  (select id from renamed)
+);
+
+select is(
+  (select slug from public.presentation_designs where id = (select id from renamed)),
+  'sinov-dizayn-yangi',
+  'editing a design by id renames it in place'
+);
+select is(
+  (select count(*)::integer from public.presentation_designs where slug like 'sinov-dizayn%'),
+  1,
+  'and does not leave a second design behind under the old slug'
+);
+select is(
+  (select count(*)::integer from public.presentation_design_versions
+     where design_id = (select id from renamed)),
+  2,
+  'the versions published before the rename still belong to it, so old decks render'
+);
+
+-- A rename onto a slug another design answers to must fail rather than pick one.
+select public.admin_save_design(
+  'band-slug', 'Band', 'simple', '', false, '',
+  '{"format":"JSLAYD","version":"1.0","kind":"design"}'::jsonb, '{}'::jsonb, 'hash-band', 90
+);
+select throws_ok(
+  $$ select public.admin_save_design(
+       'band-slug', 'Sinov dizayn', 'simple', '', false, '',
+       '{"format":"JSLAYD","version":"1.0","kind":"design"}'::jsonb, '{}'::jsonb, 'hash-v4', 95, null,
+       (select id from renamed)
+     ) $$,
+  '23505',
+  'slug_taken',
+  'a rename onto an occupied slug is refused'
+);
+
+-- A stale editor tab naming a design that no longer exists must not quietly
+-- create it again under a new id.
+select throws_ok(
+  $$ select public.admin_save_design(
+       'arvoh', 'Arvoh', 'simple', '', false, '',
+       '{"format":"JSLAYD","version":"1.0","kind":"design"}'::jsonb, '{}'::jsonb, 'hash-x', 90, null,
+       '00000000-0000-0000-0000-0000000000ff'::uuid
+     ) $$,
+  '02000',
+  'design_not_found',
+  'saving against an unknown design id is refused'
+);
+
+-- Put the slug back so the checks below read as they always did.
+select public.admin_save_design(
+  'sinov-dizayn', 'Sinov dizayn', 'simple', 'Yangilangan', false, 'JSLAYD-DESIGN 1.0',
+  '{"format":"JSLAYD","version":"1.0","kind":"design"}'::jsonb, '{}'::jsonb, 'hash-v2', 95, null,
+  (select id from renamed)
+);
+select public.admin_archive_design(
+  (select id from public.presentation_designs where slug = 'band-slug'), 'sinov uchun');
+
 -- ------------------------------------------------------ the published state
 
 set local role anon;
@@ -242,17 +312,23 @@ select is(
 
 set local role postgres;
 select is(
-  (select count(*)::integer from public.admin_audit_logs where target_type = 'presentation_design' and action = 'design.created'),
+  (select count(*)::integer from public.admin_audit_logs
+     where target_type = 'presentation_design' and action = 'design.created'
+       and target_id = (select id from renamed)::text),
   1,
   'creating a design is audited'
 );
 select is(
-  (select count(*)::integer from public.admin_audit_logs where target_type = 'presentation_design' and action = 'design.published'),
+  (select count(*)::integer from public.admin_audit_logs
+     where target_type = 'presentation_design' and action = 'design.published'
+       and target_id = (select id from renamed)::text),
   3,
   'every publish attempt is audited, including the no-op republish'
 );
 select is(
-  (select count(*)::integer from public.admin_audit_logs where target_type = 'presentation_design' and action = 'design.archived'),
+  (select count(*)::integer from public.admin_audit_logs
+     where target_type = 'presentation_design' and action = 'design.archived'
+       and target_id = (select id from renamed)::text),
   1,
   'archiving is audited'
 );
