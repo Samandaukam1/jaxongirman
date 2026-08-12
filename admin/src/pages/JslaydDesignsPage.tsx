@@ -412,6 +412,9 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
         thumbnailPath: form.thumbnailPath,
       });
       set("id", id);
+      // The recovered text is now the design's own prompt, so the notice
+      // explaining where it came from has nothing left to explain.
+      set("recovered", false);
       // The server now holds this text, so the local copy has nothing left to
       // protect and must not resurface as an "unsaved edit" next time.
       forgetDraft(draft.id);
