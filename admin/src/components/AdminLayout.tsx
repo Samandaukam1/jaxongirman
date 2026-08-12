@@ -1,4 +1,4 @@
-import { Blocks, ClipboardList, Coins, Cpu, Gamepad2, Gift, LayoutDashboard, LogOut, Menu, Presentation, Receipt, ScrollText, Smartphone, Store, TrendingUp, Users, Wallet, X } from "lucide-react";
+import { Blocks, ClipboardList, Coins, Cpu, Gamepad2, Gift, LayoutDashboard, LogOut, Menu, Palette, Presentation, Receipt, ScrollText, Smartphone, Store, TrendingUp, Users, Wallet, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { AppLink } from "@/lib/router";
@@ -8,6 +8,7 @@ const navigation = [
   { to: "/", label: "Boshqaruv", icon: LayoutDashboard, end: true },
   { to: "/users", label: "Foydalanuvchilar", icon: Users },
   { to: "/presentations", label: "Prezentatsiyalar", icon: Presentation },
+  { to: "/jslayd", label: "JSLAYD dizaynlar", icon: Palette },
   { to: "/usage", label: "AI xarajatlari", icon: Cpu },
   { to: "/pricing", label: "Kredit va narxlar", icon: Coins },
   { to: "/modules", label: "Modullar va tangalar", icon: Blocks },

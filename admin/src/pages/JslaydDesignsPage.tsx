@@ -1,0 +1,600 @@
+import { SAMPLE_PROMPT, TIERS, TIER_LABELS, type Tier } from "@jaxongirman/jslayd";
+import { ScaledSlide } from "@jaxongirman/slide-dom";
+import { Download, Plus, Search, Upload } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import { EmptyState, ErrorState, PageHeader, StatusBadge, TableSkeleton } from "@/components/AdminUI";
+import { DiagnosticList, JslaydEditor } from "@/components/JslaydEditor";
+import { JslaydStandardCard } from "@/components/JslaydStandard";
+import { dateTime, errorMessage } from "@/lib/format";
+import {
+  allPreviewsOf,
+  archiveDesign,
+  compilePrompt,
+  downloadDocument,
+  duplicateDesign,
+  importDocument,
+  listDesigns,
+  loadDesign,
+  previewOf,
+  publicAssetUrl,
+  publishDesign,
+  restoreDesign,
+  saveDesign,
+  toCanvas,
+  uploadFont,
+  uploadThumbnail,
+  PREVIEW_BUCKET,
+  type CompileOutcome,
+  type DesignRow,
+  type DesignStatus,
+} from "@/lib/jslayd";
+
+/**
+ * JSLAYD dizaynlar — the console an admin creates a design from (§4, §47).
+ *
+ * The flow the whole system exists for: copy the standard, get a prompt from an
+ * AI, paste it, check it, compile it, look at what it will actually render,
+ * publish. Everything on this page except the network calls is deterministic,
+ * and the preview is the real engine on sample content rather than a mock-up of
+ * it (§61, §62).
+ */
+
+const FONT_SLOTS = ["font_1", "font_2", "font_3", "font_4"] as const;
+const FALLBACKS = ["Manrope", "League Spartan", "Arimo", "Pinyon Script", "Inter", "Caveat Brush"] as const;
+
+type Draft = {
+  id: string | null;
+  slug: string;
+  name: string;
+  tier: Tier;
+  description: string;
+  premium: boolean;
+  source: string;
+  thumbnailPath: string | null;
+};
+
+const BLANK: Draft = {
+  id: null,
+  slug: "",
+  name: "",
+  tier: "super_professional",
+  description: "",
+  premium: false,
+  source: SAMPLE_PROMPT,
+  thumbnailPath: null,
+};
+
+export function JslaydDesignsPage() {
+  const [items, setItems] = useState<DesignRow[]>([]);
+  const [status, setStatus] = useState<DesignStatus | "all">("all");
+  const [tier, setTier] = useState<Tier | "all">("all");
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<"newest" | "oldest" | "name">("newest");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [draft, setDraft] = useState<Draft | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      setItems(await listDesigns({
+        status: status === "all" ? null : status,
+        tier: tier === "all" ? null : tier,
+        query,
+      }));
+    } catch (requestError) {
+      setError(errorMessage(requestError));
+    } finally {
+      setLoading(false);
+    }
+  }, [query, status, tier]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  // Sorting is client-side: the listing RPC caps at 200 rows, so the whole set
+  // is already here and a round trip would only add latency.
+  const sorted = useMemo(() => {
+    const rows = [...items];
+    if (sort === "name") return rows.sort((first, second) => first.name.localeCompare(second.name, "uz"));
+    return rows.sort((first, second) => {
+      const compared = new Date(first.created_at).getTime() - new Date(second.created_at).getTime();
+      return sort === "newest" ? -compared : compared;
+    });
+  }, [items, sort]);
+
+  if (draft) {
+    return (
+      <Workbench
+        draft={draft}
+        onClose={() => { setDraft(null); void load(); }}
+      />
+    );
+  }
+
+  return (
+    <div className="page-stack">
+      <PageHeader
+        eyebrow="JSLAYD DESIGN ENGINE"
+        title="JSLAYD dizaynlar"
+        description="Prompt orqali yaratiladigan, versiyalanadigan va ilovani yangilamasdan chiqariladigan taqdimot dizaynlari."
+        action={
+          <div className="header-actions">
+            <ImportButton onImported={(next) => setDraft(next)} />
+            <button className="primary-button" type="button" onClick={() => setDraft({ ...BLANK })}>
+              <Plus size={16} strokeWidth={2.1} /> Yangi JSLAYD dizayn
+            </button>
+          </div>
+        }
+      />
+
+      <JslaydStandardCard />
+
+      <div className="toolbar">
+        <div className="search-box">
+          <Search size={18} />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nomi yoki slug" />
+        </div>
+        <select value={status} onChange={(event) => setStatus(event.target.value as DesignStatus | "all")}>
+          <option value="all">Barcha holatlar</option>
+          <option value="draft">Qoralama</option>
+          <option value="published">Chop etilgan</option>
+          <option value="archived">Arxivlangan</option>
+        </select>
+        <select value={tier} onChange={(event) => setTier(event.target.value as Tier | "all")}>
+          <option value="all">Barcha uslublar</option>
+          {TIERS.map((value) => <option key={value} value={value}>{TIER_LABELS[value]}</option>)}
+        </select>
+        <select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}>
+          <option value="newest">Avval yangilari</option>
+          <option value="oldest">Avval eskilari</option>
+          <option value="name">Nomi bo‘yicha</option>
+        </select>
+      </div>
+
+      {error ? <ErrorState message={error} onRetry={() => void load()} /> : null}
+
+      <section className="panel flush">
+        {loading ? (
+          <TableSkeleton rows={6} />
+        ) : sorted.length === 0 ? (
+          <EmptyState detail="Hali JSLAYD dizayn yaratilmagan. Tepadagi standartni nusxalab boshlang." />
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Dizayn</th><th>Uslub</th><th>Arxetip</th><th>Shrift</th>
+                  <th>Sog‘lomlik</th><th>Versiya</th><th>Ishlatilgan</th><th>Holat</th><th>Yangilangan</th><th />
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map((item) => (
+                  <tr key={item.id}>
+                    <td>
+                      <strong>{item.name}</strong>
+                      <small>{item.slug}{item.is_premium ? " · Premium" : ""}</small>
+                    </td>
+                    <td>{TIER_LABELS[item.tier as Tier]}</td>
+                    <td>{item.archetype_count}</td>
+                    <td>{item.font_count}</td>
+                    <td>{item.health_score === null ? "—" : `${item.health_score}/100`}</td>
+                    <td>{item.published_version || "—"}</td>
+                    <td>{item.used_by}</td>
+                    <td><StatusBadge value={item.status} /></td>
+                    <td>{dateTime.format(new Date(item.updated_at))}</td>
+                    <td className="row-actions">
+                      <button
+                        className="secondary-button compact"
+                        type="button"
+                        onClick={() => void openDesign(item.id, setDraft, setError)}
+                      >
+                        Tahrirlash
+                      </button>
+                      <button
+                        className="secondary-button compact"
+                        type="button"
+                        onClick={() => void duplicate(item, load, setError)}
+                      >
+                        Nusxa
+                      </button>
+                      {item.status === "archived" ? (
+                        <button className="secondary-button compact" type="button" onClick={() => void guard(() => restoreDesign(item.id), load, setError)}>
+                          Tiklash
+                        </button>
+                      ) : (
+                        <button className="danger-button compact" type="button" onClick={() => void archive(item, load, setError)}>
+                          Arxivlash
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+async function guard(action: () => Promise<unknown>, reload: () => Promise<void>, onError: (message: string) => void) {
+  try {
+    await action();
+    await reload();
+  } catch (error) {
+    onError(errorMessage(error));
+  }
+}
+
+async function archive(item: DesignRow, reload: () => Promise<void>, onError: (message: string) => void) {
+  // Archiving is reversible and decks keep rendering from their pinned version,
+  // but a design in use is still worth pausing over.
+  const warning = item.used_by > 0
+    ? `«${item.name}» ${item.used_by} ta taqdimotda ishlatilgan. Arxivlash uni tanlash ro‘yxatidan olib tashlaydi, mavjud taqdimotlar ochilaveradi. Davom etamizmi?`
+    : `«${item.name}» arxivlansinmi?`;
+  if (!window.confirm(warning)) return;
+  await guard(() => archiveDesign(item.id, null), reload, onError);
+}
+
+async function duplicate(item: DesignRow, reload: () => Promise<void>, onError: (message: string) => void) {
+  const slug = window.prompt("Yangi slug", `${item.slug}-copy`);
+  if (!slug) return;
+  await guard(() => duplicateDesign(item.id, slug, `${item.name} Copy`), reload, onError);
+}
+
+async function openDesign(id: string, setDraft: (draft: Draft) => void, onError: (message: string) => void) {
+  try {
+    const { design } = await loadDesign(id);
+    setDraft({
+      id: design.id,
+      slug: design.slug,
+      name: design.name,
+      tier: design.tier as Tier,
+      description: design.description,
+      premium: design.is_premium,
+      source: design.source_prompt || SAMPLE_PROMPT,
+      thumbnailPath: design.thumbnail_path,
+    });
+  } catch (error) {
+    onError(errorMessage(error));
+  }
+}
+
+function ImportButton({ onImported }: { onImported: (draft: Draft) => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  async function read(file: File) {
+    const { document, diagnostics } = importDocument(await file.text());
+    if (!document) {
+      setProblem(diagnostics.errors[0]?.message ?? "Fayl o‘qilmadi.");
+      return;
+    }
+    setProblem(null);
+    // An imported document carries no prompt — it was compiled elsewhere. The
+    // admin gets the design's identity and an empty editor rather than a
+    // decompiled approximation nobody could trust.
+    onImported({
+      id: null,
+      slug: document.design.slug,
+      name: document.design.name,
+      tier: document.design.tier,
+      description: document.design.description,
+      premium: document.design.premium,
+      source: "",
+      thumbnailPath: null,
+    });
+  }
+
+  return (
+    <>
+      <input
+        ref={input}
+        type="file"
+        accept=".jslayd,application/json"
+        hidden
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) void read(file);
+          event.target.value = "";
+        }}
+      />
+      <button className="secondary-button" type="button" onClick={() => input.current?.click()} title={problem ?? undefined}>
+        <Upload size={16} strokeWidth={1.9} /> JSLAYD import
+      </button>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------- workbench */
+
+function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
+  const [form, setForm] = useState(draft);
+  const [outcome, setOutcome] = useState<CompileOutcome | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
+  const [family, setFamily] = useState<string | null>(null);
+
+  const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setForm((current) => ({ ...current, [key]: value }));
+
+  async function validate() {
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await compilePrompt(form.source);
+      setOutcome(next);
+      setMessage(
+        next.document
+          ? `Tekshiruv o‘tdi — ${next.document.archetypes.length} ta arxetip, ${next.health?.score ?? 0}/100 sog‘lomlik.`
+          : `${next.diagnostics.errors.length} ta xato topildi.`,
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function save(thenPublish: boolean) {
+    if (!outcome?.document) {
+      setError("Avval promptni tekshiring va kompilyatsiya qiling.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const id = await saveDesign({
+        slug: form.slug || outcome.document.design.slug,
+        name: form.name || outcome.document.design.name,
+        tier: form.tier,
+        description: form.description,
+        premium: form.premium,
+        source: form.source,
+        outcome,
+        thumbnailPath: form.thumbnailPath,
+      });
+      set("id", id);
+      if (thenPublish) {
+        const version = await publishDesign(id);
+        setMessage(`Chop etildi — v${version}. Foydalanuvchilar uni ilovani yangilamasdan ko‘radi.`);
+      } else {
+        setMessage("Qoralama saqlandi.");
+      }
+    } catch (requestError) {
+      setError(errorMessage(requestError));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const families = outcome?.document?.colorFamilies ?? [];
+  const previews = useMemo(
+    () => (outcome?.document ? allPreviewsOf(outcome.document, family) : []),
+    [family, outcome],
+  );
+  const cover = useMemo(
+    () => (outcome?.document ? previewOf(outcome.document, family) : null),
+    [family, outcome],
+  );
+
+  return (
+    <div className="page-stack">
+      <PageHeader
+        eyebrow={form.id ? "TAHRIRLASH" : "YANGI DIZAYN"}
+        title={form.name || "Nomsiz dizayn"}
+        description="Prompt → tekshiruv → kompilyatsiya → jonli ko‘rinish → chop etish."
+        action={<button className="secondary-button" type="button" onClick={onClose}>Ro‘yxatga qaytish</button>}
+      />
+
+      {error ? <ErrorState message={error} /> : null}
+      {message ? <p className="jslayd-message">{message}</p> : null}
+
+      <section className="panel">
+        <h3>1. Asosiy</h3>
+        <div className="form-grid">
+          <label>Nomi<input value={form.name} onChange={(event) => set("name", event.target.value)} /></label>
+          <label>Slug<input value={form.slug} onChange={(event) => set("slug", event.target.value)} placeholder="apelsen-futuristik" /></label>
+          <label>
+            Uslub
+            <select value={form.tier} onChange={(event) => set("tier", event.target.value as Tier)}>
+              {TIERS.map((value) => <option key={value} value={value}>{TIER_LABELS[value]}</option>)}
+            </select>
+          </label>
+          <label className="checkbox">
+            <input type="checkbox" checked={form.premium} onChange={(event) => set("premium", event.target.checked)} />
+            Premium
+          </label>
+          <label className="wide">Tavsif<input value={form.description} onChange={(event) => set("description", event.target.value)} /></label>
+        </div>
+      </section>
+
+      <section className="panel">
+        <h3>2. Muqova rasmi</h3>
+        <p className="panel-hint">
+          Uslub tanlash ekranida ko‘rinadigan rasm. Bu taqdimotning muqova slaydi emas — dizaynning o‘z tanishtiruv rasmi.
+        </p>
+        <div className="jslayd-cover">
+          {form.thumbnailPath ? (
+            <img src={publicAssetUrl(PREVIEW_BUCKET, form.thumbnailPath) ?? ""} alt="Muqova" />
+          ) : (
+            <div className="jslayd-cover-empty">Rasm yuklanmagan</div>
+          )}
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            disabled={!form.slug}
+            onChange={async (event) => {
+              const file = event.target.files?.[0];
+              if (!file || !form.slug) return;
+              try {
+                set("thumbnailPath", await uploadThumbnail(form.slug, file));
+              } catch (requestError) {
+                setError(errorMessage(requestError));
+              }
+            }}
+          />
+        </div>
+      </section>
+
+      <section className="panel">
+        <h3>3. Fontlar</h3>
+        <p className="panel-hint">
+          1-shrift majburiy, 2–4 ixtiyoriy. .ttf, .otf va .woff qabul qilinadi — WOFF2 emas, chunki PDF eksporti uni
+          joylay olmaydi. PPTX’da maxsus shrift ochuvchining kompyuterida almashtirilishi mumkin.
+        </p>
+        {FONT_SLOTS.map((slot, index) => (
+          <FontSlot
+            key={slot}
+            slot={slot}
+            required={index === 0}
+            disabled={!form.id || !form.slug}
+            designId={form.id}
+            slug={form.slug}
+            onError={setError}
+            onSaved={(name) => setMessage(`${name} yuklandi.`)}
+          />
+        ))}
+        {!form.id ? <p className="panel-hint">Shrift yuklash uchun avval qoralamani saqlang.</p> : null}
+      </section>
+
+      <section className="panel">
+        <h3>4. JSLAYD prompt</h3>
+        <JslaydEditor
+          value={form.source}
+          onChange={(next) => { set("source", next); setOutcome(null); }}
+          diagnostics={outcome?.diagnostics.all ?? []}
+          disabled={busy}
+        />
+        <div className="jslayd-actions">
+          <button className="secondary-button" type="button" disabled={busy} onClick={() => void validate()}>
+            Promptni tekshirish
+          </button>
+          <button className="primary-button" type="button" disabled={busy || !outcome?.document} onClick={() => void save(false)}>
+            JSLAYD yaratish va saqlash
+          </button>
+          <button className="primary-button" type="button" disabled={busy || !outcome?.document} onClick={() => void save(true)}>
+            Chop etish
+          </button>
+          {outcome?.document ? (
+            <button className="secondary-button" type="button" onClick={() => downloadDocument(outcome.document!)}>
+              <Download size={15} strokeWidth={1.9} /> .jslayd yuklab olish
+            </button>
+          ) : null}
+        </div>
+        <DiagnosticList diagnostics={outcome?.diagnostics.all ?? []} />
+      </section>
+
+      {outcome?.health ? (
+        <section className="panel">
+          <h3>JSLAYD Health · {outcome.health.score}/100</h3>
+          <ul className="jslayd-health">
+            {outcome.health.checks.map((check) => (
+              <li key={check.name} className={check.passed ? "ok" : "bad"}>
+                <span>{check.label}</span>
+                <strong>{check.passed ? "✓" : "✕"} {check.score}</strong>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {cover ? (
+        <section className="panel">
+          <h3>5. Jonli ko‘rinish</h3>
+          <p className="panel-hint">
+            Bu haqiqiy renderer va namunaviy ma’lumot. Foydalanuvchi paneli ham, eksport ham ayni shu modeldan chizadi.
+          </p>
+          {families.length > 1 ? (
+            <div className="jslayd-family-row">
+              {families.map((entry) => (
+                <button
+                  key={entry.code}
+                  type="button"
+                  className={(family ?? families[0]?.code) === entry.code ? "primary-button compact" : "secondary-button compact"}
+                  onClick={() => setFamily(entry.code)}
+                >
+                  <span className="jslayd-family-dot" style={{ background: entry.colors.primary, borderColor: entry.colors.border }} />
+                  {entry.name}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <div className="jslayd-preview-main">
+            <ScaledSlide width={720} {...toCanvas(cover, "cover")} />
+          </div>
+          <button className="secondary-button compact" type="button" onClick={() => setShowAll((open) => !open)}>
+            {showAll ? "Yopish" : `Barcha slaydlar (${previews.length})`}
+          </button>
+          {showAll ? (
+            <div className="jslayd-preview-grid">
+              {previews.map((preview) => (
+                <figure key={preview.id}>
+                  <ScaledSlide width={260} {...toCanvas(preview.slide, preview.id)} />
+                  <figcaption>{preview.id}<small>{preview.purpose}</small></figcaption>
+                </figure>
+              ))}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+function FontSlot({
+  slot, required, disabled, designId, slug, onError, onSaved,
+}: {
+  slot: string;
+  required: boolean;
+  disabled: boolean;
+  designId: string | null;
+  slug: string;
+  onError: (message: string) => void;
+  onSaved: (name: string) => void;
+}) {
+  const [name, setName] = useState("");
+  const [roles, setRoles] = useState(required ? "display, heading" : "body");
+  const [weight, setWeight] = useState(400);
+  const [fallback, setFallback] = useState<string>("Manrope");
+
+  return (
+    <div className="jslayd-font-slot">
+      <strong>{slot}{required ? " · majburiy" : ""}</strong>
+      <input placeholder="Nomi" value={name} onChange={(event) => setName(event.target.value)} />
+      <input placeholder="Rollar" value={roles} onChange={(event) => setRoles(event.target.value)} />
+      <input type="number" min={100} max={900} step={100} value={weight} onChange={(event) => setWeight(Number(event.target.value))} />
+      <select value={fallback} onChange={(event) => setFallback(event.target.value)}>
+        {FALLBACKS.map((value) => <option key={value} value={value}>{value}</option>)}
+      </select>
+      <input
+        type="file"
+        accept=".ttf,.otf,.woff"
+        disabled={disabled}
+        onChange={async (event) => {
+          const file = event.target.files?.[0];
+          if (!file || !designId) return;
+          try {
+            await uploadFont({
+              designId,
+              slug,
+              fontId: slot,
+              name: name || file.name,
+              roles: roles.split(/[,\s]+/).filter(Boolean),
+              file,
+              weight,
+              italic: false,
+              fallback,
+            });
+            onSaved(name || file.name);
+          } catch (requestError) {
+            onError(errorMessage(requestError));
+          }
+          event.target.value = "";
+        }}
+      />
+    </div>
+  );
+}

@@ -15,7 +15,8 @@
     "@supabase/supabase-js": "latest",
     "lucide-react": "latest",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "@jaxongirman/slide-dom": "*"
   },
   "devDependencies": {
     "@eslint/js": "latest",
