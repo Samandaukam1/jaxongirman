@@ -291,6 +291,23 @@ function ColorField({ label, value, onChange }: { label: string; value: string; 
 
 /* ------------------------------------------------------------------ upload */
 
+/**
+ * QuickTime plays in Safari and almost nowhere else.
+ *
+ * A projector is usually driven by Chrome, which will not decode a `.mov` — and
+ * the experience waits for both clips before it starts, so an unplayable loop
+ * means a black screen and nobody in the room able to pair. The site falls back
+ * to the plain pairing card rather than showing that, but the admin should know
+ * before a hall does.
+ */
+function formatWarning(name: string | null): string | null {
+  if (!name) return null;
+  return /\.mov$/i.test(name)
+    ? "Bu .mov (QuickTime) fayl — uni faqat Safari ochadi. Chrome va Firefox ochmaydi, "
+      + "shuning uchun proyektorda video o‘rniga odatdagi QR sahifasi chiqadi. MP4 (H.264) ga o‘girib qayta yuklang."
+    : null;
+}
+
 function VideoSlot({ label, hint, surface, role, path, onUploaded }: {
   label: string;
   hint: string;
@@ -356,6 +373,7 @@ function VideoSlot({ label, hint, surface, role, path, onUploaded }: {
       )}
 
       {problem ? <p className="qrv-problem">{problem}</p> : null}
+      {formatWarning(path) ? <p className="qrv-warning">{formatWarning(path)}</p> : null}
       {path ? <code className="qrv-key">{path}</code> : null}
     </div>
   );

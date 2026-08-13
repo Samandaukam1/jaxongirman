@@ -283,7 +283,16 @@ export function ArenaScreen({ handoff }: { handoff?: { sessionId: string; screen
   if (!paired && experience && pairToken) {
     return (
       <main className="qrx-page">
-        <QrVideoExperience experience={experience} qrValue={gamePairUrl(pairToken)} />
+        <QrVideoExperience
+          experience={experience}
+          qrValue={gamePairUrl(pairToken)}
+          onUnavailable={(reason) => {
+            // Dropping the experience re-renders the pairing card below with the
+            // same live match, so the room can still pair.
+            console.error("QR video experience unavailable", reason);
+            setExperience(null);
+          }}
+        />
       </main>
     );
   }

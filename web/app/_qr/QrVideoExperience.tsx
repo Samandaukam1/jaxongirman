@@ -39,9 +39,23 @@ type Props = {
   qrValue: string | null;
   /** Announced once both videos hold a frame and the intro has started. */
   onPlaying?: () => void;
+  /**
+   * Announced when the footage cannot be played at all, so the caller can fall
+   * back to the pairing screen that has always worked.
+   */
+  onUnavailable?: (reason: string) => void;
 };
 
-export function QrVideoExperience({ experience, qrValue, onPlaying }: Props) {
+/**
+ * How long to wait for two clips to become playable before giving up.
+ *
+ * Generous, because this is a projector on conference wifi loading tens of
+ * megabytes — but finite, because the alternative to giving up is a black
+ * rectangle in a lecture hall and nobody able to pair at all.
+ */
+const READY_TIMEOUT_MS = 20000;
+
+export function QrVideoExperience({ experience, qrValue, onPlaying, onUnavailable }: Props) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const introRef = useRef<HTMLVideoElement | null>(null);
   const loopRef = useRef<HTMLVideoElement | null>(null);
@@ -60,7 +74,8 @@ export function QrVideoExperience({ experience, qrValue, onPlaying }: Props) {
   const hasAppeared = useRef(false);
   const swapped = useRef(false);
   const announce = useRef(onPlaying);
-  useEffect(() => { announce.current = onPlaying; }, [onPlaying]);
+  const giveUp = useRef(onUnavailable);
+  useEffect(() => { announce.current = onPlaying; giveUp.current = onUnavailable; }, [onPlaying, onUnavailable]);
 
   const drawing = useMemo(() => (qrValue ? drawQr(qrValue) : null), [qrValue]);
 
@@ -71,20 +86,53 @@ export function QrVideoExperience({ experience, qrValue, onPlaying }: Props) {
     const loop = loopRef.current;
     if (!intro || !loop) return;
     let cancelled = false;
+    const timers: number[] = [];
 
     // HAVE_CURRENT_DATA: the element holds a decoded frame for its current
     // position. For the loop, still parked at 0, that is its opening frame —
     // which is the whole trick behind a hand-off with nothing in between.
-    const ready = (video: HTMLVideoElement) =>
+    // A clip the browser cannot decode never fires `loadeddata`. Waiting for it
+    // forever is what turns an unplayable file — a QuickTime `.mov` outside
+    // Safari, most often — into a black screen nobody can pair from. So a
+    // failure and a stall both have to be answers, not silence.
+    const ready = (video: HTMLVideoElement, name: string) =>
       video.readyState >= 2
         ? Promise.resolve()
-        : new Promise<void>((resolve) => {
-          const done = () => { video.removeEventListener("loadeddata", done); resolve(); };
+        : new Promise<void>((resolve, reject) => {
+          const done = () => { detach(); resolve(); };
+          const failed = () => {
+            detach();
+            const code = video.error?.code;
+            reject(new Error(code === 4
+              ? `${name}: bu formatni brauzer ocholmadi`
+              : `${name}: video yuklanmadi (${code ?? "noma'lum"})`));
+          };
+          const detach = () => {
+            video.removeEventListener("loadeddata", done);
+            video.removeEventListener("error", failed);
+          };
           video.addEventListener("loadeddata", done);
+          video.addEventListener("error", failed);
         });
 
+    const deadline = new Promise<never>((_resolve, reject) => {
+      const timer = window.setTimeout(
+        () => reject(new Error("videolar vaqtida yuklanmadi")),
+        READY_TIMEOUT_MS,
+      );
+      timers.push(timer);
+    });
+
     void (async () => {
-      await Promise.all([ready(intro), ready(loop)]);
+      try {
+        await Promise.race([Promise.all([ready(intro, "intro"), ready(loop, "loop")]), deadline]);
+      } catch (problem) {
+        if (cancelled) return;
+        // The room gets the screen that has always worked, rather than a black
+        // rectangle and no way to pair.
+        giveUp.current?.(problem instanceof Error ? problem.message : "video ochilmadi");
+        return;
+      }
       if (cancelled) return;
       setStarted(true);
       try {
@@ -101,7 +149,10 @@ export function QrVideoExperience({ experience, qrValue, onPlaying }: Props) {
       announce.current?.();
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      for (const timer of timers) window.clearTimeout(timer);
+    };
   }, []);
 
   /* ------------------------------------------------- the hand-off, and the code */

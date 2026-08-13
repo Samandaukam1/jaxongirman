@@ -501,7 +501,16 @@ export function PairingScreen() {
   if (experience && token) {
     return (
       <main className="qrx-page">
-        <QrVideoExperience experience={experience} qrValue={pairUrl(token)} />
+        <QrVideoExperience
+          experience={experience}
+          qrValue={pairUrl(token)}
+          onUnavailable={(reason) => {
+            // Dropping the experience re-renders the pairing card below with the
+            // same live session, so the room can still pair.
+            console.error("QR video experience unavailable", reason);
+            setExperience(null);
+          }}
+        />
       </main>
     );
   }

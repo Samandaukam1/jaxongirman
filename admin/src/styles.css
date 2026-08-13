@@ -400,5 +400,7 @@ td small { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; 
 .qrv-preview-code { position: absolute; border-radius: 8%; overflow: hidden; }
 .qrv-preview-code svg { display: block; width: 100%; height: 100%; }
 
+.qrv-warning { margin: 0; padding: 10px 12px; border-radius: 9px; color: #7a5200; background: #fdf3dd; border: 1px solid #f0dcac; font-size: 12.5px; line-height: 1.5; }
+
 .qrv-color { display: flex; gap: 8px; align-items: center; }
 .qrv-color input[type="color"] { width: 44px; height: 42px; padding: 3px; flex: none; }
