@@ -67,3 +67,43 @@ test("the appearance is remembered outside React state", () => {
   assert.match(player, /const hasAppeared = useRef\(false\)/,
     "whether the code has appeared must survive re-renders");
 });
+
+/**
+ * The rules that make the cue work at all.
+ *
+ * These were deleted once by a stylesheet rewrite, and nothing caught it: the
+ * page still built, the tests still passed, and the code simply moved to the
+ * top-left corner and showed up at the first frame instead of at 5.06 seconds.
+ * Both symptoms came from two declarations going missing, so both are pinned.
+ */
+const css = readFileSync(path.join(webRoot, "app", "globals.css"), "utf8");
+
+function block(selector) {
+  const at = css.indexOf(`${selector} {`);
+  assert.notEqual(at, -1, `${selector} has no rule at all — the code cannot be placed without it`);
+  return css.slice(at, css.indexOf("}", at));
+}
+
+test("the code is positioned by its own coordinates, not by the document flow", () => {
+  // Without `position: absolute` the inline left/top do nothing and the code
+  // lands wherever the flow puts it: the corner of the stage.
+  assert.match(block(".qrx-code"), /position:\s*absolute/,
+    "the code must be absolutely positioned or the admin's coordinates are ignored");
+});
+
+test("the code is out of sight until its cue", () => {
+  // Without this it is on screen from the first frame, and the appear time an
+  // admin set means nothing.
+  assert.match(block(".qrx-code"), /opacity:\s*0/,
+    "the code must start hidden or it appears immediately instead of at its cue");
+  assert.ok(css.includes(".qrx-code.is-in"), "and there must be a rule that reveals it");
+  assert.ok(css.includes("@keyframes qrx-arrive"), "with the arrival animation it names");
+});
+
+test("nothing in the overlay can be drawn across the code", () => {
+  // A panel or a menu over a QR is a QR nobody can scan.
+  const code = Number(/z-index:\s*(\d+)/.exec(block(".qrx-code"))?.[1]);
+  const chrome = Number(/z-index:\s*(\d+)/.exec(block(".qrx-chrome"))?.[1]);
+  assert.ok(Number.isFinite(code) && Number.isFinite(chrome), "both layers must state where they sit");
+  assert.ok(code > chrome, `the code (${code}) must sit above the chrome (${chrome})`);
+});

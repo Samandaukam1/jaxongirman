@@ -330,7 +330,7 @@ export function QrVideoExperience({ experience, qrValue, onPlaying, onUnavailabl
       />
 
       <div className="qrx-chrome" aria-hidden={false}>
-        <div className="qrx-rail">
+        <div className="qrx-rail qrx-panel">
           <a className="qrx-brand" href="/">
             <span className="qrx-brand-mark">J</span>
             <span>Jaxongirman</span>
@@ -342,7 +342,7 @@ export function QrVideoExperience({ experience, qrValue, onPlaying, onUnavailabl
           </nav>
         </div>
 
-        {children ? <div className="qrx-copy">{children}</div> : null}
+        {children ? <div className="qrx-copy qrx-panel">{children}</div> : null}
       </div>
 
       {drawing && rect ? (
