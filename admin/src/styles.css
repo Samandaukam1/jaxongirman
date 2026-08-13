@@ -427,6 +427,9 @@ td small { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; 
 
 /* -------------------------------------------------- JSLAYD font packages --- */
 
+.jslayd-font-gate { display: grid; gap: 10px; justify-items: start; padding: 14px 16px; border: 1px dashed var(--border-strong); border-radius: 12px; background: var(--surface-muted); }
+.jslayd-font-gate .panel-hint { margin: 0; }
+
 .jslayd-font-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
 .jslayd-font-head span { color: var(--ink-soft); font-size: 12px; font-weight: 600; }
 .jslayd-font-family { display: grid; grid-template-columns: 1.2fr 1fr auto; gap: 8px; }

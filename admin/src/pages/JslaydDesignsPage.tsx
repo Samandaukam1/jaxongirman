@@ -409,11 +409,33 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
     }
   }
 
+  /**
+   * Saves, compiling first if that has not happened yet.
+   *
+   * The font panel needs a saved design — the files are stored under its slug —
+   * but the save button lives in the section below it and only wakes up once
+   * the prompt has been checked. Telling somebody to "save the draft first"
+   * while the way to do that is further down the page and switched off is not
+   * an instruction, it is a puzzle. So saving compiles on the way.
+   */
   async function save(thenPublish: boolean) {
-    if (!outcome?.document) {
-      setError("Avval promptni tekshiring va kompilyatsiya qiling.");
+    let ready = outcome;
+    if (!ready?.document) {
+      setBusy(true);
+      try {
+        ready = await compilePrompt(form.source);
+        setOutcome(ready);
+      } finally {
+        setBusy(false);
+      }
+    }
+    if (!ready?.document) {
+      setError(`Prompt kompilyatsiya qilinmadi — ${ready?.diagnostics.errors.length ?? 0} ta xato.`
+        + " Quyidagi “4. JSLAYD prompt” bo‘limida ularni ko‘ring.");
       return;
     }
+    // Narrowed once, so the rest of the body is not re-proving it.
+    const compiled = { ...ready, document: ready.document };
     setBusy(true);
     setError(null);
     try {
@@ -421,8 +443,8 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
       // and until now only the id came back — so a design saved that way had a
       // blank slug in the form. The font panel is keyed on that slug, so it sat
       // disabled with no way to find out why.
-      const slug = form.slug || outcome.document.design.slug;
-      const name = form.name || outcome.document.design.name;
+      const slug = form.slug || compiled.document.design.slug;
+      const name = form.name || compiled.document.design.name;
       const id = await saveDesign({
         id: form.id,
         slug,
@@ -431,7 +453,7 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
         description: form.description,
         premium: form.premium,
         source: form.source,
-        outcome,
+        outcome: compiled,
         thumbnailPath: form.thumbnailPath,
       });
       setForm((current) => ({ ...current, id, slug, name }));
@@ -570,7 +592,18 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
           />
         ))}
         {!form.id ? (
-          <p className="panel-hint">Shrift yuklash uchun avval qoralamani saqlang — fayllar dizayn nomi ostida saqlanadi.</p>
+          // The instruction and the way to follow it, in the same place. Saying
+          // "save the draft first" while the save button is in the next section
+          // and disabled until the prompt is checked is a puzzle, not guidance.
+          <div className="jslayd-font-gate">
+            <p className="panel-hint">
+              Shrift fayllari dizayn nomi ostida saqlanadi, shuning uchun avval qoralama kerak.
+              Prompt tekshiriladi va qoralama saqlanadi — bir bosishda.
+            </p>
+            <button className="secondary-button" type="button" disabled={busy} onClick={() => void save(false)}>
+              {busy ? "Saqlanmoqda…" : "Qoralamani saqlash"}
+            </button>
+          </div>
         ) : !form.slug ? (
           <p className="panel-hint">Dizaynning slugi aniqlanmadi. Yuqoridagi “Slug” maydonini to‘ldirib qayta saqlang.</p>
         ) : null}
