@@ -27,7 +27,19 @@ export function formatRelativeDate(value: string): string {
 }
 
 export function asErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Kutilmagan xatolik yuz berdi";
+  if (error instanceof Error && error.message) return error.message;
+  // Supabase reports failures as plain objects, not Error instances — a
+  // PostgrestError is `{ message, details, hint, code }`. Treating those as
+  // "unexpected" threw away the one sentence that said what went wrong, and
+  // left every database refusal looking identical on screen.
+  if (error && typeof error === "object") {
+    const row = error as { message?: unknown; error_description?: unknown; hint?: unknown };
+    for (const field of [row.message, row.error_description, row.hint]) {
+      if (typeof field === "string" && field.trim()) return field;
+    }
+  }
+  if (typeof error === "string" && error.trim()) return error;
+  return "Kutilmagan xatolik yuz berdi";
 }
 
 /**

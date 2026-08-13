@@ -224,7 +224,9 @@ export default function SurveyBuilderScreen() {
     if (templateName.trim() === "") return;
     setTemplateSaving(true);
     const { error: templateError } = await supabase.rpc("save_survey_template", {
-      p_template_id: undefined as unknown as string,
+      // Explicitly null: an omitted key is dropped from the body, and this
+      // parameter has no default, so the call could never be resolved.
+      p_template_id: null as unknown as string,
       p_name: templateName.trim(),
       p_description: description.trim(),
       p_questions: toPayload(questions) as never,

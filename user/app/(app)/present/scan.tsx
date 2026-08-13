@@ -45,7 +45,10 @@ export default function ScanScreen() {
     setError(null);
     const { data, error: claimError } = await supabase.rpc("presentation_pairing_claim", {
       p_token: token,
-      p_presentation_id: undefined as unknown as string,
+      // Null rather than omitted: this parameter happens to have a default
+        // today, and a call that only works because of that is one schema
+        // change away from failing with "function not found".
+        p_presentation_id: null as unknown as string,
     });
     setBusy(false);
     if (claimError) {

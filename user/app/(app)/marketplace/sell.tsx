@@ -132,14 +132,20 @@ export default function SellScreen() {
   }
 
   async function publish() {
-    if (!user || problem || !materialType) { setError(problem); return; }
+    if (problem) { setError(problem); return; }
+    if (!user) { setError("Hisobingiz aniqlanmadi. Ilovaga qaytadan kiring."); return; }
+    if (!materialType) { setError("Material turini tanlang."); return; }
     setBusy(true);
     setError(null);
     try {
       // The listing exists first, so every object has a product id to live
       // under — the storage policy is keyed on that path shape.
       const { data: productId, error: saveError } = await supabase.rpc("marketplace_save_product", {
-        p_product_id: undefined as unknown as string,
+        // Explicitly null, never omitted. `JSON.stringify` drops an `undefined`
+        // value, and `p_product_id` has no default — so an omitted key leaves
+        // PostgREST unable to resolve the function at all, which is a failure
+        // before the request even reaches the rule that would have allowed it.
+        p_product_id: null as unknown as string,
         p_material_type: materialType,
         p_title: title.trim(),
         p_description: description.trim(),
@@ -448,14 +454,18 @@ export default function SellScreen() {
           </View>
         ) : null}
 
-        {error ? <InlineError message={error} /> : null}
         </>) : null}
+
+        {/* Outside the block above on purpose: that block is hidden for a game
+            listing, and it used to take the only error line on the screen with
+            it. The button is always here, so what it has to say must be too. */}
+        {error ? <InlineError message={error} /> : null}
 
         <PrimaryButton
           label="Moderatsiyaga yuborish"
           icon={Send}
           loading={busy}
-          disabled={Boolean(problem)}
+          disabled={busy || Boolean(problem)}
           onPress={() => void publish()}
         />
         {problem ? <Text style={styles.problem}>{problem}</Text> : null}
