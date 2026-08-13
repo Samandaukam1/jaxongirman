@@ -106,6 +106,16 @@ on conflict (id) do update set
   file_size_limit = excluded.file_size_limit,
   allowed_mime_types = excluded.allowed_mime_types;
 
+-- `create policy` needs ACCESS EXCLUSIVE on the table, and `storage.objects` is
+-- serving every avatar, font and preview on the site while this runs. Without a
+-- bound, a lock held by one in-flight upload would park this statement in the
+-- queue — and every request that arrived after it would park behind *that*,
+-- turning a new feature's migration into a storage outage.
+--
+-- Five seconds, then fail. The whole migration is one transaction, so a refusal
+-- leaves nothing behind and the deploy can simply be run again.
+set local lock_timeout = '5s';
+
 create policy qr_video_assets_public_read on storage.objects
   for select to anon, authenticated
   using (bucket_id = 'qr-video');
