@@ -61,6 +61,7 @@ export function QrVideoExperience({ experience, qrValue, onPlaying, onUnavailabl
   const loopRef = useRef<HTMLVideoElement | null>(null);
 
   const [started, setStarted] = useState(false);
+  const [videosReady, setVideosReady] = useState(false);
   const [looping, setLooping] = useState(false);
   const [rect, setRect] = useState<QrRect | null>(null);
   const [qrVisible, setQrVisible] = useState(false);
@@ -134,7 +135,32 @@ export function QrVideoExperience({ experience, qrValue, onPlaying, onUnavailabl
         return;
       }
       if (cancelled) return;
-      setStarted(true);
+      setVideosReady(true);
+    })();
+
+    return () => {
+      cancelled = true;
+      for (const timer of timers) window.clearTimeout(timer);
+    };
+  }, []);
+
+  /**
+   * Nothing plays until the code is drawn.
+   *
+   * The cue is a moment in the footage, and it only happens once. Starting the
+   * intro while the session token is still in flight means 5.06 seconds can
+   * pass with nothing to reveal — and then the code turns up whenever the
+   * network got round to it, which is not what the design says. Holding the
+   * first frame back by the fraction of a second the session takes costs
+   * nobody anything and makes the cue exact.
+   */
+  useEffect(() => {
+    const intro = introRef.current;
+    if (!intro || !videosReady || !drawing || started) return;
+    let cancelled = false;
+
+    setStarted(true);
+    void (async () => {
       try {
         await intro.play();
       } catch {
@@ -146,14 +172,11 @@ export function QrVideoExperience({ experience, qrValue, onPlaying, onUnavailabl
         window.addEventListener("pointerdown", retry);
         return;
       }
-      announce.current?.();
+      if (!cancelled) announce.current?.();
     })();
 
-    return () => {
-      cancelled = true;
-      for (const timer of timers) window.clearTimeout(timer);
-    };
-  }, []);
+    return () => { cancelled = true; };
+  }, [drawing, started, videosReady]);
 
   /* ------------------------------------------------- the hand-off, and the code */
 
@@ -252,7 +275,21 @@ export function QrVideoExperience({ experience, qrValue, onPlaying, onUnavailabl
     if (!stage) return;
     const observer = new ResizeObserver(measure);
     observer.observe(stage);
-    return () => observer.disconnect();
+
+    // A video reports no dimensions until its metadata arrives, and the code is
+    // positioned against those dimensions. Measuring only on mount and on
+    // resize therefore left the code with nowhere to be — so it was never
+    // drawn at all, and a window resize was the only thing that could rescue
+    // it. The cue at 5.06 seconds has to reveal something already in place.
+    const intro = introRef.current;
+    const loop = loopRef.current;
+    intro?.addEventListener("loadedmetadata", measure);
+    loop?.addEventListener("loadedmetadata", measure);
+    return () => {
+      observer.disconnect();
+      intro?.removeEventListener("loadedmetadata", measure);
+      loop?.removeEventListener("loadedmetadata", measure);
+    };
   }, [measure]);
 
   const glow = glowFilter(experience.glow);
