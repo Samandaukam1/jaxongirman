@@ -66,7 +66,17 @@ export class PaymentFailed extends Error {
    * that says *which* refusal it was. It is carried through to the logs and to
    * the failure record, and never to the buyer.
    */
-  constructor(public code: string, message: string, public providerCode?: string) {
+  constructor(
+    public code: string,
+    message: string,
+    public providerCode?: string,
+    /**
+     * Payme's `error.data`, which is where the useful part lives. A -32504
+     * carrying `invalid_key` and a -32504 carrying anything else need different
+     * people to fix them, and the number alone does not say which.
+     */
+    public providerData?: string,
+  ) {
     super(message);
   }
 }
@@ -96,17 +106,27 @@ const PAYME_ERRORS: Record<string, { code: string; message: string }> = {
   "-31602": { code: "receipt_not_found", message: "To‘lov cheki topilmadi yoki allaqachon to‘langan." },
   "-31610": { code: "invalid_code", message: "Tasdiqlash kodi noto‘g‘ri." },
   "-31611": { code: "code_expired", message: "Tasdiqlash kodining muddati tugadi. Yangi kod so‘rang." },
+  // Seen in production carrying `data: "invalid_key"`: the merchant key sent
+  // for receipt methods was not the merchant's current one. `receipts.create`
+  // does not check the key, which is why it kept working and only the charge
+  // was refused — an hour of looking at the wrong request.
   "-32504": { code: "provider_auth", message: "To‘lov tizimi vaqtincha ishlamayapti. Keyinroq urinib ko‘ring." },
 };
 
 /** Turns a provider code and message into our normalised failure. */
-export function paymeFailure(code: string, providerMessage: string): PaymentFailed {
+export function paymeFailure(code: string, providerMessage: string, providerData?: unknown): PaymentFailed {
+  // Only a short scalar is kept: `data` is occasionally an object, and the
+  // failure record is read by people, not parsers.
+  const detail = typeof providerData === "string" || typeof providerData === "number"
+    ? String(providerData).slice(0, 60)
+    : undefined;
   const known = PAYME_ERRORS[code];
-  if (known) return new PaymentFailed(known.code, known.message, code);
+  if (known) return new PaymentFailed(known.code, known.message, code, detail);
   return new PaymentFailed(
     `payme_${code.replace("-", "")}`,
     providerMessage || "To‘lov tizimi so‘rovni rad etdi.",
     code,
+    detail,
   );
 }
 
@@ -210,7 +230,7 @@ class PaymeProvider implements PaymentProvider {
       // than on a provider's numbering. The message is redacted either way: one
       // containing a card number would be stored, and the column constraint
       // would then reject the whole write.
-      throw paymeFailure(String(payload.error.code), redactDigits(message));
+      throw paymeFailure(String(payload.error.code), redactDigits(message), payload.error.data);
     }
     if (!payload.result) throw new PaymentFailed("empty_result", "To‘lov tizimi javob qaytarmadi.");
     console.log("payme.ok", JSON.stringify(context));

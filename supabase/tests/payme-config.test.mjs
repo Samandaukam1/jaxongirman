@@ -119,12 +119,19 @@ test("the provider's own error code survives normalisation", () => {
   // and useless for whoever has to fix it: the number is the only thing that
   // says which refusal it was.
   assert.match(provider, /public providerCode\?: string/, "the raw code must be carried on the failure");
-  assert.match(provider, /return new PaymentFailed\(known\.code, known\.message, code\)/,
-    "a mapped code must still keep the provider's own");
+  // `data` is where the answer actually was: production returned -32504 with
+  // `data: "invalid_key"`, and the number alone would never have said which
+  // -32504 it was or who could fix it.
+  assert.match(provider, /public providerData\?: string/, "the provider's data must be carried too");
+  assert.match(provider, /return new PaymentFailed\(known\.code, known\.message, code, detail\)/,
+    "a mapped code must still keep the provider's own code and data");
+  assert.match(provider, /paymeFailure\(String\(payload\.error\.code\), redactDigits\(message\), payload\.error\.data\)/,
+    "the data from the response must reach the failure");
 
   for (const name of ["order-pay", "pay-marketplace"]) {
     const text = readFileSync(path.join(functionsRoot, name, "index.ts"), "utf8");
     assert.match(text, /error\.providerCode/, `${name} must record the provider's code, not only ours`);
+    assert.match(text, /error\.providerData/, `${name} must record the provider's data, which is the diagnosable part`);
   }
 });
 

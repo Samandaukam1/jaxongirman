@@ -206,7 +206,7 @@ Deno.serve(async (request) => {
     // what kind of failure it was; only Payme's says which one, and that is the
     // thing to quote when asking them about it.
     const providerNote = error instanceof PaymentFailed && error.providerCode
-      ? ` [payme ${error.providerCode}]`
+      ? ` [payme ${error.providerCode}${error.providerData ? ` ${error.providerData}` : ""}]`
       : "";
 
     // Correctable mistakes leave the order standing so the buyer can fix the

@@ -65,6 +65,10 @@ Deno.serve(async (request) => {
       verdict = "Kalit merchant-scope metodlar uchun QABUL QILINDI (receipts.check o‘tdi)."
         + " Demak muammo kalitda emas, aynan receipts.pay huquqida — bu Payme kabinetidagi masala."
         + " Shu natijani Payme yordamiga yuboring.";
+    } else if (check?.providerCode === -32504 && String(check.providerData ?? "").includes("invalid_key")) {
+      verdict = "Payme aniq aytdi: kalit noto‘g‘ri (invalid_key)."
+        + " PAYME_SUBSCRIBE_KEY ni Payme kabinetidagi joriy Subscribe kaliti bilan almashtiring."
+        + " receipts.create kalitni tekshirmagani uchun ishlab turgan edi.";
     } else if (check?.providerCode === -32504) {
       verdict = "receipts.check ham -32504 qaytardi — kalit merchant-scope metodlar uchun QABUL QILINMAYAPTI."
         + (createIdOnly?.ok
