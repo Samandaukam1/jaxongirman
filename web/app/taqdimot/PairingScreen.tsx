@@ -494,12 +494,16 @@ export function PairingScreen({ experienceRow }: { experienceRow: unknown | null
   // for the card below and nothing else: the session, the rotating token and
   // the realtime subscription that notices the phone are the same ones the
   // plain screen uses, so a surface that is switched off changes nothing.
-  if (experience && token) {
+  // The token arrives from an RPC a moment after the page does, and waiting for
+  // it here meant rendering the old pairing card in the meantime — on the
+  // server too, so the flash was baked into the first HTML. A published
+  // experience takes the screen immediately and simply has no code to draw yet.
+  if (experience) {
     return (
       <main className="qrx-page">
         <QrVideoExperience
           experience={experience}
-          qrValue={pairUrl(token)}
+          qrValue={token ? pairUrl(token) : null}
           onUnavailable={(reason) => {
             // Dropping the experience re-renders the pairing card below with the
             // same live session, so the room can still pair.

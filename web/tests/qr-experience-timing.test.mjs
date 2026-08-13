@@ -130,3 +130,29 @@ test("the first frame is shown without waiting for the loop", () => {
   assert.match(player, /setRevealed\(true\)/, "the intro's opening frame must be revealed on its own");
   assert.match(css, /\[data-revealed="false"\] \.qrx-video/, "and the stylesheet must key off that");
 });
+
+test("a published experience takes the screen before its code exists", () => {
+  // The pairing token arrives from an RPC a moment after the page does. Making
+  // the film wait for it meant the old card rendered in the meantime — and
+  // because these screens are server-rendered, that flash was baked into the
+  // first HTML rather than merely happening in the browser.
+  for (const [file, guard] of [
+    [["taqdimot", "PairingScreen.tsx"], /if \(experience\) \{/],
+    [["oyingoh", "ArenaScreen.tsx"], /if \(!paired && experience\) \{/],
+  ]) {
+    const source = readFileSync(path.join(webRoot, "app", ...file), "utf8");
+    assert.match(source, guard, `${file.join("/")} must not hold the film back for the token`);
+    assert.match(source, /qrValue=\{\w+ \? \w+\(\w+\) : null\}/,
+      `${file.join("/")} must pass no code rather than no film`);
+  }
+});
+
+test("a session that never opens still says so", () => {
+  // The film would otherwise sit on its first frame for ever: playback waits
+  // for a code, and a failed session never produces one.
+  const screen = readFileSync(path.join(webRoot, "app", "taqdimot", "PairingScreen.tsx"), "utf8");
+  const failure = screen.indexOf("if (error && !active) {");
+  const film = screen.indexOf("if (experience) {");
+  assert.ok(failure !== -1 && film !== -1, "both branches must exist");
+  assert.ok(failure < film, "the failure notice must be reached before the film takes the screen");
+});

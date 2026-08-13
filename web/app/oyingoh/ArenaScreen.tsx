@@ -279,12 +279,14 @@ export function ArenaScreen({ handoff, experienceRow }: {
   // if there is one. It stands in for the card below and nothing else: the
   // match, the rotating token and the realtime subscription that notices the
   // phone are unchanged, so a surface that is switched off changes nothing.
-  if (!paired && experience && pairToken) {
+  // As on the remote's screen: the film takes over at once and the code follows
+  // when the match's token arrives, rather than the old card standing in.
+  if (!paired && experience) {
     return (
       <main className="qrx-page">
         <QrVideoExperience
           experience={experience}
-          qrValue={gamePairUrl(pairToken)}
+          qrValue={pairToken ? gamePairUrl(pairToken) : null}
           onUnavailable={(reason) => {
             // Dropping the experience re-renders the pairing card below with the
             // same live match, so the room can still pair.
