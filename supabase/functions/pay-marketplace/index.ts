@@ -204,6 +204,13 @@ Deno.serve(async (request) => {
       ? error.code
       : error instanceof HttpError ? error.code : "internal_error";
 
+    // The provider's own number, kept on the record. Our normalised code says
+    // what kind of failure it was; only Payme's says which one, and that is the
+    // thing to quote when asking them about it.
+    const providerNote = error instanceof PaymentFailed && error.providerCode
+      ? ` [payme ${error.providerCode}]`
+      : "";
+
     // Correctable mistakes leave the attempt standing, token and all, so the
     // buyer can fix the input rather than start the purchase over.
     if (RECOVERABLE.has(failureCode)) {
@@ -216,7 +223,7 @@ Deno.serve(async (request) => {
     // while recording it must not be allowed to replace it.
     if (serviceClient && transactionId) {
       const code = failureCode;
-      const message = redact(error instanceof Error ? error.message : "To‘lov amalga oshmadi.");
+      const message = redact(error instanceof Error ? error.message : "To‘lov amalga oshmadi.") + providerNote;
       try {
         await serviceClient.rpc("payment_advance", {
           p_transaction_id: transactionId, p_to: "failed", p_event: "provider.failed",

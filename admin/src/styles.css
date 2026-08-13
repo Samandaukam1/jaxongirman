@@ -404,3 +404,22 @@ td small { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; 
 
 .qrv-color { display: flex; gap: 8px; align-items: center; }
 .qrv-color input[type="color"] { width: 44px; height: 42px; padding: 3px; flex: none; }
+
+/* --------------------------------------------------- Payme diagnostics ---- */
+
+.payme-diagnostics { display: grid; gap: 10px; margin-top: 4px; }
+.payme-diagnostics > button { justify-self: start; }
+.payme-report { display: grid; gap: 14px; padding: 16px; border: 1px solid var(--border-soft); border-radius: 12px; background: var(--surface-muted); }
+.payme-verdict { margin: 0; padding: 12px 14px; border-radius: 10px; background: #fdf3dd; border: 1px solid #f0dcac; color: #6b4a00; font-size: 13.5px; line-height: 1.55; }
+.payme-report dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin: 0; }
+.payme-report dl > div { display: grid; gap: 3px; }
+.payme-report dt { color: var(--ink-soft); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; font-weight: 700; }
+.payme-report dd { margin: 0; font-size: 13px; word-break: break-all; }
+.payme-report ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.payme-report li { display: grid; gap: 4px; padding: 11px 13px; border-radius: 10px; background: white; border-left: 3px solid var(--border-strong); }
+.payme-report li.is-ok { border-left-color: #3f9c68; }
+.payme-report li.is-bad { border-left-color: #c0463c; }
+.payme-report li strong { font-size: 13.5px; }
+.payme-report li span { font-size: 12.5px; font-weight: 600; color: var(--ink-muted); }
+.payme-report li em { font-size: 12.5px; color: #8d3029; font-style: normal; }
+.payme-report li small { color: var(--ink-soft); font-size: 12px; line-height: 1.5; }

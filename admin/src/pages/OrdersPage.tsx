@@ -136,6 +136,8 @@ export function OrdersPage() {
           Merchant kaliti server muhitida (<code>PAYME_SUBSCRIBE_KEY</code>) saqlanadi va bu panelga
           hech qachon uzatilmaydi. Bu yerda faqat ulanish holati ko‘rinadi — kalitning o‘zi emas.
         </p>
+
+        <PaymeDiagnostics />
       </div>
     </section>
 
@@ -266,4 +268,81 @@ export function OrdersPage() {
       )}
     </section>
   </div>;
+}
+
+/**
+ * Why Payme is refusing `receipts.pay`, answered without charging anybody.
+ *
+ * `receipts.create` works and `receipts.pay` comes back -32504, with the same
+ * `X-Auth: <merchant_id>:<key>` on both. That is only puzzling until you notice
+ * that Payme documents create as reachable from the checkout page — the
+ * merchant id alone can be enough for it. If so, a create that works proves
+ * nothing about the key, and every method that does check the key refuses us
+ * exactly the way `receipts.pay` does.
+ *
+ * The server runs three probes and reports what Payme actually said to each.
+ * Nothing here ever receives the key, the assembled header or a card token.
+ */
+function PaymeDiagnostics() {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{
+    endpoint: string;
+    environment: string;
+    merchant: string;
+    keyLength: number;
+    verdict: string;
+    probes: { step: string; ok: boolean; providerCode?: number; providerMessage?: string; providerData?: unknown; note: string }[];
+  } | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  async function run() {
+    setBusy(true);
+    setProblem(null);
+    setResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("payme-diagnose", { body: {} });
+      if (error) throw error;
+      setResult(data as typeof result);
+    } catch (invokeError) {
+      setProblem(errorMessage(invokeError));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="payme-diagnostics">
+      <button className="secondary-button compact" type="button" disabled={busy} onClick={() => void run()}>
+        {busy ? "Tekshirilmoqda…" : "receipts.pay huquqini tekshirish"}
+      </button>
+      <p className="finance-hint">
+        Pul olinmaydi: uchta so‘rov yuboriladi — kalit bilan chek yaratish, kalitsiz chek yaratish va
+        kalit talab qiladigan <code>receipts.check</code>. Javoblar Payme’ning o‘z kodlari bilan ko‘rsatiladi.
+      </p>
+
+      {problem ? <p className="qrv-problem">{problem}</p> : null}
+
+      {result ? (
+        <div className="payme-report">
+          <p className="payme-verdict">{result.verdict}</p>
+          <dl>
+            <div><dt>Endpoint</dt><dd><code>{result.endpoint}</code></dd></div>
+            <div><dt>Muhit</dt><dd>{result.environment}</dd></div>
+            <div><dt>Merchant</dt><dd>{result.merchant}</dd></div>
+            <div><dt>Kalit uzunligi</dt><dd>{result.keyLength}</dd></div>
+          </dl>
+          <ul>
+            {result.probes.map((probe) => (
+              <li key={probe.step} className={probe.ok ? "is-ok" : "is-bad"}>
+                <strong>{probe.step}</strong>
+                <span>{probe.ok ? "o‘tdi" : `xato ${probe.providerCode ?? "?"}`}</span>
+                {probe.providerMessage ? <em>{probe.providerMessage}</em> : null}
+                <small>{probe.note}</small>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
 }

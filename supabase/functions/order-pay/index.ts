@@ -202,6 +202,13 @@ Deno.serve(async (request) => {
       ? error.code
       : error instanceof HttpError ? error.code : "internal_error";
 
+    // The provider's own number, kept on the record. Our normalised code says
+    // what kind of failure it was; only Payme's says which one, and that is the
+    // thing to quote when asking them about it.
+    const providerNote = error instanceof PaymentFailed && error.providerCode
+      ? ` [payme ${error.providerCode}]`
+      : "";
+
     // Correctable mistakes leave the order standing so the buyer can fix the
     // input rather than start the purchase over. The token is already spent, so
     // `start` is where they resume — which is what the client is told.
@@ -232,7 +239,7 @@ Deno.serve(async (request) => {
           await serviceClient.rpc("order_fail", {
             p_order_id: orderId,
             p_code: failureCode,
-            p_message: redact(error instanceof Error ? error.message : "To‘lov amalga oshmadi."),
+            p_message: redact(error instanceof Error ? error.message : "To‘lov amalga oshmadi.") + providerNote,
           });
         }
         // The token goes either way: it is single-use and this attempt is over.

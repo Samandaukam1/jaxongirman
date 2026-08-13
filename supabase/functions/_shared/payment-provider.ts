@@ -57,7 +57,16 @@ export interface PaymentProvider {
 }
 
 export class PaymentFailed extends Error {
-  constructor(public code: string, message: string) {
+  /**
+   * `code` is ours — a screen branches on it. `providerCode` is the provider's
+   * own, kept beside it rather than replaced by it.
+   *
+   * Normalising -32504 into "the payment system is unavailable" is right for the
+   * buyer and useless for whoever has to fix it: the number is the only thing
+   * that says *which* refusal it was. It is carried through to the logs and to
+   * the failure record, and never to the buyer.
+   */
+  constructor(public code: string, message: string, public providerCode?: string) {
     super(message);
   }
 }
@@ -93,10 +102,11 @@ const PAYME_ERRORS: Record<string, { code: string; message: string }> = {
 /** Turns a provider code and message into our normalised failure. */
 export function paymeFailure(code: string, providerMessage: string): PaymentFailed {
   const known = PAYME_ERRORS[code];
-  if (known) return new PaymentFailed(known.code, known.message);
+  if (known) return new PaymentFailed(known.code, known.message, code);
   return new PaymentFailed(
     `payme_${code.replace("-", "")}`,
     providerMessage || "To‘lov tizimi so‘rovni rad etdi.",
+    code,
   );
 }
 
@@ -134,11 +144,7 @@ export function somToTiyin(som: number): number {
 class PaymeProvider implements PaymentProvider {
   readonly name = "payme" as const;
 
-  constructor(
-    private readonly endpoint: string,
-    private readonly merchantId: string,
-    private readonly key: string,
-  ) {}
+  constructor(private readonly config: PaymeConfig) {}
 
   /**
    * `scope` picks the credential. Defaulting to "card" would be the dangerous
@@ -149,11 +155,29 @@ class PaymeProvider implements PaymentProvider {
     params: Record<string, unknown>,
     scope: "card" | "merchant",
   ): Promise<T> {
-    const response = await fetch(this.endpoint, {
+    const { endpoint, merchantId, key, environment, merchantTail } = this.config;
+    // Enough to tell one environment from another when a call is refused, and
+    // nothing that would be a credential if the log were read by the wrong
+    // person: no key, no assembled X-Auth, no card token. The merchant id is
+    // reduced to its last four characters — two merchants are distinguishable,
+    // the identifier is not reconstructable.
+    const context = {
+      method,
+      scope,
+      endpoint,
+      environment,
+      merchant: `…${merchantTail}`,
+      // `receipts.*` carry the receipt this call is about; it is our own
+      // reference, not a secret, and it is the thing to quote to Payme.
+      receipt: typeof params.id === "string" ? params.id : undefined,
+    };
+    console.log("payme.request", JSON.stringify(context));
+
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Auth": scope === "merchant" ? `${this.merchantId}:${this.key}` : this.merchantId,
+        "X-Auth": scope === "merchant" ? `${merchantId}:${key}` : merchantId,
       },
       body: JSON.stringify({ id: Date.now(), method, params }),
     });
@@ -172,6 +196,16 @@ class PaymeProvider implements PaymentProvider {
         : raw && typeof raw === "object"
           ? String((raw as Record<string, unknown>).uz ?? (raw as Record<string, unknown>).ru ?? "")
           : "";
+      // The provider's own code, message and data, kept whole in the log. A
+      // refusal is only diagnosable from what the provider actually said, and
+      // the buyer-facing message deliberately says none of it.
+      console.error("payme.error", JSON.stringify({
+        ...context,
+        status: response.status,
+        code: payload.error.code,
+        message: redactDigits(message),
+        data: payload.error.data,
+      }));
       // Normalised to our own codes so a screen can branch on meaning rather
       // than on a provider's numbering. The message is redacted either way: one
       // containing a card number would be stored, and the column constraint
@@ -179,6 +213,7 @@ class PaymeProvider implements PaymentProvider {
       throw paymeFailure(String(payload.error.code), redactDigits(message));
     }
     if (!payload.result) throw new PaymentFailed("empty_result", "To‘lov tizimi javob qaytarmadi.");
+    console.log("payme.ok", JSON.stringify(context));
     return payload.result;
   }
 
@@ -347,32 +382,198 @@ export type ProviderChoice = { provider: PaymentProvider; sandbox: boolean };
  * reached by setting one flag by accident, and it dies the moment the platform
  * declares itself live.
  */
-export function selectProvider(paymentsConfigured: boolean): ProviderChoice {
-  // `PAYME_SUBSCRIBE_*` are the names the integration brief specifies; the
-  // older pair is still read so a half-renamed deployment keeps working.
-  const merchantId = Deno.env.get("PAYME_SUBSCRIBE_ID") ?? Deno.env.get("PAYME_ID");
-  const key = Deno.env.get("PAYME_SUBSCRIBE_KEY") ?? Deno.env.get("PAYME_KEY");
+/**
+ * Everything the Payme adapter needs from the environment, read once.
+ *
+ * Trimming is not tidiness. A key is copied out of a cabinet and pasted into a
+ * secrets form, and a trailing newline or space rides along unseen; the header
+ * then carries a credential that is one character wrong, which the provider
+ * refuses without ever saying why. That single character has exactly the shape
+ * of the failure this integration has been chasing, so it is removed here
+ * rather than hoped against.
+ */
+export type PaymeConfig = {
+  endpoint: string;
+  merchantId: string;
+  key: string;
+  environment: string;
+  /** For logs and diagnostics: enough to tell two merchants apart, and no more. */
+  merchantTail: string;
+};
+
+function env(name: string): string {
+  return (Deno.env.get(name) ?? "").trim();
+}
+
+export function paymeConfig(): PaymeConfig | null {
+  // `PAYME_SUBSCRIBE_*` are the names this deployment uses; the older pair is
+  // still read so a half-renamed environment keeps working.
+  const merchantId = env("PAYME_SUBSCRIBE_ID") || env("PAYME_ID");
+  const key = env("PAYME_SUBSCRIBE_KEY") || env("PAYME_KEY");
+  if (!merchantId || !key) return null;
+
   // Production unless the environment says otherwise. Payme has no separate
   // Subscribe sandbox for this merchant, so `test` points at their checkout
   // test host and is only ever set deliberately.
-  const environment = Deno.env.get("PAYME_ENVIRONMENT") ?? "production";
-  const endpoint = Deno.env.get("PAYME_ENDPOINT")
-    ?? (environment === "test" ? "https://checkout.test.paycom.uz/api" : "https://checkout.paycom.uz/api");
+  const environment = env("PAYME_ENVIRONMENT") || "production";
+  const endpoint = env("PAYME_ENDPOINT")
+    || (environment === "test" ? "https://checkout.test.paycom.uz/api" : "https://checkout.paycom.uz/api");
 
-  if (merchantId && key) {
-    return { provider: new PaymeProvider(endpoint, merchantId, key), sandbox: false };
-  }
+  return { endpoint, merchantId, key, environment, merchantTail: merchantId.slice(-4) };
+}
 
-  const mode = Deno.env.get("PAYMENT_MODE") ?? "real";
+/** Which variables are missing, by name, so an operator is told rather than guessing. */
+export function missingPaymeVariables(): string[] {
+  const missing: string[] = [];
+  if (!env("PAYME_SUBSCRIBE_ID") && !env("PAYME_ID")) missing.push("PAYME_SUBSCRIBE_ID");
+  if (!env("PAYME_SUBSCRIBE_KEY") && !env("PAYME_KEY")) missing.push("PAYME_SUBSCRIBE_KEY");
+  return missing;
+}
+
+/**
+ * Picks the adapter.
+ *
+ * Real credentials win whenever they exist. The sandbox requires two
+ * independent switches — `PAYMENT_MODE=sandbox` in the server environment and
+ * `payments.config.configured = false` in the database — so it cannot be
+ * reached by setting one flag by accident, and it dies the moment the platform
+ * declares itself live.
+ */
+export function selectProvider(paymentsConfigured: boolean): ProviderChoice {
+  const config = paymeConfig();
+  if (config) return { provider: new PaymeProvider(config), sandbox: false };
+
+  const mode = env("PAYMENT_MODE") || "real";
   if (mode === "sandbox" && !paymentsConfigured) {
     return { provider: new SandboxProvider(), sandbox: true };
   }
 
   throw new PaymentFailed(
     "provider_unavailable",
-    "To‘lov tizimi hali ulanmagan. Iltimos, keyinroq urinib ko‘ring.",
+    `To‘lov tizimi hali ulanmagan (${missingPaymeVariables().join(", ")}). Iltimos, keyinroq urinib ko‘ring.`,
   );
 }
 
 /** The code the sandbox accepts, so the UI can say so during development. */
 export const SANDBOX_CODE = SandboxProvider.CODE;
+
+/* -------------------------------------------------------------- diagnostics */
+
+export type Probe = {
+  step: string;
+  ok: boolean;
+  /** Payme's own code, whole. The point of the exercise. */
+  providerCode?: number;
+  providerMessage?: string;
+  providerData?: unknown;
+  note: string;
+};
+
+/**
+ * Asks Payme, without moving any money, whether our key is accepted for the
+ * methods that need one.
+ *
+ * The integration's puzzle is that `receipts.create` succeeds while
+ * `receipts.pay` is refused with -32504, even though both are sent with the
+ * same `X-Auth: <merchant_id>:<key>`. Two explanations fit, and they need
+ * opposite fixes:
+ *
+ *   * The key is wrong, and `receipts.create` never checked it. Payme documents
+ *     create as reachable from the checkout page, so the merchant id alone can
+ *     be enough for it — in which case a create that works says nothing at all
+ *     about the key, and every method that does check it will refuse us.
+ *   * The key is right and the refusal really is per-method, which is a
+ *     merchant cabinet matter and not something in this repository.
+ *
+ * Three probes separate them. Creating a receipt costs nothing and takes
+ * nothing: an unpaid receipt simply expires.
+ */
+export async function probePaymeCredentials(config: PaymeConfig, amountTiyin = 100): Promise<Probe[]> {
+  const probes: Probe[] = [];
+
+  async function ask(
+    step: string,
+    method: string,
+    params: Record<string, unknown>,
+    auth: string,
+    note: string,
+  ): Promise<{ result?: Record<string, unknown> }> {
+    try {
+      const response = await fetch(config.endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Auth": auth },
+        body: JSON.stringify({ id: Date.now(), method, params }),
+      });
+      const payload = await response.json() as {
+        result?: Record<string, unknown>;
+        error?: { code: number; message?: unknown; data?: unknown };
+      };
+      if (payload.error) {
+        const raw = payload.error.message;
+        probes.push({
+          step,
+          ok: false,
+          providerCode: payload.error.code,
+          providerMessage: redactDigits(typeof raw === "string"
+            ? raw
+            : String((raw as Record<string, unknown> | undefined)?.uz
+              ?? (raw as Record<string, unknown> | undefined)?.ru ?? "")),
+          providerData: payload.error.data,
+          note,
+        });
+        return {};
+      }
+      probes.push({ step, ok: true, note });
+      return { result: payload.result };
+    } catch (error) {
+      probes.push({ step, ok: false, note: `${note} — so‘rov yuborilmadi: ${String(error)}` });
+      return {};
+    }
+  }
+
+  const account = { order_id: `diagnostika-${Date.now()}` };
+
+  // 1. Create with the full credential — the call that is known to work.
+  const withKey = await ask(
+    "receipts.create (id:key)",
+    "receipts.create",
+    { amount: amountTiyin, account },
+    `${config.merchantId}:${config.key}`,
+    "To‘liq credential bilan chek yaratish — bu hozir ham ishlaydi.",
+  );
+
+  // 2. The same create with the merchant id alone. If this also succeeds, then
+  //    create never validated the key, and its success was never evidence that
+  //    the key is right.
+  await ask(
+    "receipts.create (faqat id)",
+    "receipts.create",
+    { amount: amountTiyin, account },
+    config.merchantId,
+    "Kalitsiz chek yaratish. Agar bu ham o‘tsa, create kalitni tekshirmaydi —"
+    + " demak uning ishlashi kalit to‘g‘ri degani emas.",
+  );
+
+  // 3. A merchant-scope read against the receipt from probe 1. This is the same
+  //    class of method as `receipts.pay`, and it charges nothing. Its answer is
+  //    the one that matters.
+  const receipt = withKey.result?.receipt as { _id?: string } | undefined;
+  if (receipt?._id) {
+    await ask(
+      "receipts.check (id:key)",
+      "receipts.check",
+      { id: receipt._id },
+      `${config.merchantId}:${config.key}`,
+      "Kalit talab qiladigan, lekin pul olmaydigan metod. -32504 qaytsa —"
+      + " muammo kalitda; o‘tsa — muammo aynan receipts.pay huquqida.",
+    );
+  } else {
+    probes.push({
+      step: "receipts.check (id:key)",
+      ok: false,
+      note: "Chek yaratilmagani uchun tekshirib bo‘lmadi.",
+    });
+  }
+
+  return probes;
+}
