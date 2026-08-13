@@ -510,7 +510,16 @@ export function PairingScreen() {
             console.error("QR video experience unavailable", reason);
             setExperience(null);
           }}
-        />
+        >
+          <p className="eyebrow">TAQDIMOT PULTI</p>
+          <h1>Telefoningizni ulang</h1>
+          <ol>
+            <li>Jaxongirman ilovasini oching</li>
+            <li>&ldquo;Loyihalar&rdquo; sahifasida <strong>Taqdimot qilish</strong> tugmasini bosing</li>
+            <li>Ekrandagi kodni skaner qiling</li>
+          </ol>
+          <p>Kod har 30 soniyada yangilanadi va faqat bir marta ishlaydi.</p>
+        </QrVideoExperience>
       </main>
     );
   }

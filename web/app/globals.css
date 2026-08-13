@@ -578,6 +578,22 @@ body:has(.arena) .arena { min-height: 100vh; }
 
 /* ------------------------------------------------- QR Video Experience ---- */
 
+/* The footage is the page. The site's own header and footer would sit across
+ * the top and bottom of a film, so they step aside — the identity and the links
+ * move to a rail down the left instead, which is the same information without a
+ * bar drawn through the picture. */
+body:has(.qrx-page) { overflow: hidden; }
+body:has(.qrx-page) > .site-header,
+body:has(.qrx-page) > .site-footer { display: none; }
+
+.qrx-page {
+  position: fixed;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  background: #05050a;
+}
+
 /* The stage is the only thing that sizes the footage. Both videos fill it
  * absolutely, so the hand-off from intro to loop cannot move a single pixel of
  * layout — there is no layout left to move. */
@@ -608,64 +624,91 @@ body:has(.arena) .arena { min-height: 100vh; }
  * footage rather than the stage colour. */
 .qrx-stage[data-started="false"] .qrx-video { opacity: 0 !important; }
 
-.qrx-code {
+/* ------------------------------------------------------------- the chrome */
+
+/* Laid over the whole frame but transparent to the pointer: only the things a
+ * person can actually use take clicks back. */
+.qrx-chrome { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+.qrx-chrome a { pointer-events: auto; }
+
+/* Text over moving footage needs its own ground. These two scrims are the
+ * least that guarantees it, and they leave the middle of the frame — where the
+ * code sits — untouched. */
+.qrx-chrome::before,
+.qrx-chrome::after {
+  content: "";
   position: absolute;
-  border-radius: 8%;
-  overflow: hidden;
-  /* Starts out of sight and stays that way until its cue in the footage. */
-  opacity: 0;
-  transform: scale(0.82);
-  will-change: transform, opacity;
-}
-
-.qrx-code svg { display: block; width: 100%; height: 100%; }
-
-/* The one appearance. `forwards` holds the finished state, and the class is
- * only ever added once, so a restarting loop never replays it. */
-.qrx-code.is-in {
-  animation: qrx-arrive 900ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-@keyframes qrx-arrive {
-  0%   { opacity: 0; transform: scale(0.82) translateY(10px); filter: blur(10px); }
-  55%  { opacity: 1; }
-  100% { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
-}
-
-/* A single light sweep across the code as it lands. It runs once, with the
- * arrival, and then it is gone — it never touches the modules a scanner reads
- * because it finishes before anyone can raise a phone. */
-.qrx-sheen {
-  position: absolute;
-  inset: 0;
+  top: 0;
+  bottom: 0;
+  width: clamp(260px, 30vw, 560px);
   pointer-events: none;
-  opacity: 0;
-  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.72) 50%, transparent 65%);
-  transform: translateX(-120%);
+}
+.qrx-chrome::before { left: 0; background: linear-gradient(90deg, rgba(5,5,10,.72), rgba(5,5,10,0)); }
+.qrx-chrome::after { right: 0; background: linear-gradient(270deg, rgba(5,5,10,.72), rgba(5,5,10,0)); }
+
+.qrx-rail {
+  position: absolute;
+  left: clamp(20px, 3vw, 52px);
+  top: clamp(20px, 3vw, 44px);
+  bottom: clamp(20px, 3vw, 44px);
+  display: flex;
+  flex-direction: column;
+  gap: 34px;
+  color: #fff;
+  z-index: 1;
 }
 
-.qrx-code.is-in .qrx-sheen {
-  animation: qrx-sheen 1100ms cubic-bezier(0.22, 1, 0.36, 1) 220ms forwards;
+.qrx-brand { display: flex; align-items: center; gap: 12px; color: #fff; text-decoration: none; font: 700 19px/1 "Inter_900Black", system-ui, sans-serif; }
+.qrx-brand-mark {
+  width: 42px; height: 42px; flex: none;
+  display: grid; place-items: center;
+  border-radius: 13px;
+  background: linear-gradient(140deg, #A855F7, #4F46E5);
+  font-size: 20px;
 }
 
-@keyframes qrx-sheen {
-  0%   { opacity: 0; transform: translateX(-120%); }
-  25%  { opacity: 1; }
-  100% { opacity: 0; transform: translateX(120%); }
+.qrx-nav { display: flex; flex-direction: column; gap: 14px; }
+.qrx-nav a {
+  color: rgba(255,255,255,.72);
+  text-decoration: none;
+  font-size: 15.5px;
+  font-weight: 600;
+  transition: color .18s ease;
+}
+.qrx-nav a:hover { color: #fff; }
+
+/* The instructions take the right, clear of both the rail and the code. */
+.qrx-copy {
+  position: absolute;
+  right: clamp(20px, 3.5vw, 64px);
+  top: 50%;
+  transform: translateY(-50%);
+  width: min(38ch, 34vw);
+  color: #fff;
+  z-index: 1;
+  text-align: right;
+}
+.qrx-copy .eyebrow { color: #C8A6FF; margin-bottom: 14px; }
+.qrx-copy h1 { font-size: clamp(30px, 3.4vw, 54px); line-height: 1.04; margin: 0 0 20px; }
+.qrx-copy ol { margin: 0 0 20px; padding: 0; list-style: none; display: grid; gap: 11px; }
+.qrx-copy ol li { color: rgba(255,255,255,.86); font-size: clamp(14px, 1.1vw, 16.5px); line-height: 1.5; }
+.qrx-copy ol li strong { color: #fff; }
+.qrx-copy p { margin: 0; color: rgba(255,255,255,.58); font-size: 13.5px; line-height: 1.55; }
+
+/* Narrow screens have no room for a rail and a column of text beside a code, so
+ * the chrome goes back to top and bottom and the code keeps the middle. */
+@media (max-width: 900px) {
+  .qrx-chrome::before, .qrx-chrome::after { display: none; }
+  .qrx-rail { right: clamp(20px, 3vw, 52px); bottom: auto; flex-direction: row; align-items: center; justify-content: space-between; gap: 16px; }
+  .qrx-nav { flex-direction: row; gap: 16px; }
+  .qrx-nav a { font-size: 13.5px; }
+  .qrx-copy {
+    right: 0; left: 0; top: auto; bottom: 0;
+    width: auto; transform: none;
+    padding: 90px clamp(20px, 5vw, 40px) clamp(24px, 5vw, 40px);
+    text-align: left;
+    background: linear-gradient(0deg, rgba(5,5,10,.86), rgba(5,5,10,0));
+  }
+  .qrx-copy ol { display: none; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .qrx-code.is-in { animation: qrx-fade 240ms linear forwards; }
-  .qrx-code.is-in .qrx-sheen { animation: none; }
-  @keyframes qrx-fade { to { opacity: 1; transform: scale(1); } }
-}
-
-/* The experience owns the whole viewport: it is the screen in the hall, not a
- * panel on a page. */
-.qrx-page {
-  position: fixed;
-  inset: 0;
-  margin: 0;
-  padding: 0;
-  background: #05050a;
-}

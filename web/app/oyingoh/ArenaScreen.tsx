@@ -292,7 +292,16 @@ export function ArenaScreen({ handoff }: { handoff?: { sessionId: string; screen
             console.error("QR video experience unavailable", reason);
             setExperience(null);
           }}
-        />
+        >
+          <p className="eyebrow">O&lsquo;YINGOH</p>
+          <h1>Bellashuvni boshlang</h1>
+          <ol>
+            <li>Jaxongirman ilovasini oching</li>
+            <li><strong>O&lsquo;yingoh</strong> bo&lsquo;limiga kiring</li>
+            <li>Ekrandagi kodni skaner qiling</li>
+          </ol>
+          <p>Kod har 30 soniyada yangilanadi va faqat bir marta ishlaydi.</p>
+        </QrVideoExperience>
       </main>
     );
   }

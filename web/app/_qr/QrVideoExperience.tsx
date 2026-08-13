@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { drawQr, glowFilter, placeQr, type QrRect } from "@jaxongirman/qr-video";
 
@@ -44,6 +44,15 @@ type Props = {
    * back to the pairing screen that has always worked.
    */
   onUnavailable?: (reason: string) => void;
+  /**
+   * The surface's own words, laid over the footage on the right.
+   *
+   * The site's header is hidden here — a menu bar sitting across the top of a
+   * film is chrome pretending to be part of the picture — so the identity and
+   * the links move to a rail down the left, and the instructions take the right.
+   * That leaves the middle of the frame clear, which is where the code lives.
+   */
+  children?: ReactNode;
 };
 
 /**
@@ -55,7 +64,7 @@ type Props = {
  */
 const READY_TIMEOUT_MS = 20000;
 
-export function QrVideoExperience({ experience, qrValue, onPlaying, onUnavailable }: Props) {
+export function QrVideoExperience({ experience, qrValue, onPlaying, onUnavailable, children }: Props) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const introRef = useRef<HTMLVideoElement | null>(null);
   const loopRef = useRef<HTMLVideoElement | null>(null);
@@ -319,6 +328,22 @@ export function QrVideoExperience({ experience, qrValue, onPlaying, onUnavailabl
         style={{ opacity: looping ? 1 : 0 }}
         aria-hidden
       />
+
+      <div className="qrx-chrome" aria-hidden={false}>
+        <div className="qrx-rail">
+          <a className="qrx-brand" href="/">
+            <span className="qrx-brand-mark">J</span>
+            <span>Jaxongirman</span>
+          </a>
+          <nav className="qrx-nav" aria-label="Asosiy navigatsiya">
+            <a href="/#imkoniyatlar">Imkoniyatlar</a>
+            <a href="/dokon">Do&lsquo;kon</a>
+            <a href="/taqdimot">Taqdimot qilish</a>
+          </nav>
+        </div>
+
+        {children ? <div className="qrx-copy">{children}</div> : null}
+      </div>
 
       {drawing && rect ? (
         <div
