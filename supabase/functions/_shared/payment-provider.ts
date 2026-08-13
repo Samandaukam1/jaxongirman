@@ -419,7 +419,27 @@ export type PaymeConfig = {
   environment: string;
   /** For logs and diagnostics: enough to tell two merchants apart, and no more. */
   merchantTail: string;
+  /**
+   * Which variables these actually came from.
+   *
+   * Several spellings are accepted so a rename cannot fail closed half-way, and
+   * that is precisely how a deployment ends up authenticating with a variable
+   * nobody remembers setting. The answer should never be a matter of reading
+   * the fallback chain and guessing.
+   */
+  source: { merchantId: string; key: string; endpoint: string };
+  /** True when the stored value carried whitespace that had to be removed. */
+  trimmed: { merchantId: boolean; key: boolean };
 };
+
+/** The first variable of `names` that holds anything, with its name. */
+function pick(names: string[]): { name: string; raw: string } | null {
+  for (const name of names) {
+    const raw = Deno.env.get(name) ?? "";
+    if (raw.trim()) return { name, raw };
+  }
+  return null;
+}
 
 function env(name: string): string {
   return (Deno.env.get(name) ?? "").trim();
@@ -433,19 +453,37 @@ export function paymeConfig(): PaymeConfig | null {
   // standard names. The earlier spellings are still read, in that order, so a
   // deployment part-way through a rename keeps taking payments rather than
   // failing closed at the moment the first name is changed.
-  const merchantId = env("PAYME_MERCHANT_ID") || env("PAYME_SUBSCRIBE_ID") || env("PAYME_ID");
-  const key = env("PAYME_SUBSCRIBE_KEY") || env("PAYME_KEY");
-  if (!merchantId || !key) return null;
+  const merchant = pick(["PAYME_SUBSCRIBE_ID", "PAYME_MERCHANT_ID", "PAYME_ID"]);
+  const secret = pick(["PAYME_SUBSCRIBE_KEY", "PAYME_KEY"]);
+  if (!merchant || !secret) return null;
+  const merchantId = merchant.raw.trim();
+  const key = secret.raw.trim();
 
   // Production unless the environment deliberately says otherwise. Payme has no
   // separate Subscribe sandbox for this merchant, so the test host is only ever
   // reached by setting `PAYME_ENVIRONMENT=test` on purpose — a live payment
   // cannot drift onto it by omission.
   const environment = env("PAYME_ENVIRONMENT") || "production";
-  const endpoint = env("PAYME_API_URL") || env("PAYME_ENDPOINT")
+  const url = pick(["PAYME_API_URL", "PAYME_ENDPOINT"]);
+  const endpoint = url?.raw.trim()
     || (environment === "test" ? "https://checkout.test.paycom.uz/api" : PAYME_PRODUCTION_URL);
 
-  return { endpoint, merchantId, key, environment, merchantTail: merchantId.slice(-4) };
+  return {
+    endpoint,
+    merchantId,
+    key,
+    environment,
+    merchantTail: merchantId.slice(-4),
+    source: {
+      merchantId: merchant.name,
+      key: secret.name,
+      endpoint: url?.name ?? "(standart)",
+    },
+    trimmed: {
+      merchantId: merchant.raw !== merchantId,
+      key: secret.raw !== key,
+    },
+  };
 }
 
 /**
@@ -470,10 +508,28 @@ export function credentialShape(value: string): string {
   return notes.join(", ");
 }
 
+/**
+ * A credential's SHA-256, so two copies can be compared without either being read.
+ *
+ * This is the only way to answer the question that matters when a key is
+ * refused: is the running function using the value that was stored, or a stale
+ * one from a deployment that predates the change? The hosting platform reports
+ * the digest of what it holds; this reports the digest of what arrived. If the
+ * two agree, the runtime is current and the stored value itself is the problem.
+ * If they disagree, redeploying is the fix and the key was never wrong.
+ *
+ * The full digest is returned. It is a one-way hash of a secret, not the secret
+ * — and a partial one could not be compared against anything.
+ */
+export async function fingerprint(value: string): Promise<string> {
+  const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 /** Which variables are missing, by name, so an operator is told rather than guessing. */
 export function missingPaymeVariables(): string[] {
   const missing: string[] = [];
-  if (!env("PAYME_MERCHANT_ID") && !env("PAYME_SUBSCRIBE_ID") && !env("PAYME_ID")) missing.push("PAYME_MERCHANT_ID");
+  if (!env("PAYME_SUBSCRIBE_ID") && !env("PAYME_MERCHANT_ID") && !env("PAYME_ID")) missing.push("PAYME_SUBSCRIBE_ID");
   if (!env("PAYME_SUBSCRIBE_KEY") && !env("PAYME_KEY")) missing.push("PAYME_SUBSCRIBE_KEY");
   return missing;
 }

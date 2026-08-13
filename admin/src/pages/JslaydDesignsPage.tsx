@@ -400,10 +400,16 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
     setBusy(true);
     setError(null);
     try {
+      // The prompt supplies a slug and a name when the fields are left empty,
+      // and until now only the id came back — so a design saved that way had a
+      // blank slug in the form. The font panel is keyed on that slug, so it sat
+      // disabled with no way to find out why.
+      const slug = form.slug || outcome.document.design.slug;
+      const name = form.name || outcome.document.design.name;
       const id = await saveDesign({
         id: form.id,
-        slug: form.slug || outcome.document.design.slug,
-        name: form.name || outcome.document.design.name,
+        slug,
+        name,
         tier: form.tier,
         description: form.description,
         premium: form.premium,
@@ -411,7 +417,7 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
         outcome,
         thumbnailPath: form.thumbnailPath,
       });
-      set("id", id);
+      setForm((current) => ({ ...current, id, slug, name }));
       // The recovered text is now the design's own prompt, so the notice
       // explaining where it came from has nothing left to explain.
       set("recovered", false);
@@ -545,7 +551,11 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
             onSaved={(name) => setMessage(`${name} yuklandi.`)}
           />
         ))}
-        {!form.id ? <p className="panel-hint">Shrift yuklash uchun avval qoralamani saqlang.</p> : null}
+        {!form.id ? (
+          <p className="panel-hint">Shrift yuklash uchun avval qoralamani saqlang — fayllar dizayn nomi ostida saqlanadi.</p>
+        ) : !form.slug ? (
+          <p className="panel-hint">Dizaynning slugi aniqlanmadi. Yuqoridagi “Slug” maydonini to‘ldirib qayta saqlang.</p>
+        ) : null}
       </section>
 
       <section className="panel">

@@ -10,7 +10,7 @@
  * a dedicated SURVEY_PURGE_SECRET, so the sweep can only be driven by the
  * scheduler that owns it.
  */
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from "npm:@supabase/supabase-js";
 import { preflight } from "../_shared/cors.ts";
 import { errorResponse, HttpError, json } from "../_shared/http.ts";
 

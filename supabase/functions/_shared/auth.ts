@@ -1,4 +1,4 @@
-import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient, type User } from "npm:@supabase/supabase-js";
 import { HttpError } from "./http.ts";
 
 export type RequestContext = {

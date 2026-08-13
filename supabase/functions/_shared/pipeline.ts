@@ -1,4 +1,4 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "npm:@supabase/supabase-js";
 import type { PaletteFamily, SlideTemplate } from "./design-types.ts";
 import { familyOf } from "./jslayd/index.ts";
 import { buildJslaydSlides, readDesign, type ResolvedDesign } from "./jslayd-layout.ts";

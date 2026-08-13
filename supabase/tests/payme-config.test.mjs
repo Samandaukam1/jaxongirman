@@ -79,8 +79,13 @@ test("the environment is read in one place, and trimmed", () => {
   assert.match(provider, /function env\(name: string\): string \{\s*return \(Deno\.env\.get\(name\) \?\? ""\)\.trim\(\);/,
     "every environment read must be trimmed");
 
+  // Two readers only — `env` for a plain value and `pick` for a fallback chain
+  // — and both trim. Anything else reading the environment could hand an
+  // untrimmed credential straight into the header.
+  assert.ok(provider.includes("if (raw.trim())"), "`pick` must decide on the trimmed value");
+  assert.match(provider, /merchant\.raw\.trim\(\)/, "and hand back the trimmed credential");
   const direct = [...provider.matchAll(/Deno\.env\.get\(/g)].length;
-  assert.equal(direct, 1, "only the `env` helper may read the environment, so nothing can read an untrimmed value");
+  assert.equal(direct, 2, "only `env` and `pick` may read the environment");
 
   for (const file of sources()) {
     if (file.endsWith("payment-provider.ts")) continue;
@@ -117,10 +122,17 @@ test("production is the default endpoint, and test is never reached by accident"
 
 test("the standard variable names are the ones read first", () => {
   // A rename that leaves the old name winning is a rename that did nothing.
-  assert.match(provider, /env\("PAYME_MERCHANT_ID"\) \|\| env\("PAYME_SUBSCRIBE_ID"\)/,
-    "PAYME_MERCHANT_ID must take precedence, with the older spelling as a fallback");
-  assert.match(provider, /env\("PAYME_API_URL"\) \|\| env\("PAYME_ENDPOINT"\)/,
-    "PAYME_API_URL must take precedence over the older spelling");
+  assert.match(provider, /pick\(\["PAYME_SUBSCRIBE_ID", "PAYME_MERCHANT_ID", "PAYME_ID"\]\)/,
+    "PAYME_SUBSCRIBE_ID must be read first, with the other spellings as fallbacks");
+  assert.match(provider, /pick\(\["PAYME_SUBSCRIBE_KEY", "PAYME_KEY"\]\)/,
+    "PAYME_SUBSCRIBE_KEY must be read first");
+  assert.match(provider, /pick\(\["PAYME_API_URL", "PAYME_ENDPOINT"\]\)/,
+    "PAYME_API_URL must be read first");
+
+  // Which name actually supplied each value is reported rather than inferred:
+  // a fallback chain is exactly how a deployment ends up authenticating with a
+  // variable nobody remembers setting.
+  assert.match(provider, /source: \{/, "the config must say which variable each credential came from");
 });
 
 test("the provider's own error code survives normalisation", () => {

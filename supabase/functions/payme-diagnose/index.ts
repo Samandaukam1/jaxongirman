@@ -1,7 +1,7 @@
 import { requestContext } from "../_shared/auth.ts";
 import { preflight } from "../_shared/cors.ts";
 import { errorResponse, HttpError, json } from "../_shared/http.ts";
-import { credentialShape, missingPaymeVariables, paymeConfig, probePaymeCredentials } from "../_shared/payment-provider.ts";
+import { credentialShape, fingerprint, missingPaymeVariables, paymeConfig, probePaymeCredentials } from "../_shared/payment-provider.ts";
 
 /**
  * Why Payme is refusing us, answered without charging anybody.
@@ -88,6 +88,14 @@ Deno.serve(async (request) => {
       // with the quotes still on it".
       merchantIdShape: credentialShape(config.merchantId),
       keyShape: credentialShape(config.key),
+      // Which variable each value actually came from, and whether it needed
+      // trimming — the two things a fallback chain hides.
+      source: config.source,
+      trimmed: config.trimmed,
+      // Comparable against the digest the hosting platform reports for the
+      // stored secret. Equal means this runtime is current.
+      keyFingerprint: await fingerprint(config.key),
+      merchantFingerprint: await fingerprint(config.merchantId),
       probes,
       verdict,
     });

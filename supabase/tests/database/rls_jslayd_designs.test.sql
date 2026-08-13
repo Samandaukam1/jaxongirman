@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(45);
+select plan(53);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -307,6 +307,69 @@ select is(
   2,
   'but its versions survive, so decks built from it still render'
 );
+
+-- ------------------------------------------------------- font packages --
+
+-- The archiving section above left this as a signed-out reader; attaching a
+-- font is an admin action and a design that is archived is invisible to anon.
+set local role authenticated;
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select set_config('request.jwt.claim.sub', 'a1110000-0000-0000-0000-000000000001', true);
+
+--
+-- A slot is a family, not a file. Regular, Medium, SemiBold, Bold and their
+-- italics are separate files of one typeface, and a design that uses two
+-- weights needs both present or the renderer smears one into the other.
+select lives_ok(
+  $$ select public.admin_save_design_font(
+       (select id from public.presentation_designs where slug = 'sinov-dizayn'), 'font_2', 'Sinov Sans', array['body'],
+       'sinov-700.ttf', 'ttf', 700, false, 'Inter') $$,
+  'a second weight can be added to a package that already has one');
+select is(
+  (select count(*)::integer from public.presentation_design_fonts
+     where design_id = (select id from public.presentation_designs where slug = 'sinov-dizayn') and font_id = 'font_1'),
+  1,
+  'and it does not disturb another slot');
+
+select lives_ok(
+  $$ select public.admin_save_design_font(
+       (select id from public.presentation_designs where slug = 'sinov-dizayn'), 'font_2', 'Sinov Sans', array['body'],
+       'sinov-700i.ttf', 'ttf', 700, true, 'Inter') $$,
+  'the italic of a weight is a separate face, not a replacement');
+select is(
+  (select count(*)::integer from public.presentation_design_fonts
+     where design_id = (select id from public.presentation_designs where slug = 'sinov-dizayn') and font_id = 'font_2'),
+  2,
+  'so the package now holds both');
+
+-- Re-uploading a face replaces it. Otherwise a corrected file would sit beside
+-- the wrong one and the renderer would pick whichever it found first.
+select public.admin_save_design_font(
+  (select id from public.presentation_designs where slug = 'sinov-dizayn'), 'font_2', 'Sinov Sans', array['body'],
+  'sinov-700-tuzatilgan.ttf', 'ttf', 700, false, 'Inter');
+select is(
+  (select count(*)::integer from public.presentation_design_fonts
+     where design_id = (select id from public.presentation_designs where slug = 'sinov-dizayn') and font_id = 'font_2'),
+  2,
+  'the same weight and slope replaces rather than accumulates');
+
+-- The family's own properties stay identical across its faces: two faces of one
+-- font disagreeing about their own name is not a state worth reaching.
+select is(
+  (select count(distinct name)::integer from public.presentation_design_fonts
+     where design_id = (select id from public.presentation_designs where slug = 'sinov-dizayn') and font_id = 'font_2'),
+  1,
+  'every face of a package carries the same family name');
+
+select lives_ok(
+  $$ select public.admin_remove_design_font(
+       (select id from public.presentation_designs where slug = 'sinov-dizayn'), 'font_2', 700, true) $$,
+  'a face can be taken back without dropping the family');
+select is(
+  (select count(*)::integer from public.presentation_design_fonts
+     where design_id = (select id from public.presentation_designs where slug = 'sinov-dizayn') and font_id = 'font_2'),
+  1,
+  'and only that face goes');
 
 -- ------------------------------------------------------------------ audit --
 

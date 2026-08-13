@@ -3936,6 +3936,15 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_remove_design_font: {
+        Args: {
+          p_design_id: string
+          p_font_id: string
+          p_italic?: boolean
+          p_weight: number
+        }
+        Returns: string
+      }
       admin_resolve_report: {
         Args: {
           p_note?: string
