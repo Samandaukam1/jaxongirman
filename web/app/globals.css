@@ -620,9 +620,10 @@ body:has(.qrx-page) > .site-footer { display: none; }
   transition: none;
 }
 
-/* Held back until both clips hold a frame, so the first thing on screen is
- * footage rather than the stage colour. */
-.qrx-stage[data-started="false"] .qrx-video { opacity: 0 !important; }
+/* Held back only until the intro holds a frame, so the first thing on screen is
+ * footage rather than the stage colour — and not held back for as long as the
+ * loop takes to arrive, which is a separate wait and a much longer one. */
+.qrx-stage[data-revealed="false"] .qrx-video { opacity: 0 !important; }
 
 /* ------------------------------------------------------------- the chrome */
 

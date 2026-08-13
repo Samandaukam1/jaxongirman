@@ -14,7 +14,7 @@ import { ChevronLeft, ChevronRight, Maximize, Minimize, RotateCw } from "lucide-
 import QRCode from "qrcode";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { loadQrExperience, type QrExperience } from "@/lib/qr-experience";
+import { experienceFromRow, type QrExperience } from "@/lib/qr-experience";
 import { pairUrl } from "@/lib/public-url";
 import { supabase } from "@/lib/supabase";
 
@@ -103,13 +103,15 @@ function imageUrls(deck: PresentationScreenDeck, slidePositions: number[]): stri
   return urls;
 }
 
-export function PairingScreen() {
+export function PairingScreen({ experienceRow }: { experienceRow: unknown | null }) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [screenToken, setScreenToken] = useState<string | null>(null);
   const [realtimeToken, setRealtimeToken] = useState<string | null>(null);
   const [qr, setQr] = useState<string | null>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [experience, setExperience] = useState<QrExperience | null>(null);
+  // Decided on the server, so the first paint is already the film — not the
+  // pairing card with the film arriving a moment later.
+  const [experience, setExperience] = useState<QrExperience | null>(() => experienceFromRow(experienceRow));
   const [session, setSession] = useState<Session | null>(null);
   const [deck, setDeck] = useState<PresentationScreenDeck | null>(null);
   const [viewport, setViewport] = useState<PresentationViewport>({ ...RESET_PRESENTATION_VIEWPORT });
@@ -141,12 +143,6 @@ export function PairingScreen() {
     setToken(next);
     const value = `jaxongirman://pair/${next}`;
     setQr(await QRCode.toDataURL(value, { errorCorrectionLevel: "M", margin: 1, width: 520 }));
-  }, []);
-
-  // Decoration, so it is loaded beside the session rather than in front of it:
-  // a projector must reach a working pairing code even if this never answers.
-  useEffect(() => {
-    void loadQrExperience("taqdimot").then(setExperience);
   }, []);
 
   /**

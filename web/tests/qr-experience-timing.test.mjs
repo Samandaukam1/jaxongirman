@@ -107,3 +107,26 @@ test("nothing in the overlay can be drawn across the code", () => {
   assert.ok(Number.isFinite(code) && Number.isFinite(chrome), "both layers must state where they sit");
   assert.ok(code > chrome, `the code (${code}) must sit above the chrome (${chrome})`);
 });
+
+test("the page opens on the film, not on the screen it replaces", () => {
+  // Deciding in the browser meant the old pairing card rendered first and the
+  // film arrived a moment later, so every projector opened with a flash of the
+  // thing the film was meant to replace. The server settles it instead.
+  const page = readFileSync(path.join(webRoot, "app", "taqdimot", "page.tsx"), "utf8");
+  assert.match(page, /loadQrExperienceRow\("taqdimot"\)/, "the page must read the config on the server");
+  assert.match(page, /experienceRow=/, "and hand it to the screen as its starting state");
+
+  const screen = readFileSync(path.join(webRoot, "app", "taqdimot", "PairingScreen.tsx"), "utf8");
+  assert.match(
+    screen,
+    /useState<QrExperience \| null>\(\(\) => experienceFromRow\(experienceRow\)\)/,
+    "the first render must already know, rather than start at null and correct itself",
+  );
+});
+
+test("the first frame is shown without waiting for the loop", () => {
+  // Both clips have to be ready before playback starts, but holding the picture
+  // back for the second one means a dark rectangle for as long as it takes.
+  assert.match(player, /setRevealed\(true\)/, "the intro's opening frame must be revealed on its own");
+  assert.match(css, /\[data-revealed="false"\] \.qrx-video/, "and the stylesheet must key off that");
+});

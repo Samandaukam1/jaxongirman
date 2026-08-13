@@ -71,6 +71,7 @@ export function QrVideoExperience({ experience, qrValue, onPlaying, onUnavailabl
 
   const [started, setStarted] = useState(false);
   const [videosReady, setVideosReady] = useState(false);
+  const [revealed, setRevealed] = useState(false);
   const [looping, setLooping] = useState(false);
   const [rect, setRect] = useState<QrRect | null>(null);
   const [qrVisible, setQrVisible] = useState(false);
@@ -133,9 +134,16 @@ export function QrVideoExperience({ experience, qrValue, onPlaying, onUnavailabl
       timers.push(timer);
     });
 
+    // The intro's opening frame goes up the moment it exists, rather than after
+    // the loop has finished downloading too. Waiting for both meant a dark
+    // rectangle for as long as the second file took — the film is what should
+    // be on screen, and its first frame is film.
+    const introReady = ready(intro, "intro");
+    void introReady.then(() => { if (!cancelled) setRevealed(true); }, () => {});
+
     void (async () => {
       try {
-        await Promise.race([Promise.all([ready(intro, "intro"), ready(loop, "loop")]), deadline]);
+        await Promise.race([Promise.all([introReady, ready(loop, "loop")]), deadline]);
       } catch (problem) {
         if (cancelled) return;
         // The room gets the screen that has always worked, rather than a black
@@ -304,7 +312,7 @@ export function QrVideoExperience({ experience, qrValue, onPlaying, onUnavailabl
   const glow = glowFilter(experience.glow);
 
   return (
-    <div className="qrx-stage" ref={stageRef} data-started={started ? "true" : "false"}>
+    <div className="qrx-stage" ref={stageRef} data-revealed={revealed ? "true" : "false"}>
       <video
         ref={introRef}
         className="qrx-video"

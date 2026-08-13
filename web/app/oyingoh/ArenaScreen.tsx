@@ -6,7 +6,7 @@ import QRCode from "qrcode";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { joinUrl } from "@/lib/public-url";
-import { loadQrExperience, type QrExperience } from "@/lib/qr-experience";
+import { experienceFromRow, type QrExperience } from "@/lib/qr-experience";
 import { gamePairUrl } from "@/lib/public-url";
 import { supabase } from "@/lib/supabase";
 
@@ -94,12 +94,17 @@ function useCountdown(deadline: string | null): number {
  * Nothing on this screen can drive the match. The host's phone does that; this
  * follows the session row over realtime and re-reads its own snapshot.
  */
-export function ArenaScreen({ handoff }: { handoff?: { sessionId: string; screenToken: string } }) {
+export function ArenaScreen({ handoff, experienceRow }: {
+  handoff?: { sessionId: string; screenToken: string };
+  /** Absent when the arena is reached by hand-off: that match is already paired. */
+  experienceRow?: unknown | null;
+}) {
   const [sessionId, setSessionId] = useState<string | null>(handoff?.sessionId ?? null);
   const [screenToken, setScreenToken] = useState<string | null>(handoff?.screenToken ?? null);
   const [pairQr, setPairQr] = useState<string | null>(null);
   const [pairToken, setPairToken] = useState<string | null>(null);
-  const [experience, setExperience] = useState<QrExperience | null>(null);
+  // Decided on the server, so the first paint is already the film.
+  const [experience, setExperience] = useState<QrExperience | null>(() => experienceFromRow(experienceRow ?? null));
   const [joinQr, setJoinQr] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -114,12 +119,6 @@ export function ArenaScreen({ handoff }: { handoff?: { sessionId: string; screen
     currentToken.current = token;
     setPairToken(token);
     setPairQr(await QRCode.toDataURL(`jaxongirman://game-pair/${token}`, { errorCorrectionLevel: "M", margin: 1, width: 520 }));
-  }, []);
-
-  // Decoration, so it is loaded beside the session rather than in front of it:
-  // a projector must reach a working pairing code even if this never answers.
-  useEffect(() => {
-    void loadQrExperience("oyingoh").then(setExperience);
   }, []);
 
   const openSession = useCallback(async () => {

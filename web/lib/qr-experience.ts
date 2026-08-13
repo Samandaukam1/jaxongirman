@@ -97,3 +97,59 @@ export async function loadQrExperience(surface: QrVideoSurface): Promise<QrExper
   if (!experience.isEnabled || !experience.introUrl || !experience.loopUrl) return null;
   return experience;
 }
+
+/* -------------------------------------------------------- the server's copy */
+
+/**
+ * The same row, read before a single byte of HTML goes out.
+ *
+ * Deciding this in the browser meant the page rendered the old pairing card
+ * first and swapped to the film a moment later, so every projector opened with
+ * a flash of the screen the film was supposed to replace. The server already
+ * knows — it just was not asked.
+ *
+ * A plain `fetch` rather than the browser client: this is a public read under
+ * the same RLS, and the client carries session handling that has no meaning on
+ * a server. Anything unexpected answers "no experience", because a decorative
+ * feature must never be the reason a hall cannot reach its pairing code.
+ */
+export async function loadQrExperienceRow(surface: QrVideoSurface): Promise<unknown | null> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) return null;
+
+  try {
+    const response = await fetch(
+      `${url}/rest/v1/qr_video_experiences`
+      + `?select=surface,is_enabled,intro_path,loop_path,qr_appear_ms,qr_x,qr_y,qr_size`
+      + `,gradient_from,gradient_via,gradient_to,qr_background,glow`
+      + `&surface=eq.${surface}&is_enabled=is.true&limit=1`,
+      {
+        headers: { apikey: key, Authorization: `Bearer ${key}` },
+        // The screen in the hall must reflect what an admin just published, so
+        // this is never served from a cache.
+        cache: "no-store",
+      },
+    );
+    if (!response.ok) return null;
+    const rows = await response.json() as unknown[];
+    return rows[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Turns the server's row into an experience, in the browser.
+ *
+ * The conversion happens here rather than on the server because the public
+ * video URLs are built by the Supabase client, and there should be one place
+ * that knows their shape. It is synchronous, so the first paint already has the
+ * film — there is no moment where the page has to guess.
+ */
+export function experienceFromRow(row: unknown | null): QrExperience | null {
+  if (!row || typeof row !== "object") return null;
+  const experience = toExperience(row as Row);
+  if (!experience.isEnabled || !experience.introUrl || !experience.loopUrl) return null;
+  return experience;
+}
