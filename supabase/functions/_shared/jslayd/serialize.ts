@@ -242,12 +242,35 @@ function checkFonts(value: unknown, bag: DiagnosticBag): Set<string> {
       bag.error("invalid_fonts", `\`${font.id}.roles\` noto'g'ri.`, 0);
     }
     if (typeof font.family !== "string" || !font.family) bag.error("invalid_fonts", `\`${font.id}.family\` yo'q.`, 0);
-    if (font.asset !== null && (typeof font.asset !== "string" || /[\\/]|\.\./.test(font.asset))) {
+
+    // A design saved before a font slot could hold more than one file carries
+    // its single face at the top level. Reading it as a one-face package keeps
+    // every published design opening, rather than making a model change into a
+    // day when nothing renders (§69).
+    const faces: unknown[] = Array.isArray(font.faces) ? font.faces : [];
+    if (!Array.isArray(font.faces)) {
+      font.faces = font.asset
+        ? [{ asset: font.asset, format: font.format, weight: font.weight ?? 400, italic: font.italic === true }]
+        : [];
+      faces.push(...(font.faces as unknown[]));
+    }
+
+    if (faces.length > LIMITS.fontFaces) {
+      bag.error("invalid_fonts", `\`${font.id}\` paketida ${LIMITS.fontFaces} tadan ko'p fayl bor.`, 0);
+    }
+    for (const raw of faces.slice(0, LIMITS.fontFaces)) {
+      const face = record(raw);
+      if (!face) { bag.error("invalid_fonts", `\`${font.id}.faces\` noto'g'ri.`, 0); continue; }
       // An asset that could climb out of its bucket prefix is the one thing an
       // imported file must never be allowed to carry (§82).
-      bag.error("unsafe_asset", `\`${font.id}.asset\` xavfsiz emas.`, 0, "Fayl nomida yo'l ajratuvchi bo'lishi mumkin emas.");
+      if (typeof face.asset !== "string" || !face.asset || /[\\/]|\.\./.test(face.asset)) {
+        bag.error("unsafe_asset", `\`${font.id}\` faylining nomi xavfsiz emas.`, 0, "Fayl nomida yo'l ajratuvchi bo'lishi mumkin emas.");
+      }
+      if (!oneOf(face.format, FONT_FORMATS)) bag.error("invalid_fonts", `\`${font.id}\` fayl formati noto'g'ri.`, 0);
+      if (typeof face.weight !== "number" || face.weight < 100 || face.weight > 900) {
+        bag.error("invalid_fonts", `\`${font.id}\` fayl qalinligi noto'g'ri.`, 0);
+      }
     }
-    if (font.format !== null && !oneOf(font.format, FONT_FORMATS)) bag.error("invalid_fonts", `\`${font.id}.format\` noto'g'ri.`, 0);
     ids.add(font.id);
   }
   if (!ids.has("font_1")) bag.error("invalid_fonts", "`font_1` yo'q.", 0);

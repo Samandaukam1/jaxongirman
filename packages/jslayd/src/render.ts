@@ -7,6 +7,7 @@ import {
   type ImageRef,
   type SlideData,
 } from "./content.ts";
+import { faceFor } from "./document.ts";
 import type {
   Archetype,
   Border,
@@ -355,14 +356,18 @@ export function bundledFace(fallback: string, weight: number): string {
 function typeface(style: TextStyle, context: RenderContext): Record<string, unknown> {
   const font = context.fonts.get(style.font);
   const fallbackFace = bundledFace(font?.fallback ?? "Manrope", style.fontWeight);
+  // The file for this weight and slope, rather than the font's only file: a
+  // package ships several, and picking the wrong one is how a heading ends up
+  // drawn in the body weight.
+  const face = faceFor(font, style.fontWeight, style.fontStyle === "italic");
   return {
-    fontFamily: font?.asset ? font.family : fallbackFace,
+    fontFamily: face ? font!.family : fallbackFace,
     // The bundled face to draw with while the custom one loads, and the face
     // PowerPoint is told to use — never a substitution the engine picked (§78).
     fontFallback: fallbackFace,
     // The object key of the custom face, so an exporter that can embed a font
     // embeds the design's own rather than approximating it.
-    ...(font?.asset ? { fontAsset: font.asset, fontDisplayName: font.name } : {}),
+    ...(face ? { fontAsset: face.asset, fontDisplayName: font!.name } : {}),
     fontWeight: String(style.fontWeight),
     fontStyle: style.fontStyle,
   };

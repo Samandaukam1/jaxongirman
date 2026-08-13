@@ -15,6 +15,8 @@ import {
   duplicateDesign,
   editableSource,
   importDocument,
+  listDesignFonts,
+  removeDesignFont,
   listDesigns,
   loadDesign,
   previewOf,
@@ -27,6 +29,7 @@ import {
   uploadThumbnail,
   PREVIEW_BUCKET,
   type CompileOutcome,
+  type DesignFontFace,
   type DesignRow,
   type DesignStatus,
 } from "@/lib/jslayd";
@@ -333,6 +336,7 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [family, setFamily] = useState<string | null>(null);
+  const [fonts, setFonts] = useState<DesignFontFace[]>([]);
   const [kept, setKept] = useState<KeptDraft<Draft> | null>(() => recallDraft(draft.id, draft));
   const [saved, setSaved] = useState(false);
 
@@ -340,6 +344,19 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
     setSaved(false);
     setForm((current) => ({ ...current, [key]: value }));
   };
+
+  // The faces a design ships, reloaded whenever one is attached or detached so
+  // the list is what the database holds rather than what this screen remembers.
+  const loadFonts = useCallback(async () => {
+    if (!form.id) { setFonts([]); return; }
+    try {
+      setFonts(await listDesignFonts(form.id));
+    } catch (requestError) {
+      setError(errorMessage(requestError));
+    }
+  }, [form.id]);
+
+  useEffect(() => { void loadFonts(); }, [loadFonts]);
 
   // Every keystroke is kept locally, so nothing is riding on the tab staying
   // open. Writing on a short delay keeps a long prompt from touching storage on
@@ -547,8 +564,9 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
             disabled={!form.id || !form.slug}
             designId={form.id}
             slug={form.slug}
+            faces={fonts}
             onError={setError}
-            onSaved={(name) => setMessage(`${name} yuklandi.`)}
+            onSaved={(text) => { setMessage(text); void loadFonts(); }}
           />
         ))}
         {!form.id ? (
@@ -642,57 +660,129 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
   );
 }
 
+/**
+ * One slot, which is a family rather than a file.
+ *
+ * Regular, Medium, SemiBold, Bold and their italics are separate files of one
+ * typeface. A design that sets 700 somewhere and ships only the 400 does not
+ * get bold — it gets the 400 smeared sideways, which is what faux bold is and
+ * what it looks like. So each slot lists what it has and takes up to ten.
+ */
 function FontSlot({
-  slot, required, disabled, designId, slug, onError, onSaved,
+  slot, required, disabled, designId, slug, faces, onError, onSaved,
 }: {
   slot: string;
   required: boolean;
   disabled: boolean;
   designId: string | null;
   slug: string;
+  faces: DesignFontFace[];
   onError: (message: string) => void;
-  onSaved: (name: string) => void;
+  onSaved: (message: string) => void;
 }) {
-  const [name, setName] = useState("");
-  const [roles, setRoles] = useState(required ? "display, heading" : "body");
+  const mine = faces.filter((face) => face.font_id === slot);
+  const first = mine[0];
+  const [name, setName] = useState(first?.name ?? "");
+  const [roles, setRoles] = useState(first?.roles.join(", ") ?? (required ? "display, heading" : "body"));
   const [weight, setWeight] = useState(400);
-  const [fallback, setFallback] = useState<string>("Manrope");
+  const [italic, setItalic] = useState(false);
+  const [fallback, setFallback] = useState<string>(first?.fallback ?? "Manrope");
+  const [busy, setBusy] = useState(false);
+
+  const full = mine.length >= 10;
+  const taken = mine.some((face) => face.weight === weight && face.italic === italic);
+
+  async function attach(file: File) {
+    setBusy(true);
+    try {
+      await uploadFont({
+        designId: designId as string,
+        slug,
+        fontId: slot,
+        name: name || file.name.replace(/\.[^.]+$/, ""),
+        roles: roles.split(/[,\s]+/).filter(Boolean),
+        file,
+        weight,
+        italic,
+        fallback,
+      });
+      onSaved(`${slot}: ${weight}${italic ? " italic" : ""} yuklandi.`);
+    } catch (requestError) {
+      onError(errorMessage(requestError));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function detach(face: DesignFontFace) {
+    setBusy(true);
+    try {
+      await removeDesignFont(designId as string, slot, face.weight, face.italic);
+      onSaved(`${slot}: ${face.weight}${face.italic ? " italic" : ""} o‘chirildi.`);
+    } catch (requestError) {
+      onError(errorMessage(requestError));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <div className="jslayd-font-slot">
-      <strong>{slot}{required ? " · majburiy" : ""}</strong>
-      <input placeholder="Nomi" value={name} onChange={(event) => setName(event.target.value)} />
-      <input placeholder="Rollar" value={roles} onChange={(event) => setRoles(event.target.value)} />
-      <input type="number" min={100} max={900} step={100} value={weight} onChange={(event) => setWeight(Number(event.target.value))} />
-      <select value={fallback} onChange={(event) => setFallback(event.target.value)}>
-        {FALLBACKS.map((value) => <option key={value} value={value}>{value}</option>)}
-      </select>
-      <input
-        type="file"
-        accept=".ttf,.otf,.woff"
-        disabled={disabled}
-        onChange={async (event) => {
-          const file = event.target.files?.[0];
-          if (!file || !designId) return;
-          try {
-            await uploadFont({
-              designId,
-              slug,
-              fontId: slot,
-              name: name || file.name,
-              roles: roles.split(/[,\s]+/).filter(Boolean),
-              file,
-              weight,
-              italic: false,
-              fallback,
-            });
-            onSaved(name || file.name);
-          } catch (requestError) {
-            onError(errorMessage(requestError));
-          }
-          event.target.value = "";
-        }}
-      />
+      <div className="jslayd-font-head">
+        <strong>{slot}{required ? " · majburiy" : ""}</strong>
+        <span>{mine.length}/10 fayl</span>
+      </div>
+
+      <div className="jslayd-font-family">
+        <input placeholder="Nomi" value={name} onChange={(event) => setName(event.target.value)} />
+        <input placeholder="Rollar" value={roles} onChange={(event) => setRoles(event.target.value)} />
+        <select value={fallback} onChange={(event) => setFallback(event.target.value)}>
+          {FALLBACKS.map((value) => <option key={value} value={value}>{value}</option>)}
+        </select>
+      </div>
+
+      {mine.length > 0 ? (
+        <ul className="jslayd-font-faces">
+          {mine.map((face) => (
+            <li key={`${face.weight}-${face.italic}`}>
+              <span>{face.weight}{face.italic ? " italic" : ""}</span>
+              <code>{face.asset_path?.split("/").pop() ?? "—"}</code>
+              <button type="button" disabled={busy || disabled} onClick={() => void detach(face)}>O‘chirish</button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="jslayd-font-empty">Hali fayl yo‘q — zaxira shrift chiziladi.</p>
+      )}
+
+      <div className="jslayd-font-add">
+        <select value={weight} onChange={(event) => setWeight(Number(event.target.value))}>
+          {[100, 200, 300, 400, 500, 600, 700, 800, 900].map((value) => (
+            <option key={value} value={value}>{value}</option>
+          ))}
+        </select>
+        <label className="checkbox">
+          <input type="checkbox" checked={italic} onChange={(event) => setItalic(event.target.checked)} />
+          Kursiv
+        </label>
+        <input
+          type="file"
+          accept=".ttf,.otf,.woff"
+          disabled={disabled || busy || full}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) void attach(file);
+            event.target.value = "";
+          }}
+        />
+      </div>
+
+      {full ? <p className="jslayd-font-empty">Paket to‘ldi — yangi fayl qo‘shish uchun bittasini o‘chiring.</p> : null}
+      {taken && !full ? (
+        <p className="jslayd-font-empty">
+          {weight}{italic ? " kursiv" : ""} allaqachon bor — yangi fayl uni almashtiradi.
+        </p>
+      ) : null}
     </div>
   );
 }

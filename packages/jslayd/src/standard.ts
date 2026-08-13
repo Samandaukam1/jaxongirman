@@ -94,13 +94,14 @@ colors: #FF6A00, #111111, #FFD166, #6C63FF
 font_1:
   name: Apelsen Display
   role: display, heading
-  asset: apelsen-display.ttf
+  face: apelsen-display.ttf 400
+  face: apelsen-display-700.ttf 700
   fallback: League Spartan
   weight: 800
 font_2:
   name: Apelsen Text
   role: body, caption, subheading
-  asset: apelsen-text.ttf
+  face: apelsen-text.ttf 400
   fallback: Manrope
   weight: 400
 
@@ -428,8 +429,11 @@ Xossalar markerdan keyin yoki chekintirilgan holda yozilishi mumkin.
 
 name      ixtiyoriy  ko'rinadigan nom
 role      majburiy   ${list(FONT_ROLES)}  (vergul bilan bir nechta)
-asset     ixtiyoriy  yuklangan fayl nomi, masalan apelsen-display.ttf
+face      ixtiyoriy  bitta fayl: \`face: <fayl> <qalinlik> [italic]\`
+                     takrorlanadi — bitta paketga 10 tagacha fayl kiradi,
+                     masalan Regular, SemiBold, Bold va ularning kursivlari
                      yo'l ajratuvchi (/ \\ ..) taqiqlangan
+asset     eskirgan   bitta faylli eski shakl; \`weight\` va \`italic\` bilan ishlaydi
 format    ixtiyoriy  ${list(FONT_FORMATS)}
 weight    ixtiyoriy  100–900
 italic    ixtiyoriy  true / false

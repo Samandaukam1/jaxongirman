@@ -87,7 +87,7 @@ test("a malformed design is refused with a reason instead of throwing", () => {
 
 test("a tampered document is refused at the boundary, not rendered", () => {
   const tampered = JSON.parse(JSON.stringify(DOCUMENT));
-  tampered.fonts[0].asset = "../../secret.ttf";
+  tampered.fonts[0].faces = [{ asset: "../../secret.ttf", format: "ttf", weight: 400, italic: false }];
   assert.equal(readDesign({ ...DESIGN_ROW, compiled_config: tampered }).design, null);
 });
 

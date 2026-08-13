@@ -105,7 +105,7 @@ function checkFonts(document: JslaydDocument, bag: DiagnosticBag): void {
       bag.error("undeclared_font", `Element e'lon qilinmagan shriftni so'rayapti: \`${id}\`.`, 0);
       continue;
     }
-    if (!font.asset) {
+    if (font.faces.length === 0) {
       bag.warn("font_asset_missing", `\`${font.id}\` (${font.name}) uchun fayl yuklanmagan.`, 0, `Zaxira sifatida ${font.fallback} chiziladi.`);
     }
   }
@@ -113,7 +113,7 @@ function checkFonts(document: JslaydDocument, bag: DiagnosticBag): void {
     if (used.has(font.id)) continue;
     bag.info("unused_font", `\`${font.id}\` (${font.name}) hech qayerda ishlatilmagan.`, 0);
   }
-  if (document.fonts.some((font) => font.asset)) {
+  if (document.fonts.some((font) => font.faces.length > 0)) {
     bag.info(
       "pptx_font_substitution",
       "PPTX eksportida maxsus shrift ochuvchining kompyuterida almashtirilishi mumkin.",

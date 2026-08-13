@@ -104,12 +104,12 @@ function fontsOf(template) {
     id: `font_${index + 1}`,
     name: entry.fallback,
     roles: entry.roles,
-    asset: null,
-    format: null,
     family: `jslayd_${slug}_font_${index + 1}`,
     fallback: entry.fallback,
-    weight: entry.weight,
-    italic: false,
+    // The old templates shipped no files of their own: they named a bundled
+    // face and drew with it. An empty package is exactly that, and the weight
+    // the template asked for still reaches the renderer through the elements.
+    faces: [],
   }));
 }
 

@@ -163,7 +163,7 @@ test("the translation carries every font voice the blueprint declared", () => {
     // Every migrated design leans on a bundled face: these designs never
     // shipped a font file, and the migration must not pretend otherwise.
     for (const font of document.fonts) {
-      assert.equal(font.asset, null);
+      assert.deepEqual(font.faces, [], `${template.code} invented a font file`);
       assert.ok(font.fallback.length > 0);
     }
   }

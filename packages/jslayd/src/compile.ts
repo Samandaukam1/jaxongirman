@@ -7,6 +7,7 @@ import type {
   ColorValue,
   DesignMeta,
   FontDeclaration,
+  FontFace,
   Gradient,
   JslaydDocument,
   JslaydElement,
@@ -326,7 +327,7 @@ function compileChartPalette(section: ParseSection | undefined, family: ColorFam
 
 /* ------------------------------------------------------------------- fonts */
 
-const FONT_KEYS = ["name", "role", "roles", "asset", "format", "weight", "italic", "fallback"];
+const FONT_KEYS = ["name", "role", "roles", "face", "asset", "format", "weight", "italic", "fallback"];
 const FONT_ID_PATTERN = /^font_([1-4])$/;
 
 /** Bundled faces a design may name as its export/loading fallback (§78). */
@@ -395,7 +396,8 @@ function compileFonts(section: ParseSection | undefined, slug: string, bag: Diag
 
 function compileFont(id: string, nodes: ParseNode[], line: number, slug: string, bag: DiagnosticBag): FontDeclaration | null {
   rejectUnknownKeys(nodes, FONT_KEYS, `[FONTS] ${id}`, bag);
-  rejectDuplicateKeys(nodes, [], bag);
+  // `face` is the one key that repeats here: a package is several files.
+  rejectDuplicateKeys(nodes, ["face"], bag);
 
   const roleNode = findNode(nodes, "role") ?? findNode(nodes, "roles");
   const roles: FontRole[] = [];
@@ -410,33 +412,91 @@ function compileFont(id: string, nodes: ParseNode[], line: number, slug: string,
     return null;
   }
 
-  const asset = readString(nodes, "asset", bag, 200) ?? null;
-  let format: FontFormat | null = null;
-  if (asset) {
-    if (asset.includes("..") || asset.includes("/") || asset.includes("\\")) {
-      // A font asset names a file the admin uploaded, never a path. Rejecting
+  /**
+   * The files this font ships.
+   *
+   * `face: <fayl> <qalinlik> [italic]` may be repeated up to ten times, which
+   * is how a family arrives: Regular, Medium, SemiBold, Bold and their italics
+   * are separate files, and a design that sets 700 while shipping only the 400
+   * gets the 400 smeared sideways rather than bold.
+   *
+   * The older single-file spelling — `asset:` with `weight:` and `italic:` —
+   * still reads, as the first face. A prompt written before packages existed
+   * must keep compiling to the design it always did (§69).
+   */
+  const faces: FontFace[] = [];
+  const seen = new Set<string>();
+
+  const addFace = (file: string, weight: number, italic: boolean, at: number) => {
+    if (file.includes("..") || file.includes("/") || file.includes("\\")) {
+      // A font file names something the admin uploaded, never a path. Rejecting
       // separators outright is what keeps a `.jslayd` from reaching anything
       // outside its own bucket prefix (§82).
-      bag.error("unsafe_asset", `\`asset\` yo'l ajratuvchisi bo'lishi mumkin emas: "${asset}".`, findNode(nodes, "asset")?.line ?? line, "Faqat fayl nomini yozing: `apelsen-display.ttf`.");
-      return null;
+      bag.error("unsafe_asset", `Shrift fayli yo'l ajratuvchisi bo'lishi mumkin emas: "${file}".`, at, "Faqat fayl nomini yozing: `apelsen-display.ttf`.");
+      return;
     }
-    const extension = asset.toLowerCase().split(".").pop() ?? "";
-    if ((FONT_FORMATS as readonly string[]).includes(extension)) format = extension as FontFormat;
-    else {
+    const extension = file.toLowerCase().split(".").pop() ?? "";
+    if (!(FONT_FORMATS as readonly string[]).includes(extension)) {
       bag.error(
         "unsupported_font_format",
         `Shrift formati qo'llab-quvvatlanmaydi: ".${extension}".`,
-        findNode(nodes, "asset")?.line ?? line,
+        at,
         `Ruxsat etilganlar: ${FONT_FORMATS.map((value) => `.${value}`).join(", ")}. WOFF2 PDF eksportida ishlamaydi.`,
       );
-      return null;
+      return;
     }
-  } else {
+    const key = `${weight}:${italic}`;
+    if (seen.has(key)) {
+      bag.error("duplicate_face", `\`${id}\` da ${weight}${italic ? " italic" : ""} ikki marta e'lon qilingan.`, at, "Har bir qalinlik va qiyalik bir marta bo'ladi.");
+      return;
+    }
+    if (faces.length >= LIMITS.fontFaces) {
+      bag.error("font_package_full", `\`${id}\` paketiga eng ko'pi ${LIMITS.fontFaces} ta fayl kiradi.`, at);
+      return;
+    }
+    seen.add(key);
+    faces.push({ asset: file, format: extension as FontFormat, weight, italic });
+  };
+
+  for (const node of nodes.filter((entry) => entry.key === "face")) {
+    // `apelsen-display-700.ttf 700 italic`
+    const parts = node.value.split(/\s+/).filter(Boolean);
+    const file = parts[0] ?? "";
+    if (!file) {
+      bag.error("missing_property", "`face` fayl nomini kutadi.", node.line, "Masalan: `face: apelsen-700.ttf 700`.");
+      continue;
+    }
+    const weight = parts[1] === undefined ? 400 : coerceNumber(parts[1], "face", node.line, bag);
+    if (weight === undefined) continue;
+    if (weight < 100 || weight > 900) {
+      bag.error("out_of_range", `Shrift qalinligi 100–900 oralig'ida bo'ladi: ${weight}.`, node.line);
+      continue;
+    }
+    const slope = parts.slice(2).join(" ").toLowerCase();
+    if (slope && slope !== "italic") {
+      bag.error("unknown_value", `\`face\` uchun noma'lum qiyalik: "${slope}".`, node.line, "Faqat `italic` yozilishi mumkin.");
+      continue;
+    }
+    addFace(file, Math.round(weight), slope === "italic", node.line);
+  }
+
+  const legacyAsset = readString(nodes, "asset", bag, 200) ?? null;
+  if (legacyAsset) {
+    addFace(
+      legacyAsset,
+      readInteger(nodes, "weight", bag, { min: 100, max: 900 }) ?? 400,
+      readBoolean(nodes, "italic", bag) ?? false,
+      findNode(nodes, "asset")?.line ?? line,
+    );
+  }
+
+  if (faces.length === 0) {
     bag.warn("font_without_asset", `\`${id}\` uchun shrift fayli biriktirilmagan.`, line, "Fayl yuklanmaguncha zaxira shrift chiziladi.");
   }
+
   const declaredFormat = readEnum(nodes, "format", FONT_FORMATS, bag);
-  if (declaredFormat && format && declaredFormat !== format) {
-    bag.warn("format_mismatch", `\`format\` (${declaredFormat}) fayl kengaytmasiga (${format}) mos emas.`, line, "Kengaytma ustun keladi.");
+  if (declaredFormat && faces[0] && declaredFormat !== faces[0].format) {
+    bag.warn("format_mismatch", `\`format\` (${declaredFormat}) fayl kengaytmasiga (${faces[0].format}) mos emas.`, line, "Kengaytma ustun keladi.");
   }
 
   const fallback = readString(nodes, "fallback", bag, 64) ?? "Manrope";
@@ -449,23 +509,19 @@ function compileFont(id: string, nodes: ParseNode[], line: number, slug: string,
     );
   }
 
-  const weight = readInteger(nodes, "weight", bag, { min: 100, max: 900 }) ?? 400;
-  const italic = readBoolean(nodes, "italic", bag) ?? false;
-  const name = readString(nodes, "name", bag, 80) ?? (asset ? asset.replace(/\.[^.]+$/, "") : `Shrift ${id.slice(-1)}`);
+  const name = readString(nodes, "name", bag, 80)
+    ?? (faces[0] ? faces[0].asset.replace(/\.[^.]+$/, "") : `Shrift ${id.slice(-1)}`);
 
   return {
     id,
     name,
     roles,
-    asset,
-    format,
     // Namespacing by slug is what lets two designs ship different files under
     // the same human name without one overwriting the other's registration in
     // a long-lived app process.
     family: `jslayd_${slug.replace(/-/g, "_")}_${id}`,
     fallback: (BUNDLED_FALLBACKS as readonly string[]).includes(fallback) ? fallback : "Manrope",
-    weight,
-    italic,
+    faces,
   };
 }
 

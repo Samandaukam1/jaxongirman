@@ -87,9 +87,12 @@ export function decompile(document: JslaydDocument): string {
     out.push(`${font.id}:`);
     out.push(`  name: ${font.name}`);
     out.push(`  role: ${font.roles.join(", ")}`);
-    if (font.asset) out.push(`  asset: ${font.asset}`);
-    out.push(`  weight: ${font.weight}`);
-    if (font.italic) out.push("  italic: true");
+    // One line per file, always in the `face:` form. A prompt written with the
+    // older single-file spelling still compiles, but what comes back out is the
+    // spelling that can express a whole family.
+    for (const face of font.faces) {
+      out.push(`  face: ${face.asset} ${face.weight}${face.italic ? " italic" : ""}`);
+    }
     out.push(`  fallback: ${font.fallback}`);
   }
   out.push("");

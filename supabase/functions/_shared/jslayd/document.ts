@@ -84,26 +84,67 @@ export type NamedColorFamily = {
   chartPalette: readonly string[];
 };
 
+/**
+ * One file of a typeface.
+ *
+ * Regular, Medium, SemiBold, Bold and their italics are separate files of the
+ * same family. A design that sets 700 somewhere and ships only the 400 file
+ * does not get bold — it gets the 400 smeared sideways by the renderer, which
+ * is what faux bold is and what it looks like.
+ */
+export type FontFace = {
+  /** File name inside the design's font bucket. Never a path. */
+  asset: string;
+  format: FontFormat;
+  weight: number;
+  italic: boolean;
+};
+
 export type FontDeclaration = {
   /** `font_1` … `font_4`. Elements reference a font by this id. */
   id: string;
   /** Display name, used in the admin UI and as the PPTX face name. */
   name: string;
   roles: readonly FontRole[];
-  /** Storage object key inside the design's font bucket, or null while drafting. */
-  asset: string | null;
-  format: FontFormat | null;
   /**
-   * The family name the renderers register the face under. Derived from the
+   * The family name the renderers register every face under. Derived from the
    * design slug and the font id so two designs can ship different files under
    * the same human name without colliding at runtime.
    */
   family: string;
-  /** A bundled face to draw with until the asset resolves, and in PPTX (§78). */
+  /** A bundled face to draw with until the files resolve, and in PPTX (§78). */
   fallback: string;
-  weight: number;
-  italic: boolean;
+  /**
+   * The files this font ships, up to ten. Empty while a design is still being
+   * drafted, in which case the fallback carries the whole design.
+   */
+  faces: readonly FontFace[];
 };
+
+/**
+ * The face to draw a given weight and slope with.
+ *
+ * Nearest weight wins, and a slope that was asked for beats one that was not —
+ * so a deck asking for bold italic with only an upright bold present gets the
+ * bold, not the regular italic. Returns nothing when the font ships no files,
+ * which is the signal to fall back to a bundled face.
+ */
+export function faceFor(
+  font: FontDeclaration | undefined,
+  weight: number,
+  italic: boolean,
+): FontFace | undefined {
+  if (!font || font.faces.length === 0) return undefined;
+  let best: FontFace | undefined;
+  let bestScore = Number.POSITIVE_INFINITY;
+  for (const face of font.faces) {
+    // A wrong slope costs more than any weight difference can, so the two never
+    // trade off against each other.
+    const score = Math.abs(face.weight - weight) + (face.italic === italic ? 0 : 10000);
+    if (score < bestScore) { best = face; bestScore = score; }
+  }
+  return best;
+}
 
 /**
  * The bounds a generator's safe adjustments may not leave (§44, §46). They are

@@ -63,6 +63,8 @@ export const LIMITS = {
   elementsPerArchetype: 80,
   elementsPerDocument: 3000,
   fonts: 4,
+  /** Files in one font package: a full family is nine weights plus its italics. */
+  fontFaces: 10,
   colorFamilies: 12,
   gradientStops: 12,
   shadows: 6,

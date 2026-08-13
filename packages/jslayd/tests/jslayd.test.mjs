@@ -283,10 +283,57 @@ test("readDocument refuses a future version by name rather than guessing", () =>
 test("readDocument refuses an imported font asset that escapes its prefix", () => {
   const { document } = compile(SAMPLE_PROMPT);
   const tampered = JSON.parse(serialize(document));
-  tampered.fonts[0].asset = "../../secret.ttf";
+  tampered.fonts[0].faces[0].asset = "../../secret.ttf";
   const { document: read, diagnostics } = readDocument(JSON.stringify(tampered));
   assert.equal(read, null);
   assert.ok(diagnostics.errors.some((item) => item.code === "unsafe_asset"));
+});
+
+/**
+ * A font slot used to hold one file, and every design published before it could
+ * hold more carries that single face at the top level. Those documents are what
+ * six production decks are drawn from: if they stop reading, the decks stop
+ * opening, and a model change becomes a day when nothing renders (§69).
+ */
+test("a design saved before font packages existed still reads", () => {
+  const { document } = compile(SAMPLE_PROMPT);
+  const legacy = JSON.parse(serialize(document));
+  for (const font of legacy.fonts) {
+    const [face] = font.faces;
+    delete font.faces;
+    font.asset = face ? face.asset : null;
+    font.format = face ? face.format : null;
+    font.weight = face ? face.weight : 400;
+    font.italic = face ? face.italic : false;
+  }
+
+  const { document: read, diagnostics } = readDocument(JSON.stringify(legacy));
+  assert.ok(read, `the legacy shape must still read:\n${
+    diagnostics.errors.map((item) => item.message).join("\n")}`);
+  // And it reads as a one-face package, so everything downstream sees one model.
+  assert.equal(read.fonts[0].faces.length, 1);
+  assert.equal(read.fonts[0].faces[0].asset, document.fonts[0].faces[0].asset);
+  assert.equal(read.fonts[0].faces[0].weight, document.fonts[0].faces[0].weight);
+});
+
+test("an unsafe asset in the legacy shape is still refused", () => {
+  const { document } = compile(SAMPLE_PROMPT);
+  const legacy = JSON.parse(serialize(document));
+  for (const font of legacy.fonts) delete font.faces;
+  legacy.fonts[0].asset = "../../secret.ttf";
+  legacy.fonts[0].format = "ttf";
+  const { document: read, diagnostics } = readDocument(JSON.stringify(legacy));
+  assert.equal(read, null);
+  assert.ok(diagnostics.errors.some((item) => item.code === "unsafe_asset"));
+});
+
+test("a package may not exceed ten files", () => {
+  const { document } = compile(SAMPLE_PROMPT);
+  const tampered = JSON.parse(serialize(document));
+  tampered.fonts[0].faces = Array.from({ length: 11 }, (_unused, index) => ({
+    asset: `face-${index}.ttf`, format: "ttf", weight: 100 + index * 50, italic: false,
+  }));
+  assert.equal(readDocument(JSON.stringify(tampered)).document, null);
 });
 
 test("readDocument refuses an element type it does not know", () => {
@@ -326,4 +373,65 @@ test("the analyzer catches a table taller than its box", () => {
   const { document } = compile(source);
   const report = analyze(document);
   assert.ok(report.findings.some((item) => item.code === "table_overflow"));
+});
+
+/* ------------------------------------------------------------ font packages */
+
+/**
+ * A package ships several files and the renderer has to pick one. Getting that
+ * wrong is not a crash — it is a heading drawn in the body weight, which nobody
+ * notices in a test that only checks the family name.
+ */
+test("the renderer picks the file that matches the weight and slope asked for", async () => {
+  const dir = buildJslayd();
+  const { faceFor } = await import(`${dir}/document.js`);
+  const font = {
+    id: "font_1", name: "Sinov", roles: ["display"], family: "f", fallback: "Manrope",
+    faces: [
+      { asset: "r.ttf", format: "ttf", weight: 400, italic: false },
+      { asset: "sb.ttf", format: "ttf", weight: 600, italic: false },
+      { asset: "b.ttf", format: "ttf", weight: 700, italic: false },
+      { asset: "bi.ttf", format: "ttf", weight: 700, italic: true },
+    ],
+  };
+
+  assert.equal(faceFor(font, 400, false).asset, "r.ttf");
+  assert.equal(faceFor(font, 700, false).asset, "b.ttf");
+  assert.equal(faceFor(font, 700, true).asset, "bi.ttf");
+  // Nearest weight, not the first file that happens to be listed.
+  assert.equal(faceFor(font, 500, false).asset, "r.ttf", "500 is nearer 400 than 600");
+  assert.equal(faceFor(font, 650, false).asset, "sb.ttf", "650 is nearer 600 than 700");
+  assert.equal(faceFor(font, 900, false).asset, "b.ttf", "the heaviest available carries the rest");
+
+  // A slope that was asked for beats one that was not, whatever the weights do:
+  // bold italic with only an upright bold present should give the bold, not a
+  // lighter italic.
+  const sparse = { ...font, faces: [
+    { asset: "b.ttf", format: "ttf", weight: 700, italic: false },
+    { asset: "li.ttf", format: "ttf", weight: 300, italic: true },
+  ] };
+  assert.equal(faceFor(sparse, 700, true).asset, "li.ttf", "an italic that exists is preferred for italic");
+  assert.equal(faceFor(sparse, 300, false).asset, "b.ttf", "and an upright for upright");
+
+  assert.equal(faceFor({ ...font, faces: [] }, 400, false), undefined, "no files means fall back");
+  assert.equal(faceFor(undefined, 400, false), undefined);
+});
+
+test("a font with no files draws with its bundled fallback", async () => {
+  const dir = buildJslayd();
+  const { compile: compileHere } = await import(`${dir}/compile.js`);
+  const { renderArchetype } = await import(`${dir}/render.js`);
+  const prompt = SAMPLE_PROMPT.replace(/^\s*face: .*$/gm, "");
+  const { document } = compileHere(prompt);
+  assert.ok(document, "a design with no font files must still compile");
+  assert.deepEqual(document.fonts[0].faces, []);
+
+  const { previewSlide } = await import(`${dir}/content.js`);
+  const archetype = document.archetypes[0];
+  const rendered = renderArchetype(document, archetype, previewSlide(archetype.purpose));
+  const text = rendered.elements.find((element) => element.style.fontFamily);
+  assert.ok(text, "something must be drawn");
+  assert.ok(!text.style.fontAsset, "no file may be claimed when none was shipped");
+  assert.match(String(text.style.fontFamily), /Manrope|League|Inter|Arimo|Pinyon|Caveat/,
+    "a bundled face carries the design instead");
 });

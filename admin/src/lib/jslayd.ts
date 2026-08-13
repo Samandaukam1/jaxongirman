@@ -179,7 +179,9 @@ export async function uploadFont(params: {
   if (!["ttf", "otf", "woff"].includes(extension)) {
     throw new Error("Faqat .ttf, .otf va .woff qo‘llab-quvvatlanadi. WOFF2 PDF eksportida ishlamaydi.");
   }
-  const fileName = `${params.fontId}.${extension}`;
+  // One file per weight and slope, so a package can hold a whole family rather
+  // than whichever face was uploaded last.
+  const fileName = `${params.fontId}-${params.weight}${params.italic ? "i" : ""}.${extension}`;
   const upload = await supabase.storage
     .from(FONT_BUCKET)
     .upload(`${params.slug}/${fileName}`, params.file, { upsert: true, contentType: params.file.type || "font/ttf" });
@@ -209,6 +211,48 @@ export async function uploadThumbnail(slug: string, file: File): Promise<string>
     .upload(key, file, { upsert: true, contentType: file.type || "image/png" });
   if (error) throw error;
   return key;
+}
+
+export type DesignFontFace = {
+  font_id: string;
+  name: string;
+  roles: string[];
+  asset_path: string | null;
+  format: string | null;
+  weight: number;
+  italic: boolean;
+  fallback: string;
+};
+
+/** Every face a design ships, newest slot first, heaviest last. */
+export async function listDesignFonts(designId: string): Promise<DesignFontFace[]> {
+  const { data, error } = await supabase
+    .from("presentation_design_fonts")
+    .select("font_id, name, roles, asset_path, format, weight, italic, fallback")
+    .eq("design_id", designId)
+    .order("font_id")
+    .order("weight")
+    .order("italic");
+  if (error) throw error;
+  return (data ?? []) as DesignFontFace[];
+}
+
+/**
+ * Detaches one face and deletes the file it pointed at.
+ *
+ * The row goes first: a bucket object with no row is litter, but a row pointing
+ * at a deleted object is a design that renders a missing font.
+ */
+export async function removeDesignFont(designId: string, fontId: string, weight: number, italic: boolean) {
+  const { data, error } = await supabase.rpc("admin_remove_design_font", {
+    p_design_id: designId,
+    p_font_id: fontId,
+    p_weight: weight,
+    p_italic: italic,
+  });
+  if (error) throw error;
+  const path = data as string | null;
+  if (path) await supabase.storage.from(FONT_BUCKET).remove([path]);
 }
 
 export function publicAssetUrl(bucket: string, path: string | null): string | null {
