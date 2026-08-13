@@ -430,8 +430,11 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
       }
     }
     if (!ready?.document) {
-      setError(`Prompt kompilyatsiya qilinmadi — ${ready?.diagnostics.errors.length ?? 0} ta xato.`
-        + " Quyidagi “4. JSLAYD prompt” bo‘limida ularni ko‘ring.");
+      // Said plainly, and once. The errors themselves are listed below the
+      // button on a new design, and in the prompt section on an existing one —
+      // a count on its own is not information, and neither is being sent
+      // somewhere else to find out.
+      setError("Prompt kompilyatsiya qilinmadi, shuning uchun qoralama saqlanmadi.");
       return;
     }
     // Narrowed once, so the rest of the body is not re-proving it.
@@ -497,7 +500,7 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
         action={<button className="secondary-button" type="button" onClick={onClose}>Ro‘yxatga qaytish</button>}
       />
 
-      {error ? <ErrorState message={error} /> : null}
+      {error ? <ErrorState title="Saqlanmadi" message={error} /> : null}
       {message ? <p className="jslayd-message">{message}</p> : null}
 
       {kept ? (
@@ -603,6 +606,13 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
             <button className="secondary-button" type="button" disabled={busy} onClick={() => void save(false)}>
               {busy ? "Saqlanmoqda…" : "Qoralamani saqlash"}
             </button>
+
+            {outcome && !outcome.document ? (
+              <>
+                <p className="jslayd-font-empty">Quyidagilarni tuzatib, qaytadan bosing:</p>
+                <DiagnosticList diagnostics={outcome.diagnostics.errors.slice(0, 6)} />
+              </>
+            ) : null}
           </div>
         ) : !form.slug ? (
           <p className="panel-hint">Dizaynning slugi aniqlanmadi. Yuqoridagi “Slug” maydonini to‘ldirib qayta saqlang.</p>

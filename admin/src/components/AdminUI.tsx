@@ -9,8 +9,14 @@ export function StatusBadge({ value }: { value: string }) {
   return <span className={`status-badge status-${value.replaceAll("_", "-")}`}>{value.replaceAll("_", " ")}</span>;
 }
 
-export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
-  return <div className="inline-state error-state"><AlertCircle size={22} /><div><strong>Ma’lumot yuklanmadi</strong><p>{message}</p></div>{onRetry && <button className="text-button" type="button" onClick={onRetry}><RefreshCw size={15} /> Qayta urinish</button>}</div>;
+/**
+ * `title` defaults to a loading failure because that is what most callers are
+ * reporting — but not all of them. A prompt that will not compile announced
+ * itself as "data did not load", which is a sentence about the wrong thing and
+ * sends the reader looking for a network problem that is not there.
+ */
+export function ErrorState({ title = "Ma’lumot yuklanmadi", message, onRetry }: { title?: string; message: string; onRetry?: () => void }) {
+  return <div className="inline-state error-state"><AlertCircle size={22} /><div><strong>{title}</strong><p>{message}</p></div>{onRetry && <button className="text-button" type="button" onClick={onRetry}><RefreshCw size={15} /> Qayta urinish</button>}</div>;
 }
 
 export function EmptyState({ title = "Ma’lumot topilmadi", detail }: { title?: string; detail: string }) {
