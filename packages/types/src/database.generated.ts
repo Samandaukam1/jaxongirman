@@ -2597,6 +2597,60 @@ export type Database = {
           },
         ]
       }
+      qr_video_experiences: {
+        Row: {
+          glow: number
+          gradient_from: string
+          gradient_to: string
+          gradient_via: string
+          intro_path: string | null
+          is_enabled: boolean
+          loop_path: string | null
+          qr_appear_ms: number
+          qr_background: string
+          qr_size: number
+          qr_x: number
+          qr_y: number
+          surface: Database["public"]["Enums"]["qr_video_surface"]
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          glow?: number
+          gradient_from?: string
+          gradient_to?: string
+          gradient_via?: string
+          intro_path?: string | null
+          is_enabled?: boolean
+          loop_path?: string | null
+          qr_appear_ms?: number
+          qr_background?: string
+          qr_size?: number
+          qr_x?: number
+          qr_y?: number
+          surface: Database["public"]["Enums"]["qr_video_surface"]
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          glow?: number
+          gradient_from?: string
+          gradient_to?: string
+          gradient_via?: string
+          intro_path?: string | null
+          is_enabled?: boolean
+          loop_path?: string | null
+          qr_appear_ms?: number
+          qr_background?: string
+          qr_size?: number
+          qr_x?: number
+          qr_y?: number
+          surface?: Database["public"]["Enums"]["qr_video_surface"]
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       seller_ledger_entries: {
         Row: {
           created_at: string
@@ -3960,6 +4014,46 @@ export type Database = {
         }
         Returns: string
       }
+      admin_save_qr_video_experience: {
+        Args: {
+          p_glow?: number
+          p_gradient_from?: string
+          p_gradient_to?: string
+          p_gradient_via?: string
+          p_intro_path?: string
+          p_is_enabled: boolean
+          p_loop_path?: string
+          p_qr_appear_ms?: number
+          p_qr_background?: string
+          p_qr_size?: number
+          p_qr_x?: number
+          p_qr_y?: number
+          p_surface: Database["public"]["Enums"]["qr_video_surface"]
+        }
+        Returns: {
+          glow: number
+          gradient_from: string
+          gradient_to: string
+          gradient_via: string
+          intro_path: string | null
+          is_enabled: boolean
+          loop_path: string | null
+          qr_appear_ms: number
+          qr_background: string
+          qr_size: number
+          qr_x: number
+          qr_y: number
+          surface: Database["public"]["Enums"]["qr_video_surface"]
+          updated_at: string
+          updated_by: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "qr_video_experiences"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       admin_set_commission: {
         Args: {
           p_buyer_fee_rate: number
@@ -4248,6 +4342,7 @@ export type Database = {
       game_my_stats: { Args: never; Returns: Json }
       game_new_join_code: { Args: never; Returns: string }
       game_normalize_text: { Args: { p_value: string }; Returns: string }
+      game_pair_info: { Args: { p_token: string }; Returns: Json }
       game_pairing_claim: {
         Args: { p_game_id?: string; p_token: string }
         Returns: Json
@@ -4803,6 +4898,7 @@ export type Database = {
         Returns: Json
       }
       presentation_new_token: { Args: never; Returns: string }
+      presentation_pair_info: { Args: { p_token: string }; Returns: Json }
       presentation_pairing_claim: {
         Args: { p_presentation_id?: string; p_token: string }
         Returns: Json
@@ -5199,6 +5295,7 @@ export type Database = {
         | "failed"
         | "archived"
       presentation_style: "simple" | "good" | "great" | "super_professional"
+      qr_video_surface: "taqdimot" | "oyingoh"
       seller_ledger_status: "pending" | "approved" | "paid" | "reversed"
       settlement_status: "draft" | "pending" | "paid" | "cancelled"
       step_status: "queued" | "running" | "succeeded" | "failed" | "skipped"
@@ -5491,6 +5588,7 @@ export const Constants = {
         "archived",
       ],
       presentation_style: ["simple", "good", "great", "super_professional"],
+      qr_video_surface: ["taqdimot", "oyingoh"],
       seller_ledger_status: ["pending", "approved", "paid", "reversed"],
       settlement_status: ["draft", "pending", "paid", "cancelled"],
       step_status: ["queued", "running", "succeeded", "failed", "skipped"],

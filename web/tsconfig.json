@@ -31,6 +31,9 @@
       ],
       "@jaxongirman/slide-dom": [
         "../packages/slide-dom/src/index.tsx"
+      ],
+      "@jaxongirman/qr-video": [
+        "../packages/qr-video/src/index.ts"
       ]
     }
   },

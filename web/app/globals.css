@@ -575,3 +575,97 @@ body:has(.arena) .arena { min-height: 100vh; }
 @font-face { font-family: "Inter_400Regular"; src: url("/fonts/Inter_400Regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
 @font-face { font-family: "Inter_900Black"; src: url("/fonts/Inter_900Black.ttf") format("truetype"); font-weight: 900; font-display: swap; }
 @font-face { font-family: "CaveatBrush_400Regular"; src: url("/fonts/CaveatBrush_400Regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+
+/* ------------------------------------------------- QR Video Experience ---- */
+
+/* The stage is the only thing that sizes the footage. Both videos fill it
+ * absolutely, so the hand-off from intro to loop cannot move a single pixel of
+ * layout — there is no layout left to move. */
+.qrx-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  /* Nothing shows through: the stage is only revealed once a frame is decoded,
+   * so this colour is never seen as a flash between the two clips. */
+  background: #05050a;
+}
+
+.qrx-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  /* Deliberately no transition. A crossfade at the hand-off would blend the
+   * intro's last frame into the loop's first one, which reads as a dissolve —
+   * the cut has to be exact. */
+  transition: none;
+}
+
+/* Held back until both clips hold a frame, so the first thing on screen is
+ * footage rather than the stage colour. */
+.qrx-stage[data-started="false"] .qrx-video { opacity: 0 !important; }
+
+.qrx-code {
+  position: absolute;
+  border-radius: 8%;
+  overflow: hidden;
+  /* Starts out of sight and stays that way until its cue in the footage. */
+  opacity: 0;
+  transform: scale(0.82);
+  will-change: transform, opacity;
+}
+
+.qrx-code svg { display: block; width: 100%; height: 100%; }
+
+/* The one appearance. `forwards` holds the finished state, and the class is
+ * only ever added once, so a restarting loop never replays it. */
+.qrx-code.is-in {
+  animation: qrx-arrive 900ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes qrx-arrive {
+  0%   { opacity: 0; transform: scale(0.82) translateY(10px); filter: blur(10px); }
+  55%  { opacity: 1; }
+  100% { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
+}
+
+/* A single light sweep across the code as it lands. It runs once, with the
+ * arrival, and then it is gone — it never touches the modules a scanner reads
+ * because it finishes before anyone can raise a phone. */
+.qrx-sheen {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.72) 50%, transparent 65%);
+  transform: translateX(-120%);
+}
+
+.qrx-code.is-in .qrx-sheen {
+  animation: qrx-sheen 1100ms cubic-bezier(0.22, 1, 0.36, 1) 220ms forwards;
+}
+
+@keyframes qrx-sheen {
+  0%   { opacity: 0; transform: translateX(-120%); }
+  25%  { opacity: 1; }
+  100% { opacity: 0; transform: translateX(120%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qrx-code.is-in { animation: qrx-fade 240ms linear forwards; }
+  .qrx-code.is-in .qrx-sheen { animation: none; }
+  @keyframes qrx-fade { to { opacity: 1; transform: scale(1); } }
+}
+
+/* The experience owns the whole viewport: it is the screen in the hall, not a
+ * panel on a page. */
+.qrx-page {
+  position: fixed;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  background: #05050a;
+}

@@ -29,17 +29,33 @@ select ok(not has_function_privilege('anon', 'public.start_generation(uuid, text
 
 -- What a signed-out caller may reach, and nothing else: a presentation screen
 -- (open, rotate, snapshot, command), an O‘yingoh projector (open, rotate,
--- snapshot), and the universal join landing (join_info, which answers only what
--- is already painted on the projector). Trigger functions are excluded: they
--- return `trigger`, so PostgREST will not expose them as RPCs and the trigger
--- machinery, not a caller, invokes them.
+-- snapshot), and the landings a scanned QR opens (join_info, and the two
+-- pair_info calls, which answer only whether a code is still live). Trigger
+-- functions are excluded: they return `trigger`, so PostgREST will not expose
+-- them as RPCs and the trigger machinery, not a caller, invokes them.
+--
+-- The names are listed rather than counted. A count says a door was added; only
+-- the list says which one, and a swap that keeps the total the same is exactly
+-- the change worth catching.
 select is(
-  (select count(*)::integer
+  (select array_agg(p.proname::text order by p.proname)
    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public' and p.prosecdef
      and pg_get_function_result(p.oid) <> 'trigger'
      and has_function_privilege('anon', p.oid, 'EXECUTE')),
-  8, 'only pairing, screen-capability and join-landing entry points are callable by a signed-out caller'
+  array[
+    'game_join_info',
+    'game_pair_info',
+    'game_pairing_rotate',
+    'game_screen_open',
+    'game_screen_snapshot',
+    'presentation_pair_info',
+    'presentation_pairing_rotate',
+    'presentation_screen_command',
+    'presentation_screen_snapshot',
+    'presentation_session_open'
+  ],
+  'only pairing, screen-capability and scan-landing entry points are callable by a signed-out caller'
 );
 
 -- A definer function that does not pin its search_path can be redirected by a

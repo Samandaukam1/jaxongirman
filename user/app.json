@@ -31,10 +31,41 @@
           "action": "VIEW",
           "autoVerify": true,
           "data": [
-            { "scheme": "https", "host": "jaxongirman.uz", "pathPrefix": "/join" },
-            { "scheme": "https", "host": "jaxongirman.app", "pathPrefix": "/join" }
+            {
+              "scheme": "https",
+              "host": "jaxongirman.uz",
+              "pathPrefix": "/join"
+            },
+            {
+              "scheme": "https",
+              "host": "jaxongirman.app",
+              "pathPrefix": "/join"
+            },
+            {
+              "scheme": "https",
+              "host": "jaxongirman.uz",
+              "pathPrefix": "/pair"
+            },
+            {
+              "scheme": "https",
+              "host": "jaxongirman.app",
+              "pathPrefix": "/pair"
+            },
+            {
+              "scheme": "https",
+              "host": "jaxongirman.uz",
+              "pathPrefix": "/game-pair"
+            },
+            {
+              "scheme": "https",
+              "host": "jaxongirman.app",
+              "pathPrefix": "/game-pair"
+            }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },

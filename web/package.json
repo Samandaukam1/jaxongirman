@@ -10,6 +10,8 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@jaxongirman/qr-video": "*",
+    "@jaxongirman/slide-dom": "*",
     "@jaxongirman/types": "*",
     "@supabase/supabase-js": "latest",
     "@types/qrcode": "^1.5.6",
@@ -17,8 +19,7 @@
     "next": "latest",
     "qrcode": "^1.5.4",
     "react": "19.2.3",
-    "react-dom": "19.2.3",
-    "@jaxongirman/slide-dom": "*"
+    "react-dom": "19.2.3"
   },
   "devDependencies": {
     "@eslint/js": "latest",

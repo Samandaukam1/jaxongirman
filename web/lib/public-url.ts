@@ -28,3 +28,20 @@ export function publicOrigin(): string {
 export function joinUrl(token: string): string {
   return `${publicOrigin()}/join/${token}`;
 }
+
+/**
+ * The universal link a projector's pairing QR carries.
+ *
+ * An `https://` URL rather than `jaxongirman://` because a phone camera reads a
+ * string and hands it to the browser — it has never heard of the app's private
+ * scheme. The app still gets there first through the Universal Link / App Link
+ * association, and the in-app scanner reads either form.
+ */
+export function pairUrl(token: string): string {
+  return `${publicOrigin()}/pair/${token}`;
+}
+
+/** The same, for the phone that will run a match on the big screen. */
+export function gamePairUrl(token: string): string {
+  return `${publicOrigin()}/game-pair/${token}`;
+}

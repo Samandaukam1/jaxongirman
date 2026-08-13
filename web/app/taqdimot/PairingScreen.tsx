@@ -14,7 +14,11 @@ import { ChevronLeft, ChevronRight, Maximize, Minimize, RotateCw } from "lucide-
 import QRCode from "qrcode";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { loadQrExperience, type QrExperience } from "@/lib/qr-experience";
+import { pairUrl } from "@/lib/public-url";
 import { supabase } from "@/lib/supabase";
+
+import { QrVideoExperience } from "@/app/_qr/QrVideoExperience";
 
 import { ArenaScreen } from "@/app/oyingoh/ArenaScreen";
 
@@ -104,6 +108,8 @@ export function PairingScreen() {
   const [screenToken, setScreenToken] = useState<string | null>(null);
   const [realtimeToken, setRealtimeToken] = useState<string | null>(null);
   const [qr, setQr] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [experience, setExperience] = useState<QrExperience | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [deck, setDeck] = useState<PresentationScreenDeck | null>(null);
   const [viewport, setViewport] = useState<PresentationViewport>({ ...RESET_PRESENTATION_VIEWPORT });
@@ -130,10 +136,17 @@ export function PairingScreen() {
 
   useEffect(() => { sessionRef.current = session; }, [session]);
 
-  const drawToken = useCallback(async (token: string) => {
-    currentToken.current = token;
-    const value = `jaxongirman://pair/${token}`;
+  const drawToken = useCallback(async (next: string) => {
+    currentToken.current = next;
+    setToken(next);
+    const value = `jaxongirman://pair/${next}`;
     setQr(await QRCode.toDataURL(value, { errorCorrectionLevel: "M", margin: 1, width: 520 }));
+  }, []);
+
+  // Decoration, so it is loaded beside the session rather than in front of it:
+  // a projector must reach a working pairing code even if this never answers.
+  useEffect(() => {
+    void loadQrExperience("taqdimot").then(setExperience);
   }, []);
 
   /**
@@ -149,6 +162,7 @@ export function PairingScreen() {
     setScreenToken(null);
     setRealtimeToken(null);
     setSession(null);
+    setToken(null);
     setDeck(null);
     setDeckError(null);
     setError(null);
@@ -476,6 +490,18 @@ export function PairingScreen() {
           <p>Yangi QR kod tayyorlanmoqda — keyingi taqdimotchi uni skaner qilishi kifoya.</p>
           <div className="store-row"><button className="store-button" type="button" onClick={() => void openSession()}>Hoziroq yangi kod</button></div>
         </div></div>
+      </main>
+    );
+  }
+
+  // The cinematic pairing screen, when an admin has published one. It stands in
+  // for the card below and nothing else: the session, the rotating token and
+  // the realtime subscription that notices the phone are the same ones the
+  // plain screen uses, so a surface that is switched off changes nothing.
+  if (experience && token) {
+    return (
+      <main className="qrx-page">
+        <QrVideoExperience experience={experience} qrValue={pairUrl(token)} />
       </main>
     );
   }

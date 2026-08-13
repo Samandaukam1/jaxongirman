@@ -376,3 +376,29 @@ td small { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; 
 .slide-chart-labels span { text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .jslayd-family-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
 .jslayd-family-dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid; display: inline-block; }
+
+/* ------------------------------------------------- QR Video Experience ---- */
+
+.qrv-uploads { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+.qrv-slot { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--border-soft); border-radius: 12px; background: var(--surface-muted); align-content: start; }
+.qrv-slot-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.qrv-slot-head span { color: var(--ink-soft); font-size: 12.5px; }
+.qrv-slot-video, .qrv-slot-empty { width: 100%; aspect-ratio: 16 / 9; border-radius: 9px; background: #0B0B12; }
+.qrv-slot-empty { display: grid; place-items: center; color: var(--ink-soft); font-size: 13px; background: var(--field); border: 1px dashed var(--border-strong); }
+.qrv-key { color: var(--ink-soft); font-size: 11.5px; word-break: break-all; }
+.qrv-problem { margin: 0; color: #8d3029; font-size: 13px; }
+
+.qrv-progress { position: relative; height: 32px; border-radius: 10px; background: var(--brand-soft); overflow: hidden; display: grid; place-items: center; }
+.qrv-progress span { position: absolute; inset: 0 auto 0 0; background: var(--brand-tint); transition: width 120ms linear; }
+.qrv-progress em { position: relative; color: var(--brand-ink); font-style: normal; font-size: 12.5px; font-weight: 700; }
+
+/* The preview is measured, not decorative: it keeps the 16:9 the footage is cut
+ * to, so a percentage set here lands where it will land in the hall. */
+.qrv-preview { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; background: #0B0B12; }
+.qrv-preview-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.qrv-preview-empty { position: absolute; inset: 0; display: grid; place-items: center; color: rgba(255,255,255,.42); font-size: 13.5px; }
+.qrv-preview-code { position: absolute; border-radius: 8%; overflow: hidden; }
+.qrv-preview-code svg { display: block; width: 100%; height: 100%; }
+
+.qrv-color { display: flex; gap: 8px; align-items: center; }
+.qrv-color input[type="color"] { width: 44px; height: 42px; padding: 3px; flex: none; }

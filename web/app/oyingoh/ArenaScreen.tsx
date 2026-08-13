@@ -6,7 +6,11 @@ import QRCode from "qrcode";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { joinUrl } from "@/lib/public-url";
+import { loadQrExperience, type QrExperience } from "@/lib/qr-experience";
+import { gamePairUrl } from "@/lib/public-url";
 import { supabase } from "@/lib/supabase";
+
+import { QrVideoExperience } from "@/app/_qr/QrVideoExperience";
 
 import { GameAvatar } from "./GameAvatar";
 
@@ -94,6 +98,8 @@ export function ArenaScreen({ handoff }: { handoff?: { sessionId: string; screen
   const [sessionId, setSessionId] = useState<string | null>(handoff?.sessionId ?? null);
   const [screenToken, setScreenToken] = useState<string | null>(handoff?.screenToken ?? null);
   const [pairQr, setPairQr] = useState<string | null>(null);
+  const [pairToken, setPairToken] = useState<string | null>(null);
+  const [experience, setExperience] = useState<QrExperience | null>(null);
   const [joinQr, setJoinQr] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -106,7 +112,14 @@ export function ArenaScreen({ handoff }: { handoff?: { sessionId: string; screen
 
   const drawPairToken = useCallback(async (token: string) => {
     currentToken.current = token;
+    setPairToken(token);
     setPairQr(await QRCode.toDataURL(`jaxongirman://game-pair/${token}`, { errorCorrectionLevel: "M", margin: 1, width: 520 }));
+  }, []);
+
+  // Decoration, so it is loaded beside the session rather than in front of it:
+  // a projector must reach a working pairing code even if this never answers.
+  useEffect(() => {
+    void loadQrExperience("oyingoh").then(setExperience);
   }, []);
 
   const openSession = useCallback(async () => {
@@ -115,6 +128,7 @@ export function ArenaScreen({ handoff }: { handoff?: { sessionId: string; screen
     setScreenToken(null);
     setSnapshot(null);
     setJoinQr(null);
+    setPairToken(null);
     setPaired(false);
     setError(null);
     currentToken.current = null;
@@ -258,6 +272,18 @@ export function ArenaScreen({ handoff }: { handoff?: { sessionId: string; screen
           <p>{error}</p>
           <div className="store-row"><a className="store-button ghost" href="/">Bosh sahifa</a></div>
         </div></div>
+      </main>
+    );
+  }
+
+  // Waiting for the host's phone, with the cinematic screen an admin published
+  // if there is one. It stands in for the card below and nothing else: the
+  // match, the rotating token and the realtime subscription that notices the
+  // phone are unchanged, so a surface that is switched off changes nothing.
+  if (!paired && experience && pairToken) {
+    return (
+      <main className="qrx-page">
+        <QrVideoExperience experience={experience} qrValue={gamePairUrl(pairToken)} />
       </main>
     );
   }

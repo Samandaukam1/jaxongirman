@@ -2,11 +2,21 @@
   "applinks": {
     "details": [
       {
-        "appIDs": ["TEAMID.uz.jaxongirman.app"],
+        "appIDs": [
+          "TEAMID.uz.jaxongirman.app"
+        ],
         "components": [
           {
             "/": "/join/*",
             "comment": "A scanned O'yingoh join link opens the app straight into the room."
+          },
+          {
+            "/": "/pair/*",
+            "comment": "A scanned presentation QR opens the app straight onto the remote."
+          },
+          {
+            "/": "/game-pair/*",
+            "comment": "A scanned O'yingoh host QR opens the app onto the match controls."
           }
         ]
       }
