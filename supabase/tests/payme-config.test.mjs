@@ -106,12 +106,21 @@ test("no credential is written into the source", () => {
 });
 
 test("production is the default endpoint, and test is never reached by accident", () => {
-  assert.match(provider, /https:\/\/checkout\.paycom\.uz\/api/, "the production endpoint must be the fallback");
+  assert.match(provider, /PAYME_PRODUCTION_URL = "https:\/\/checkout\.paycom\.uz\/api"/,
+    "the production endpoint must be stated once, literally");
   assert.match(
     provider,
-    /environment === "test" \? "https:\/\/checkout\.test\.paycom\.uz\/api" : "https:\/\/checkout\.paycom\.uz\/api"/,
+    /environment === "test" \? "https:\/\/checkout\.test\.paycom\.uz\/api" : PAYME_PRODUCTION_URL/,
     "the test host must require the environment to say so explicitly",
   );
+});
+
+test("the standard variable names are the ones read first", () => {
+  // A rename that leaves the old name winning is a rename that did nothing.
+  assert.match(provider, /env\("PAYME_MERCHANT_ID"\) \|\| env\("PAYME_SUBSCRIBE_ID"\)/,
+    "PAYME_MERCHANT_ID must take precedence, with the older spelling as a fallback");
+  assert.match(provider, /env\("PAYME_API_URL"\) \|\| env\("PAYME_ENDPOINT"\)/,
+    "PAYME_API_URL must take precedence over the older spelling");
 });
 
 test("the provider's own error code survives normalisation", () => {

@@ -425,27 +425,55 @@ function env(name: string): string {
   return (Deno.env.get(name) ?? "").trim();
 }
 
+/** Where the production Subscribe API lives. Nothing computes this. */
+export const PAYME_PRODUCTION_URL = "https://checkout.paycom.uz/api";
+
 export function paymeConfig(): PaymeConfig | null {
-  // `PAYME_SUBSCRIBE_*` are the names this deployment uses; the older pair is
-  // still read so a half-renamed environment keeps working.
-  const merchantId = env("PAYME_SUBSCRIBE_ID") || env("PAYME_ID");
+  // `PAYME_MERCHANT_ID` / `PAYME_SUBSCRIBE_KEY` / `PAYME_API_URL` are the
+  // standard names. The earlier spellings are still read, in that order, so a
+  // deployment part-way through a rename keeps taking payments rather than
+  // failing closed at the moment the first name is changed.
+  const merchantId = env("PAYME_MERCHANT_ID") || env("PAYME_SUBSCRIBE_ID") || env("PAYME_ID");
   const key = env("PAYME_SUBSCRIBE_KEY") || env("PAYME_KEY");
   if (!merchantId || !key) return null;
 
-  // Production unless the environment says otherwise. Payme has no separate
-  // Subscribe sandbox for this merchant, so `test` points at their checkout
-  // test host and is only ever set deliberately.
+  // Production unless the environment deliberately says otherwise. Payme has no
+  // separate Subscribe sandbox for this merchant, so the test host is only ever
+  // reached by setting `PAYME_ENVIRONMENT=test` on purpose — a live payment
+  // cannot drift onto it by omission.
   const environment = env("PAYME_ENVIRONMENT") || "production";
-  const endpoint = env("PAYME_ENDPOINT")
-    || (environment === "test" ? "https://checkout.test.paycom.uz/api" : "https://checkout.paycom.uz/api");
+  const endpoint = env("PAYME_API_URL") || env("PAYME_ENDPOINT")
+    || (environment === "test" ? "https://checkout.test.paycom.uz/api" : PAYME_PRODUCTION_URL);
 
   return { endpoint, merchantId, key, environment, merchantTail: merchantId.slice(-4) };
+}
+
+/**
+ * What a credential looks like, without saying what it is.
+ *
+ * A key that is refused is either the wrong key or the right key stored wrongly,
+ * and those need different people to fix them. Nobody can tell which from a
+ * refusal alone, and the value itself must not be printed to find out — so this
+ * reports only shape: how long it is, which character classes it uses, and
+ * whether it carries the quotes or spaces that a paste into a secrets form
+ * leaves behind.
+ */
+export function credentialShape(value: string): string {
+  const notes: string[] = [`${value.length} belgi`];
+  if (/^[0-9a-f]+$/i.test(value)) notes.push("faqat hex");
+  else if (/^[A-Za-z0-9]+$/.test(value)) notes.push("harf va raqam");
+  else notes.push("boshqa belgilar ham bor");
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) notes.push("UUID shaklida");
+  if (/["']/.test(value)) notes.push("QO‘SHTIRNOQ BOR");
+  if (/\s/.test(value)) notes.push("BO‘SH JOY BOR");
+  if (value !== value.trim()) notes.push("CHETIDA BO‘SH JOY BOR");
+  return notes.join(", ");
 }
 
 /** Which variables are missing, by name, so an operator is told rather than guessing. */
 export function missingPaymeVariables(): string[] {
   const missing: string[] = [];
-  if (!env("PAYME_SUBSCRIBE_ID") && !env("PAYME_ID")) missing.push("PAYME_SUBSCRIBE_ID");
+  if (!env("PAYME_MERCHANT_ID") && !env("PAYME_SUBSCRIBE_ID") && !env("PAYME_ID")) missing.push("PAYME_MERCHANT_ID");
   if (!env("PAYME_SUBSCRIBE_KEY") && !env("PAYME_KEY")) missing.push("PAYME_SUBSCRIBE_KEY");
   return missing;
 }

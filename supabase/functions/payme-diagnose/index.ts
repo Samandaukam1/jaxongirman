@@ -1,7 +1,7 @@
 import { requestContext } from "../_shared/auth.ts";
 import { preflight } from "../_shared/cors.ts";
 import { errorResponse, HttpError, json } from "../_shared/http.ts";
-import { missingPaymeVariables, paymeConfig, probePaymeCredentials } from "../_shared/payment-provider.ts";
+import { credentialShape, missingPaymeVariables, paymeConfig, probePaymeCredentials } from "../_shared/payment-provider.ts";
 
 /**
  * Why Payme is refusing us, answered without charging anybody.
@@ -84,8 +84,10 @@ Deno.serve(async (request) => {
       endpoint: config.endpoint,
       environment: config.environment,
       merchant: `…${config.merchantTail}`,
-      merchantIdLength: config.merchantId.length,
-      keyLength: config.key.length,
+      // Shape, never value. Enough to tell "wrong key" from "right key, stored
+      // with the quotes still on it".
+      merchantIdShape: credentialShape(config.merchantId),
+      keyShape: credentialShape(config.key),
       probes,
       verdict,
     });
