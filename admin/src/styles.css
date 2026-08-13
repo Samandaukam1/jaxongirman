@@ -425,6 +425,10 @@ td small { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; 
 .payme-report li em { font-size: 12.5px; color: #8d3029; font-style: normal; }
 .payme-report li small { color: var(--ink-soft); font-size: 12px; line-height: 1.5; }
 
+/* A field that is about to be refused says so where it is being typed. */
+.field-problem { color: #8d3029; font-size: 12px; font-weight: 500; line-height: 1.5; }
+.field-problem .text-button { padding: 0; font-size: 12px; font-weight: 700; }
+
 /* -------------------------------------------------- JSLAYD font packages --- */
 
 .jslayd-font-gate { display: grid; gap: 10px; justify-items: start; padding: 14px 16px; border: 1px dashed var(--border-strong); border-radius: 12px; background: var(--surface-muted); }

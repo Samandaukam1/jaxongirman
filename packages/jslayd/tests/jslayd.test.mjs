@@ -435,3 +435,34 @@ test("a font with no files draws with its bundled fallback", async () => {
   assert.match(String(text.style.fontFamily), /Manrope|League|Inter|Arimo|Pinyon|Caveat/,
     "a bundled face carries the design instead");
 });
+
+/* -------------------------------------------------------------------- slugs */
+
+/**
+ * A slug is a storage prefix and a URL segment, so the database refuses
+ * anything else — by naming a constraint, which says nothing about what to
+ * write instead. The suggestion is what turns that into an instruction.
+ */
+test("a typed name is corrected into the nearest legal slug", async () => {
+  const dir = buildJslayd();
+  const { toSlug, SLUG_PATTERN } = await import(`${dir}/spec.js`);
+
+  assert.equal(toSlug("Apelsen Futuristik"), "apelsen-futuristik");
+  assert.equal(toSlug("  Toza   Osmon  "), "toza-osmon");
+  assert.equal(toSlug("Kobalt & Qahrabo"), "kobalt-qahrabo");
+  assert.equal(toSlug("2026 Yillik"), "yillik", "a slug may not open with a digit");
+  assert.equal(toSlug("apelsen-futuristik"), "apelsen-futuristik", "one that is already legal is left alone");
+
+  // Nothing legal left to suggest is an honest answer, not a guess.
+  assert.equal(toSlug("Тоза Осмон"), null);
+  assert.equal(toSlug("!!"), null);
+  assert.equal(toSlug("ab"), null, "three characters is the floor");
+
+  // Whatever it returns must satisfy the rule the database enforces.
+  for (const typed of ["Apelsen Futuristik", "  Toza   Osmon  ", "Kobalt & Qahrabo", "ЯMixed Aralash"]) {
+    const slug = toSlug(typed);
+    if (slug === null) continue;
+    assert.ok(SLUG_PATTERN.test(slug), `${typed} produced an illegal slug: ${slug}`);
+    assert.ok(slug.length >= 3 && slug.length <= 64);
+  }
+});

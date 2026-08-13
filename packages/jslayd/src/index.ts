@@ -43,6 +43,8 @@ export {
   CONDITIONS,
   IMAGE_SOURCE_STRATEGIES,
   MIN_READABLE_FONT_SIZE,
+  SLUG_PATTERN,
+  toSlug,
   isTier,
   isSupportedVersion,
   type Anchor,

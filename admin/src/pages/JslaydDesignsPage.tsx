@@ -1,4 +1,4 @@
-import { decompile, SAMPLE_PROMPT, TIERS, TIER_LABELS, type Tier } from "@jaxongirman/jslayd";
+import { decompile, SAMPLE_PROMPT, SLUG_PATTERN, TIERS, TIER_LABELS, toSlug, type Tier } from "@jaxongirman/jslayd";
 import { ScaledSlide } from "@jaxongirman/slide-dom";
 import { Download, Plus, Search, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -439,6 +439,20 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
     }
     // Narrowed once, so the rest of the body is not re-proving it.
     const compiled = { ...ready, document: ready.document };
+
+    // A slug is a storage prefix and a URL segment, so the database refuses
+    // anything outside a narrow shape — and it refuses it by naming a
+    // constraint, which tells the reader nothing about what to write instead.
+    const slugToSave = form.slug || compiled.document.design.slug;
+    if (!SLUG_PATTERN.test(slugToSave) || slugToSave.length < 3 || slugToSave.length > 64) {
+      const suggestion = toSlug(slugToSave);
+      setError(
+        `Slug faqat kichik lotin harflari, raqamlar va chiziqchadan iborat bo‘ladi (3–64 belgi): “${slugToSave}”.`
+        + (suggestion ? ` Masalan: “${suggestion}”.` : " Lotin harflaridan foydalaning."),
+      );
+      return;
+    }
+
     setBusy(true);
     setError(null);
     try {
@@ -532,7 +546,23 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
         <h3>1. Asosiy</h3>
         <div className="form-grid">
           <label>Nomi<input value={form.name} onChange={(event) => set("name", event.target.value)} /></label>
-          <label>Slug<input value={form.slug} onChange={(event) => set("slug", event.target.value)} placeholder="apelsen-futuristik" /></label>
+          <label>
+            Slug
+            <input value={form.slug} onChange={(event) => set("slug", event.target.value)} placeholder="apelsen-futuristik" />
+            {form.slug && !SLUG_PATTERN.test(form.slug) ? (
+              <small className="field-problem">
+                Kichik lotin harflari, raqamlar va chiziqcha.
+                {toSlug(form.slug) ? (
+                  <>
+                    {" "}
+                    <button type="button" className="text-button" onClick={() => set("slug", toSlug(form.slug) as string)}>
+                      “{toSlug(form.slug)}” ga o‘zgartirish
+                    </button>
+                  </>
+                ) : null}
+              </small>
+            ) : null}
+          </label>
           <label>
             Uslub
             <select value={form.tier} onChange={(event) => set("tier", event.target.value as Tier)}>

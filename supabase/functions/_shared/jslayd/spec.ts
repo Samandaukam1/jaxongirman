@@ -311,6 +311,31 @@ export const BINDING_PATTERN = /^\{\{\s*([a-z][a-z0-9_]*)\s*\}\}$/;
 
 /** Identifiers: design slugs, archetype ids, element ids, font asset names. */
 export const SLUG_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+
+/**
+ * The nearest legal slug to something a person typed.
+ *
+ * A slug is a file path prefix and a URL segment, so the database refuses
+ * anything else — and it refuses it in its own words, which name a constraint
+ * rather than say what to write. Offering the corrected form is the difference
+ * between an error and an instruction.
+ *
+ * Returns nothing when there is no legal slug left to suggest, which is the
+ * honest answer for a name written entirely in an alphabet this rule excludes.
+ */
+export function toSlug(value: string): string | null {
+  const slug = value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    // A slug opens with a letter, so leading digits go rather than the whole
+    // suggestion: "2026 Yillik" is far more usefully "yillik" than nothing.
+    .replace(/^[-0-9]+/, "")
+    .replace(/-+$/, "")
+    .replace(/-{2,}/g, "-")
+    .slice(0, 64)
+    .replace(/-+$/, "");
+  return SLUG_PATTERN.test(slug) && slug.length >= 3 ? slug : null;
+}
 export const IDENTIFIER_PATTERN = /^[a-z][a-z0-9_]*$/;
 
 export const HEX_COLOR_PATTERN = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
