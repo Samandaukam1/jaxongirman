@@ -6,7 +6,10 @@ values
   ('generation.max_upload_bytes', '52428800'::jsonb, 'Maximum source upload size', true),
   ('generation.allowed_upload_mime_types', '["application/pdf","application/vnd.openxmlformats-officedocument.wordprocessingml.document","text/plain","image/jpeg","image/png","image/webp"]'::jsonb, 'Accepted context uploads', true),
   ('credits.packages', '[{"code":"starter","label":"Starter","credits":100,"price_usd":4.99,"active":true},{"code":"creator","label":"Creator","credits":300,"price_usd":11.99,"active":true},{"code":"studio","label":"Studio","credits":1000,"price_usd":34.99,"active":true}]'::jsonb, 'Purchasable credit package catalog; payment provider integration can map package codes', false),
-  ('credits.operation_costs', '{"ai_edit":{"base_credits":1},"pdf_export":{"base_credits":0},"png_export":{"base_credits":0},"image_regeneration":{"base_credits":5}}'::jsonb, 'Non-generation operation prices used by server-side billing adapters', false),
+  -- Kept in step with 202608160001, which adds the same two prices in
+  -- production where this file never runs. This row is force-overwritten below,
+  -- so anything a migration adds and the seed omits disappears on a local reset.
+  ('credits.operation_costs', '{"ai_edit":{"base_credits":1},"pdf_export":{"base_credits":0},"png_export":{"base_credits":0},"image_regeneration":{"base_credits":5},"external_pptx_present":{"base_credits":24},"game_after_free_limit":{"base_credits":20}}'::jsonb, 'Non-generation operation prices used by server-side billing adapters', false),
   ('ai.provider_pricing', '{"gpt-5.6-terra":{"input_per_million":2.5,"output_per_million":15},"gpt-5.6-luna":{"input_per_million":1,"output_per_million":6},"gpt-image-1.5":{"medium_landscape_per_image":0.05}}'::jsonb, 'Provider price snapshots used only for cost estimates; update through admin RPC', false)
 on conflict (key) do update set value = excluded.value, description = excluded.description, public_read = excluded.public_read;
 

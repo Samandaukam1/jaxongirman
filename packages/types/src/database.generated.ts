@@ -1106,6 +1106,63 @@ export type Database = {
           },
         ]
       }
+      marketplace_licenses: {
+        Row: {
+          download_allowed: boolean
+          editable: boolean
+          granted_at: string
+          id: string
+          license_type: string
+          presentable: boolean
+          presentation_id: string | null
+          product_id: string
+          resale_allowed: boolean
+          source_type: string
+          user_id: string
+        }
+        Insert: {
+          download_allowed?: boolean
+          editable?: boolean
+          granted_at?: string
+          id?: string
+          license_type: string
+          presentable?: boolean
+          presentation_id?: string | null
+          product_id: string
+          resale_allowed?: boolean
+          source_type?: string
+          user_id: string
+        }
+        Update: {
+          download_allowed?: boolean
+          editable?: boolean
+          granted_at?: string
+          id?: string
+          license_type?: string
+          presentable?: boolean
+          presentation_id?: string | null
+          product_id?: string
+          resale_allowed?: boolean
+          source_type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketplace_licenses_presentation_id_fkey"
+            columns: ["presentation_id"]
+            isOneToOne: false
+            referencedRelation: "presentations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketplace_licenses_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       marketplace_material_types: {
         Row: {
           allowed_mime_types: string[]
@@ -2569,6 +2626,7 @@ export type Database = {
           last_name: string
           last_seen_at: string | null
           status: Database["public"]["Enums"]["user_status"]
+          timezone: string
           updated_at: string
           username: string | null
         }
@@ -2582,6 +2640,7 @@ export type Database = {
           last_name?: string
           last_seen_at?: string | null
           status?: Database["public"]["Enums"]["user_status"]
+          timezone?: string
           updated_at?: string
           username?: string | null
         }
@@ -2595,6 +2654,7 @@ export type Database = {
           last_name?: string
           last_seen_at?: string | null
           status?: Database["public"]["Enums"]["user_status"]
+          timezone?: string
           updated_at?: string
           username?: string | null
         }
@@ -3091,6 +3151,96 @@ export type Database = {
         }
         Relationships: []
       }
+      subscription_plans: {
+        Row: {
+          badge: string
+          code: string
+          compare_at_amount: number
+          created_at: string
+          cta_label: string
+          currency: string
+          description: string
+          estimated_cost_amount: number
+          features: Json
+          id: string
+          is_active: boolean
+          is_featured: boolean
+          name: string
+          period_days: number
+          price_amount: number
+          sort_order: number
+          subtitle: string
+          updated_at: string
+        }
+        Insert: {
+          badge?: string
+          code: string
+          compare_at_amount?: number
+          created_at?: string
+          cta_label?: string
+          currency?: string
+          description?: string
+          estimated_cost_amount?: number
+          features?: Json
+          id?: string
+          is_active?: boolean
+          is_featured?: boolean
+          name: string
+          period_days?: number
+          price_amount: number
+          sort_order?: number
+          subtitle?: string
+          updated_at?: string
+        }
+        Update: {
+          badge?: string
+          code?: string
+          compare_at_amount?: number
+          created_at?: string
+          cta_label?: string
+          currency?: string
+          description?: string
+          estimated_cost_amount?: number
+          features?: Json
+          id?: string
+          is_active?: boolean
+          is_featured?: boolean
+          name?: string
+          period_days?: number
+          price_amount?: number
+          sort_order?: number
+          subtitle?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      subscription_usage: {
+        Row: {
+          feature_key: string
+          id: string
+          period_start: string
+          updated_at: string
+          used: number
+          user_id: string
+        }
+        Insert: {
+          feature_key: string
+          id?: string
+          period_start: string
+          updated_at?: string
+          used?: number
+          user_id: string
+        }
+        Update: {
+          feature_key?: string
+          id?: string
+          period_start?: string
+          updated_at?: string
+          used?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       survey_answer_files: {
         Row: {
           answer_id: string
@@ -3551,6 +3701,63 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      user_subscriptions: {
+        Row: {
+          cancelled_at: string | null
+          created_at: string
+          expires_at: string | null
+          id: string
+          order_id: string | null
+          plan_id: string
+          plan_snapshot: Json
+          started_at: string | null
+          status: Database["public"]["Enums"]["subscription_status"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cancelled_at?: string | null
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          order_id?: string | null
+          plan_id: string
+          plan_snapshot?: Json
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["subscription_status"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cancelled_at?: string | null
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          order_id?: string | null
+          plan_id?: string
+          plan_snapshot?: Json
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["subscription_status"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_subscriptions_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_plans"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -4196,6 +4403,7 @@ export type Database = {
           last_name: string
           last_seen_at: string | null
           status: Database["public"]["Enums"]["user_status"]
+          timezone: string
           updated_at: string
           username: string | null
         }
@@ -4318,6 +4526,28 @@ export type Database = {
       current_app_role: {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]
+      }
+      current_subscription: {
+        Args: { p_user_id?: string }
+        Returns: {
+          cancelled_at: string | null
+          created_at: string
+          expires_at: string | null
+          id: string
+          order_id: string | null
+          plan_id: string
+          plan_snapshot: Json
+          started_at: string | null
+          status: Database["public"]["Enums"]["subscription_status"]
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "user_subscriptions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       estimate_presentation_credits: {
         Args: {
@@ -4574,6 +4804,7 @@ export type Database = {
         Returns: Json
       }
       module_access_state: { Args: { p_module_code?: string }; Returns: Json }
+      my_entitlements: { Args: { p_user_id?: string }; Returns: Json }
       my_orders: {
         Args: { p_limit?: number }
         Returns: {
@@ -5070,6 +5301,18 @@ export type Database = {
         Returns: Json
       }
       purge_stale_orders: { Args: never; Returns: number }
+      quota_consume: {
+        Args: { p_amount?: number; p_feature_key: string; p_user_id?: string }
+        Returns: Json
+      }
+      quota_release: {
+        Args: { p_amount?: number; p_feature_key: string; p_user_id?: string }
+        Returns: undefined
+      }
+      quota_status: {
+        Args: { p_feature_key: string; p_user_id?: string }
+        Returns: Json
+      }
       record_survey_export: {
         Args: {
           p_form_id: string
@@ -5252,6 +5495,10 @@ export type Database = {
         }
         Returns: Json
       }
+      usage_period_start: {
+        Args: { p_period: string; p_user_id: string }
+        Returns: string
+      }
     }
     Enums: {
       app_role: "user" | "admin" | "super_admin"
@@ -5402,6 +5649,12 @@ export type Database = {
       seller_ledger_status: "pending" | "approved" | "paid" | "reversed"
       settlement_status: "draft" | "pending" | "paid" | "cancelled"
       step_status: "queued" | "running" | "succeeded" | "failed" | "skipped"
+      subscription_status:
+        | "inactive"
+        | "payment_pending"
+        | "active"
+        | "expired"
+        | "cancelled"
       survey_participant_status: "invited" | "viewed" | "submitted"
       survey_question_type:
         | "short_text"
@@ -5695,6 +5948,13 @@ export const Constants = {
       seller_ledger_status: ["pending", "approved", "paid", "reversed"],
       settlement_status: ["draft", "pending", "paid", "cancelled"],
       step_status: ["queued", "running", "succeeded", "failed", "skipped"],
+      subscription_status: [
+        "inactive",
+        "payment_pending",
+        "active",
+        "expired",
+        "cancelled",
+      ],
       survey_participant_status: ["invited", "viewed", "submitted"],
       survey_question_type: [
         "short_text",
