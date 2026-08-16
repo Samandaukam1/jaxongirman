@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(31);
+select plan(33);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -153,6 +153,39 @@ select is(
   (select count(*)::integer from public.subscription_usage
     where user_id = 'f1110000-0000-0000-0000-000000000001' and feature_key = 'game_free_daily'),
   0, 'without writing a counter row nobody would read');
+
+-- --------------------------------------------------- generation, gated --
+
+/**
+ * The plan meeting the work.
+ *
+ * A member's four a week are spent by generating, their sixteen slides are a
+ * ceiling the server enforces, and somebody without a plan keeps the credit
+ * path the product already had — this adds a plan, it does not take away how
+ * things already worked.
+ */
+set local role authenticated;
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select set_config('request.jwt.claim.sub', 'f1110000-0000-0000-0000-000000000001', true);
+
+-- Seventeen slides is past the plan's ceiling, and it is refused before
+-- anything is written rather than trimmed silently.
+select throws_ok(
+  $$ select public.start_generation(
+       gen_random_uuid(), 'Mavzu matni', 'Sarlavha', 'simple'::public.presentation_style, 17) $$,
+  '22023', null, 'a member cannot exceed the plan''s slide ceiling');
+
+reset role;
+
+-- The week is already spent by the four consumed above, so the next generation
+-- is refused for the allowance rather than for the wallet.
+select set_config('request.jwt.claim.sub', 'f1110000-0000-0000-0000-000000000001', true);
+set local role authenticated;
+select throws_ok(
+  $$ select public.start_generation(
+       gen_random_uuid(), 'Mavzu matni', 'Sarlavha', 'simple'::public.presentation_style, 8) $$,
+  'P0001', null, 'and cannot generate once the week is gone');
+reset role;
 
 select * from finish();
 rollback;
