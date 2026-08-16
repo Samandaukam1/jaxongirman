@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(33);
+select plan(40);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -186,6 +186,64 @@ select throws_ok(
        gen_random_uuid(), 'Mavzu matni', 'Sarlavha', 'simple'::public.presentation_style, 8) $$,
   'P0001', null, 'and cannot generate once the week is gone');
 reset role;
+
+-- ------------------------------------------------------ hosting a game --
+
+/**
+ * Three a day free, then twenty J — and a member without a ceiling.
+ *
+ * The outsider here has no plan, so they are the free tier: the fourth game is
+ * where the price starts. The reuse rule is checked too, because a double press
+ * that made two rooms would now also pay for the second one.
+ */
+insert into public.games (id, owner_id, title, status, question_count)
+values ('9a000000-0000-0000-0000-00000000000a', 'f2220000-0000-0000-0000-000000000002',
+        'Sinov o''yin', 'ready', 5)
+on conflict do nothing;
+
+update public.credit_wallets set balance = 100
+ where user_id = 'f2220000-0000-0000-0000-000000000002';
+
+set local role authenticated;
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select set_config('request.jwt.claim.sub', 'f2220000-0000-0000-0000-000000000002', true);
+
+-- One room per press only while it is still an empty lobby.
+select is(
+  (public.game_session_create('9a000000-0000-0000-0000-00000000000a') ->> 'reused'),
+  'false', 'the first press opens a room');
+select is(
+  (public.game_session_create('9a000000-0000-0000-0000-00000000000a') ->> 'reused'),
+  'true', 'and a second press returns the same one rather than opening another');
+select is(
+  (select count(*)::integer from public.game_sessions
+    where host_user_id = 'f2220000-0000-0000-0000-000000000002'),
+  1, 'so a double press cannot make two rooms');
+select is(
+  (select balance from public.credit_wallets where user_id = 'f2220000-0000-0000-0000-000000000002'),
+  100, 'and cannot pay twice for one');
+
+reset role;
+-- Close the lobby so the next call is genuinely a new room, and use up the rest
+-- of the day's free allowance.
+update public.game_sessions set status = 'finished'
+ where host_user_id = 'f2220000-0000-0000-0000-000000000002';
+select public.quota_consume('game_free_daily', 2, 'f2220000-0000-0000-0000-000000000002');
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'f2220000-0000-0000-0000-000000000002', true);
+select lives_ok(
+  $$ select public.game_session_create('9a000000-0000-0000-0000-00000000000a') $$,
+  'the fourth game of the day still opens');
+reset role;
+
+select is(
+  (select balance from public.credit_wallets where user_id = 'f2220000-0000-0000-0000-000000000002'),
+  80, 'but it costs 20 J, taken from the one price list');
+select is(
+  (select count(*)::integer from public.credit_transactions
+    where user_id = 'f2220000-0000-0000-0000-000000000002' and type = 'charge'),
+  1, 'charged once, and settled once the room existed');
 
 select * from finish();
 rollback;
