@@ -1,5 +1,8 @@
 "use client";
 
+import { cardLines, detailSections, priceLine } from "@jaxongirman/tariff-card";
+import { Check } from "lucide-react";
+
 import {
   cardDigits,
   formatCardExpiryInput,
@@ -252,19 +255,60 @@ export function TariffCheckout() {
                 <p>Hozircha sotuvda tarif yo&lsquo;q. Keyinroq qayta urinib ko&lsquo;ring.</p>
               ) : (
                 <div className="plan-list">
-                  {plans.map((plan) => (
-                    <button
-                      key={plan.code}
-                      className="plan-option"
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void choose(plan)}
-                    >
-                      <span className="plan-name">{plan.label}</span>
-                      <span className="plan-meta">{plan.duration_months} oy</span>
-                      <span className="plan-price">{som(plan.price_amount)}</span>
-                    </button>
-                  ))}
+                  {plans.map((plan) => {
+                    // Drawn from the same package the console previews with, so
+                    // what an admin approved is what is shown here.
+                    const shaped = {
+                      code: plan.code, name: plan.name, subtitle: plan.subtitle,
+                      description: "", badge: plan.badge, ctaLabel: plan.cta_label,
+                      priceAmount: plan.price_amount, compareAtAmount: plan.compare_at_amount,
+                      currency: plan.currency, periodDays: plan.period_days,
+                      features: plan.features,
+                    };
+                    const price = priceLine(shaped);
+                    return (
+                      <article key={plan.code} className="tariff-card">
+                        {plan.badge ? <span className="tariff-card-badge">{plan.badge}</span> : null}
+                        <h2>{plan.name}</h2>
+                        <p className="tariff-card-price">
+                          <strong>{price.amount}</strong>
+                          <span>{price.unit}</span>
+                        </p>
+                        {plan.subtitle ? <p className="tariff-card-subtitle">{plan.subtitle}</p> : null}
+
+                        <ul className="tariff-card-lines">
+                          {cardLines(shaped).map((line) => (
+                            <li key={line.key}><Check size={15} strokeWidth={2.4} aria-hidden /> {line.label}</li>
+                          ))}
+                        </ul>
+
+                        <button
+                          className="tariff-card-cta"
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void choose(plan)}
+                        >
+                          {plan.cta_label || `${price.amount} so‘mga boshlash`}
+                        </button>
+
+                        <details className="tariff-detail">
+                          <summary>Barcha imkoniyatlarni ko‘rish</summary>
+                          {detailSections(shaped).map((section) => (
+                            <section key={section.key}>
+                              <h3>{section.title}</h3>
+                              <dl>
+                                {section.rows.map((row) => (
+                                  <div key={row.label} className={row.included ? undefined : "is-absent"}>
+                                    <dt>{row.label}</dt><dd>{row.value}</dd>
+                                  </div>
+                                ))}
+                              </dl>
+                            </section>
+                          ))}
+                        </details>
+                      </article>
+                    );
+                  })}
                 </div>
               )}
             </>

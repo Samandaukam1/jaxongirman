@@ -847,3 +847,60 @@ body:has(.qrx-page) > .site-footer { display: none; }
   .qrx-copy h1 { font-size: clamp(22px, 5vw, 30px); margin-bottom: 16px; }
   .qrx-copy ol { display: none; }
 }
+
+/* -------------------------------------------------------------- Tarif ---- */
+
+/* The card is the argument for buying, so it carries the weight of the page:
+ * one soft luminous edge, a price that is the loudest thing on it, and no
+ * cheap neon. */
+.plan-list { display: grid; gap: 22px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+
+.tariff-card {
+  position: relative; display: grid; gap: 18px; padding: 32px 30px;
+  border-radius: 28px; color: #fff; text-align: left;
+  background: radial-gradient(120% 100% at 50% 0%, #241a3d 0%, #120d20 60%, #0b0814 100%);
+  border: 1px solid rgba(168, 85, 247, .3);
+  box-shadow: 0 0 0 1px rgba(255,255,255,.03) inset, 0 30px 80px rgba(10, 6, 22, .45), 0 0 70px rgba(124, 58, 237, .16);
+}
+.tariff-card-badge {
+  justify-self: start; padding: 6px 12px; border-radius: 999px;
+  background: linear-gradient(120deg, #A855F7, #4F46E5);
+  font-size: 10.5px; font-weight: 800; letter-spacing: .12em;
+}
+.tariff-card h2 { margin: 0; font-size: 15px; letter-spacing: .09em; text-transform: uppercase; color: rgba(255,255,255,.72); }
+.tariff-card-price { display: flex; align-items: baseline; gap: 10px; margin: 0; }
+.tariff-card-price strong { font-size: clamp(44px, 6vw, 58px); line-height: 1; letter-spacing: -.04em; }
+.tariff-card-price span { color: rgba(255,255,255,.6); font-size: 15px; }
+.tariff-card-subtitle { margin: 0; color: rgba(255,255,255,.66); font-size: 14px; }
+.tariff-card-lines { list-style: none; margin: 0; padding: 0; display: grid; gap: 11px; }
+.tariff-card-lines li { display: flex; align-items: center; gap: 10px; color: rgba(255,255,255,.9); font-size: 14.5px; }
+.tariff-card-lines svg { color: #C8A6FF; flex: none; }
+.tariff-card-cta {
+  width: 100%; min-height: 54px; border: 0; border-radius: 16px;
+  color: #fff; font-size: 15.5px; font-weight: 700;
+  background: linear-gradient(120deg, #A855F7, #4F46E5);
+  transition: transform .16s ease, box-shadow .16s ease;
+}
+.tariff-card-cta:hover { transform: translateY(-1px); box-shadow: 0 12px 30px rgba(124, 58, 237, .35); }
+.tariff-card-cta:active { transform: translateY(0); }
+.tariff-card-cta:disabled { opacity: .6; }
+
+.tariff-detail { color: rgba(255,255,255,.82); font-size: 13.5px; }
+.tariff-detail summary { cursor: pointer; color: #C8A6FF; font-weight: 600; }
+.tariff-detail section { margin-top: 16px; }
+.tariff-detail h3 { margin: 0 0 6px; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: rgba(255,255,255,.5); }
+.tariff-detail dl { display: grid; gap: 5px; margin: 0; }
+.tariff-detail dl > div { display: flex; justify-content: space-between; gap: 14px; }
+.tariff-detail dt { color: rgba(255,255,255,.66); }
+.tariff-detail dd { margin: 0; font-weight: 600; }
+.tariff-detail .is-absent dt, .tariff-detail .is-absent dd { color: rgba(255,255,255,.38); }
+
+/* The glow breathes rather than pulses: slow, low contrast, and gone entirely
+ * for anyone who asked for less motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .tariff-card { animation: tariff-breathe 7s ease-in-out infinite; }
+  @keyframes tariff-breathe {
+    0%, 100% { box-shadow: 0 0 0 1px rgba(255,255,255,.03) inset, 0 30px 80px rgba(10, 6, 22, .45), 0 0 70px rgba(124, 58, 237, .16); }
+    50%      { box-shadow: 0 0 0 1px rgba(255,255,255,.05) inset, 0 30px 80px rgba(10, 6, 22, .45), 0 0 92px rgba(124, 58, 237, .26); }
+  }
+}

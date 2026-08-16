@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(57);
+select plan(56);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -195,7 +195,9 @@ select throws_ok(
 
 -- ------------------------------------------------- subscription plans --
 -- A plan a client could open but never pay is worse than no plan, so the
--- publisher refuses the shapes that would produce one.
+-- shapes that would produce one are refused. These used to be checks inside a
+-- publisher function; they are constraints on the table now, which is a better
+-- place for them because nothing can route around a constraint.
 reset role;
 insert into public.user_roles (user_id, role) values ('cc330000-0000-0000-0000-0000000000d3', 'admin')
   on conflict do nothing;
@@ -203,22 +205,29 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', 'cc330000-0000-0000-0000-0000000000d3', true);
 
 select throws_ok(
-  $$select public.admin_set_subscription_plans('[{"code":"oy","label":"Oylik","price_amount":0,"duration_months":1}]'::jsonb)$$,
-  '22023', null, 'a plan priced at zero is refused');
+  $$insert into public.subscription_plans (code, name, price_amount, period_days)
+    values ('Oy Lik', 'X', 1000, 30)$$,
+  '42501', null, 'no client may write the plan table directly at all');
+
+reset role;
 select throws_ok(
-  $$select public.admin_set_subscription_plans('[{"code":"oy","label":"Oylik","price_amount":49000,"duration_months":0}]'::jsonb)$$,
-  '22023', null, 'and one with no duration');
+  $$insert into public.subscription_plans (code, name, price_amount, period_days)
+    values ('Oy Lik', 'X', 1000, 30)$$,
+  '23514', null, 'a code that is not a code is refused by the table');
 select throws_ok(
-  $$select public.admin_set_subscription_plans('[{"code":"Oy Lik","label":"X","price_amount":1,"duration_months":1}]'::jsonb)$$,
-  '22023', null, 'and one whose code is not a code');
+  $$insert into public.subscription_plans (code, name, price_amount, period_days)
+    values ('oylik', 'X', 1000, 0)$$,
+  '23514', null, 'and a plan with no duration');
 select throws_ok(
-  $$select public.admin_set_subscription_plans('[{"code":"oy","label":"A","price_amount":1,"duration_months":1},{"code":"oy","label":"B","price_amount":2,"duration_months":1}]'::jsonb)$$,
-  '22023', null, 'and a duplicated code');
-select is(
-  (public.admin_set_subscription_plans('[{"code":"oylik","label":"Oylik tarif","price_amount":49000,"duration_months":1}]'::jsonb)) -> 'plans' -> 0 ->> 'code',
-  'oylik', 'a well-formed plan is published');
+  $$insert into public.subscription_plans (code, name, price_amount, period_days)
+    values ('premium_monthly', 'Ikkinchi', 1000, 30)$$,
+  '23505', null, 'and a code another plan already answers to');
+
+insert into public.subscription_plans (code, name, price_amount, period_days)
+values ('oylik', 'Oylik tarif', 49000, 30);
 
 -- Now that a plan exists, an order can be opened against it — and only it.
+set local role authenticated;
 select set_config('request.jwt.claim.sub', 'aa110000-0000-0000-0000-0000000000d1', true);
 select is(
   (public.order_create_subscription('oylik', 'android')) ->> 'total_amount',

@@ -259,16 +259,12 @@ select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config('request.jwt.claim.sub', 'f2220000-0000-0000-0000-000000000002', true);
 
 select is(
-  (public.order_create_subscription(
-     (select id from public.subscription_plans where code = 'premium_monthly'), 'android')
-   ->> 'total_amount')::integer,
+  (public.order_create_subscription('premium_monthly', 'android') ->> 'total_amount')::integer,
   36000, 'the order is priced from the plan, not from the caller');
 
 -- Two presses are one purchase.
 select is(
-  (public.order_create_subscription(
-     (select id from public.subscription_plans where code = 'premium_monthly'), 'android')
-   ->> 'reused')::boolean,
+  (public.order_create_subscription('premium_monthly', 'android') ->> 'reused')::boolean,
   true, 'and a second press reuses the open order rather than opening another');
 
 reset role;

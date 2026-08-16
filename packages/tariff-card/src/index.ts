@@ -233,3 +233,78 @@ export function economicsOf(plan: Pick<Plan, "priceAmount"> & { estimatedCostAmo
     lossy: price > 0 && grossProfit < 0,
   };
 }
+
+/* ---------------------------------------------------------------- usage */
+
+/** What `quota_status` answers, as a screen needs to read it. */
+export type QuotaStatus = {
+  feature: string;
+  enabled: boolean;
+  unlimited?: boolean;
+  limit?: number | null;
+  used?: number;
+  remaining?: number | null;
+  resets_at?: string | null;
+};
+
+export type UsageLine = {
+  key: string;
+  label: string;
+  /** `3 / 4 ishlatildi`, or `Cheksiz` where there is no ceiling. */
+  detail: string;
+  used: number;
+  limit: number | null;
+  unlimited: boolean;
+};
+
+const USAGE_LABELS: Record<string, string> = {
+  presentation_weekly: "Prezentatsiyalar",
+  marathon_unlock: "Premium ochish",
+  game_free_daily: "O‘yinlar",
+};
+
+/**
+ * What a member has spent this period.
+ *
+ * A "Premium" badge tells somebody they paid; this tells them what they have
+ * left, which is the thing they actually came to the page to find out.
+ */
+export function usageLines(statuses: QuotaStatus[]): UsageLine[] {
+  return statuses
+    .filter((status) => status.enabled)
+    .map((status) => {
+      const used = status.used ?? 0;
+      const unlimited = Boolean(status.unlimited);
+      const limit = unlimited ? null : status.limit ?? 0;
+      return {
+        key: status.feature,
+        label: USAGE_LABELS[status.feature] ?? status.feature,
+        detail: unlimited ? "Cheksiz" : `${used} / ${limit} ishlatildi`,
+        used,
+        limit,
+        unlimited,
+      };
+    });
+}
+
+/**
+ * "Yangi limitlar dushanba kuni yangilanadi".
+ *
+ * Said as a day rather than a date: somebody planning their week thinks in
+ * days, and a date makes them work out which one it is.
+ */
+export function resetLabel(resetsAt: string | null | undefined): string | null {
+  if (!resetsAt) return null;
+  const when = new Date(resetsAt);
+  if (Number.isNaN(when.getTime())) return null;
+
+  const days = ["yakshanba", "dushanba", "seshanba", "chorshanba", "payshanba", "juma", "shanba"];
+  const today = new Date();
+  const sameDay = when.toDateString() === today.toDateString();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+
+  if (sameDay) return "Yangi limitlar bugun yangilanadi";
+  if (when.toDateString() === tomorrow.toDateString()) return "Yangi limitlar ertaga yangilanadi";
+  return `Yangi limitlar ${days[when.getDay()]} kuni yangilanadi`;
+}

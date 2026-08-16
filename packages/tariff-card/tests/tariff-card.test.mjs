@@ -135,3 +135,41 @@ test("the economics warn about a lossy plan without refusing it", () => {
   assert.equal(economicsOf({ priceAmount: 0, estimatedCostAmount: 0 }).marginPercent, 0,
     "a free plan divides by nothing rather than by zero");
 });
+
+/* ---------------------------------------------------------------- usage */
+
+const { usageLines, resetLabel } = await import(`${dir}/index.js`);
+
+/**
+ * A "Premium" badge tells somebody they paid. This tells them what they have
+ * left, which is what they opened the page to find out.
+ */
+test("usage says what is left, not merely that somebody is premium", () => {
+  const lines = usageLines([
+    { feature: "presentation_weekly", enabled: true, limit: 4, used: 3, remaining: 1 },
+    { feature: "marathon_unlock", enabled: true, limit: 1, used: 0, remaining: 1 },
+    { feature: "game_free_daily", enabled: true, unlimited: true, limit: null, remaining: null },
+    { feature: "marketplace_buy", enabled: false },
+  ]);
+
+  assert.equal(lines.length, 3, "a capability that is switched off has no allowance to report");
+  assert.deepEqual(lines.map((l) => l.detail), ["3 / 4 ishlatildi", "0 / 1 ishlatildi", "Cheksiz"]);
+  assert.deepEqual(lines.map((l) => l.label), ["Prezentatsiyalar", "Premium ochish", "O‘yinlar"]);
+  assert.equal(lines[2].limit, null, "an unlimited line has no bar to fill");
+});
+
+test("the reset is said as a day, because that is how a week is planned", () => {
+  const today = new Date();
+  assert.equal(resetLabel(today.toISOString()), "Yangi limitlar bugun yangilanadi");
+
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  assert.equal(resetLabel(tomorrow.toISOString()), "Yangi limitlar ertaga yangilanadi");
+
+  const later = new Date(today);
+  later.setDate(today.getDate() + 4);
+  assert.match(resetLabel(later.toISOString()), /^Yangi limitlar \S+ kuni yangilanadi$/);
+
+  assert.equal(resetLabel(null), null, "nothing to say when there is no reset");
+  assert.equal(resetLabel("not a date"), null);
+});

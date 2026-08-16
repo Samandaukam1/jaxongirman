@@ -1,3 +1,4 @@
+import type { PlanFeatures } from "@jaxongirman/tariff-card";
 import type { Tables } from "@jaxongirman/types";
 
 import { supabase } from "./supabase";
@@ -35,23 +36,55 @@ export type Plan = {
   price_amount: number;
   duration_months: number;
   is_active?: boolean;
+  /** Everything the card needs to describe itself, from the plan's own row. */
+  name: string;
+  subtitle: string;
+  badge: string;
+  cta_label: string;
+  compare_at_amount: number;
+  currency: string;
+  period_days: number;
+  features: PlanFeatures;
 };
 
 /** The only card representation a client may read or keep. */
 export type PartialCard = Tables<"partial_cards">;
 
-/** The published tariff catalogue. Empty means nothing is for sale, and says so. */
+/**
+ * The published tariff catalogue. Empty means nothing is for sale, and says so.
+ *
+ * Read from `subscription_plans`, which is where an admin shapes them. This used
+ * to read an `app_settings` key that was never filled, so the page offered
+ * nothing to anybody who visited it.
+ */
 export async function subscriptionPlans(): Promise<{ currency: string; plans: Plan[] }> {
   const { data, error } = await supabase
-    .from("app_settings")
-    .select("value")
-    .eq("key", "subscription.plans")
-    .maybeSingle();
+    .from("subscription_plans")
+    .select("code, name, subtitle, badge, cta_label, price_amount, compare_at_amount, currency, period_days, features, is_active")
+    .eq("is_active", true)
+    .order("sort_order")
+    .order("created_at");
   if (error) throw error;
-  const value = data?.value as { currency?: string; plans?: Plan[] } | null;
+
+  const rows = data ?? [];
   return {
-    currency: value?.currency ?? "UZS",
-    plans: (value?.plans ?? []).filter((plan) => plan.is_active !== false),
+    currency: rows[0]?.currency ?? "UZS",
+    plans: rows.map((row) => ({
+      code: row.code,
+      // `label` is what the existing checkout renders; the plan's name is it.
+      label: row.name,
+      name: row.name,
+      subtitle: row.subtitle,
+      badge: row.badge,
+      cta_label: row.cta_label,
+      price_amount: row.price_amount,
+      compare_at_amount: row.compare_at_amount,
+      currency: row.currency,
+      period_days: row.period_days,
+      duration_months: Math.max(1, Math.round(row.period_days / 30)),
+      features: (row.features ?? {}) as PlanFeatures,
+      is_active: row.is_active,
+    })),
   };
 }
 

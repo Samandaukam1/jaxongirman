@@ -11,73 +11,12 @@
 -- through the same card flow, the same partial-card hints and the same
 -- reconciliation as a J Coin purchase.
 
-/**
- * Opens an order for a plan, priced by the server.
- *
- * The client names a plan and nothing else. A price that arrived in the request
- * would be a price the buyer chose, so the amount comes from
- * `subscription_plans` and the plan's own currency comes with it.
- *
- * An open order for the same plan is reused rather than duplicated, the way
- * `order_create_jcoin` already does: two presses are one purchase.
- */
-create or replace function public.order_create_subscription(
-  p_plan_id uuid,
-  p_platform text default null
-)
-returns jsonb
-language plpgsql
-security definer
-set search_path = ''
-as $$
-declare
-  v_user uuid := auth.uid();
-  v_plan public.subscription_plans%rowtype;
-  v_existing public.orders%rowtype;
-  v_order public.orders%rowtype;
-  v_price integer;
-begin
-  if v_user is null then raise exception 'authentication required' using errcode = '28000'; end if;
-  perform public.assert_payment_allowed(p_platform, 'subscription');
-  if exists (select 1 from public.profiles where id = v_user and status = 'blocked') then
-    raise exception 'account is blocked' using errcode = '42501';
-  end if;
+-- The order-creating half of this originally added a second
+-- `order_create_subscription` taking a plan id, beside the one taking a code
+-- that the web checkout already called. Two doors to one thing is the mistake
+-- this work avoids everywhere else, so it was removed and 202608160008 points
+-- the original at the new table instead.
 
-  select * into v_plan from public.subscription_plans where id = p_plan_id and is_active;
-  if not found then
-    raise exception 'Bu tarif sotuvda emas.' using errcode = 'P0002';
-  end if;
-
-  v_existing := public.order_find_open(v_user, 'subscription', null, null, v_plan.code);
-  if v_existing.id is not null then
-    return public.order_summary(v_existing) || jsonb_build_object('reused', true);
-  end if;
-
-  v_price := v_plan.price_amount;
-
-  insert into public.orders (
-    user_id, purpose, reference_code, currency,
-    subtotal, buyer_fee, total_amount, seller_fee, seller_net, platform_revenue,
-    metadata
-  ) values (
-    -- No seller and no fees, so the arithmetic is the same shape a J Coin
-    -- order uses: `platform_revenue` is what the fees add up to, which is
-    -- nothing. That the platform keeps the money is said by there being no
-    -- seller, not by inflating a revenue column the constraint governs.
-    v_user, 'subscription', v_plan.code, v_plan.currency,
-    v_price, 0, v_price, 0, v_price, 0,
-    jsonb_build_object('plan_id', v_plan.id, 'label', v_plan.name,
-                       'period_days', v_plan.period_days,
-                       'platform', lower(btrim(coalesce(p_platform, 'unknown'))))
-  )
-  returning * into v_order;
-
-  return public.order_summary(v_order) || jsonb_build_object('reused', false);
-end;
-$$;
-
-revoke all on function public.order_create_subscription(uuid, text) from public, anon;
-grant execute on function public.order_create_subscription(uuid, text) to authenticated;
 
 CREATE OR REPLACE FUNCTION public.order_fulfil(p_order_id uuid, p_payme_receipt_id text DEFAULT NULL::text, p_payme_transaction_id text DEFAULT NULL::text, p_provider_cost integer DEFAULT 0)
  RETURNS jsonb
