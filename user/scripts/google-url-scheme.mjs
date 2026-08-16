@@ -45,12 +45,24 @@ if (!clientId) {
   process.exit(1);
 }
 
-// Refused rather than reversed blindly: a web client ID pasted here produces a
-// scheme that looks plausible, builds, and fails only when somebody signs in.
-if (!clientId.endsWith(SUFFIX)) {
+/**
+ * Refused rather than reversed blindly.
+ *
+ * Checking only the suffix is not enough, and this was learned the hard way: a
+ * placeholder copied out of a set of instructions —
+ * `YOUR_IOS_CLIENT_ID.apps.googleusercontent.com` — ends correctly, reverses
+ * into a plausible-looking scheme, and produces a build that installs and then
+ * fails the moment somebody presses the button. A real client ID is a project
+ * number, a hyphen, then an identifier.
+ */
+const SHAPE = /^\d{6,}-[a-z0-9]+\.apps\.googleusercontent\.com$/;
+
+if (!SHAPE.test(clientId)) {
   console.error(
-    `Bu iOS client ID ga o‘xshamaydi — "${SUFFIX}" bilan tugashi kerak.\n` +
-      "Google Cloud → Credentials → OAuth 2.0 Client IDs → iOS turidagisini oling.",
+    `Bu iOS client ID ga o‘xshamaydi:\n  ${clientId}\n\n` +
+      "Kutilgan ko‘rinish: 123456789012-abcdef.apps.googleusercontent.com\n" +
+      "Google Cloud → APIs & Services → Credentials → OAuth 2.0 Client IDs →\n" +
+      "turi «iOS» bo‘lganini oling.",
   );
   process.exit(1);
 }
