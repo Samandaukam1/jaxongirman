@@ -39,6 +39,7 @@ export default function AppLayout() {
             <Stack.Screen name="presentation/[id]" />
             <Stack.Screen name="coins/send" />
             <Stack.Screen name="coins/buy" />
+            <Stack.Screen name="tarif/index" />
             <Stack.Screen name="survey/index" />
             {/* The survey builder and the response form are both long forms whose
               in-progress state lives only in memory — the same rule as `create`. */}

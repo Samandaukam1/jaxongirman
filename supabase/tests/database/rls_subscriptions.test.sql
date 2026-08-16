@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(48);
+select plan(54);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -311,6 +311,50 @@ select ok(
   (select expires_at from public.user_subscriptions
     where user_id = 'f2220000-0000-0000-0000-000000000002') < now() + interval '31 days',
   'and fulfilling the same order twice does not stack two months');
+
+
+/**
+ * Whose allowance is it.
+ *
+ * Every reader here takes a user id that defaults to the caller's. A default is
+ * a convenience, not a boundary — so each one is asked for somebody else's row
+ * by a signed-in person who is not an admin, and must refuse.
+ */
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'f1110000-0000-0000-0000-000000000001', true);
+
+select throws_ok(
+  $$select public.my_entitlements('f2220000-0000-0000-0000-000000000002')$$,
+  '42501', null, 'one member may not read another member''s entitlements');
+select throws_ok(
+  $$select public.quota_status('presentation_weekly', 'f2220000-0000-0000-0000-000000000002')$$,
+  '42501', null, 'nor how much of their allowance is left');
+select throws_ok(
+  $$select public.my_usage('f2220000-0000-0000-0000-000000000002')$$,
+  '42501', null, 'nor all of it at once');
+select throws_ok(
+  $$select public.current_subscription('f2220000-0000-0000-0000-000000000002')$$,
+  '42501', null, 'nor whether they are paying at all');
+
+-- Their own is theirs to read either way, or the guard would have broken every
+-- screen that passes the id it already has.
+select is(
+  public.my_entitlements('f1110000-0000-0000-0000-000000000001'),
+  public.my_entitlements(),
+  'while their own answer comes back the same whether or not they name themselves');
+
+/**
+ * `my_usage` lists allowances, not switches.
+ *
+ * A capability with nothing to count has no bar to draw, and a row of "✓ / ✓"
+ * would push the numbers somebody opened the screen for off the bottom.
+ */
+select set_config('request.jwt.claim.sub', 'f2220000-0000-0000-0000-000000000002', true);
+select ok(
+  not exists (
+    select 1 from jsonb_array_elements(public.my_usage()) line
+     where line ->> 'feature' in ('marketplace_buy', 'marketplace_sell', 'marketplace_edit')),
+  'a switch is not a usage line');
 
 select * from finish();
 rollback;

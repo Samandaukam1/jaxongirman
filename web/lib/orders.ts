@@ -1,4 +1,4 @@
-import type { PlanFeatures } from "@jaxongirman/tariff-card";
+import type { PlanFeatures, QuotaStatus } from "@jaxongirman/tariff-card";
 import type { Tables } from "@jaxongirman/types";
 
 import { supabase } from "./supabase";
@@ -179,3 +179,46 @@ export const payStart = (orderId: string, pan: string, expiry: string) =>
 
 export const payVerify = (orderId: string, attemptId: string, code: string) =>
   callPay({ orderId, step: "verify", attemptId, code }) as Promise<PayDone>;
+
+/* -------------------------------------------------------- membership */
+
+export type Membership = {
+  member: boolean;
+  status: string;
+  expiresAt: string | null;
+  planCode: string | null;
+  planName: string | null;
+};
+
+/**
+ * What the caller is entitled to, resolved by the server.
+ *
+ * Membership is never a flag the browser keeps: every gate asks the database
+ * again before doing anything, so a tampered client is contradicting the thing
+ * that decides rather than fooling it.
+ */
+export async function myMembership(): Promise<Membership> {
+  const { data, error } = await supabase.rpc("my_entitlements");
+  if (error) throw error;
+
+  const answer = (data ?? {}) as {
+    member?: boolean;
+    status?: string;
+    expires_at?: string | null;
+    plan?: { code?: string; name?: string } | null;
+  };
+  return {
+    member: Boolean(answer.member),
+    status: answer.status ?? "inactive",
+    expiresAt: answer.expires_at ?? null,
+    planCode: answer.plan?.code ?? null,
+    planName: answer.plan?.name ?? null,
+  };
+}
+
+/** Every metered allowance and how much of it is gone, in one question. */
+export async function myUsage(): Promise<QuotaStatus[]> {
+  const { data, error } = await supabase.rpc("my_usage");
+  if (error) throw error;
+  return (data ?? []) as QuotaStatus[];
+}

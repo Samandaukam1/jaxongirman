@@ -9,6 +9,9 @@
       ],
       "@jaxongirman/types": [
         "../packages/types/src/index.ts"
+      ],
+      "@jaxongirman/tariff-card": [
+        "../packages/tariff-card/src/index.ts"
       ]
     }
   },

@@ -4570,6 +4570,10 @@ export type Database = {
         Args: { p_context?: string; p_platform?: string }
         Returns: undefined
       }
+      assert_reads_own_entitlements: {
+        Args: { p_user_id: string }
+        Returns: undefined
+      }
       create_survey_from_template: {
         Args: { p_template_id: string; p_title?: string }
         Returns: string
@@ -4900,6 +4904,7 @@ export type Database = {
         }[]
       }
       my_surveys: { Args: never; Returns: Json }
+      my_usage: { Args: { p_user_id?: string }; Returns: Json }
       next_order_number: { Args: never; Returns: string }
       normalize_uz_phone: { Args: { p_value: string }; Returns: string }
       notify_upcoming_settlements: {
@@ -4932,9 +4937,10 @@ export type Database = {
         Args: { p_module_code?: string; p_platform?: string }
         Returns: Json
       }
-      order_create_subscription:
-        | { Args: { p_plan_code: string; p_platform?: string }; Returns: Json }
-        | { Args: { p_plan_id: string; p_platform?: string }; Returns: Json }
+      order_create_subscription: {
+        Args: { p_plan_code: string; p_platform?: string }
+        Returns: Json
+      }
       order_fail: {
         Args: { p_code: string; p_message: string; p_order_id: string }
         Returns: boolean

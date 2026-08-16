@@ -1,6 +1,9 @@
 "use client";
 
-import { cardLines, detailSections, priceLine } from "@jaxongirman/tariff-card";
+import {
+  cardLines, detailSections, priceLine, resetLabel, usageLines,
+  type QuotaStatus,
+} from "@jaxongirman/tariff-card";
 import { Check } from "lucide-react";
 
 import {
@@ -16,8 +19,9 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
-  createSubscriptionOrder, listPartialCards, OrderPaymentError, payStart, payVerify,
-  subscriptionPlans, type OrderSummary, type PartialCard, type Plan,
+  createSubscriptionOrder, listPartialCards, myMembership, myUsage, OrderPaymentError,
+  payStart, payVerify, subscriptionPlans,
+  type Membership, type OrderSummary, type PartialCard, type Plan,
 } from "@/lib/orders";
 import { supabase } from "@/lib/supabase";
 
@@ -57,6 +61,8 @@ export function TariffCheckout() {
   const [cards, setCards] = useState<PartialCard[]>([]);
   const [order, setOrder] = useState<OrderSummary | null>(null);
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  const [membership, setMembership] = useState<Membership | null>(null);
+  const [usage, setUsage] = useState<QuotaStatus[]>([]);
 
   const [pan, setPan] = useState("");
   const [expiry, setExpiry] = useState("");
@@ -76,12 +82,18 @@ export function TariffCheckout() {
     const hasSession = Boolean(session.session) && !sessionError;
     setSignedIn(hasSession);
     try {
-      const [catalogue, savedCards] = await Promise.all([
+      // A signed-out visitor sees the plans and nothing personal: there is no
+      // membership to report and no allowance to count.
+      const [catalogue, savedCards, member, usageRows] = await Promise.all([
         subscriptionPlans(),
         hasSession ? listPartialCards() : Promise.resolve([]),
+        hasSession ? myMembership() : Promise.resolve(null),
+        hasSession ? myUsage() : Promise.resolve([]),
       ]);
       setPlans(catalogue.plans);
       setCards(savedCards);
+      setMembership(member);
+      setUsage(usageRows);
     } catch {
       setError("Tariflar yoki chala kartalar yuklanmadi.");
     }
@@ -250,7 +262,45 @@ export function TariffCheckout() {
 
           {step === "plans" ? (
             <>
-              <h1>Tarifni tanlang</h1>
+              <h1>{membership?.member ? "Sizning tarifingiz" : "Tarifni tanlang"}</h1>
+
+              {/* A member arriving to check what is left should find the number
+                  before the sales pitch, not after scrolling past it. */}
+              {membership && usageLines(usage).length > 0 ? (
+                <section className={membership.member ? "tariff-usage is-member" : "tariff-usage"}>
+                  <header>
+                    <span className="tariff-usage-title">
+                      {membership.member ? membership.planName ?? "Faol obuna" : "Bepul limitingiz"}
+                    </span>
+                    {membership.member && membership.expiresAt ? (
+                      <span className="tariff-usage-expiry">
+                        {new Date(membership.expiresAt).toLocaleDateString("uz-UZ", { day: "numeric", month: "long" })}gacha
+                      </span>
+                    ) : null}
+                  </header>
+                  {usageLines(usage).map((line) => (
+                    <div key={line.key} className="tariff-usage-row">
+                      <div className="tariff-usage-head">
+                        <span>{line.label}</span>
+                        <span>{line.detail}</span>
+                      </div>
+                      <div className="tariff-usage-track">
+                        {/* An unlimited allowance draws a full, quiet bar: there
+                            is nothing to run out of. */}
+                        <div
+                          className="tariff-usage-fill"
+                          style={{ width: `${line.unlimited ? 100 : Math.min((line.used / (line.limit || 1)) * 100, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  {resetLabel(usage.find((row) => row.resets_at)?.resets_at) ? (
+                    <p className="tariff-usage-reset">
+                      {resetLabel(usage.find((row) => row.resets_at)?.resets_at)}
+                    </p>
+                  ) : null}
+                </section>
+              ) : null}
               {plans.length === 0 ? (
                 <p>Hozircha sotuvda tarif yo&lsquo;q. Keyinroq qayta urinib ko&lsquo;ring.</p>
               ) : (
