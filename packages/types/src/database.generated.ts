@@ -4719,6 +4719,28 @@ export type Database = {
       is_admin: { Args: { p_user_id?: string }; Returns: boolean }
       is_latin_text: { Args: { p_value: string }; Returns: boolean }
       is_super_admin: { Args: { p_user_id?: string }; Returns: boolean }
+      jcoin_refund: {
+        Args: {
+          p_idempotency_key: string
+          p_reason?: string
+          p_user_id?: string
+        }
+        Returns: Json
+      }
+      jcoin_reserve: {
+        Args: {
+          p_idempotency_key: string
+          p_metadata?: Json
+          p_operation: string
+          p_reference_id?: string
+          p_user_id?: string
+        }
+        Returns: Json
+      }
+      jcoin_settle: {
+        Args: { p_idempotency_key: string; p_user_id?: string }
+        Returns: Json
+      }
       mark_notifications_read: { Args: { p_id?: string }; Returns: number }
       marketplace_attach_file: {
         Args: {

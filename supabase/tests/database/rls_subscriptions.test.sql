@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(27);
+select plan(31);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -126,6 +126,33 @@ update public.user_subscriptions
 select is(
   (public.my_entitlements('f1110000-0000-0000-0000-000000000001') ->> 'member'),
   'false', 'a lapsed membership stops being one without anything having to run');
+
+-- ----------------------------------------------------------- no ceiling --
+
+/**
+ * An allowance with no ceiling writes nothing.
+ *
+ * A member hosts games without limit, and `limit: 999999` would be a limit
+ * waiting to be hit by a bug while filling `subscription_usage` with rows
+ * nobody reads. Unlimited says so, and counts nothing.
+ */
+update public.user_subscriptions
+   set started_at = now(), expires_at = now() + interval '30 days'
+ where user_id = 'f1110000-0000-0000-0000-000000000001';
+
+select is(
+  (public.quota_status('game_free_daily', 'f1110000-0000-0000-0000-000000000001') ->> 'unlimited'),
+  'true', 'a member hosts games without a ceiling');
+select is(
+  (public.quota_status('game_free_daily', 'f1110000-0000-0000-0000-000000000001') ->> 'remaining'),
+  null, 'so there is no number of games left to report');
+select is(
+  (public.quota_consume('game_free_daily', 1, 'f1110000-0000-0000-0000-000000000001') ->> 'ok'),
+  'true', 'and hosting is always allowed');
+select is(
+  (select count(*)::integer from public.subscription_usage
+    where user_id = 'f1110000-0000-0000-0000-000000000001' and feature_key = 'game_free_daily'),
+  0, 'without writing a counter row nobody would read');
 
 select * from finish();
 rollback;
