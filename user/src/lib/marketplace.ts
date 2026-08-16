@@ -153,3 +153,38 @@ export async function shareFile(uri: string, mimeType: string): Promise<boolean>
   await Sharing.shareAsync(uri, { mimeType, dialogTitle: "Materialni ochish" });
   return true;
 }
+
+/* ------------------------------------------------------- refund policy */
+
+export type RefundPolicy = {
+  enabled: boolean;
+  title: string;
+  body: string;
+  checkboxLabel: string;
+};
+
+/**
+ * The rule a buyer has to agree to, as an admin worded it.
+ *
+ * Read rather than hardcoded: the wording is legal text, it ages, and an edit
+ * to it should not need a store release. Nothing here decides anything — the
+ * server refuses an order that arrives without the agreement, so this only
+ * supplies the sentence somebody is agreeing to.
+ */
+export async function refundPolicy(): Promise<RefundPolicy | null> {
+  const { data, error } = await supabase
+    .from("app_settings")
+    .select("value")
+    .eq("key", "marketplace.refund_policy")
+    .maybeSingle();
+  if (error) throw error;
+
+  const value = (data?.value ?? null) as Record<string, unknown> | null;
+  if (!value || value.enabled !== true) return null;
+  return {
+    enabled: true,
+    title: String(value.title ?? "Qaytarish siyosati"),
+    body: String(value.body ?? ""),
+    checkboxLabel: String(value.checkbox_label ?? "Shartlarga roziman."),
+  };
+}

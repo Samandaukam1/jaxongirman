@@ -14,6 +14,7 @@ import { createSession } from "@/lib/games";
 import { signPaths, toggleFavorite } from "@/lib/marketplace";
 import { formatSom } from "@/lib/money";
 import { createMarketplaceOrder } from "@/lib/orders";
+import { refundPolicy, type RefundPolicy } from "@/lib/marketplace";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
 import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
@@ -75,6 +76,9 @@ export default function ProductDetailScreen() {
     game_id: string; question_count: number; difficulty: string; types: Record<string, number>;
   } | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
+  const [refund, setRefund] = useState<RefundPolicy | null>(null);
+  const [refundOpen, setRefundOpen] = useState(false);
+  const [refundAgreed, setRefundAgreed] = useState(false);
   const [reportReason, setReportReason] = useState<string>("copyright");
   const [reportDetail, setReportDetail] = useState("");
 
@@ -127,19 +131,40 @@ export default function ProductDetailScreen() {
     }
   }
 
-  async function buy() {
+  /**
+   * Asks for the refund agreement before opening an order.
+   *
+   * The server refuses an unacknowledged purchase, so this modal is not what
+   * enforces the rule — it is where somebody is actually told it, which is the
+   * part a refusal alone cannot do.
+   */
+  async function startBuy() {
+    if (!detail) return;
+    setActionError(null);
+    const current = refund ?? await refundPolicy().catch(() => null);
+    setRefund(current);
+    if (current) {
+      setRefundAgreed(false);
+      setRefundOpen(true);
+      return;
+    }
+    await buy(false);
+  }
+
+  async function buy(acknowledged: boolean) {
     if (!detail) return;
     setBusy(true);
     setActionError(null);
     try {
       // Marketplace now enters the same order/payment engine as J Coin, modules
       // and web tariffs. One checkout means one partial-card source of truth.
-      const order = await createMarketplaceOrder(productId);
+      const order = await createMarketplaceOrder(productId, acknowledged);
       router.push({ pathname: "/(app)/checkout/[orderId]", params: { orderId: order.order_id } });
     } catch (checkoutError) {
       setActionError(asErrorMessage(checkoutError));
     } finally {
       setBusy(false);
+      setRefundOpen(false);
     }
   }
 
@@ -212,6 +237,16 @@ export default function ProductDetailScreen() {
             <View style={styles.coverFallback}><Store color={colors.borderStrong} size={40} strokeWidth={1.6} /></View>
           )}
         </View>
+
+        {detail.previews.length > 0 ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push({ pathname: "/(app)/marketplace/preview/[id]", params: { id: productId } })}
+            style={styles.previewOpen}
+          >
+            <Text style={styles.previewOpenText}>Ko‘rib chiqish</Text>
+          </Pressable>
+        ) : null}
 
         {detail.previews.length > 0 ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.previewStrip}>
@@ -326,7 +361,7 @@ export default function ProductDetailScreen() {
             <Text style={styles.ownedText}>Bu sizning mahsulotingiz.</Text>
           </View>
         ) : policy.paymentsEnabled ? (
-          <PrimaryButton label={`${formatSom(quote.buyer_total)} — sotib olish`} loading={busy} onPress={() => void buy()} />
+          <PrimaryButton label={`${formatSom(quote.buyer_total)} — sotib olish`} loading={busy} onPress={() => void startBuy()} />
         ) : null}
 
         {detail.reviews.length > 0 ? (
@@ -364,6 +399,46 @@ export default function ProductDetailScreen() {
           </Pressable>
         ) : null}
       </ScrollView>
+
+      {/* Said plainly, before the money: a digital file cannot be handed back,
+          so the sale is final. The agreement travels with the order and is
+          recorded against it, wording and all. */}
+      <Modal visible={refundOpen} transparent animationType="fade" onRequestClose={() => setRefundOpen(false)}>
+        <View style={styles.refundBackdrop}>
+          <View style={styles.refundSheet}>
+            <Text style={styles.refundTitle}>{refund?.title}</Text>
+            <ScrollView style={styles.refundScroll}>
+              <Text style={styles.refundBody}>{refund?.body}</Text>
+            </ScrollView>
+
+            <Pressable
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: refundAgreed }}
+              onPress={() => setRefundAgreed((was) => !was)}
+              style={styles.refundAgree}
+            >
+              <View style={[styles.refundBox, refundAgreed && styles.refundBoxOn]}>
+                {refundAgreed ? <Text style={styles.refundTick}>✓</Text> : null}
+              </View>
+              <Text style={styles.refundAgreeText}>{refund?.checkboxLabel}</Text>
+            </Pressable>
+
+            <View style={styles.refundActions}>
+              <Pressable accessibilityRole="button" onPress={() => setRefundOpen(false)} style={styles.refundCancel}>
+                <Text style={styles.refundCancelText}>Bekor qilish</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                disabled={!refundAgreed || busy}
+                onPress={() => void buy(true)}
+                style={[styles.refundConfirm, (!refundAgreed || busy) && styles.refundDisabled]}
+              >
+                <Text style={styles.refundConfirmText}>{busy ? "Ochilmoqda…" : "Davom etish"}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <Modal visible={reportOpen} transparent animationType="fade" onRequestClose={() => setReportOpen(false)}>
         <Pressable accessibilityLabel="Yopish" onPress={() => setReportOpen(false)} style={styles.backdrop}>
@@ -404,6 +479,24 @@ const styles = StyleSheet.create({
   coverFrame: { aspectRatio: 16 / 10, borderRadius: radius.lg, overflow: "hidden", backgroundColor: colors.surfaceMuted },
   cover: { width: "100%", height: "100%" },
   coverFallback: { flex: 1, alignItems: "center", justifyContent: "center" },
+  refundBackdrop: { flex: 1, backgroundColor: "rgba(21, 14, 36, 0.55)", justifyContent: "flex-end" },
+  refundSheet: { backgroundColor: colors.surface, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, padding: spacing.xl, gap: spacing.md, maxHeight: "80%" },
+  refundTitle: { ...typography.heading, color: colors.ink },
+  refundScroll: { maxHeight: 220 },
+  refundBody: { ...typography.body, color: colors.inkMuted, lineHeight: 22 },
+  refundAgree: { flexDirection: "row", alignItems: "flex-start", gap: spacing.sm },
+  refundBox: { width: 22, height: 22, borderRadius: 7, borderWidth: 1.5, borderColor: colors.borderStrong, alignItems: "center", justifyContent: "center", marginTop: 1 },
+  refundBoxOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  refundTick: { color: colors.onPrimary, fontSize: 13, lineHeight: 16 },
+  refundAgreeText: { ...typography.caption, color: colors.ink, flex: 1, lineHeight: 18 },
+  refundActions: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.xs },
+  refundCancel: { flex: 1, paddingVertical: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, alignItems: "center" },
+  refundCancelText: { ...typography.bodyMedium, color: colors.inkMuted },
+  refundConfirm: { flex: 1.4, paddingVertical: spacing.md, borderRadius: radius.md, backgroundColor: colors.primary, alignItems: "center" },
+  refundDisabled: { opacity: 0.5 },
+  refundConfirmText: { ...typography.bodyMedium, color: colors.onPrimary },
+  previewOpen: { alignSelf: "flex-start", paddingVertical: spacing.xs },
+  previewOpenText: { ...typography.bodyMedium, color: colors.primary },
   previewStrip: { gap: spacing.sm, paddingVertical: 2 },
   previewImage: { width: 96, height: 72, borderRadius: radius.md, backgroundColor: colors.surfaceMuted },
 

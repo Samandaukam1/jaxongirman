@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(56);
+select plan(58);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -69,7 +69,7 @@ select ok(not has_function_privilege('authenticated', 'public.order_mark_process
 select ok(not has_function_privilege('authenticated',
   'public.order_fulfil_and_remember_card(uuid, uuid, text, text, integer)', 'EXECUTE'),
   'the atomic fulfil-and-remember wrapper is server-only');
-select ok(not has_function_privilege('anon', 'public.order_create_marketplace(uuid, text)', 'EXECUTE'),
+select ok(not has_function_privilege('anon', 'public.order_create_marketplace(uuid, text, boolean)', 'EXECUTE'),
   'opening an order requires an account');
 
 -- ------------------------------------------------------------ server pricing --
@@ -77,8 +77,32 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', 'aa110000-0000-0000-0000-0000000000d1', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
+-- Buying is member-only, and the refund rule has to be agreed to. Both are
+-- refused here before the plan is granted, because the useful thing to prove is
+-- that the path the app actually takes enforces them — a gate on the door
+-- nobody uses is not a gate.
+select throws_ok(
+  $$select public.order_create_marketplace('dd440000-0000-0000-0000-0000000000d4'::uuid, 'android', true)$$,
+  '42501', null, 'without a plan there is no marketplace purchase');
+
+reset role;
+insert into public.subscription_plans (code, name, price_amount, period_days, features)
+values ('test_shop', 'Do‘kon tarifi', 36000, 30, jsonb_build_object(
+  'marketplace_access', jsonb_build_object('enabled', true),
+  'marketplace_buy', jsonb_build_object('enabled', true)));
+insert into public.user_subscriptions (user_id, plan_id, status, started_at, expires_at, plan_snapshot)
+select 'aa110000-0000-0000-0000-0000000000d1', id, 'active', now(), now() + interval '30 days',
+       jsonb_build_object('features', features)
+  from public.subscription_plans where code = 'test_shop';
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'aa110000-0000-0000-0000-0000000000d1', true);
+select throws_ok(
+  $$select public.order_create_marketplace('dd440000-0000-0000-0000-0000000000d4'::uuid, 'android')$$,
+  '42501', null, 'and no purchase opens until the refund rule is agreed to');
+
 create temporary table t_mk as
-  select public.order_create_marketplace('dd440000-0000-0000-0000-0000000000d4'::uuid, 'android') as payload;
+  select public.order_create_marketplace('dd440000-0000-0000-0000-0000000000d4'::uuid, 'android', true) as payload;
 
 -- The brief's expected arithmetic, checked figure by figure.
 select is((select (payload ->> 'subtotal')::integer from t_mk), 10000, 'subtotal is the published price');
@@ -115,7 +139,7 @@ select set_config('request.jwt.claim.sub', 'aa110000-0000-0000-0000-0000000000d1
 
 -- Pressing pay twice is the same order, not a second one.
 select is(
-  (select (public.order_create_marketplace('dd440000-0000-0000-0000-0000000000d4'::uuid, 'android')) ->> 'order_id'),
+  (select (public.order_create_marketplace('dd440000-0000-0000-0000-0000000000d4'::uuid, 'android', true)) ->> 'order_id'),
   (select payload ->> 'order_id' from t_mk),
   'a double tap reuses the open order');
 select is(

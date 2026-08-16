@@ -54,8 +54,20 @@ export const createModuleOrder = (moduleCode = "data_collection") =>
 export const createSubscriptionOrder = (planCode: string) =>
   rpc<OrderSummary>("order_create_subscription", { p_plan_code: planCode, p_platform: clientPlatform });
 
-export const createMarketplaceOrder = (productId: string) =>
-  rpc<OrderSummary>("order_create_marketplace", { p_product_id: productId, p_platform: clientPlatform });
+/**
+ * Opens a marketplace order.
+ *
+ * `p_refund_acknowledged` is the buyer's agreement that a digital file cannot
+ * be handed back. The server refuses without it, so this is not a client-side
+ * courtesy — passing `true` here without having shown the wording would be
+ * agreeing on somebody's behalf.
+ */
+export const createMarketplaceOrder = (productId: string, refundAcknowledged: boolean) =>
+  rpc<OrderSummary>("order_create_marketplace", {
+    p_product_id: productId,
+    p_platform: clientPlatform,
+    p_refund_acknowledged: refundAcknowledged,
+  });
 
 /** A person's own receipts. Never any card data — the RPC returns none. */
 export const myOrders = () =>

@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(66);
+select plan(68);
 
 -- ---------------------------------------------------------------- fixtures --
 insert into auth.users (
@@ -138,12 +138,12 @@ select throws_ok(
 
 select set_config('request.jwt.claim.sub', 'e2220000-0000-0000-0000-000000000002', true);
 select is(
-  (public.marketplace_create_checkout('d0000000-0000-0000-0000-000000000001', 'attempt-1') ->> 'buyer_total')::integer,
+  (public.marketplace_create_checkout('d0000000-0000-0000-0000-000000000001', 'attempt-1', null, null, true) ->> 'buyer_total')::integer,
   12000, 'checkout quotes the buyer 12 000'
 );
 -- The same key is the same attempt, not a second charge.
 select is(
-  (public.marketplace_create_checkout('d0000000-0000-0000-0000-000000000001', 'attempt-1') ->> 'reused')::boolean,
+  (public.marketplace_create_checkout('d0000000-0000-0000-0000-000000000001', 'attempt-1', null, null, true) ->> 'reused')::boolean,
   true, 'a replayed checkout returns the first transaction'
 );
 select is((select count(*)::integer from public.payment_transactions), 1, 'only one transaction exists');
@@ -328,5 +328,24 @@ select is(
   1, 'so the week still shows one unlock used');
 
 reset role;
+
+/**
+ * A preview is not the thing being sold.
+ *
+ * The images anyone may look at live in one bucket and the file a buyer pays
+ * for lives in another, and a signed-in client holds no read policy on the
+ * second at all. So the original has no URL to leak through the preview screen
+ * — not because that screen is careful, but because it could not ask.
+ */
+select is(
+  (select count(*)::integer from pg_policies
+    where schemaname = 'storage' and tablename = 'objects' and cmd = 'SELECT'
+      and qual like '%marketplace-files%'),
+  0, 'no client role may read the marketplace file bucket');
+select ok(
+  exists (select 1 from pg_policies
+           where schemaname = 'storage' and tablename = 'objects' and cmd = 'SELECT'
+             and qual like '%marketplace-previews%'),
+  'while previews are readable, which is what makes them previews');
 select * from finish();
 rollback;

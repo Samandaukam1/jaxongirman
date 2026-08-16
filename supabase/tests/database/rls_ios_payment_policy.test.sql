@@ -112,8 +112,10 @@ select is(
 );
 
 -- The same call from Android goes through, which is the other half of the claim.
+-- The refund acknowledgement is passed because the policy is on by default; the
+-- rule that it is required has its own test, in the marketplace file.
 select lives_ok(
-  $$select public.marketplace_create_checkout('cc330000-0000-0000-0000-0000000000c3'::uuid, 'android-key-1', null, 'android')$$,
+  $$select public.marketplace_create_checkout('cc330000-0000-0000-0000-0000000000c3'::uuid, 'android-key-1', null, 'android', true)$$,
   'the identical purchase succeeds from Android'
 );
 

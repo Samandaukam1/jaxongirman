@@ -167,8 +167,16 @@ try {
   assert((buyerAfterApproval.data?.items ?? []).length === 1, "an approved product appears in search");
 
   console.log("Checking out…");
+  // A digital file cannot be handed back, so the sale is final and the buyer has
+  // to say they understand that. The server is what refuses, not the checkbox.
+  const unacknowledged = await buyer.client.rpc("marketplace_create_checkout", {
+    p_product_id: productId, p_idempotency_key: `smoke-noack-${randomUUID()}`,
+  });
+  assert(Boolean(unacknowledged.error), "a purchase without the refund acknowledgement is refused");
+
   const { data: checkout, error: checkoutError } = await buyer.client.rpc("marketplace_create_checkout", {
     p_product_id: productId, p_idempotency_key: `smoke-${randomUUID()}`,
+    p_refund_acknowledged: true,
   });
   if (checkoutError) throw checkoutError;
   assert(checkout.buyer_total === 12000, "the buyer is quoted 12 000 for a 10 000 product");
@@ -243,6 +251,7 @@ try {
 
   const repeat = await buyer.client.rpc("marketplace_create_checkout", {
     p_product_id: productId, p_idempotency_key: `smoke-again-${randomUUID()}`,
+    p_refund_acknowledged: true,
   });
   assert(Boolean(repeat.error), "the same product cannot be bought twice");
 

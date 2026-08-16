@@ -55,6 +55,11 @@ export default function AppLayout() {
             />
             <Stack.Screen name="survey/results/[id]" />
             <Stack.Screen name="marketplace/[id]" />
+            {/* A viewer, not a document: full screen, and left on purpose. */}
+            <Stack.Screen
+              name="marketplace/preview/[id]"
+              options={{ presentation: "fullScreenModal", gestureEnabled: false }}
+            />
             {/* Checkout and the seller form are both flows a person should leave on
               purpose, through their own header button, rather than by swiping. */}
             <Stack.Screen

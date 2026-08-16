@@ -4819,6 +4819,7 @@ export type Database = {
           p_partial_card_id?: string
           p_platform?: string
           p_product_id: string
+          p_refund_acknowledged?: boolean
         }
         Returns: Json
       }
@@ -4840,6 +4841,10 @@ export type Database = {
       }
       marketplace_quote: {
         Args: { p_base_price: number; p_scope?: string }
+        Returns: Json
+      }
+      marketplace_refund_ack: {
+        Args: { p_acknowledged: boolean }
         Returns: Json
       }
       marketplace_save_product: {
@@ -4930,7 +4935,11 @@ export type Database = {
         Returns: Json
       }
       order_create_marketplace: {
-        Args: { p_platform?: string; p_product_id: string }
+        Args: {
+          p_platform?: string
+          p_product_id: string
+          p_refund_acknowledged?: boolean
+        }
         Returns: Json
       }
       order_create_module: {

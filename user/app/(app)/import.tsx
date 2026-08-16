@@ -1,6 +1,6 @@
 import * as DocumentPicker from "expo-document-picker";
 import { useRouter } from "expo-router";
-import { FileUp, Info } from "lucide-react-native";
+import { Coins, FileUp, Info } from "lucide-react-native";
 import { useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
@@ -17,6 +17,7 @@ const PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.
 const MAX_BYTES = 52_428_800;
 
 type Picked = { uri: string; name: string; sizeBytes: number };
+type Quote = { cost: number; balance: number; affordable: boolean };
 
 /**
  * Bringing an existing deck in.
@@ -35,6 +36,28 @@ export default function ImportScreen() {
   const [step, setStep] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
+  const [quote, setQuote] = useState<Quote | null>(null);
+  const [agreed, setAgreed] = useState(false);
+
+  /**
+   * What it will cost, asked before anything is uploaded.
+   *
+   * Nobody should learn a price by being charged it. The figure comes from the
+   * same list the charge will read, so the number shown here and the number
+   * taken cannot be two different numbers.
+   */
+  async function fetchQuote() {
+    setQuote(null);
+    setAgreed(false);
+    const { data, error: quoteError } = await supabase.functions.invoke("import-pptx", {
+      body: { step: "quote" },
+    });
+    if (quoteError) {
+      setError(asErrorMessage(quoteError));
+      return;
+    }
+    setQuote(data as Quote);
+  }
 
   async function pick() {
     setError(null);
@@ -56,6 +79,7 @@ export default function ImportScreen() {
       return;
     }
     setFile({ uri: asset.uri, name: asset.name, sizeBytes: asset.size ?? 0 });
+    await fetchQuote();
   }
 
   async function run() {
@@ -134,6 +158,42 @@ export default function ImportScreen() {
           </View>
         ) : null}
 
+        {/* The price, and what it buys, before a single byte is uploaded. The
+            charge is taken when the deck imports successfully and is not given
+            back afterwards — somebody agreeing to that has to have been told
+            it first, plainly, on the screen where they agree. */}
+        {file && quote && quote.cost > 0 ? (
+          <View style={styles.quote}>
+            <View style={styles.quoteHead}>
+              <Coins color={colors.primary} size={18} strokeWidth={2} />
+              <Text style={styles.quoteTitle}>{quote.cost} J Tanga</Text>
+              <Text style={styles.quoteBalance}>Balans: {quote.balance} J</Text>
+            </View>
+            <Text style={styles.quoteBody}>
+              Tashqi PowerPoint faylini import qilish {quote.cost} J Tanga turadi. Import muvaffaqiyatli
+              tugagach, bu summa qaytarilmaydi. Texnik xatolik yuz bersa, tanga to‘liq qaytariladi.
+            </Text>
+
+            {quote.affordable ? (
+              <Pressable
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: agreed }}
+                onPress={() => setAgreed((was) => !was)}
+                style={styles.agreeRow}
+              >
+                <View style={[styles.checkbox, agreed && styles.checkboxOn]}>
+                  {agreed ? <Text style={styles.checkboxTick}>✓</Text> : null}
+                </View>
+                <Text style={styles.agreeText}>Roziman, {quote.cost} J Tanga yechilishini tasdiqlayman.</Text>
+              </Pressable>
+            ) : (
+              <Pressable accessibilityRole="button" onPress={() => router.push("/(app)/coins/buy")} style={styles.topUp}>
+                <Text style={styles.topUpText}>Tanga yetarli emas — to‘ldirish</Text>
+              </Pressable>
+            )}
+          </View>
+        ) : null}
+
         {error ? <InlineError message={error} /> : null}
 
         {busy ? (
@@ -142,7 +202,11 @@ export default function ImportScreen() {
             <Text style={styles.busyText}>{step}</Text>
           </View>
         ) : (
-          <PrimaryButton disabled={!file} label="Import qilish" onPress={() => void run()} />
+          <PrimaryButton
+            disabled={!file || (quote !== null && quote.cost > 0 && (!agreed || !quote.affordable))}
+            label="Import qilish"
+            onPress={() => void run()}
+          />
         )}
       </ScrollView>
     </View>
@@ -171,6 +235,18 @@ const styles = StyleSheet.create({
   warnings: { gap: spacing.xs, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.primarySoft },
   warningText: { ...typography.caption, color: colors.ink, lineHeight: 18 },
   warningLead: { ...typography.caption, color: colors.inkMuted, marginTop: spacing.xs },
+  quote: { gap: spacing.sm, padding: spacing.md, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.borderStrong, backgroundColor: colors.surfaceMuted },
+  quoteHead: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  quoteTitle: { ...typography.heading, color: colors.ink, flex: 1 },
+  quoteBalance: { ...typography.caption, color: colors.inkMuted },
+  quoteBody: { ...typography.caption, color: colors.inkMuted, lineHeight: 18 },
+  agreeRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingTop: spacing.xs },
+  checkbox: { width: 22, height: 22, borderRadius: 7, borderWidth: 1.5, borderColor: colors.borderStrong, alignItems: "center", justifyContent: "center" },
+  checkboxOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  checkboxTick: { color: colors.onPrimary, fontSize: 13, lineHeight: 16 },
+  agreeText: { ...typography.caption, color: colors.ink, flex: 1 },
+  topUp: { alignSelf: "flex-start", paddingVertical: spacing.xs },
+  topUpText: { ...typography.caption, color: colors.primary, fontFamily: "Manrope_600SemiBold" },
   busy: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, paddingVertical: spacing.md },
   busyText: { ...typography.body, color: colors.inkMuted },
 });
