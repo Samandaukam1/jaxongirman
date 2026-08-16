@@ -6,6 +6,7 @@ import { Alert, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, Vie
 import { FormField } from "@/components/FormField";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { Screen } from "@/components/Screen";
+import { SocialAuthButtons } from "@/components/SocialAuthButtons";
 import { authRedirectTo } from "@/lib/authLinking";
 import { asErrorMessage } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
@@ -51,6 +52,13 @@ export default function SignInScreen() {
         <Text style={styles.eyebrow}>JAXONGIR AI</Text>
         <Text style={styles.title}>{mode === "sign-in" ? "Xush kelibsiz" : "Hisob yarating"}</Text>
         <Text style={styles.subtitle}>Bir mavzudan professional taqdimotgacha.</Text>
+
+        {/* Above the form, because it is the faster way in and because a person
+            who has an Apple or Google account has one fewer password to invent.
+            The form below is untouched — this adds a door, it does not replace
+            one. */}
+        <SocialAuthButtons />
+
         <View style={styles.form}>
           {mode === "sign-up" ? (
             <FormField label="Ism va familiya" value={fullName} onChangeText={setFullName} autoComplete="name" />

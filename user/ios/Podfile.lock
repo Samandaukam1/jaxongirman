@@ -1,4 +1,16 @@
 PODS:
+  - AppAuth (2.1.0):
+    - AppAuth/Core (= 2.1.0)
+    - AppAuth/ExternalUserAgent (= 2.1.0)
+  - AppAuth/Core (2.1.0)
+  - AppAuth/ExternalUserAgent (2.1.0):
+    - AppAuth/Core
+  - AppCheckCore (11.3.1):
+    - GoogleUtilities/Environment (~> 8.0)
+    - GoogleUtilities/UserDefaults (~> 8.0)
+    - PromisesObjC (~> 2.4)
+    - PromisesSwift (~> 2.4)
+    - RecaptchaInterop (~> 101.0)
   - EXConstants (57.0.11):
     - ExpoModulesCore
   - EXJSONUtils (57.0.1)
@@ -178,6 +190,15 @@ PODS:
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
     - Yoga
+  - ExpoAdapterGoogleSignIn (16.1.4):
+    - ExpoModulesCore
+    - GoogleSignIn (~> 9.0)
+    - GoogleUtilities/Environment
+    - GoogleUtilities/UserDefaults
+    - React-Core
+    - RecaptchaInterop
+  - ExpoAppleAuthentication (57.0.1):
+    - ExpoModulesCore
   - ExpoAsset (57.0.11):
     - ExpoModulesCore
   - ExpoBlur (57.0.2):
@@ -248,6 +269,8 @@ PODS:
   - ExpoRouter (57.0.13):
     - ExpoModulesCore
     - RNScreens
+  - ExpoScreenCapture (57.0.2):
+    - ExpoModulesCore
   - ExpoSharing (57.0.12):
     - ExpoModulesCore
   - ExpoSplashScreen (57.0.6):
@@ -261,9 +284,30 @@ PODS:
   - EXUpdatesInterface (57.0.1):
     - ExpoModulesCore
   - FBLazyVector (0.86.2)
+  - GoogleSignIn (9.2.0):
+    - AppAuth (~> 2.1)
+    - AppCheckCore (~> 11.0)
+    - GTMAppAuth (~> 5.0)
+    - GTMSessionFetcher/Core (~> 3.3)
+  - GoogleUtilities/Environment (8.1.2):
+    - GoogleUtilities/Privacy
+  - GoogleUtilities/Logger (8.1.2):
+    - GoogleUtilities/Environment
+    - GoogleUtilities/Privacy
+  - GoogleUtilities/Privacy (8.1.2)
+  - GoogleUtilities/UserDefaults (8.1.2):
+    - GoogleUtilities/Logger
+    - GoogleUtilities/Privacy
+  - GTMAppAuth (5.0.0):
+    - AppAuth/Core (~> 2.0)
+    - GTMSessionFetcher/Core (< 4.0, >= 3.3)
+  - GTMSessionFetcher/Core (3.5.0)
   - hermes-engine (250829098.0.16):
     - hermes-engine/Pre-built (= 250829098.0.16)
   - hermes-engine/Pre-built (250829098.0.16)
+  - PromisesObjC (2.4.1)
+  - PromisesSwift (2.4.1):
+    - PromisesObjC (= 2.4.1)
   - RCTDeprecation (0.86.2)
   - RCTRequired (0.86.2)
   - RCTSwiftUI (0.86.2)
@@ -2175,6 +2219,7 @@ PODS:
     - React-utils (= 0.86.2)
     - ReactNativeDependencies
   - ReactNativeDependencies (0.86.2)
+  - RecaptchaInterop (101.0.0)
   - RNCAsyncStorage (2.2.0):
     - hermes-engine
     - RCTRequired
@@ -2220,6 +2265,29 @@ PODS:
     - ReactNativeDependencies
     - Yoga
   - RNGestureHandler (2.32.0):
+    - hermes-engine
+    - RCTRequired
+    - RCTTypeSafety
+    - React-Core
+    - React-Core-prebuilt
+    - React-debug
+    - React-Fabric
+    - React-featureflags
+    - React-graphics
+    - React-ImageManager
+    - React-jsi
+    - React-NativeModulesApple
+    - React-RCTFabric
+    - React-renderercss
+    - React-rendererdebug
+    - React-utils
+    - ReactCodegen
+    - ReactCommon/turbomodule/bridging
+    - ReactCommon/turbomodule/core
+    - ReactNativeDependencies
+    - Yoga
+  - RNGoogleSignin (16.1.4):
+    - GoogleSignIn (~> 9.0)
     - hermes-engine
     - RCTRequired
     - RCTTypeSafety
@@ -2514,6 +2582,8 @@ DEPENDENCIES:
   - expo-dev-launcher (from `../../node_modules/expo-dev-launcher`)
   - expo-dev-menu (from `../../node_modules/expo-dev-menu`)
   - expo-dev-menu-interface (from `../../node_modules/expo-dev-menu-interface/ios`)
+  - "ExpoAdapterGoogleSignIn (from `../../node_modules/@react-native-google-signin/google-signin/expo/ios`)"
+  - ExpoAppleAuthentication (from `../../node_modules/expo-apple-authentication/ios`)
   - ExpoAsset (from `../../node_modules/expo-asset/ios`)
   - ExpoBlur (from `../../node_modules/expo-blur/ios`)
   - ExpoCamera (from `../../node_modules/expo-camera/ios/ExpoCamera.podspec`)
@@ -2535,6 +2605,7 @@ DEPENDENCIES:
   - ExpoModulesWorklets (from `../../node_modules/expo-modules-core/ExpoModulesWorklets.podspec`)
   - ExpoModulesWorkletsAdapter (from `../../node_modules/expo-modules-core`)
   - ExpoRouter (from `../../node_modules/expo-router/ios`)
+  - ExpoScreenCapture (from `../../node_modules/expo-screen-capture/ios`)
   - ExpoSharing (from `../../node_modules/expo-sharing/ios`)
   - ExpoSplashScreen (from `../../node_modules/expo-splash-screen/ios`)
   - ExpoSymbols (from `../../node_modules/expo-symbols/ios`)
@@ -2620,11 +2691,24 @@ DEPENDENCIES:
   - "RNCAsyncStorage (from `../../node_modules/@react-native-async-storage/async-storage`)"
   - "RNCMaskedView (from `../../node_modules/@react-native-masked-view/masked-view`)"
   - RNGestureHandler (from `../../node_modules/react-native-gesture-handler`)
+  - "RNGoogleSignin (from `../../node_modules/@react-native-google-signin/google-signin`)"
   - RNReanimated (from `../../node_modules/react-native-reanimated`)
   - RNScreens (from `../../node_modules/react-native-screens`)
   - RNSVG (from `../../node_modules/react-native-svg`)
   - RNWorklets (from `../../node_modules/react-native-worklets`)
   - Yoga (from `../../node_modules/react-native/ReactCommon/yoga`)
+
+SPEC REPOS:
+  trunk:
+    - AppAuth
+    - AppCheckCore
+    - GoogleSignIn
+    - GoogleUtilities
+    - GTMAppAuth
+    - GTMSessionFetcher
+    - PromisesObjC
+    - PromisesSwift
+    - RecaptchaInterop
 
 EXTERNAL SOURCES:
   EXConstants:
@@ -2643,6 +2727,10 @@ EXTERNAL SOURCES:
     :path: "../../node_modules/expo-dev-menu"
   expo-dev-menu-interface:
     :path: "../../node_modules/expo-dev-menu-interface/ios"
+  ExpoAdapterGoogleSignIn:
+    :path: "../../node_modules/@react-native-google-signin/google-signin/expo/ios"
+  ExpoAppleAuthentication:
+    :path: "../../node_modules/expo-apple-authentication/ios"
   ExpoAsset:
     :path: "../../node_modules/expo-asset/ios"
   ExpoBlur:
@@ -2685,6 +2773,8 @@ EXTERNAL SOURCES:
     :path: "../../node_modules/expo-modules-core"
   ExpoRouter:
     :path: "../../node_modules/expo-router/ios"
+  ExpoScreenCapture:
+    :path: "../../node_modules/expo-screen-capture/ios"
   ExpoSharing:
     :path: "../../node_modules/expo-sharing/ios"
   ExpoSplashScreen:
@@ -2854,6 +2944,8 @@ EXTERNAL SOURCES:
     :path: "../../node_modules/@react-native-masked-view/masked-view"
   RNGestureHandler:
     :path: "../../node_modules/react-native-gesture-handler"
+  RNGoogleSignin:
+    :path: "../../node_modules/@react-native-google-signin/google-signin"
   RNReanimated:
     :path: "../../node_modules/react-native-reanimated"
   RNScreens:
@@ -2866,6 +2958,8 @@ EXTERNAL SOURCES:
     :path: "../../node_modules/react-native/ReactCommon/yoga"
 
 SPEC CHECKSUMS:
+  AppAuth: ef4da5a3fc2e10b90c09a0a94a9baeaedc0341d5
+  AppCheckCore: e215d35177a9cf469927863e69c13e220df32a8b
   EXConstants: 13cc6ad9324d81223386074a523d4e16aed32cd2
   EXJSONUtils: 7a1683cfa2cbe6d11fca97097d51a496755b0287
   EXManifests: f9888c0bf5aaa6ddb7e3d4b224d6d54ac4ca84a4
@@ -2874,6 +2968,8 @@ SPEC CHECKSUMS:
   expo-dev-launcher: 7262c0045c0fac046a2ffff9c0127986f0f64c51
   expo-dev-menu: 5788381267fbff3de6ce89bdffe2ea827d209666
   expo-dev-menu-interface: 7a59e803916fbfd1b96c75ff91ea8dddac7e722f
+  ExpoAdapterGoogleSignIn: cfc75819d7d2490488250ce5634f57f92c60a2b8
+  ExpoAppleAuthentication: 97d113f0f2680067e6e76d3c9249e7e1fc026b42
   ExpoAsset: e046c820a585f46969182c2aa03c3a822dd55b6b
   ExpoBlur: 69e67b4fbfed6f7325377af2aefa8aa4f00cd2af
   ExpoCamera: a5e9d9ce2fc06689eb2dd676f1f8d5f22f8aa292
@@ -2895,13 +2991,20 @@ SPEC CHECKSUMS:
   ExpoModulesWorklets: eaf2898a6621e3c9a09c0479c1a4cb5f1b368d53
   ExpoModulesWorkletsAdapter: abb7388bf2cdbcf02f49f66fd59bcde36af259f9
   ExpoRouter: 5e3858e1f94c18aebb2289c62996be55edfa7169
+  ExpoScreenCapture: 6b82aba55db3ecc6f124ebd45163d6db9b916b2d
   ExpoSharing: efb8f6341420901f6c7ecec5274dc7d389c69588
   ExpoSplashScreen: 2dda363bfc268b92f00530ee7fa2a3be4534cf57
   ExpoSymbols: 0efd93edf0f825bf3c762582b0769dd3b296235c
   ExpoUI: 0df983122ad00cc8a31ac79e72fc8f585719ab87
   EXUpdatesInterface: 92d2aa5194b6fb93ca8ab749db75665cb28b2e60
   FBLazyVector: 3c3be9a019176b5699455f7f66c5444b78a411c6
+  GoogleSignIn: e449a40a92e9f2eea56e98b5214d13725dc5a00a
+  GoogleUtilities: 766ace00c6b10d8148408f329d10c4f051931850
+  GTMAppAuth: 217a876b249c3c585a54fd6f73e6b58c4f5c4238
+  GTMSessionFetcher: 5aea5ba6bd522a239e236100971f10cb71b96ab6
   hermes-engine: 4287cdfb7bf138f47ee0906e41e296fe8672fc00
+  PromisesObjC: 752c3227f599e3467650e47ea36f433eeb10c273
+  PromisesSwift: 217dea0fd5d2ad65222a109c48698add13cc1c5b
   RCTDeprecation: bccb6545c26db881ecddfd83a3f9ea82aba1605f
   RCTRequired: b2f74764d596fc0051f00fee94b49bf41a6f7f5a
   RCTSwiftUI: c6d6a31b849b9dfa64c33b55dc91ac15dd55774c
@@ -2976,9 +3079,11 @@ SPEC CHECKSUMS:
   ReactCodegen: 8f2b77e96bcb03fe939d567a067fb097618227a1
   ReactCommon: 9002f006f571256348994183f7d4387aa7cf84e8
   ReactNativeDependencies: 2bd6854ade79bf1b60586d1ab7813a389df1b6bf
+  RecaptchaInterop: 11e0b637842dfb48308d242afc3f448062325aba
   RNCAsyncStorage: 2ad919e88b8bc2cd80e8697ce66d04d006743283
   RNCMaskedView: eb2b2e538afa907f05a5848a1a1ac26092e6fec9
   RNGestureHandler: 92172e79df6e88e0e93b6341f9dcd8b5a02746ba
+  RNGoogleSignin: 3877e3613380fab0ca9112c1abbb19d876ec6751
   RNReanimated: dbc78e86e5782811ebbfb8f492abfbc744486666
   RNScreens: c1a06fd73d0581a2a28a160577be393f579662b9
   RNSVG: 3fe8590403ac9f107b4d14591bc6e54da4894e5c

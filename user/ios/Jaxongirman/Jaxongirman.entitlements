@@ -19,5 +19,23 @@
       <string>applinks:jaxongirman.uz</string>
       <string>applinks:jaxongirman.app</string>
     </array>
+
+    <!--
+      Sign in with Apple. Without this entitlement the button presents itself
+      and then fails at the moment somebody uses it, which is the worst place to
+      discover a missing capability.
+
+      Here for the same reason as the domains above: app.config.js sets
+      `ios.usesAppleSignIn`, but EAS Build does not sync the `ios` block into a
+      checked-in native project. Both places say the same thing, so a later
+      `expo prebuild` reproduces this file rather than contradicting it.
+
+      The matching capability must also be enabled on the App ID in the Apple
+      Developer console — see docs/social-auth-setup.md.
+    -->
+    <key>com.apple.developer.applesignin</key>
+    <array>
+      <string>Default</string>
+    </array>
   </dict>
 </plist>
