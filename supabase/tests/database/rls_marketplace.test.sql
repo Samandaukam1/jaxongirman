@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(58);
+select plan(66);
 
 -- ---------------------------------------------------------------- fixtures --
 insert into auth.users (
@@ -99,6 +99,37 @@ select is(
 );
 
 -- ---------------------------------------------------------------- checkout --
+
+/**
+ * The shop is a members' economy now.
+ *
+ * Browsing stays open — a shop nobody may look into has nothing to sell a
+ * subscription with — but buying and selling need a live plan, and the refusal
+ * comes from the database rather than from a hidden button.
+ */
+select set_config('request.jwt.claim.sub', 'e2220000-0000-0000-0000-000000000002', true);
+select throws_ok(
+  $$select public.marketplace_create_checkout('d0000000-0000-0000-0000-000000000001', 'no-plan')$$,
+  '42501', null, 'somebody without a plan cannot buy'
+);
+select throws_ok(
+  $$select public.marketplace_save_product(null, 'presentation', 'Nomsiz')$$,
+  '42501', null, 'and cannot sell'
+);
+
+-- Both buyer and seller are members from here on: the rest of this file is
+-- about what the shop does, not about who may enter it.
+-- Granting a membership is a privileged write, as it should be: no client role
+-- holds INSERT here. The test steps out of `authenticated` to seed it and
+-- steps straight back.
+reset role;
+insert into public.user_subscriptions (user_id, plan_id, status, started_at, expires_at, plan_snapshot)
+select u.id, p.id, 'active', now(), now() + interval '30 days', jsonb_build_object('features', p.features)
+  from (values ('e1110000-0000-0000-0000-000000000001'::uuid), ('e2220000-0000-0000-0000-000000000002'::uuid)) as u(id)
+  cross join public.subscription_plans p
+ where p.code = 'premium_monthly';
+set local role authenticated;
+
 select set_config('request.jwt.claim.sub', 'e1110000-0000-0000-0000-000000000001', true);
 select throws_ok(
   $$select public.marketplace_create_checkout('d0000000-0000-0000-0000-000000000001', 'self-buy')$$,
@@ -249,6 +280,52 @@ select is((select count(*)::integer from public.partial_cards), 1,
 delete from public.partial_cards where display_pan = '86004954XXXX6478';
 select is((select count(*)::integer from public.partial_cards), 0,
   'the owner can delete a saved card');
+
+-- ------------------------------------------------ the weekly unlock --
+
+/**
+ * Opening a paid item on the allowance rather than by buying it.
+ *
+ * What a member gets is the right to use the work inside Jaxongirman. What they
+ * do not get is the file or the right to sell it on — they did not buy it, and
+ * the seller is still its author. Those are columns on the licence, so an
+ * export path can ask rather than a screen having to remember.
+ */
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select set_config('request.jwt.claim.sub', 'e3330000-0000-0000-0000-000000000003', true);
+
+reset role;
+insert into public.user_subscriptions (user_id, plan_id, status, started_at, expires_at, plan_snapshot)
+select 'e3330000-0000-0000-0000-000000000003', p.id, 'active', now(), now() + interval '30 days',
+       jsonb_build_object('features', p.features)
+  from public.subscription_plans p where p.code = 'premium_monthly';
+set local role authenticated;
+
+select is(
+  (public.marketplace_unlock_with_subscription('d0000000-0000-0000-0000-000000000001') ->> 'ok'),
+  'true', 'a member opens a paid item on the weekly allowance');
+select is(
+  (select license_type from public.marketplace_licenses
+    where user_id = 'e3330000-0000-0000-0000-000000000003'),
+  'subscription_access', 'and it is recorded as access, not as a purchase');
+select is(
+  (select editable::text || ',' || presentable::text || ',' || download_allowed::text || ',' || resale_allowed::text
+     from public.marketplace_licenses where user_id = 'e3330000-0000-0000-0000-000000000003'),
+  'true,true,false,false', 'editable and presentable; not downloadable, not resellable');
+select is(
+  public.marketplace_may_download('d0000000-0000-0000-0000-000000000001', 'e3330000-0000-0000-0000-000000000003'),
+  false, 'so no export path will hand over the file');
+
+-- The allowance is one a week, and opening the same thing twice is not two.
+select is(
+  (public.marketplace_unlock_with_subscription('d0000000-0000-0000-0000-000000000001') ->> 'repeated'),
+  'true', 'opening what is already open spends nothing');
+select is(
+  (select used from public.subscription_usage
+    where user_id = 'e3330000-0000-0000-0000-000000000003' and feature_key = 'marathon_unlock'),
+  1, 'so the week still shows one unlock used');
 
 reset role;
 select * from finish();

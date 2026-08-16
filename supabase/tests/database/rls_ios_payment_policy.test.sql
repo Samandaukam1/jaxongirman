@@ -87,6 +87,15 @@ select ok(
 -- ------------------------------------------------------- the server refusal --
 -- A client that ignores the policy, or a request replayed from a script, must
 -- still be refused: the hide is presentation, this is enforcement.
+
+-- The shop needs a live plan now, and this file is about the platform gate
+-- rather than the membership one — so the buyer gets a membership and the
+-- refusal being tested stays the iOS refusal.
+insert into public.user_subscriptions (user_id, plan_id, status, started_at, expires_at, plan_snapshot)
+select 'aa110000-0000-0000-0000-0000000000a1', p.id, 'active', now(), now() + interval '30 days',
+       jsonb_build_object('features', p.features)
+  from public.subscription_plans p where p.code = 'premium_monthly';
+
 set local role authenticated;
 select set_config('request.jwt.claim.sub', 'aa110000-0000-0000-0000-0000000000a1', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);

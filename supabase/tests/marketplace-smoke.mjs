@@ -94,6 +94,20 @@ try {
   created.push(seller.id, buyer.id, stranger.id, admin.id);
   await service.from("user_roles").insert({ user_id: admin.id, role: "admin" });
 
+  /**
+   * The shop is a members' economy: buying and selling both need a live plan.
+   *
+   * Granting one is a privileged write — no client role holds INSERT on
+   * `user_subscriptions`, which is the point — so it goes in through psql the
+   * way an operator would, not through the API.
+   */
+  execFileSync("psql", [dbUrl, "-q", "-v", "ON_ERROR_STOP=1", "-c",
+    `insert into public.user_subscriptions (user_id, plan_id, status, started_at, expires_at, plan_snapshot)
+     select u.id, p.id, 'active', now(), now() + interval '30 days', jsonb_build_object('features', p.features)
+       from (values ('${seller.id}'::uuid), ('${buyer.id}'::uuid)) as u(id)
+       cross join public.subscription_plans p where p.code = 'premium_monthly';`,
+  ], { encoding: "utf8" });
+
   const productTitle = `Smoke taqdimoti ${randomUUID().slice(0, 8)}`;
   console.log("Listing a product…");
   const { data: productId, error: saveError } = await seller.client.rpc("marketplace_save_product", {
