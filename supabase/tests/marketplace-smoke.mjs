@@ -175,10 +175,16 @@ try {
   }
   assert(start.data.state === "otp_requested", "the provider asks for a verification code");
   assert(start.data.sandbox === true, "the sandbox adapter is the one running");
-  assert(start.data.first8 === "86001234" && start.data.last4 === "9012", "only the two ends of the number come back");
+  // The card comes back already masked, and the client is never asked to echo
+  // the ends of the number back: the server holds them privately against the
+  // attempt it just opened, so nothing a caller sends can substitute a
+  // different card into the charge.
+  assert(start.data.maskedCard === "86001234XXXX9012", "only the masked hint comes back");
+  assert(typeof start.data.attemptId === "string" && start.data.attemptId,
+    "and the attempt the verification code will belong to");
 
   const wrongCode = await buyer.client.functions.invoke("pay-marketplace", {
-    body: { transactionId, step: "verify", code: "000000", first8: start.data.first8, last4: start.data.last4, expiry: "12/29" },
+    body: { transactionId, step: "verify", code: "000000", attemptId: start.data.attemptId },
   });
   assert(Boolean(wrongCode.error), "a wrong verification code is refused");
 
@@ -187,9 +193,11 @@ try {
     body: { transactionId, step: "start", pan: "8600123456789012", expiry: "12/29" },
   });
   assert(!restart.error, "a fresh attempt can start after a failure");
+  assert(restart.data.attemptId && restart.data.attemptId !== start.data.attemptId,
+    "and it is a new attempt rather than the consumed one revived");
 
   const paid = await buyer.client.functions.invoke("pay-marketplace", {
-    body: { transactionId, step: "verify", code: "111111", first8: "86001234", last4: "9012", expiry: "12/29" },
+    body: { transactionId, step: "verify", code: "111111", attemptId: restart.data.attemptId },
   });
   if (paid.error) {
     const detail = paid.error.context instanceof Response ? await paid.error.context.clone().text() : "";

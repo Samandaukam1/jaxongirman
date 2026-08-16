@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(53);
+select plan(57);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -64,6 +64,11 @@ select ok(not has_function_privilege('authenticated', 'public.order_fulfil(uuid,
   'fulfilment is unreachable from a client: only the code holding the provider answer may grant');
 select ok(not has_function_privilege('authenticated', 'public.order_advance(uuid, public.order_status, text, text)', 'EXECUTE'),
   'and so is the status writer');
+select ok(not has_function_privilege('authenticated', 'public.order_mark_processing(uuid, text)', 'EXECUTE'),
+  'a client cannot claim that a receipt is being charged');
+select ok(not has_function_privilege('authenticated',
+  'public.order_fulfil_and_remember_card(uuid, uuid, text, text, integer)', 'EXECUTE'),
+  'the atomic fulfil-and-remember wrapper is server-only');
 select ok(not has_function_privilege('anon', 'public.order_create_marketplace(uuid, text)', 'EXECUTE'),
   'opening an order requires an account');
 
@@ -139,6 +144,18 @@ select is(
 
 -- ------------------------------------------------------------ fulfilment --
 reset role;
+
+select ok(
+  public.order_mark_processing(
+    (select (payload ->> 'order_id')::uuid from t_coin), 'receipt-1'
+  ),
+  'the server persists the provider receipt before charging'
+);
+select is(
+  (select payme_receipt_id from public.orders
+   where id = (select (payload ->> 'order_id')::uuid from t_coin)),
+  'receipt-1', 'the processing order is reconcilable by provider receipt'
+);
 
 select is(
   (public.order_fulfil((select (payload ->> 'order_id')::uuid from t_coin), 'receipt-1', 'txn-1', 0)) ->> 'coins_granted',

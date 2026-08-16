@@ -22,14 +22,25 @@ import { randomUUID } from "node:crypto";
 
 import { createClient } from "@supabase/supabase-js";
 
-const SANDBOX_CODE = "111111";
+const PROVIDER_CODE = process.env.PROVIDER_CODE ?? "111111";
+const EXPECT_SANDBOX = (process.env.EXPECT_SANDBOX ?? "true") === "true";
 // Payme's own documented example number, not anybody's card. It never leaves
 // this file: the sandbox provider is what receives it, and nothing is stored.
-const GOOD_CARD = "8600069195406311";
+const GOOD_CARD = process.env.PAYMENT_TEST_CARD ?? "8600069195406311";
+const SECOND_CARD = process.env.PAYMENT_TEST_CARD_2 ?? "8600495473316478";
 // The sandbox declines any number ending 0000, which is how the failure path is
 // exercised without a real decline.
 const DECLINED_CARD = "8600069195400000";
-const EXPIRY = "03/99";
+const EXPIRY = process.env.PAYMENT_TEST_EXPIRY ?? "03/99";
+const SECOND_EXPIRY = process.env.PAYMENT_TEST_EXPIRY_2 ?? EXPIRY;
+
+function expectedMask(pan) {
+  return `${pan.slice(0, 8)}XXXX${pan.slice(-4)}`;
+}
+
+function reconstruct(masked, missing) {
+  return `${masked.slice(0, 8)}${missing}${masked.slice(-4)}`;
+}
 
 function localEnvironment() {
   const output = execFileSync("npx", ["supabase", "status", "-o", "env"], {
@@ -118,24 +129,43 @@ try {
   assert(order.data.total_amount === 20000, "priced from the catalogue, not from the client");
 
   const started = await pay(buyer.token, { orderId: order.data.order_id, step: "start", pan: GOOD_CARD, expiry: EXPIRY });
-  assert(started.status === 200, "the card is accepted and a code is requested");
+  assert(started.status === 200,
+    `the card is accepted and a code is requested — got ${started.status}: ${JSON.stringify(started.body)}`);
   assert(started.body.status === "awaiting_verification", "and the order waits for verification");
-  assert(
-    typeof started.body.maskedCard === "string" && !started.body.maskedCard.includes(GOOD_CARD),
-    "the card comes back masked, never in full",
-  );
+  assert(started.body.maskedCard === expectedMask(GOOD_CARD), "the required 8+XXXX+4 mask comes back, never the PAN");
+  assert(started.body.expiryHint === EXPIRY, "expiry comes back normalized as MM/YY");
+  assert(started.body.sandbox === EXPECT_SANDBOX, "the expected provider mode is running");
 
-  const wrong = await pay(buyer.token, { orderId: order.data.order_id, step: "verify", code: "000000" });
-  assert(wrong.status === 400 && wrong.body.recoverable === true, "a wrong code is recoverable, not a failed payment");
+  // Verification names the attempt it belongs to. The server will not guess:
+  // an OTP is only meaningful against the card start that requested it, and
+  // binding the two is what stops a code from being replayed against a later
+  // attempt.
+  assert(typeof started.body.attemptId === "string" && started.body.attemptId,
+    "the start hands back the attempt the code will belong to");
+  let attemptId = started.body.attemptId;
 
-  // The token was spent by the failed verify, so the buyer restarts the card
-  // step — which is exactly what the client is told to do.
-  const restart = await pay(buyer.token, { orderId: order.data.order_id, step: "start", pan: GOOD_CARD, expiry: EXPIRY });
-  assert(restart.status === 200, "and the buyer can try the card again");
+  // Wrong-code behavior is deterministic in the local adapter. The official
+  // Payme test run may choose to avoid an extra SMS by setting RUN_WRONG_CODE=false.
+  if ((process.env.RUN_WRONG_CODE ?? String(EXPECT_SANDBOX)) === "true") {
+    const wrong = await pay(buyer.token, { orderId: order.data.order_id, step: "verify", code: "000000", attemptId });
+    assert(
+      wrong.status === 400 && wrong.body.recoverable === true && wrong.body.restartRequired === true,
+      "a consumed wrong-code attempt explicitly requires a fresh card start",
+    );
 
-  const paid = await pay(buyer.token, { orderId: order.data.order_id, step: "verify", code: SANDBOX_CODE });
-  assert(paid.status === 200 && paid.body.status === "paid", "the correct code completes the payment");
+    const restart = await pay(buyer.token, { orderId: order.data.order_id, step: "start", pan: GOOD_CARD, expiry: EXPIRY });
+    assert(restart.status === 200, "and the buyer can request a fresh verification code");
+    // A restart is a new attempt, and the old id is now spent.
+    assert(restart.body.attemptId && restart.body.attemptId !== attemptId,
+      "a restart issues a fresh attempt rather than reviving the consumed one");
+    attemptId = restart.body.attemptId;
+  }
+
+  const paid = await pay(buyer.token, { orderId: order.data.order_id, step: "verify", code: PROVIDER_CODE, attemptId });
+  assert(paid.status === 200 && paid.body.status === "paid",
+    `the correct code completes the payment — got ${paid.status}: ${JSON.stringify(paid.body)}`);
   assert(paid.body.fulfilment?.coins_granted === 40, "and fulfilment granted the coins");
+  assert(paid.body.maskedCard === expectedMask(GOOD_CARD), "paid response keeps only the trusted mask");
 
   const after = await service.from("credit_wallets").select("balance").eq("user_id", buyer.id).single();
   assert(after.data.balance === startingBalance + 40, "the wallet moved by exactly the package amount");
@@ -144,14 +174,82 @@ try {
     .eq("user_id", buyer.id).eq("type", "coin_purchase");
   assert(ledger.count === 1, "with exactly one ledger row");
 
+  const firstCards = await buyer.client
+    .from("partial_cards")
+    .select("id,display_pan,last4,expiry_month,expiry_year,last_used_at")
+    .order("last_used_at", { ascending: false });
+  if (firstCards.error) throw firstCards.error;
+  assert(firstCards.data.length === 1, "the first successful payment remembers one card");
+  assert(firstCards.data[0].display_pan === expectedMask(GOOD_CARD), "database stores only the required masked hint");
+  assert(!JSON.stringify(firstCards.data).includes(GOOD_CARD), "the partial-card row contains no full PAN");
+
+  /* ---------------------------------------- second pay from four digits */
+
+  console.log("Paying again from the four missing digits…");
+  const orderFromHint = await buyer.client.rpc("order_create_jcoin", {
+    p_package_id: pkg.data.id, p_platform: "android",
+  });
+  if (orderFromHint.error) throw orderFromHint.error;
+
+  // This is what the UI does when the buyer types only the XXXX segment. The
+  // four digits are a local variable and are never sent or stored separately.
+  const missingFour = GOOD_CARD.slice(8, 12);
+  const reconstructedPan = reconstruct(firstCards.data[0].display_pan, missingFour);
+  assert(reconstructedPan === GOOD_CARD, "exactly four entered digits reconstruct the provider PAN in memory");
+
+  const hintStart = await pay(buyer.token, {
+    orderId: orderFromHint.data.order_id, step: "start", pan: reconstructedPan, expiry: EXPIRY,
+  });
+  assert(hintStart.status === 200, "the reconstructed card requests SMS verification normally");
+  const hintPaid = await pay(buyer.token, {
+    orderId: orderFromHint.data.order_id, step: "verify", code: PROVIDER_CODE,
+    attemptId: hintStart.body.attemptId,
+  });
+  assert(hintPaid.status === 200 && hintPaid.body.status === "paid",
+    `the second verified payment succeeds — got ${hintPaid.status}: ${JSON.stringify(hintPaid.body)}`);
+
+  const duplicateCards = await buyer.client.from("partial_cards").select("id,display_pan,last_used_at");
+  if (duplicateCards.error) throw duplicateCards.error;
+  assert(duplicateCards.data.length === 1, "the same card is not saved twice");
+
+  const afterHintPayment = await service.from("credit_wallets").select("balance").eq("user_id", buyer.id).single();
+  assert(afterHintPayment.data.balance === startingBalance + 80, "the second payment fulfilled exactly once");
+
+  /* ------------------------------------------------ another card */
+
+  if (EXPECT_SANDBOX || process.env.PAYMENT_TEST_CARD_2) {
+    const otherOrder = await buyer.client.rpc("order_create_jcoin", {
+      p_package_id: pkg.data.id, p_platform: "android",
+    });
+    if (otherOrder.error) throw otherOrder.error;
+    const otherStart = await pay(buyer.token, {
+      orderId: otherOrder.data.order_id, step: "start", pan: SECOND_CARD, expiry: SECOND_EXPIRY,
+    });
+    assert(otherStart.status === 200, "a different card starts its own verified payment");
+    const otherPaid = await pay(buyer.token, {
+      orderId: otherOrder.data.order_id, step: "verify", code: PROVIDER_CODE,
+      attemptId: otherStart.body.attemptId,
+    });
+    assert(otherPaid.status === 200 && otherPaid.body.status === "paid",
+      `the different card payment succeeds — got ${otherPaid.status}: ${JSON.stringify(otherPaid.body)}`);
+    const allCards = await buyer.client.from("partial_cards").select("display_pan");
+    if (allCards.error) throw allCards.error;
+    assert(allCards.data.length === 2, "a genuinely different card gets a separate hint");
+    assert(allCards.data.some((card) => card.display_pan === expectedMask(SECOND_CARD)), "the second hint has the right mask");
+  }
+
   /* ------------------------------------------------------ replays */
 
   console.log("Replaying what a dropped connection replays…");
-  const again = await pay(buyer.token, { orderId: order.data.order_id, step: "verify", code: SANDBOX_CODE });
+  // Measured against the balance right before the replay rather than against
+  // the opening one: several orders have been paid by now, and the claim being
+  // tested is that a repeat grants nothing — not what the total happens to be.
+  const beforeReplay = await service.from("credit_wallets").select("balance").eq("user_id", buyer.id).single();
+  const again = await pay(buyer.token, { orderId: order.data.order_id, step: "verify", code: PROVIDER_CODE });
   assert(again.body.alreadyPaid === true, "asking again about a paid order reports it already paid");
 
   const afterReplay = await service.from("credit_wallets").select("balance").eq("user_id", buyer.id).single();
-  assert(afterReplay.data.balance === startingBalance + 40, "and grants nothing a second time");
+  assert(afterReplay.data.balance === beforeReplay.data.balance, "and grants nothing a second time");
 
   const fulfilTwice = await service.rpc("order_fulfil", { p_order_id: order.data.order_id });
   assert(fulfilTwice.data?.already === true, "fulfilling directly a second time is a no-op too");
@@ -161,9 +259,17 @@ try {
   console.log("Declining a card…");
   const order2 = await buyer.client.rpc("order_create_jcoin", { p_package_id: pkg.data.id, p_platform: "android" });
   if (order2.error) throw order2.error;
-  await pay(buyer.token, { orderId: order2.data.order_id, step: "start", pan: DECLINED_CARD, expiry: EXPIRY });
-  const declined = await pay(buyer.token, { orderId: order2.data.order_id, step: "verify", code: SANDBOX_CODE });
-  assert(declined.status === 402, "a provider decline is reported as a payment failure");
+  const declineStart = await pay(buyer.token, {
+    orderId: order2.data.order_id, step: "start", pan: DECLINED_CARD, expiry: EXPIRY,
+  });
+  assert(declineStart.status === 200,
+    `a card that will decline still starts normally — got ${declineStart.status}: ${JSON.stringify(declineStart.body)}`);
+  const declined = await pay(buyer.token, {
+    orderId: order2.data.order_id, step: "verify", code: PROVIDER_CODE,
+    attemptId: declineStart.body.attemptId,
+  });
+  assert(declined.status === 402,
+    `a provider decline is reported as a payment failure — got ${declined.status}: ${JSON.stringify(declined.body)}`);
 
   const declinedRow = await service.from("orders").select("status, failure_code")
     .eq("id", order2.data.order_id).single();
@@ -177,7 +283,9 @@ try {
   assert(declinedRow.data.status !== "paid", "a declined order is never paid");
 
   const balanceAfterDecline = await service.from("credit_wallets").select("balance").eq("user_id", buyer.id).single();
-  assert(balanceAfterDecline.data.balance === startingBalance + 40, "a decline granted nothing");
+  // Against the balance the replay section already established, for the same
+  // reason: what matters is that a decline moves it by nothing.
+  assert(balanceAfterDecline.data.balance === afterReplay.data.balance, "a decline granted nothing");
 
   /* ------------------------------------------------- someone else's */
 
@@ -194,16 +302,39 @@ try {
   // configured, and a test has no business rewriting production settings.
   sql("update public.app_settings set value = jsonb_set(value, '{review_mode}', 'true') where key = 'payments.ios_policy'");
 
-  const order3 = await buyer.client.rpc("order_create_jcoin", { p_package_id: pkg.data.id, p_platform: "android" });
+  // A separate package, because `order_create_jcoin` reuses whatever open order
+  // the buyer already has for a package — and the declined one above is left in
+  // `processing` on purpose, which is not a state a fresh card attempt may open
+  // against. Reusing it made this section test the refusal instead of the
+  // platform gate it is named after.
+  const platformCode = `smoke_${randomUUID().slice(0, 8)}`;
+  sql(`insert into public.coin_packages (code, label, coins, bonus_coins, price_amount)
+       values ('${platformCode}', 'Smoke platform 40 J', 40, 0, 20000)`);
+  const platformPkg = await service.from("coin_packages").select("id").eq("code", platformCode).single();
+  if (platformPkg.error) throw platformPkg.error;
+
+  const order3 = await buyer.client.rpc("order_create_jcoin", { p_package_id: platformPkg.data.id, p_platform: "android" });
+  // Checked rather than fallen back from: silently paying against an earlier
+  // order would have tested the wrong thing entirely, and did.
+  if (order3.error) throw order3.error;
+  assert(order3.data.reused !== true, "the platform check needs an order nothing else has touched");
   const iosAttempt = await pay(buyer.token, {
-    orderId: order3.data?.order_id ?? order.data.order_id, step: "start", pan: GOOD_CARD, expiry: EXPIRY,
+    orderId: order3.data.order_id, step: "start", pan: GOOD_CARD, expiry: EXPIRY,
   }, "ios");
   assert(iosAttempt.status === 403, "an iOS client cannot pay even an order opened on Android");
 
+  // The refused attempt closes that order — a policy refusal is still a failed
+  // attempt — so the Android half of the claim is made on a fresh one. What is
+  // being shown is that the gate turns on the platform, not on the order.
+  const order4 = await buyer.client.rpc("order_create_jcoin", {
+    p_package_id: platformPkg.data.id, p_platform: "android",
+  });
+  if (order4.error) throw order4.error;
   const androidStillWorks = await pay(buyer.token, {
-    orderId: order3.data.order_id, step: "start", pan: GOOD_CARD, expiry: EXPIRY,
+    orderId: order4.data.order_id, step: "start", pan: GOOD_CARD, expiry: EXPIRY,
   }, "android");
-  assert(androidStillWorks.status === 200, "while the same order pays fine from Android");
+  assert(androidStillWorks.status === 200,
+    `while Android pays fine under the same policy — got ${androidStillWorks.status}: ${JSON.stringify(androidStillWorks.body)}`);
 
   sql("update public.app_settings set value = jsonb_set(value, '{review_mode}', 'false') where key = 'payments.ios_policy'");
 
@@ -213,7 +344,7 @@ try {
   const stored = await service.from("orders").select("*").eq("id", order.data.order_id).single();
   const serialised = JSON.stringify(stored.data);
   assert(!serialised.includes(GOOD_CARD), "the full card number is nowhere in the order row");
-  assert(!serialised.includes(SANDBOX_CODE), "and neither is the verification code");
+  assert(!serialised.includes(PROVIDER_CODE), "and neither is the verification code");
   assert(stored.data.provider_card_token === null, "the one-time token was wiped after use");
 
   const events = await service.from("credit_transactions").select("metadata").eq("user_id", buyer.id);

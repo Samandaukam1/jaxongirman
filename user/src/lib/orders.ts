@@ -70,7 +70,9 @@ export type PayStart = {
   status: "awaiting_verification";
   orderNumber: string;
   sandbox: boolean;
-  /** Masked by the provider, for the confirmation line. Never built here. */
+  /** Opaque identity binding the next OTP call to this exact card attempt. */
+  attemptId: string;
+  /** Trusted display-only mask returned by the server; never built in the client. */
   maskedCard: string | null;
   expiryHint: string | null;
 };
@@ -85,7 +87,13 @@ export type PayResult = {
 };
 
 export class OrderPaymentError extends Error {
-  constructor(message: string, readonly code: string, readonly recoverable: boolean) {
+  constructor(
+    message: string,
+    readonly code: string,
+    readonly recoverable: boolean,
+    /** The single-use provider token is gone, so another SMS needs a fresh start. */
+    readonly restartRequired = false,
+  ) {
     super(message);
   }
 }
@@ -109,9 +117,14 @@ async function callPay(body: Record<string, unknown>): Promise<PayStart | PayRes
     const context = (error as { context?: Response }).context;
     if (context) {
       const payload = await context.json().catch(() => null) as
-        { error?: string; code?: string; recoverable?: boolean } | null;
+        { error?: string; code?: string; recoverable?: boolean; restartRequired?: boolean } | null;
       if (payload?.error) {
-        throw new OrderPaymentError(payload.error, payload.code ?? "payment_failed", payload.recoverable === true);
+        throw new OrderPaymentError(
+          payload.error,
+          payload.code ?? "payment_failed",
+          payload.recoverable === true,
+          payload.restartRequired === true,
+        );
       }
     }
     throw new OrderPaymentError("To‘lov amalga oshmadi.", "payment_failed", false);
@@ -128,8 +141,8 @@ async function callPay(body: Record<string, unknown>): Promise<PayStart | PayRes
 export const payStart = (orderId: string, pan: string, expiry: string) =>
   callPay({ orderId, step: "start", pan, expiry }) as Promise<PayStart>;
 
-export const payVerify = (orderId: string, code: string) =>
-  callPay({ orderId, step: "verify", code }) as Promise<PayResult>;
+export const payVerify = (orderId: string, attemptId: string, code: string) =>
+  callPay({ orderId, step: "verify", attemptId, code }) as Promise<PayResult>;
 
 /**
  * What happened to an order, asked of the server rather than remembered.

@@ -13,9 +13,10 @@ import { asErrorMessage } from "@/lib/format";
 import { createSession } from "@/lib/games";
 import { signPaths, toggleFavorite } from "@/lib/marketplace";
 import { formatSom } from "@/lib/money";
+import { createMarketplaceOrder } from "@/lib/orders";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
-import { clientPlatform, usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
+import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
 import { colors, icon, radius, shadow, spacing, typography } from "@/theme/tokens";
 
 type Detail = {
@@ -130,16 +131,16 @@ export default function ProductDetailScreen() {
     if (!detail) return;
     setBusy(true);
     setActionError(null);
-    const { data, error: checkoutError } = await supabase.rpc("marketplace_create_checkout", {
-      p_platform: clientPlatform,
-      p_product_id: productId,
-      // One key per press, so a double tap is one attempt rather than two.
-      p_idempotency_key: `${productId}:${Date.now()}`,
-    });
-    setBusy(false);
-    if (checkoutError) { setActionError(asErrorMessage(checkoutError)); return; }
-    const result = data as unknown as { transaction_id: string };
-    router.push({ pathname: "/(app)/marketplace/checkout", params: { transactionId: result.transaction_id } });
+    try {
+      // Marketplace now enters the same order/payment engine as J Coin, modules
+      // and web tariffs. One checkout means one partial-card source of truth.
+      const order = await createMarketplaceOrder(productId);
+      router.push({ pathname: "/(app)/checkout/[orderId]", params: { orderId: order.order_id } });
+    } catch (checkoutError) {
+      setActionError(asErrorMessage(checkoutError));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function submitReport() {

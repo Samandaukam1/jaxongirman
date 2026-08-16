@@ -146,8 +146,18 @@ test("the provider's own error code survives normalisation", () => {
   assert.match(provider, /public providerData\?: string/, "the provider's data must be carried too");
   assert.match(provider, /return new PaymentFailed\(known\.code, known\.message, code, detail\)/,
     "a mapped code must still keep the provider's own code and data");
-  assert.match(provider, /paymeFailure\(String\(payload\.error\.code\), redactDigits\(message\), payload\.error\.data\)/,
+  assert.match(provider, /paymeFailure\(String\(payload\.error\.code\), diagnosticMessage, payload\.error\.data\)/,
     "the data from the response must reach the failure");
+
+  // A provider is free to echo the SMS code back in `message`, so the one
+  // method that carries an OTP gets a fixed sentence rather than a redaction
+  // that only removes long digit runs — a six-digit code survives that.
+  assert.match(provider, /if \(method === "cards\.verify"\) return/,
+    "a card verification refusal must not repeat whatever the provider said");
+  assert.match(provider, /const diagnosticMessage = safeProviderMessage\(method, message\)/,
+    "every provider sentence must pass through the same filter");
+  assert.match(provider, /data: safeProviderData\(payload\.error\.data\)/,
+    "`error.data` is free-form and must be reduced to known-safe labels before it is logged");
 
   for (const name of ["order-pay", "pay-marketplace"]) {
     const text = readFileSync(path.join(functionsRoot, name, "index.ts"), "utf8");

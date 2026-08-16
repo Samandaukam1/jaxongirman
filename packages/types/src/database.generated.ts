@@ -1835,6 +1835,51 @@ export type Database = {
           },
         ]
       }
+      payment_card_attempts: {
+        Row: {
+          consumed_at: string | null
+          created_at: string
+          display_pan: string
+          expires_at: string
+          expiry_month: number
+          expiry_year: number
+          id: string
+          provider_token: string | null
+          subject_id: string
+          subject_kind: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          consumed_at?: string | null
+          created_at?: string
+          display_pan: string
+          expires_at: string
+          expiry_month: number
+          expiry_year: number
+          id?: string
+          provider_token?: string | null
+          subject_id: string
+          subject_kind: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          consumed_at?: string | null
+          created_at?: string
+          display_pan?: string
+          expires_at?: string
+          expiry_month?: number
+          expiry_year?: number
+          id?: string
+          provider_token?: string | null
+          subject_id?: string
+          subject_kind?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       payment_transactions: {
         Row: {
           attempt_expires_at: string | null
@@ -4486,32 +4531,6 @@ export type Database = {
         Args: { p_base_price: number; p_scope?: string }
         Returns: Json
       }
-      marketplace_remember_partial_card: {
-        Args: {
-          p_expiry_month: number
-          p_expiry_year: number
-          p_first8: string
-          p_last4: string
-          p_user_id: string
-        }
-        Returns: {
-          created_at: string
-          display_pan: string
-          expiry_month: number
-          expiry_year: number
-          id: string
-          is_active: boolean
-          last_used_at: string | null
-          last4: string
-          user_id: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "partial_cards"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
       marketplace_save_product: {
         Args: {
           p_base_price?: number
@@ -4539,6 +4558,14 @@ export type Database = {
           p_query?: string
           p_seller_id?: string
           p_sort?: string
+        }
+        Returns: Json
+      }
+      marketplace_settle_and_remember_card: {
+        Args: {
+          p_attempt_id: string
+          p_provider_cost?: number
+          p_transaction_id: string
         }
         Returns: Json
       }
@@ -4658,6 +4685,20 @@ export type Database = {
         }
         Returns: Json
       }
+      order_fulfil_and_remember_card: {
+        Args: {
+          p_attempt_id: string
+          p_order_id: string
+          p_payme_receipt_id?: string
+          p_payme_transaction_id?: string
+          p_provider_cost?: number
+        }
+        Returns: Json
+      }
+      order_mark_processing: {
+        Args: { p_order_id: string; p_payme_receipt_id: string }
+        Returns: boolean
+      }
       order_mark_test: { Args: { p_order_id: string }; Returns: undefined }
       order_purpose_for_material: {
         Args: { p_material_type: string }
@@ -4768,6 +4809,34 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      payment_card_attempt_clear: {
+        Args: {
+          p_attempt_id: string
+          p_subject_id: string
+          p_subject_kind: string
+        }
+        Returns: boolean
+      }
+      payment_card_attempt_set: {
+        Args: {
+          p_display_pan: string
+          p_expiry_month: number
+          p_expiry_year: number
+          p_minutes?: number
+          p_subject_id: string
+          p_subject_kind: string
+          p_token: string
+        }
+        Returns: string
+      }
+      payment_card_attempt_take: {
+        Args: {
+          p_attempt_id: string
+          p_subject_id: string
+          p_subject_kind: string
+        }
+        Returns: Json
       }
       payment_clear_attempt_token: {
         Args: { p_transaction_id: string }
@@ -5020,6 +5089,31 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "survey_exports"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      remember_partial_card: {
+        Args: {
+          p_display_pan: string
+          p_expiry_month: number
+          p_expiry_year: number
+          p_user_id: string
+        }
+        Returns: {
+          created_at: string
+          display_pan: string
+          expiry_month: number
+          expiry_year: number
+          id: string
+          is_active: boolean
+          last_used_at: string | null
+          last4: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "partial_cards"
           isOneToOne: true
           isSetofReturn: false
         }

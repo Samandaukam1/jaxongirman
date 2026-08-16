@@ -89,7 +89,9 @@
           "cameraPermission": "Proyektordagi QR kodni skanerlash uchun kameraga kirish kerak."
         }
       ],
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-sharing",
+      "expo-splash-screen"
     ],
     "extra": {
       "router": {},

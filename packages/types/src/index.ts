@@ -1,5 +1,7 @@
 import type { Json } from "./database.generated";
 
+export * from "./payment-cards";
+
 /**
  * Account roles, ordered from least to most privileged. `super_admin` is a
  * strict superset of `admin`: everywhere an admin is allowed, a super admin is

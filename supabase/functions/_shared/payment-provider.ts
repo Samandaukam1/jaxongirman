@@ -33,13 +33,14 @@ export type PayResult = {
 };
 
 export type ProviderError = { code: string; message: string };
+export type VerificationCodeRequest = { sent: true; waitSeconds: number | null };
 
 export interface PaymentProvider {
   readonly name: "payme" | "mock";
   /** Creates a one-time card token. `save` is always false: nothing is stored. */
   createCard(pan: string, expiry: string): Promise<CardHandle>;
   /** Asks the provider to send the cardholder a verification code. */
-  requestCode(token: string): Promise<void>;
+  requestCode(token: string): Promise<VerificationCodeRequest>;
   /** Exchanges the code for a usable token. */
   verifyCode(token: string, code: string): Promise<CardHandle>;
   /** Opens a receipt for an amount, in tiyin. */
@@ -115,11 +116,7 @@ const PAYME_ERRORS: Record<string, { code: string; message: string }> = {
 
 /** Turns a provider code and message into our normalised failure. */
 export function paymeFailure(code: string, providerMessage: string, providerData?: unknown): PaymentFailed {
-  // Only a short scalar is kept: `data` is occasionally an object, and the
-  // failure record is read by people, not parsers.
-  const detail = typeof providerData === "string" || typeof providerData === "number"
-    ? String(providerData).slice(0, 60)
-    : undefined;
+  const detail = safeProviderData(providerData);
   const known = PAYME_ERRORS[code];
   if (known) return new PaymentFailed(known.code, known.message, code, detail);
   return new PaymentFailed(
@@ -216,21 +213,23 @@ class PaymeProvider implements PaymentProvider {
         : raw && typeof raw === "object"
           ? String((raw as Record<string, unknown>).uz ?? (raw as Record<string, unknown>).ru ?? "")
           : "";
-      // The provider's own code, message and data, kept whole in the log. A
-      // refusal is only diagnosable from what the provider actually said, and
-      // the buyer-facing message deliberately says none of it.
+      // Card verification errors are deliberately reduced to a fixed sentence:
+      // a provider is free to echo the 4--6 digit SMS code in `message`, and an
+      // OTP must never enter logs or a failure column. Other methods retain a
+      // PAN-redacted provider sentence for operational diagnosis.
+      const diagnosticMessage = safeProviderMessage(method, message);
       console.error("payme.error", JSON.stringify({
         ...context,
         status: response.status,
         code: payload.error.code,
-        message: redactDigits(message),
-        data: payload.error.data,
+        message: diagnosticMessage,
+        data: safeProviderData(payload.error.data) ?? "[omitted]",
       }));
       // Normalised to our own codes so a screen can branch on meaning rather
       // than on a provider's numbering. The message is redacted either way: one
       // containing a card number would be stored, and the column constraint
       // would then reject the whole write.
-      throw paymeFailure(String(payload.error.code), redactDigits(message), payload.error.data);
+      throw paymeFailure(String(payload.error.code), diagnosticMessage, payload.error.data);
     }
     if (!payload.result) throw new PaymentFailed("empty_result", "To‘lov tizimi javob qaytarmadi.");
     console.log("payme.ok", JSON.stringify(context));
@@ -247,8 +246,19 @@ class PaymeProvider implements PaymentProvider {
     return handleOf(result.card);
   }
 
-  async requestCode(token: string): Promise<void> {
-    await this.call("cards.get_verify_code", { token }, "card");
+  async requestCode(token: string): Promise<VerificationCodeRequest> {
+    const result = await this.call<{ sent?: boolean; wait?: number }>(
+      "cards.get_verify_code",
+      { token },
+      "card",
+    );
+    if (result.sent !== true) {
+      throw new PaymentFailed("code_not_sent", "Tasdiqlash kodini yuborib bo‘lmadi.");
+    }
+    return {
+      sent: true,
+      waitSeconds: Number.isFinite(result.wait) ? Math.max(Number(result.wait), 0) : null,
+    };
   }
 
   async verifyCode(token: string, code: string): Promise<CardHandle> {
@@ -274,10 +284,14 @@ class PaymeProvider implements PaymentProvider {
   }
 
   async checkReceipt(receiptId: string): Promise<PayResult> {
-    const result = await this.call<{ receipt: PaymeReceipt }>("receipts.check", {
+    // Payme deployments return both documented shapes in the wild: some wrap
+    // the state in `receipt`, while the official response may put `state`
+    // directly on `result`. Treating only the former as valid turns a successful
+    // reconciliation into an undefined dereference.
+    const result = await this.call<PaymeReceipt & { receipt?: PaymeReceipt }>("receipts.check", {
       id: receiptId,
     }, "merchant");
-    return payResultOf(result.receipt);
+    return payResultOf(result.receipt ?? result);
   }
 }
 
@@ -328,6 +342,36 @@ function redactDigits(message: string): string {
   return message.replace(/\d{12,}/g, "\u2022\u2022\u2022\u2022");
 }
 
+/** Never retain free-form provider text from the one method that receives OTP. */
+function safeProviderMessage(method: string, message: string): string {
+  if (method === "cards.verify") return "Karta tasdiqlash so\u2018rovi rad etildi.";
+  return redactDigits(message);
+}
+
+/**
+ * Keeps only known-safe diagnostic labels from Payme's free-form `error.data`.
+ *
+ * Production has returned `invalid_key`, which is valuable. The same field is
+ * otherwise allowed to be an arbitrary scalar or object and could echo a PAN,
+ * token, OTP or credential. Unknown values are therefore omitted rather than
+ * logged and then hoped safe.
+ */
+function safeProviderData(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const detail = value.trim().toLowerCase();
+  const safeLabels = new Set([
+    "invalid_key",
+    "invalid_amount",
+    "invalid_account",
+    "invalid_card",
+    "invalid_expire",
+    "invalid_token",
+    "invalid_code",
+    "invalid_id",
+  ]);
+  return safeLabels.has(detail) ? detail : undefined;
+}
+
 /* ------------------------------------------------------------------ sandbox */
 
 /**
@@ -360,8 +404,8 @@ class SandboxProvider implements PaymentProvider {
     });
   }
 
-  async requestCode(): Promise<void> {
-    return await Promise.resolve();
+  async requestCode(): Promise<VerificationCodeRequest> {
+    return await Promise.resolve({ sent: true, waitSeconds: 60 });
   }
 
   async verifyCode(token: string, code: string): Promise<CardHandle> {
@@ -622,7 +666,7 @@ export async function probePaymeCredentials(config: PaymeConfig, amountTiyin = 1
             ? raw
             : String((raw as Record<string, unknown> | undefined)?.uz
               ?? (raw as Record<string, unknown> | undefined)?.ru ?? "")),
-          providerData: payload.error.data,
+          providerData: safeProviderData(payload.error.data),
           note,
         });
         return {};

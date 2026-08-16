@@ -1,3 +1,5 @@
+import type { Tables } from "@jaxongirman/types";
+
 import { supabase } from "./supabase";
 
 /**
@@ -35,6 +37,9 @@ export type Plan = {
   is_active?: boolean;
 };
 
+/** The only card representation a client may read or keep. */
+export type PartialCard = Tables<"partial_cards">;
+
 /** The published tariff catalogue. Empty means nothing is for sale, and says so. */
 export async function subscriptionPlans(): Promise<{ currency: string; plans: Plan[] }> {
   const { data, error } = await supabase
@@ -50,6 +55,23 @@ export async function subscriptionPlans(): Promise<{ currency: string; plans: Pl
   };
 }
 
+/**
+ * A person's own successful-payment card hints.
+ *
+ * Ownership is enforced by `partial_cards` RLS. This deliberately asks only for
+ * active rows and exposes no write path: a hint is created by the payment server
+ * after a charge succeeds, and the settings screen may only delete it.
+ */
+export async function listPartialCards(): Promise<PartialCard[]> {
+  const { data, error } = await supabase
+    .from("partial_cards")
+    .select("*")
+    .eq("is_active", true)
+    .order("last_used_at", { ascending: false, nullsFirst: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
 export async function createSubscriptionOrder(planCode: string): Promise<OrderSummary> {
   const { data, error } = await supabase.rpc("order_create_subscription", {
     p_plan_code: planCode,
@@ -63,6 +85,8 @@ export type PayStart = {
   status: "awaiting_verification";
   orderNumber: string;
   sandbox: boolean;
+  /** Opaque identity binding this OTP to the exact server-side masked attempt. */
+  attemptId: string;
   maskedCard: string | null;
   expiryHint: string | null;
 };
@@ -76,7 +100,13 @@ export type PayDone = {
 };
 
 export class OrderPaymentError extends Error {
-  constructor(message: string, readonly code: string, readonly recoverable: boolean) {
+  constructor(
+    message: string,
+    readonly code: string,
+    readonly recoverable: boolean,
+    /** A verification token was consumed or expired, so card start must run again. */
+    readonly restartRequired = false,
+  ) {
     super(message);
   }
 }
@@ -90,9 +120,14 @@ async function callPay(body: Record<string, unknown>): Promise<PayStart | PayDon
     const context = (error as { context?: Response }).context;
     if (context) {
       const payload = await context.json().catch(() => null) as
-        { error?: string; code?: string; recoverable?: boolean } | null;
+        { error?: string; code?: string; recoverable?: boolean; restartRequired?: boolean } | null;
       if (payload?.error) {
-        throw new OrderPaymentError(payload.error, payload.code ?? "payment_failed", payload.recoverable === true);
+        throw new OrderPaymentError(
+          payload.error,
+          payload.code ?? "payment_failed",
+          payload.recoverable === true,
+          payload.restartRequired === true,
+        );
       }
     }
     throw new OrderPaymentError("To‘lov amalga oshmadi.", "payment_failed", false);
@@ -103,11 +138,11 @@ async function callPay(body: Record<string, unknown>): Promise<PayStart | PayDon
 /**
  * Hands the card to the provider and asks for a verification code.
  *
- * `pan` exists in this call and nowhere else. It is not stored in the browser,
- * not put in a URL, and not returned; what comes back is what Payme masked.
+ * `pan` is request-only in this layer: it is never persisted, put in a URL or
+ * returned; what comes back is a safe masked hint.
  */
 export const payStart = (orderId: string, pan: string, expiry: string) =>
   callPay({ orderId, step: "start", pan, expiry }) as Promise<PayStart>;
 
-export const payVerify = (orderId: string, code: string) =>
-  callPay({ orderId, step: "verify", code }) as Promise<PayDone>;
+export const payVerify = (orderId: string, attemptId: string, code: string) =>
+  callPay({ orderId, step: "verify", attemptId, code }) as Promise<PayDone>;

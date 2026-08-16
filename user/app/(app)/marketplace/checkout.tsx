@@ -1,4 +1,13 @@
-import type { Tables } from "@jaxongirman/types";
+import {
+  cardDigits,
+  formatCardExpiryInput,
+  formatCardPan,
+  formatStoredCardExpiry,
+  isStoredCardExpired,
+  reconstructPartialCardPan,
+  validateCardExpiry,
+  type Tables,
+} from "@jaxongirman/types";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { CheckCircle2, CreditCard, Info, Plus, ShieldCheck } from "lucide-react-native";
@@ -22,15 +31,11 @@ type Transaction = Omit<Tables<"payment_transactions">, "provider_card_token" | 
 type PartialCard = Tables<"partial_cards">;
 type PaymentConfig = { provider: string | null; configured: boolean };
 
-/** What `start` returned, held for the `verify` call and nothing longer. */
-type Attempt = { first8: string; last4: string; expiry: string; sandbox: boolean };
+/** Provider-safe display metadata returned by `start`. No client fragments echo back. */
+type Attempt = { attemptId: string; maskedCard: string; expiryHint: string; sandbox: boolean };
 
 const OTP_LENGTH = 6;
 const RESEND_SECONDS = 60;
-
-function groupDigits(value: string): string {
-  return (value.match(/.{1,4}/g) ?? [value]).join(" ");
-}
 
 /**
  * The payment step, including "chala kartalar".
@@ -67,6 +72,7 @@ export default function CheckoutScreen() {
   const [cooldown, setCooldown] = useState(0);
 
   const codeInput = useRef<TextInput>(null);
+  const submitting = useRef(false);
 
   const load = useCallback(async () => {
     if (!transactionId) { setLoadError("To‘lov topilmadi."); setLoading(false); return; }
@@ -75,7 +81,7 @@ export default function CheckoutScreen() {
       // Column-granted, like `orders`: the provider token is not askable for,
       // so `*` would be refused outright rather than trimmed.
       supabase.from("payment_transactions").select("id, buyer_id, product_id, seller_id, state, provider, provider_receipt_id, provider_error_code, provider_error_message, base_price, currency, buyer_fee_rate, buyer_fee_amount, buyer_total, seller_fee_rate, seller_fee_amount, seller_net, platform_gross, provider_cost, partial_card_id, idempotency_key, paid_at, failed_at, created_at, updated_at, is_sandbox, attempt_expires_at").eq("id", transactionId).single(),
-      supabase.from("partial_cards").select("*").eq("is_active", true).order("last_used_at", { ascending: false, nullsFirst: false }),
+      supabase.from("partial_cards").select("id,user_id,display_pan,last4,expiry_month,expiry_year,is_active,created_at,last_used_at").eq("is_active", true).order("last_used_at", { ascending: false, nullsFirst: false }),
       supabase.from("app_settings").select("value").eq("key", "payments.config").maybeSingle(),
     ]);
     if (transactionResult.error) { setLoadError(transactionResult.error.message); setLoading(false); return; }
@@ -108,68 +114,110 @@ export default function CheckoutScreen() {
    * Returned rather than stored: it exists as a local for the length of one
    * call and is never written to state, storage or a log.
    */
-  function reconstructPan(): string {
-    if (selectedCard) return `${selectedCard.display_pan.slice(0, 8)}${missingDigits}${selectedCard.last4}`;
-    return newPan.replace(/[^0-9]/g, "");
+  function reconstructPan(): string | null {
+    if (selectedCard) return reconstructPartialCardPan(selectedCard.display_pan, missingDigits);
+    const digits = cardDigits(newPan);
+    return digits.length === 16 ? digits : null;
   }
 
   const cardExpiry = selectedCard
-    ? `${String(selectedCard.expiry_month).padStart(2, "0")}/${String(selectedCard.expiry_year).padStart(2, "0")}`
+    ? formatStoredCardExpiry(selectedCard.expiry_month, selectedCard.expiry_year)
     : expiry;
+  const expiryValidation = validateCardExpiry(cardExpiry);
 
   const cardReady = selectedCard
-    ? missingDigits.length === 4
-    : newPan.replace(/[^0-9]/g, "").length >= 16 && expiry.replace(/[^0-9]/g, "").length === 4;
+    ? cardDigits(missingDigits).length === 4
+      && !isStoredCardExpired(selectedCard.expiry_month, selectedCard.expiry_year)
+      && expiryValidation.valid
+    : cardDigits(newPan).length === 16 && expiryValidation.valid;
+
+  async function paymentFailure(error: unknown): Promise<{ message: string; restartRequired: boolean }> {
+    const response = (error as { context?: unknown })?.context;
+    if (response instanceof Response) {
+      try {
+        const body = await response.clone().json() as { error?: unknown; restartRequired?: unknown };
+        if (typeof body.error === "string" && body.error) {
+          return { message: body.error, restartRequired: body.restartRequired === true };
+        }
+      } catch {
+        // Fall through to the common function error formatter.
+      }
+    }
+    return { message: await asFunctionErrorMessage(error), restartRequired: false };
+  }
 
   async function startPayment() {
+    if (submitting.current || busy) return;
+    submitting.current = true;
     setBusy(true);
     setError(null);
     try {
-      const { data, error: startError } = await supabase.functions.invoke("pay-marketplace", {
-        body: { transactionId, step: "start", pan: reconstructPan(), expiry: cardExpiry },
+      const paymentPan = reconstructPan();
+      if (!paymentPan || !expiryValidation.valid) {
+        setError("Karta ma’lumotlarini tekshirib, qayta kiriting.");
+        return;
+      }
+      const startRequest = supabase.functions.invoke("pay-marketplace", {
+        body: { transactionId, step: "start", pan: paymentPan, expiry: expiryValidation.normalized },
       });
-      if (startError) throw startError;
-      const result = data as { first8: string; last4: string; sandbox: boolean };
-
-      // The number has been handed over. Everything that could rebuild it is
-      // dropped now, before the next screen renders.
+      // The in-flight request owns the transient digits now. Drop every state
+      // fragment that could reconstruct the PAN before awaiting the provider.
       setNewPan("");
       setMissingDigits("");
-      setAttempt({ first8: result.first8, last4: result.last4, expiry: cardExpiry, sandbox: result.sandbox });
+      setExpiry("");
+      setSelectedCard(null);
+
+      const { data, error: startError } = await startRequest;
+      if (startError) throw startError;
+      const result = data as { attemptId: string; maskedCard: string; expiryHint: string; sandbox: boolean };
+      if (!result.attemptId) throw new Error("To‘lov urinishi ochilmadi.");
+
+      setAttempt({
+        attemptId: result.attemptId,
+        maskedCard: result.maskedCard,
+        expiryHint: result.expiryHint,
+        sandbox: result.sandbox,
+      });
       setStep("otp");
       setCooldown(RESEND_SECONDS);
       setTimeout(() => codeInput.current?.focus(), 250);
     } catch (nextError) {
-      setError(await asFunctionErrorMessage(nextError));
+      setError((await paymentFailure(nextError)).message);
     } finally {
       setBusy(false);
+      submitting.current = false;
     }
   }
 
   async function confirmCode() {
-    if (!attempt) return;
+    if (!attempt || submitting.current || busy) return;
+    submitting.current = true;
     setBusy(true);
     setError(null);
     try {
-      const { data, error: verifyError } = await supabase.functions.invoke("pay-marketplace", {
-        body: {
-          transactionId, step: "verify", code,
-          first8: attempt.first8, last4: attempt.last4, expiry: attempt.expiry,
-        },
+      const verifyRequest = supabase.functions.invoke("pay-marketplace", {
+        body: { transactionId, step: "verify", attemptId: attempt.attemptId, code },
       });
+      setCode("");
+      const { data, error: verifyError } = await verifyRequest;
       if (verifyError) throw verifyError;
       const result = data as { state: string };
       if (result.state !== "paid") throw new Error("To‘lov yakunlanmadi.");
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setAttempt(null);
-      setCode("");
       setStep("done");
       void load();
     } catch (nextError) {
-      setError(await asFunctionErrorMessage(nextError));
+      const failure = await paymentFailure(nextError);
+      setError(failure.message);
       setCode("");
+      if (failure.restartRequired) {
+        setAttempt(null);
+        setStep("card");
+      }
     } finally {
       setBusy(false);
+      submitting.current = false;
     }
   }
 
@@ -212,7 +260,13 @@ export default function CheckoutScreen() {
       <ScreenHeader
         title={step === "otp" ? "Tasdiqlash" : "To‘lov"}
         variant="close"
-        onLeave={() => (step === "otp" ? setStep("card") : router.back())}
+        onLeave={() => {
+          if (step !== "otp") { router.back(); return; }
+          setCode("");
+          setAttempt(null);
+          setError(null);
+          setStep("card");
+        }}
       />
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
@@ -253,7 +307,7 @@ export default function CheckoutScreen() {
           <View style={styles.otpBlock}>
             <Text style={styles.otpTitle}>Tasdiqlash kodi</Text>
             <Text style={styles.otpCopy}>
-              {attempt ? `•••• ${attempt.last4}` : ""} kartasiga biriktirilgan raqamga {OTP_LENGTH} xonali kod yuborildi.
+              {attempt ? `${formatCardPan(attempt.maskedCard)} · ${attempt.expiryHint} kartaga` : "Kartaga"} biriktirilgan raqamga {OTP_LENGTH} xonali kod yuborildi.
             </Text>
 
             <TextInput
@@ -280,18 +334,23 @@ export default function CheckoutScreen() {
             <PrimaryButton
               label="Tasdiqlash"
               loading={busy}
-              disabled={code.length < OTP_LENGTH}
+              disabled={!attempt || code.length < OTP_LENGTH}
               onPress={() => void confirmCode()}
             />
 
             <Pressable
               accessibilityRole="button"
               disabled={cooldown > 0 || busy}
-              onPress={() => void startPayment()}
+              onPress={() => {
+                setCode("");
+                setAttempt(null);
+                setError(null);
+                setStep("card");
+              }}
               style={styles.resend}
             >
               <Text style={[styles.resendText, cooldown > 0 && styles.resendDisabled]}>
-                {cooldown > 0 ? `Kodni qayta yuborish — ${cooldown}s` : "Kodni qayta yuborish"}
+                {cooldown > 0 ? `Yangi kod olish — ${cooldown}s` : "Yangi kod uchun kartani qayta kiriting"}
               </Text>
             </Pressable>
           </View>
@@ -306,19 +365,28 @@ export default function CheckoutScreen() {
                   <Text style={styles.blockLabel}>Chala kartalardan</Text>
                   {cards.map((card) => {
                     const active = selectedCard?.id === card.id;
+                    const expired = isStoredCardExpired(card.expiry_month, card.expiry_year);
                     return (
                       <Pressable
                         key={card.id}
                         accessibilityRole="button"
-                        accessibilityState={{ selected: active }}
-                        onPress={() => { setSelectedCard(active ? null : card); setMissingDigits(""); setError(null); }}
-                        style={[styles.cardRow, active && styles.cardRowActive]}
+                        accessibilityState={{ selected: active, disabled: expired }}
+                        disabled={expired || busy}
+                        onPress={() => {
+                          setSelectedCard(active ? null : card);
+                          setMissingDigits("");
+                          setNewPan("");
+                          setExpiry("");
+                          setError(null);
+                        }}
+                        style={[styles.cardRow, active && styles.cardRowActive, expired && styles.cardRowExpired]}
                       >
                         <CreditCard color={active ? colors.primary : colors.inkSoft} size={18} strokeWidth={2} />
                         <View style={styles.cardCopy}>
-                          <Text style={styles.cardPan}>•••• {card.last4}</Text>
-                          <Text style={styles.cardExpiry}>
-                            {String(card.expiry_month).padStart(2, "0")}/{String(card.expiry_year).padStart(2, "0")}
+                          <Text style={styles.cardPan}>{formatCardPan(card.display_pan)}</Text>
+                          <Text style={[styles.cardExpiry, expired && styles.cardExpiryExpired]}>
+                            {formatStoredCardExpiry(card.expiry_month, card.expiry_year)}
+                            {expired ? " · muddati tugagan" : ""}
                           </Text>
                         </View>
                         {active ? <CheckCircle2 color={colors.primary} size={18} strokeWidth={2} /> : null}
@@ -328,7 +396,7 @@ export default function CheckoutScreen() {
 
                   <Pressable
                     accessibilityRole="button"
-                    onPress={() => { setSelectedCard(null); setMissingDigits(""); setError(null); }}
+                    onPress={() => { setSelectedCard(null); setMissingDigits(""); setNewPan(""); setExpiry(""); setError(null); }}
                     style={[styles.cardRow, selectedCard === null && styles.cardRowActive]}
                   >
                     <Plus color={selectedCard === null ? colors.primary : colors.inkSoft} size={18} strokeWidth={2} />
@@ -341,10 +409,10 @@ export default function CheckoutScreen() {
                 <View style={styles.panBlock}>
                   <Text style={styles.blockLabel}>Yetishmayotgan 4 ta raqamni kiriting</Text>
                   <View style={styles.panRow}>
-                    <Text style={styles.panPart}>{groupDigits(selectedCard.display_pan.slice(0, 8))}</Text>
+                    <Text style={styles.panPart}>{formatCardPan(selectedCard.display_pan.slice(0, 8))}</Text>
                     <TextInput
                       value={missingDigits}
-                      onChangeText={(value) => setMissingDigits(value.replace(/[^0-9]/g, "").slice(0, 4))}
+                      onChangeText={(value) => setMissingDigits(cardDigits(value).slice(0, 4))}
                       keyboardType="number-pad"
                       placeholder="XXXX"
                       placeholderTextColor={colors.borderStrong}
@@ -355,15 +423,15 @@ export default function CheckoutScreen() {
                     <Text style={styles.panPart}>{selectedCard.last4}</Text>
                   </View>
                   <Text style={styles.panExpiry}>
-                    {String(selectedCard.expiry_month).padStart(2, "0")}/{String(selectedCard.expiry_year).padStart(2, "0")}
+                    {formatStoredCardExpiry(selectedCard.expiry_month, selectedCard.expiry_year)}
                   </Text>
                 </View>
               ) : (
                 <View style={styles.panBlock}>
                   <Text style={styles.blockLabel}>Karta raqami</Text>
                   <TextInput
-                    value={groupDigits(newPan.replace(/[^0-9]/g, ""))}
-                    onChangeText={(value) => setNewPan(value.replace(/[^0-9]/g, "").slice(0, 19))}
+                    value={formatCardPan(cardDigits(newPan))}
+                    onChangeText={(value) => setNewPan(cardDigits(value).slice(0, 16))}
                     keyboardType="number-pad"
                     placeholder="8600 0000 0000 0000"
                     placeholderTextColor={colors.inkSoft}
@@ -371,17 +439,21 @@ export default function CheckoutScreen() {
                     accessibilityLabel="Karta raqami"
                   />
                   <TextInput
-                    value={expiry}
-                    onChangeText={(value) => {
-                      const digits = value.replace(/[^0-9]/g, "").slice(0, 4);
-                      setExpiry(digits.length > 2 ? `${digits.slice(0, 2)}/${digits.slice(2)}` : digits);
-                    }}
+                    value={formatCardExpiryInput(expiry)}
+                    onChangeText={(value) => setExpiry(formatCardExpiryInput(value))}
                     keyboardType="number-pad"
                     placeholder="MM/YY"
                     placeholderTextColor={colors.inkSoft}
                     style={styles.input}
                     accessibilityLabel="Amal qilish muddati"
                   />
+                  {cardDigits(expiry).length === 4 && !expiryValidation.valid ? (
+                    <Text style={styles.validationError}>
+                      {expiryValidation.error === "invalid_month"
+                        ? "Oy 01–12 oralig‘ida bo‘lsin."
+                        : "Kartaning amal qilish muddati tugagan."}
+                    </Text>
+                  ) : null}
                 </View>
               )}
 
@@ -410,10 +482,13 @@ export default function CheckoutScreen() {
 
         <View style={styles.privacy}>
           <ShieldCheck color={colors.inkSoft} size={14} strokeWidth={2} />
-          <Text style={styles.privacyText}>
-            Karta raqamingiz Jaxongirman serverida saqlanmaydi. Keyingi xaridlar uchun faqat
-            niqoblangan ko‘rinish — 5614 8540 XXXX 2121 — eslab qolinadi. Kod va CVV saqlanmaydi.
-          </Text>
+          <View style={styles.privacyCopy}>
+            <Text style={styles.privacyText}>
+              Karta raqamingiz Jaxongirman bazasida saqlanmaydi. Keyingi xaridlar uchun faqat
+              niqoblangan ko‘rinish — 5614 8540 XXXX 2121 — eslab qolinadi. Kod va CVV saqlanmaydi.
+            </Text>
+            <Text style={styles.paymeBrand}>Powered by Payme</Text>
+          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -448,9 +523,11 @@ const styles = StyleSheet.create({
   blockLabel: { ...typography.caption, color: colors.inkMuted, letterSpacing: 0.6, textTransform: "uppercase" },
   cardRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.lg, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   cardRowActive: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
+  cardRowExpired: { opacity: 0.52 },
   cardCopy: { flex: 1 },
   cardPan: { ...typography.bodyMedium, color: colors.ink, fontSize: 15, letterSpacing: 1 },
   cardExpiry: { ...typography.caption, color: colors.inkSoft },
+  cardExpiryExpired: { color: colors.danger },
 
   panBlock: { gap: spacing.sm },
   panRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, padding: spacing.lg, borderRadius: radius.md, backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border },
@@ -466,6 +543,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border,
     borderRadius: radius.md, paddingHorizontal: spacing.lg,
   },
+  validationError: { ...typography.caption, color: colors.danger },
 
   otpBlock: { gap: spacing.md },
   otpTitle: { ...typography.heading, color: colors.ink },
@@ -482,5 +560,7 @@ const styles = StyleSheet.create({
   resendDisabled: { color: colors.inkSoft },
 
   privacy: { flexDirection: "row", gap: spacing.sm, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.surfaceMuted },
-  privacyText: { ...typography.caption, color: colors.inkMuted, lineHeight: 18, flex: 1 },
+  privacyCopy: { flex: 1, gap: 4 },
+  privacyText: { ...typography.caption, color: colors.inkMuted, lineHeight: 18 },
+  paymeBrand: { ...typography.caption, color: colors.primaryDeep, fontFamily: "Manrope_700Bold" },
 });

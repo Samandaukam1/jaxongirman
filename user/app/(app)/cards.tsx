@@ -1,4 +1,4 @@
-import type { Tables } from "@jaxongirman/types";
+import { formatCardPan, formatStoredCardExpiry, type Tables } from "@jaxongirman/types";
 import { useFocusEffect } from "expo-router";
 import { CreditCard, ShieldCheck, Trash2 } from "lucide-react-native";
 import { useCallback, useState } from "react";
@@ -12,11 +12,6 @@ import { supabase } from "@/lib/supabase";
 import { colors, radius, shadow, spacing, typography } from "@/theme/tokens";
 
 type PartialCard = Tables<"partial_cards">;
-
-/** "56148540XXXX2121" as "5614 8540 XXXX 2121". */
-function groupPan(displayPan: string): string {
-  return (displayPan.match(/.{1,4}/g) ?? [displayPan]).join(" ");
-}
 
 /**
  * Chala kartalar.
@@ -49,7 +44,7 @@ export default function CardsScreen() {
   function remove(card: PartialCard) {
     Alert.alert(
       "Karta o‘chirilsinmi?",
-      `${groupPan(card.display_pan)} ro‘yxatdan olib tashlanadi. Keyingi to‘lovda kartani qaytadan kiritishingiz mumkin.`,
+      `${formatCardPan(card.display_pan)} ro‘yxatdan olib tashlanadi. Keyingi to‘lovda kartani qaytadan kiritishingiz mumkin.`,
       [
         { text: "Bekor qilish", style: "cancel" },
         {
@@ -100,9 +95,9 @@ export default function CardsScreen() {
             <View key={card.id} style={styles.card}>
               <CreditCard color={colors.primary} size={20} strokeWidth={2} />
               <View style={styles.cardCopy}>
-                <Text style={styles.pan}>{groupPan(card.display_pan)}</Text>
+                <Text style={styles.pan}>{formatCardPan(card.display_pan)}</Text>
                 <Text style={styles.meta}>
-                  {String(card.expiry_month).padStart(2, "0")}/{String(card.expiry_year).padStart(2, "0")}
+                  {formatStoredCardExpiry(card.expiry_month, card.expiry_year)}
                   {card.last_used_at ? ` · oxirgi: ${formatShortDateTime(card.last_used_at)}` : ""}
                 </Text>
               </View>

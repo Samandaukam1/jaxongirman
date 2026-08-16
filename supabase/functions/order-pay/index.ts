@@ -24,6 +24,7 @@
 import { requestContext } from "../_shared/auth.ts";
 import { preflight } from "../_shared/cors.ts";
 import { bodyJson, errorResponse, HttpError, json } from "../_shared/http.ts";
+import { parsePaymentCard, providerMaskMatches } from "../_shared/payment-card.ts";
 import { PaymentFailed, selectProvider, somToTiyin } from "../_shared/payment-provider.ts";
 
 type Body = {
@@ -34,6 +35,8 @@ type Body = {
   /** "MM/YY" as typed. */
   expiry?: string;
   code?: string;
+  /** Opaque server attempt identity returned by start. */
+  attemptId?: string;
 };
 
 /**
@@ -49,6 +52,7 @@ const RECOVERABLE = new Set([
   // `provider_auth` is deliberately absent — that is our misconfiguration, and
   // inviting somebody to re-type a card would waste their time.
   "card_invalid", "card_expired", "card_blocked", "card_not_found", "code_expired",
+  "code_not_sent", "attempt_not_found", "attempt_expired", "attempt_consumed", "attempt_in_progress",
 ]);
 
 /** Strips anything that looks like a card number before a string is written. */
@@ -56,19 +60,15 @@ function redact(value: string): string {
   return value.replace(/[0-9]{12,}/g, "[redacted]");
 }
 
-function parseExpiry(expiry: string): { providerFormat: string; hint: string } {
-  const digits = expiry.replace(/[^0-9]/g, "");
-  if (digits.length !== 4) {
-    throw new HttpError(400, "Amal qilish muddatini MM/YY ko‘rinishida kiriting.", "invalid_expiry");
-  }
-  const month = Number(digits.slice(0, 2));
-  if (month < 1 || month > 12) throw new HttpError(400, "Oy noto‘g‘ri.", "invalid_expiry");
-  // Payme's card `expire` is YYMM in the request and MM/YY in the response.
-  return {
-    providerFormat: `${digits.slice(2, 4)}${digits.slice(0, 2)}`,
-    hint: `${digits.slice(0, 2)}/${digits.slice(2, 4)}`,
-  };
-}
+type TakenAttempt = {
+  ok: boolean;
+  code?: string;
+  attemptId?: string;
+  token?: string;
+  displayPan?: string;
+  expiryMonth?: number;
+  expiryYear?: number;
+};
 
 /** The platform a client claims to be, for the iOS payment policy. */
 function clientPlatform(request: Request): string {
@@ -80,6 +80,9 @@ Deno.serve(async (request) => {
   if (options) return options;
 
   let orderId = "";
+  let activeAttemptId = "";
+  let attemptCreated = false;
+  let attemptTaken = false;
   let serviceClient: Awaited<ReturnType<typeof requestContext>>["serviceClient"] | null = null;
 
   try {
@@ -130,71 +133,108 @@ Deno.serve(async (request) => {
 
     /* ------------------------------------------------------------- start */
     if (body.step !== "verify") {
-      const pan = (body.pan ?? "").replace(/[^0-9]/g, "");
-      if (pan.length < 16 || pan.length > 19) {
-        throw new HttpError(400, "Karta raqamini to‘liq kiriting.", "invalid_pan");
-      }
-      const expiry = parseExpiry(body.expiry ?? "");
-
-      // A fresh card replaces anything left from an abandoned attempt.
+      // Clear the pre-unification column too, so an order opened by an older
+      // deployed function cannot leave a live token behind after restart.
       await serviceClient.rpc("order_clear_attempt_token", { p_order_id: orderId });
 
-      const card = await provider.createCard(pan, expiry.providerFormat);
-      const { error: tokenError } = await serviceClient.rpc("order_set_attempt_token", {
-        p_order_id: orderId, p_token: card.token,
+      const paymentCard = parsePaymentCard(body.pan ?? "", body.expiry ?? "");
+
+      const card = await provider.createCard(paymentCard.pan, paymentCard.providerExpiry);
+      if (!providerMaskMatches(card.maskedNumber, paymentCard.displayPan)) {
+        throw new PaymentFailed("provider_card_mismatch", "To‘lov tizimi karta ma’lumotini tasdiqlamadi.");
+      }
+      const { data: createdAttemptId, error: tokenError } = await serviceClient.rpc("payment_card_attempt_set", {
+        p_subject_kind: "order",
+        p_subject_id: orderId,
+        p_token: card.token,
+        p_display_pan: paymentCard.displayPan,
+        p_expiry_month: paymentCard.expiryMonth,
+        p_expiry_year: paymentCard.expiryYear,
       });
-      if (tokenError) throw tokenError;
+      if (tokenError) {
+        if ((tokenError as { code?: string }).code === "55000") {
+          throw new HttpError(409, "Avval yuborilgan tasdiqlash kodini kiriting.", "attempt_in_progress");
+        }
+        throw tokenError;
+      }
+      activeAttemptId = String(createdAttemptId ?? "");
+      if (!activeAttemptId) throw new Error("Payment attempt id was not returned");
+      attemptCreated = true;
 
       await provider.requestCode(card.token);
-      await serviceClient.rpc("order_advance", {
+      const { error: advanceError } = await serviceClient.rpc("order_advance", {
         p_order_id: orderId, p_to: "awaiting_verification",
       });
+      if (advanceError) throw advanceError;
 
       return json({
         status: "awaiting_verification",
         orderNumber: order.order_number,
         sandbox,
-        // What Payme itself already redacted, so the confirmation screen can
-        // show which card is being charged. Never derived from the PAN here.
-        maskedCard: card.maskedNumber,
-        expiryHint: card.expiryHint ?? expiry.hint,
+        // Derived while the PAN was request-local. This exact value is the only
+        // card representation stored in the private attempt row.
+        maskedCard: paymentCard.displayPan,
+        expiryHint: paymentCard.expiryHint,
+        attemptId: activeAttemptId,
       });
     }
 
     /* ------------------------------------------------------------ verify */
     const code = (body.code ?? "").replace(/[^0-9]/g, "");
     if (code.length < 4) throw new HttpError(400, "Tasdiqlash kodini kiriting.", "invalid_code");
+    activeAttemptId = body.attemptId?.trim() ?? "";
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(activeAttemptId)) {
+      throw new HttpError(400, "To‘lov urinishi topilmadi. Kartani qaytadan kiriting.", "attempt_not_found");
+    }
 
     // Single-use: taking the token wipes it, so a replayed verify finds nothing.
-    const { data: token, error: takeError } = await serviceClient.rpc("order_take_attempt_token", {
-      p_order_id: orderId,
+    const { data: taken, error: takeError } = await serviceClient.rpc("payment_card_attempt_take", {
+      p_subject_kind: "order", p_subject_id: orderId, p_attempt_id: activeAttemptId,
     });
     if (takeError) throw takeError;
+    const attempt = taken as TakenAttempt | null;
+    if (!attempt?.ok || !attempt.attemptId || !attempt.token || !attempt.displayPan) {
+      const attemptCode = attempt?.code ?? "attempt_not_found";
+      throw new HttpError(400, "To‘lov urinishi tugagan. Kartani qaytadan kiriting.", attemptCode);
+    }
+    attemptTaken = true;
 
-    const verified = await provider.verifyCode(token as string, code);
+    const verified = await provider.verifyCode(attempt.token, code);
     if (!verified.verified) throw new PaymentFailed("not_verified", "Karta tasdiqlanmadi.");
+    if (!providerMaskMatches(verified.maskedNumber, attempt.displayPan)) {
+      throw new PaymentFailed("provider_card_mismatch", "To‘lov tizimi karta ma’lumotini tasdiqlamadi.");
+    }
 
     const receiptId = await provider.createReceipt(somToTiyin(order.total_amount), order.order_number);
-    await serviceClient.rpc("order_advance", { p_order_id: orderId, p_to: "processing" });
+    // Persist the provider reference before asking Payme to charge. A process
+    // crash after the charge is then reconcilable instead of anonymous money.
+    const { error: processingError } = await serviceClient.rpc("order_mark_processing", {
+      p_order_id: orderId,
+      p_payme_receipt_id: receiptId,
+    });
+    if (processingError) throw processingError;
 
     const charged = await provider.payReceipt(receiptId, verified.token);
     if (!charged.paid) throw new PaymentFailed("not_paid", "To‘lov amalga oshmadi.");
+    if (!providerMaskMatches(charged.maskedNumber, attempt.displayPan)) {
+      throw new PaymentFailed("provider_card_mismatch", "To‘lov tizimi karta ma’lumotini tasdiqlamadi.");
+    }
 
-    // The provider said yes. Only now does anything become owned.
-    const { data: fulfilled, error: fulfilError } = await serviceClient.rpc("order_fulfil", {
+    // The provider said yes. Fulfilment and promoting the trusted masked hint
+    // happen in one database transaction, or neither database change happens.
+    const { data: fulfilled, error: fulfilError } = await serviceClient.rpc("order_fulfil_and_remember_card", {
       p_order_id: orderId,
+      p_attempt_id: attempt.attemptId,
       p_payme_receipt_id: receiptId,
       p_provider_cost: Math.round(charged.providerCost / 100),
     });
     if (fulfilError) throw fulfilError;
 
-    await serviceClient.rpc("order_clear_attempt_token", { p_order_id: orderId });
-
     return json({
       status: "paid",
       orderNumber: order.order_number,
       sandbox,
-      maskedCard: charged.maskedNumber ?? verified.maskedNumber,
+      maskedCard: attempt.displayPan,
       fulfilment: fulfilled,
     });
   } catch (error) {
@@ -213,8 +253,24 @@ Deno.serve(async (request) => {
     // input rather than start the purchase over. The token is already spent, so
     // `start` is where they resume — which is what the client is told.
     if (RECOVERABLE.has(failureCode)) {
+      if (serviceClient && orderId && activeAttemptId && (attemptCreated || attemptTaken)) {
+        await serviceClient.rpc("payment_card_attempt_clear", {
+          p_subject_kind: "order", p_subject_id: orderId, p_attempt_id: activeAttemptId,
+        });
+        await serviceClient.rpc("order_clear_attempt_token", { p_order_id: orderId });
+      }
       const message = error instanceof Error ? redact(error.message) : "Ma’lumot noto‘g‘ri.";
-      return json({ error: message, code: failureCode, recoverable: true }, 400);
+      return json({
+        error: message,
+        code: failureCode,
+        recoverable: true,
+        // `take` atomically consumes the provider token before any provider
+        // verification verdict. Every error after that point needs a fresh
+        // card start, regardless of the provider's particular error code.
+        restartRequired: attemptCreated || attemptTaken
+          || failureCode === "attempt_not_found"
+          || failureCode === "attempt_expired",
+      }, 400);
     }
 
     // Anything else is terminal for this attempt — but whether it is terminal for
@@ -242,8 +298,12 @@ Deno.serve(async (request) => {
             p_message: redact(error instanceof Error ? error.message : "To‘lov amalga oshmadi.") + providerNote,
           });
         }
-        // The token goes either way: it is single-use and this attempt is over.
-        await serviceClient.rpc("order_clear_attempt_token", { p_order_id: orderId });
+        if (!charging && activeAttemptId) {
+          await serviceClient.rpc("payment_card_attempt_clear", {
+            p_subject_kind: "order", p_subject_id: orderId, p_attempt_id: activeAttemptId,
+          });
+          await serviceClient.rpc("order_clear_attempt_token", { p_order_id: orderId });
+        }
       } catch {
         // Nothing useful to do here; the response below still tells the buyer.
       }
