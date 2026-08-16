@@ -232,6 +232,19 @@ try {
   assert(true, "a .pptx is accepted by the upload bucket");
 
   console.log("Importing…");
+  /**
+   * Presenting a deck made outside Jaxongirman is an operational cost, so it is
+   * quoted before it is taken. Nobody should discover the price by being
+   * charged it.
+   */
+  const quote = await user.functions.invoke("import-pptx", { body: { step: "quote" } });
+  if (quote.error) throw quote.error;
+  assert(quote.data.cost === 24, "the quote names the price from the one price list");
+  assert(typeof quote.data.balance === "number", "and says whether it can be afforded");
+
+  const walletBefore = await service.from("credit_wallets").select("balance")
+    .eq("user_id", created.data.user.id).single();
+
   const imported = await user.functions.invoke("import-pptx", {
     body: { storagePath, sourceName: "Yillik hisobot.pptx" },
   });
@@ -247,6 +260,22 @@ try {
   const presentation = await user.from("presentations").select("title,status,generated_slide_count").eq("id", presentationId).single();
   if (presentation.error) throw presentation.error;
   assert(presentation.data.status === "ready", "the import finished ready");
+
+  const walletAfter = await service.from("credit_wallets").select("balance")
+    .eq("user_id", created.data.user.id).single();
+  assert(
+    walletAfter.data.balance === walletBefore.data.balance - 24,
+    `the import cost exactly 24 J (${walletBefore.data.balance} \u2192 ${walletAfter.data.balance})`,
+  );
+
+  const charges = await service.from("credit_transactions")
+    .select("type,reservation_delta")
+    .eq("user_id", created.data.user.id)
+    .in("type", ["reservation", "charge"]);
+  assert(charges.data.length === 2, "one reservation and one settlement, not a bare deduction");
+  const held = await service.from("credit_wallets").select("reserved")
+    .eq("user_id", created.data.user.id).single();
+  assert(held.data.reserved === 0, "and nothing is left held aside once the deck exists");
   assert(presentation.data.title === "Yillik hisobot", "the title placeholder named the deck, spaces intact");
   assert(presentation.data.generated_slide_count === 1, "the slide count was recorded");
 

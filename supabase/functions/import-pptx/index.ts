@@ -17,7 +17,7 @@ import { bodyJson, errorResponse, HttpError, json } from "../_shared/http.ts";
 import { readPptx, PptxError, type ImportedElement } from "../_shared/pptx.ts";
 import { unzip, ZipError } from "../_shared/unzip.ts";
 
-type Body = { storagePath?: string; sourceName?: string };
+type Body = { storagePath?: string; sourceName?: string; step?: "quote" | "import" };
 
 const UPLOAD_BUCKET = "user-uploads";
 const ASSET_BUCKET = "presentation-assets";
@@ -31,10 +31,33 @@ Deno.serve(async (request) => {
 
   let context: Awaited<ReturnType<typeof requestContext>> | null = null;
   let presentationId: string | null = null;
+  let chargeKey: string | null = null;
 
   try {
     context = await requestContext(request);
     const body = await bodyJson<Body>(request);
+
+    /**
+     * What it will cost, before anything is spent.
+     *
+     * Presenting a deck made outside Jaxongirman is an operational cost rather
+     * than part of any plan, so a member pays it too. Nobody should discover the
+     * price by being charged it, and the price is read from the same list the
+     * charge will read — asking twice must not be able to give two answers.
+     */
+    if (body.step === "quote") {
+      const [price, wallet] = await Promise.all([
+        context.serviceClient.from("app_settings").select("value").eq("key", "credits.operation_costs").single(),
+        context.serviceClient.from("credit_wallets").select("balance").eq("user_id", context.user.id).maybeSingle(),
+      ]);
+      const cost = Number(
+        (price.data?.value as Record<string, { base_credits?: number }> | null)
+          ?.external_pptx_present?.base_credits ?? 0,
+      );
+      const balance = Number(wallet.data?.balance ?? 0);
+      return json({ operation: "external_pptx_present", cost, balance, affordable: balance >= cost });
+    }
+
     const storagePath = body.storagePath?.trim();
     if (!storagePath) throw new HttpError(400, "storagePath is required", "invalid_request");
 
@@ -58,6 +81,25 @@ Deno.serve(async (request) => {
     });
     if (started.error) throw started.error;
     presentationId = started.data as unknown as string;
+
+    // Keyed on the presentation, so a retry of the same import settles the
+    // reservation it already made instead of taking a second one.
+    chargeKey = `pptx-present:${presentationId}`;
+    const reserved = await context.serviceClient.rpc("jcoin_reserve", {
+      p_operation: "external_pptx_present",
+      p_idempotency_key: chargeKey,
+      p_reference_id: presentationId,
+      p_user_id: context.user.id,
+    });
+    if (reserved.error) throw reserved.error;
+    const charge = reserved.data as { ok?: boolean; amount?: number; balance?: number } | null;
+    if (charge?.ok !== true) {
+      throw new HttpError(
+        402,
+        `Tashqi PPTX'ni namoyish qilish uchun ${charge?.amount ?? 0} J kerak.`,
+        "insufficient_jcoin",
+      );
+    }
 
     const slideRows: Record<string, unknown>[] = [];
     const elementRows: Record<string, unknown>[] = [];
@@ -105,6 +147,12 @@ Deno.serve(async (request) => {
     });
     if (finished.error) throw finished.error;
 
+    // The deck exists and is readable, so what was held aside is now spent.
+    await context.serviceClient.rpc("jcoin_settle", {
+      p_idempotency_key: chargeKey,
+      p_user_id: context.user.id,
+    });
+
     return json({
       presentationId,
       slideCount: slideRows.length,
@@ -114,6 +162,20 @@ Deno.serve(async (request) => {
   } catch (error) {
     // A half-written import is worse than none: the row exists, so it has to be
     // told why it is empty rather than left saying "generating" forever.
+    // A file we could not read is not something to charge for. The refund is a
+    // no-op if nothing was reserved or it was already settled, so it is safe on
+    // every path through here.
+    if (context && chargeKey) {
+      try {
+        await context.serviceClient.rpc("jcoin_refund", {
+          p_idempotency_key: chargeKey,
+          p_reason: "import amalga oshmadi",
+          p_user_id: context.user.id,
+        });
+      } catch {
+        // Reconciliation still has the reservation row to work from.
+      }
+    }
     if (context && presentationId) {
       try {
         await context.serviceClient.rpc("pptx_import_fail", {
