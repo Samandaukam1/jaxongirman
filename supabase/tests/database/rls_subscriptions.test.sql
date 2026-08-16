@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(40);
+select plan(48);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -244,6 +244,77 @@ select is(
   (select count(*)::integer from public.credit_transactions
     where user_id = 'f2220000-0000-0000-0000-000000000002' and type = 'charge'),
   1, 'charged once, and settled once the room existed');
+
+-- ------------------------------------------------------- buying a plan --
+
+/**
+ * The price is the server's, and the membership follows the money.
+ *
+ * A client names a plan and nothing else: a price that arrived in the request
+ * would be a price the buyer chose. And a membership only exists once an order
+ * is fulfilled, which only happens once the provider has confirmed.
+ */
+set local role authenticated;
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select set_config('request.jwt.claim.sub', 'f2220000-0000-0000-0000-000000000002', true);
+
+select is(
+  (public.order_create_subscription(
+     (select id from public.subscription_plans where code = 'premium_monthly'), 'android')
+   ->> 'total_amount')::integer,
+  36000, 'the order is priced from the plan, not from the caller');
+
+-- Two presses are one purchase.
+select is(
+  (public.order_create_subscription(
+     (select id from public.subscription_plans where code = 'premium_monthly'), 'android')
+   ->> 'reused')::boolean,
+  true, 'and a second press reuses the open order rather than opening another');
+
+reset role;
+
+-- Nothing is a membership until the order is fulfilled.
+select is(
+  (public.my_entitlements('f2220000-0000-0000-0000-000000000002') ->> 'member'),
+  'false', 'an unpaid order grants nothing');
+
+select public.order_fulfil(
+  (select id from public.orders
+    where user_id = 'f2220000-0000-0000-0000-000000000002' and purpose = 'subscription'
+    order by created_at desc limit 1));
+
+select is(
+  (public.my_entitlements('f2220000-0000-0000-0000-000000000002') ->> 'member'),
+  'true', 'fulfilment is what makes somebody a member');
+select is(
+  (select count(*)::integer from public.user_subscriptions
+    where user_id = 'f2220000-0000-0000-0000-000000000002' and status = 'active'),
+  1, 'with exactly one live membership');
+select is(
+  (select (plan_snapshot -> 'features' -> 'presentation_weekly' ->> 'limit')
+     from public.user_subscriptions where user_id = 'f2220000-0000-0000-0000-000000000002'),
+  '4', 'carrying the plan as it was sold, so a later edit cannot rewrite it');
+
+-- The dead `plan:` entitlement is gone rather than written alongside.
+select is(
+  (select count(*)::integer from public.module_entitlements
+    where user_id = 'f2220000-0000-0000-0000-000000000002' and module_code like 'plan:%'),
+  0, 'and nothing is written to the table nobody read');
+
+/**
+ * Renewing extends rather than restarting.
+ *
+ * Time already paid for is not forfeited by renewing early — the arithmetic the
+ * replaced branch already had right, kept.
+ */
+select public.order_fulfil((
+  select o.id from public.orders o
+   where o.user_id = 'f2220000-0000-0000-0000-000000000002' and o.purpose = 'subscription'
+   order by o.created_at desc limit 1));
+select ok(
+  (select expires_at from public.user_subscriptions
+    where user_id = 'f2220000-0000-0000-0000-000000000002') < now() + interval '31 days',
+  'and fulfilling the same order twice does not stack two months');
 
 select * from finish();
 rollback;

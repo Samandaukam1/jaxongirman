@@ -4511,6 +4511,10 @@ export type Database = {
         }
         Returns: number
       }
+      assert_marketplace_member: {
+        Args: { p_action: string }
+        Returns: undefined
+      }
       assert_module_access: {
         Args: { p_module_code: string; p_role: string }
         Returns: undefined
@@ -4775,6 +4779,10 @@ export type Database = {
         Args: { p_product_id: string; p_user_id?: string }
         Returns: boolean
       }
+      marketplace_may_download: {
+        Args: { p_product_id: string; p_user_id?: string }
+        Returns: boolean
+      }
       marketplace_product_detail: {
         Args: { p_product_id: string }
         Returns: Json
@@ -4825,6 +4833,10 @@ export type Database = {
         Args: { p_provider_cost?: number; p_transaction_id: string }
         Returns: Json
       }
+      marketplace_unlock_with_subscription: {
+        Args: { p_product_id: string }
+        Returns: Json
+      }
       module_access_state: { Args: { p_module_code?: string }; Returns: Json }
       my_entitlements: { Args: { p_user_id?: string }; Returns: Json }
       my_orders: {
@@ -4873,10 +4885,9 @@ export type Database = {
         Args: { p_module_code?: string; p_platform?: string }
         Returns: Json
       }
-      order_create_subscription: {
-        Args: { p_plan_code: string; p_platform?: string }
-        Returns: Json
-      }
+      order_create_subscription:
+        | { Args: { p_plan_code: string; p_platform?: string }; Returns: Json }
+        | { Args: { p_plan_id: string; p_platform?: string }; Returns: Json }
       order_fail: {
         Args: { p_code: string; p_message: string; p_order_id: string }
         Returns: boolean
