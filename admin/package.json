@@ -14,6 +14,7 @@
     "@jaxongirman/jslayd": "*",
     "@jaxongirman/qr-video": "*",
     "@jaxongirman/slide-dom": "*",
+    "@jaxongirman/tariff-card": "*",
     "@jaxongirman/types": "*",
     "@supabase/supabase-js": "latest",
     "lucide-react": "latest",

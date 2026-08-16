@@ -446,3 +446,57 @@ td small { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; 
 .jslayd-font-add { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .jslayd-font-add select { padding: 8px 10px; }
 .jslayd-font-empty { margin: 0; color: var(--ink-soft); font-size: 12.5px; }
+
+/* ------------------------------------------------------------ Tariflar --- */
+
+/* Editor on the left, the real card on the right — the preview is the shipped
+ * component, so what an admin sees while typing is what a buyer will see. */
+.tariff-builder { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr); gap: 28px; align-items: start; }
+.tariff-editor { display: grid; gap: 14px; min-width: 0; }
+.tariff-editor h3 { margin: 8px 0 0; }
+.tariff-group { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--border-soft); border-radius: 12px; background: var(--surface-muted); }
+.tariff-group > strong { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); }
+.tariff-feature { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.tariff-feature label.checkbox { margin: 0; }
+.tariff-number { display: inline-flex; align-items: center; gap: 7px; }
+.tariff-number input { width: 92px; padding: 8px 10px; }
+.tariff-number em { font-style: normal; font-size: 12px; color: var(--ink-soft); }
+
+.tariff-economics { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin: 0; }
+.tariff-economics > div { display: grid; gap: 3px; }
+.tariff-economics dt { color: var(--ink-soft); font-size: 11px; letter-spacing: .07em; text-transform: uppercase; font-weight: 700; }
+.tariff-economics dd { margin: 0; font-size: 15px; font-weight: 700; }
+.tariff-warning { display: flex; align-items: center; gap: 8px; margin: 0; padding: 11px 13px; border-radius: 10px; color: #7a5200; background: #fdf3dd; border: 1px solid #f0dcac; font-size: 13px; }
+.margin-lossy { color: #8d3029; font-weight: 700; }
+
+/* The card is dark because the app's is: a preview on a white card would be
+ * telling the admin about a design nobody will ever see. */
+.tariff-preview { position: sticky; top: 24px; display: grid; gap: 12px; }
+.tariff-card {
+  position: relative; display: grid; gap: 16px; padding: 28px 26px;
+  border-radius: 26px; color: #fff;
+  background: radial-gradient(120% 100% at 50% 0%, #241a3d 0%, #120d20 60%, #0b0814 100%);
+  border: 1px solid rgba(168, 85, 247, .28);
+  box-shadow: 0 0 0 1px rgba(255,255,255,.03) inset, 0 30px 70px rgba(10, 6, 22, .5), 0 0 60px rgba(124, 58, 237, .18);
+}
+.tariff-card-badge { justify-self: start; padding: 5px 11px; border-radius: 999px; background: linear-gradient(120deg, #A855F7, #4F46E5); font-size: 10.5px; font-weight: 800; letter-spacing: .12em; }
+.tariff-card h4 { margin: 0; font-size: 15px; letter-spacing: .08em; text-transform: uppercase; color: rgba(255,255,255,.72); font-weight: 700; }
+.tariff-card-price { display: flex; align-items: baseline; gap: 9px; }
+.tariff-card-price strong { font-size: 46px; line-height: 1; letter-spacing: -.035em; }
+.tariff-card-price span { color: rgba(255,255,255,.6); font-size: 14px; }
+.tariff-card-subtitle { margin: 0; color: rgba(255,255,255,.66); font-size: 13.5px; }
+.tariff-card-lines { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; }
+.tariff-card-lines li { display: flex; align-items: center; gap: 9px; font-size: 13.5px; color: rgba(255,255,255,.88); }
+.tariff-card-lines svg { color: #C8A6FF; flex: none; }
+.tariff-card-cta { width: 100%; min-height: 48px; border: 0; border-radius: 14px; color: #fff; font-weight: 700; background: linear-gradient(120deg, #A855F7, #4F46E5); opacity: .95; }
+
+.tariff-detail { padding: 12px 14px; border: 1px solid var(--border-soft); border-radius: 12px; background: var(--surface-muted); font-size: 13px; }
+.tariff-detail summary { cursor: pointer; font-weight: 700; }
+.tariff-detail > div { margin-top: 12px; }
+.tariff-detail dl { display: grid; gap: 4px; margin: 6px 0 0; }
+.tariff-detail dl > div { display: flex; justify-content: space-between; gap: 12px; }
+.tariff-detail dt { color: var(--ink-muted); }
+.tariff-detail dd { margin: 0; font-weight: 600; }
+.tariff-detail .is-absent dd { color: var(--ink-soft); }
+
+@media (max-width: 1100px) { .tariff-builder { grid-template-columns: 1fr; } .tariff-preview { position: static; } }

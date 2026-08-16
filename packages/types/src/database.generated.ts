@@ -4315,6 +4315,52 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      admin_save_subscription_plan: {
+        Args: {
+          p_badge?: string
+          p_code: string
+          p_compare_at_amount?: number
+          p_cta_label?: string
+          p_currency?: string
+          p_description?: string
+          p_estimated_cost_amount?: number
+          p_features: Json
+          p_id: string
+          p_is_active?: boolean
+          p_is_featured?: boolean
+          p_name: string
+          p_period_days?: number
+          p_price_amount: number
+          p_sort_order?: number
+          p_subtitle?: string
+        }
+        Returns: {
+          badge: string
+          code: string
+          compare_at_amount: number
+          created_at: string
+          cta_label: string
+          currency: string
+          description: string
+          estimated_cost_amount: number
+          features: Json
+          id: string
+          is_active: boolean
+          is_featured: boolean
+          name: string
+          period_days: number
+          price_amount: number
+          sort_order: number
+          subtitle: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "subscription_plans"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       admin_set_commission: {
         Args: {
           p_buyer_fee_rate: number
@@ -4415,6 +4461,7 @@ export type Database = {
         }
       }
       admin_settle_ai_cost: { Args: { p_note?: string }; Returns: Json }
+      admin_subscription_overview: { Args: never; Returns: Json }
       admin_terminate_game_session: {
         Args: { p_reason: string; p_session_id: string }
         Returns: boolean

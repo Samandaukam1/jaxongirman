@@ -18,6 +18,7 @@ import { ModulesPage } from "@/pages/ModulesPage";
 import { OrdersPage } from "@/pages/OrdersPage";
 import { PricingPage } from "@/pages/PricingPage";
 import { QrVideoPage } from "@/pages/QrVideoPage";
+import { TariffsPage } from "@/pages/TariffsPage";
 import { SurveysPage } from "@/pages/SurveysPage";
 import { UsagePage } from "@/pages/UsagePage";
 import { UsersPage } from "@/pages/UsersPage";
@@ -30,6 +31,7 @@ const pages: Record<string, ReactNode> = {
   "/presentations": <PresentationsPage />,
   "/jslayd": <JslaydDesignsPage />,
   "/qr-video": <QrVideoPage />,
+  "/tariflar": <TariffsPage />,
   "/usage": <UsagePage />,
   "/pricing": <PricingPage />,
   "/audit": <AuditPage />,

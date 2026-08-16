@@ -1,0 +1,12 @@
+{
+  "name": "@jaxongirman/tariff-card",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The plan's shape and wording, shared by the console's live preview and the app that sells it.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc --noEmit" },
+  "devDependencies": { "typescript": "^5.9.2" }
+}

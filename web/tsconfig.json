@@ -34,6 +34,9 @@
       ],
       "@jaxongirman/qr-video": [
         "../packages/qr-video/src/index.ts"
+      ],
+      "@jaxongirman/tariff-card": [
+        "../packages/tariff-card/src/index.ts"
       ]
     }
   },

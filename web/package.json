@@ -12,6 +12,7 @@
   "dependencies": {
     "@jaxongirman/qr-video": "*",
     "@jaxongirman/slide-dom": "*",
+    "@jaxongirman/tariff-card": "*",
     "@jaxongirman/types": "*",
     "@supabase/supabase-js": "latest",
     "@types/qrcode": "^1.5.6",

@@ -1,4 +1,5 @@
 import {
+  BadgeCheck,
   MonitorPlay, Blocks, ClipboardList, Coins, Cpu, Gamepad2, Gift, LayoutDashboard, LogOut, Menu, Palette, Presentation, Receipt, ScrollText, Smartphone, Store, TrendingUp, Users, Wallet, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
@@ -13,6 +14,7 @@ const navigation = [
   { to: "/qr-video", label: "QR Video Experience", icon: MonitorPlay },
   { to: "/usage", label: "AI xarajatlari", icon: Cpu },
   { to: "/pricing", label: "Kredit va narxlar", icon: Coins },
+  { to: "/tariflar", label: "Tariflar", icon: BadgeCheck },
   { to: "/modules", label: "Modullar va tangalar", icon: Blocks },
   { to: "/surveys", label: "So‘rovnomalar", icon: ClipboardList },
   { to: "/games", label: "O‘yingoh", icon: Gamepad2 },
