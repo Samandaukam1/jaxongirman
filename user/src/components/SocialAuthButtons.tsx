@@ -1,4 +1,3 @@
-import { Apple } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
@@ -8,6 +7,29 @@ import {
   type SocialAuthAvailability,
 } from "@/lib/auth/social-auth";
 import { colors, radius, spacing, typography } from "@/theme/tokens";
+
+/**
+ * Apple's mark, drawn rather than imported.
+ *
+ * `lucide-react-native` ships an `Apple` icon that is a piece of fruit with a
+ * leaf — not Apple Inc.'s logo. On a black Sign in with Apple button that reads
+ * as a mistake, and Apple's guidelines are specific about which mark goes
+ * there. This is that mark, at the weight their spec asks for.
+ */
+function AppleMark({ size = 19 }: { size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path
+        fill="#FFFFFF"
+        d="M17.05 12.54c-.02-2.66 2.17-3.93 2.27-4-1.24-1.8-3.16-2.05-3.84-2.08-1.63-.16-3.19.96-4.02.96-.83 0-2.11-.94-3.46-.91-1.78.03-3.42 1.03-4.34 2.63-1.85 3.2-.47 7.95 1.33 10.55.88 1.27 1.93 2.7 3.3 2.65 1.33-.05 1.83-.86 3.43-.86 1.6 0 2.05.86 3.46.83 1.42-.03 2.33-1.3 3.2-2.58 1-1.47 1.42-2.9 1.44-2.98-.03-.01-2.77-1.06-2.8-4.22z"
+      />
+      <Path
+        fill="#FFFFFF"
+        d="M14.54 4.6c.73-.89 1.22-2.12 1.09-3.35-1.05.05-2.33.7-3.08 1.59-.68.78-1.27 2.04-1.11 3.24 1.17.09 2.37-.6 3.1-1.48z"
+      />
+    </Svg>
+  );
+}
 
 /**
  * Google's mark, drawn rather than imported.
@@ -86,7 +108,7 @@ export function SocialAuthButtons({ onSignedIn }: { onSignedIn?: () => void }) {
             <ActivityIndicator color="#FFFFFF" size="small" />
           ) : (
             <>
-              <Apple color="#FFFFFF" size={19} fill="#FFFFFF" strokeWidth={0} />
+              <AppleMark />
               <Text style={[styles.label, styles.appleLabel]}>Apple bilan davom etish</Text>
             </>
           )}

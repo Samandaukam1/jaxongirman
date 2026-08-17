@@ -1,19 +1,33 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { ArrowRight } from "lucide-react-native";
 import { useState } from "react";
-import { Alert, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView,
+  StyleSheet, Text, View,
+} from "react-native";
 
+import { AuthHero } from "@/components/AuthHero";
 import { FormField } from "@/components/FormField";
 import { PrimaryButton } from "@/components/PrimaryButton";
-import { Screen } from "@/components/Screen";
 import { SocialAuthButtons } from "@/components/SocialAuthButtons";
 import { authRedirectTo } from "@/lib/authLinking";
 import { asErrorMessage } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
-import { colors, gradients, radius, shadowLifted, spacing, typography } from "@/theme/tokens";
+import { colors, radius, spacing, typography } from "@/theme/tokens";
 
+/**
+ * The first screen, and for most people the only one they will judge the app by
+ * before deciding whether to bother.
+ *
+ * Three ways in, ordered by how little they ask of somebody: Apple and Google
+ * want one tap, the form wants an email, a password and a trip to an inbox. The
+ * form is collapsed behind a link rather than removed — it is how every account
+ * that exists today was made, and putting two empty fields under the fold of a
+ * welcome screen makes the fast paths look like an afterthought beside them.
+ */
 export default function SignInScreen() {
   const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
+  const [emailOpen, setEmailOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -46,43 +60,99 @@ export default function SignInScreen() {
   }
 
   return (
-    <Screen scroll contentStyle={styles.screen}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.brandMark}><Text style={styles.brandLetter}>J</Text></LinearGradient>
-        <Text style={styles.eyebrow}>JAXONGIR AI</Text>
-        <Text style={styles.title}>{mode === "sign-in" ? "Xush kelibsiz" : "Hisob yarating"}</Text>
-        <Text style={styles.subtitle}>Bir mavzudan professional taqdimotgacha.</Text>
+    // A wash rather than a flat white: the marks above are stickers, and a
+    // sticker needs something to sit on. It fades out before the buttons so
+    // nothing competes with them for the eye.
+    <LinearGradient
+      colors={["#F4EDFE", "#FDF1F8", "#FFFFFF"]}
+      locations={[0, 0.42, 0.78]}
+      style={styles.screen}
+    >
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={styles.flex}
+      >
+        <ScrollView
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <AuthHero />
 
-        {/* Above the form, because it is the faster way in and because a person
-            who has an Apple or Google account has one fewer password to invent.
-            The form below is untouched — this adds a door, it does not replace
-            one. */}
-        <SocialAuthButtons />
+          <View style={styles.copy}>
+            <Text style={styles.title}>Fikringizdan{"\n"}taqdimot tug‘iladi</Text>
+            <Text style={styles.subtitle}>
+              Bir mavzu yozing — slaydlar, dizayn va o‘yin o‘zi tayyor bo‘ladi.
+            </Text>
+          </View>
 
-        <View style={styles.form}>
-          {mode === "sign-up" ? (
-            <FormField label="Ism va familiya" value={fullName} onChangeText={setFullName} autoComplete="name" />
-          ) : null}
-          <FormField label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" autoComplete="email" />
-          <FormField label="Parol" value={password} onChangeText={setPassword} secureTextEntry autoComplete={mode === "sign-in" ? "current-password" : "new-password"} />
-          <PrimaryButton label={mode === "sign-in" ? "Kirish" : "Ro‘yxatdan o‘tish"} trailingIcon={ArrowRight} loading={loading} onPress={() => void submit()} />
-        </View>
-        <Pressable onPress={() => setMode((current) => (current === "sign-in" ? "sign-up" : "sign-in"))} style={styles.switch}>
-          <Text style={styles.switchText}>{mode === "sign-in" ? "Hisobingiz yo‘qmi? Ro‘yxatdan o‘ting" : "Hisobingiz bormi? Kirish"}</Text>
-        </Pressable>
+          <SocialAuthButtons />
+
+          {emailOpen ? (
+            <View style={styles.form}>
+              {mode === "sign-up" ? (
+                <FormField label="Ism va familiya" value={fullName} onChangeText={setFullName} autoComplete="name" />
+              ) : null}
+              <FormField label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" autoComplete="email" />
+              <FormField label="Parol" value={password} onChangeText={setPassword} secureTextEntry autoComplete={mode === "sign-in" ? "current-password" : "new-password"} />
+              <PrimaryButton
+                label={mode === "sign-in" ? "Kirish" : "Ro‘yxatdan o‘tish"}
+                trailingIcon={ArrowRight}
+                loading={loading}
+                onPress={() => void submit()}
+              />
+              <Pressable
+                onPress={() => setMode((current) => (current === "sign-in" ? "sign-up" : "sign-in"))}
+                style={styles.switch}
+              >
+                <Text style={styles.switchText}>
+                  {mode === "sign-in" ? "Hisobingiz yo‘qmi? Ro‘yxatdan o‘ting" : "Hisobingiz bormi? Kirish"}
+                </Text>
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setEmailOpen(true)}
+              style={({ pressed }) => [styles.emailButton, pressed && styles.pressed]}
+            >
+              <Text style={styles.emailButtonText}>Email bilan davom etish</Text>
+            </Pressable>
+          )}
+
+          <Text style={styles.legal}>
+            Davom etish orqali foydalanish shartlariga rozilik bildirasiz.
+          </Text>
+        </ScrollView>
       </KeyboardAvoidingView>
-    </Screen>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { justifyContent: "center", paddingTop: 84, paddingBottom: spacing.xxxl },
-  brandMark: { width: 56, height: 56, borderRadius: radius.md, alignItems: "center", justifyContent: "center", marginBottom: spacing.xl, ...shadowLifted },
-  brandLetter: { color: colors.onPrimary, fontFamily: "Manrope_700Bold", fontSize: 28 },
-  eyebrow: { ...typography.caption, color: colors.accent, letterSpacing: 2, marginBottom: spacing.md },
-  title: { ...typography.display, color: colors.ink },
-  subtitle: { ...typography.body, color: colors.inkMuted, marginTop: spacing.sm, marginBottom: spacing.xxl },
+  screen: { flex: 1 },
+  flex: { flex: 1 },
+  content: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: 64,
+    paddingBottom: spacing.xxxl,
+    gap: spacing.lg,
+  },
+
+  copy: { alignItems: "center", gap: spacing.sm, marginBottom: spacing.xs },
+  title: { ...typography.display, color: colors.ink, textAlign: "center", fontSize: 32, lineHeight: 38 },
+  subtitle: { ...typography.body, color: colors.inkMuted, textAlign: "center", paddingHorizontal: spacing.md },
+
+  emailButton: {
+    minHeight: 52, borderRadius: radius.md, alignItems: "center", justifyContent: "center",
+    backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border,
+  },
+  emailButtonText: { ...typography.bodyMedium, fontSize: 16, color: colors.ink },
+  pressed: { opacity: 0.85 },
+
   form: { gap: spacing.lg },
-  switch: { alignItems: "center", padding: spacing.xl },
+  switch: { alignItems: "center", paddingTop: spacing.sm },
   switchText: { ...typography.caption, color: colors.primary },
+
+  legal: { ...typography.caption, color: colors.inkSoft, textAlign: "center", paddingTop: spacing.sm },
 });
