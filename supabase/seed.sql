@@ -10,7 +10,10 @@ values
   -- production where this file never runs. This row is force-overwritten below,
   -- so anything a migration adds and the seed omits disappears on a local reset.
   ('credits.operation_costs', '{"ai_edit":{"base_credits":1},"pdf_export":{"base_credits":0},"png_export":{"base_credits":0},"image_regeneration":{"base_credits":5},"external_pptx_present":{"base_credits":24},"game_after_free_limit":{"base_credits":20}}'::jsonb, 'Non-generation operation prices used by server-side billing adapters', false),
-  ('ai.provider_pricing', '{"gpt-5.6-terra":{"input_per_million":2.5,"output_per_million":15},"gpt-5.6-luna":{"input_per_million":1,"output_per_million":6},"gpt-image-1.5":{"medium_landscape_per_image":0.05}}'::jsonb, 'Provider price snapshots used only for cost estimates; update through admin RPC', false)
+  -- Kept in step with 202608170002 by hand: `db reset` runs the seed *after*
+  -- the migrations, so a price added by a migration and absent here disappears
+  -- on every local reset and the local database stops matching production.
+  ('ai.provider_pricing', '{"gpt-5.6-terra":{"input_per_million":2.5,"output_per_million":15},"gpt-5.6-luna":{"input_per_million":1,"output_per_million":6},"gpt-image-1.5":{"medium_landscape_per_image":0.05},"gemini-2.5-flash-lite":{"input_per_million":0.10,"output_per_million":0.40},"gemini-2.5-flash":{"input_per_million":0.30,"output_per_million":2.50}}'::jsonb, 'Provider price snapshots used only for cost estimates; update through admin RPC', false)
 on conflict (key) do update set value = excluded.value, description = excluded.description, public_read = excluded.public_read;
 
 insert into public.style_configs (

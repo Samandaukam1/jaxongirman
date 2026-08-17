@@ -6,6 +6,7 @@ import {
 } from "./layout-brief.ts";
 import { buildJslaydSlides, readDesign, type ResolvedDesign } from "./jslayd-layout.ts";
 import { OpenAIClient } from "./openai.ts";
+import { attributionMetadata, Writer } from "./writer.ts";
 import { contentSchema, outlineSchema, rewriteSchema } from "./plan-schema.ts";
 import type { GeneratedImage, LayoutName, PresentationPlan, ResearchSource, SemanticSlide, VisualDna } from "./presentation-types.ts";
 import { OpenAIImageProvider } from "./providers/image.ts";
@@ -276,12 +277,25 @@ function assembleDeck(params: {
   return { visualDna, slides: [cover, agenda, ...body, references, thanks] };
 }
 
-async function providerPricing(service: SupabaseClient, textModel: string, imageModel: string) {
+/**
+ * What each model costs, from the one configured price list.
+ *
+ * Keyed by model name, so adding Gemini is a settings row rather than a code
+ * change — and a stage that ran on a model nobody priced logs a zero rather
+ * than a guess, which is visible in the dashboard as a gap instead of being
+ * quietly wrong.
+ */
+async function providerPricing(service: SupabaseClient, imageModel: string) {
   const { data } = await service.from("app_settings").select("value").eq("key", "ai.provider_pricing").maybeSingle();
   const value = data?.value && typeof data.value === "object" && !Array.isArray(data.value) ? data.value as Record<string, unknown> : {};
-  const text = value[textModel] as Record<string, number> | undefined;
   const image = value[imageModel] as Record<string, number> | undefined;
-  return { inputPerMillion: Number(text?.input_per_million ?? 0), outputPerMillion: Number(text?.output_per_million ?? 0), imageCost: Number(image?.medium_landscape_per_image ?? 0) };
+  return {
+    for(model: string) {
+      const row = value[model] as Record<string, number> | undefined;
+      return { inputPerMillion: Number(row?.input_per_million ?? 0), outputPerMillion: Number(row?.output_per_million ?? 0) };
+    },
+    imageCost: Number(image?.medium_landscape_per_image ?? 0),
+  };
 }
 
 function usageCost(usage: { input_tokens?: number; output_tokens?: number }, pricing: { inputPerMillion: number; outputPerMillion: number }) {
@@ -290,6 +304,10 @@ function usageCost(usage: { input_tokens?: number; output_tokens?: number }, pri
 
 export async function runGenerationPipeline(input: PipelineInput): Promise<void> {
   const openai = new OpenAIClient();
+  // Research and copy go to Gemini when it is configured, and to OpenAI when it
+  // is not or when it fails. Image generation is deliberately not routed: the
+  // imagery was never the problem this change is solving.
+  const writer = new Writer(openai);
   const uploadedFileIds: string[] = [];
   let totalCost = 0;
   try {
@@ -335,9 +353,19 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
       };
       if (mode === "mock") return { ...empty, failure: null as string | null };
       const system = "You are a research assistant for Uzbek-language academic presentations. Search the live web before answering and report only what the pages you opened actually say. Never state a fact you could not find a source for. Write in Uzbek Latin script.";
-      const prompt = `Mavzu: ${prepared.presentation.topic}\n\n1. Ishonchli manbalardan qidiring: rasmiy davlat saytlari, ilmiy nashrlar, statistika idoralari, universitetlar, ensiklopediyalar.\n2. 12–18 ta aniq dalil yozing: raqamlar, sanalar, ismlar, ta'riflar, sabab-oqibat bog'lanishlari. Har bir dalildan keyin qavs ichida manba havolasini bering.\n3. Manbalar bir-biriga zid bo'lsa, buni ochiq yozing.\n4. Manbasi topilmagan da'voni umuman yozmang — noaniqligini aytganingiz yaxshiroq.\n5. Oxirida eng muhim 5–8 ta manbani ro'yxat qilib bering.\nBiriktirilgan fayllar bo'lsa, ular ham kontekst hisoblanadi.`;
+      // Notes, not an essay. This stage was spending 30–45k input tokens on
+      // prose that the writing stage then compressed away — a deck needs the
+      // facts, and the facts are short. Asking for them as a list rather than
+      // as exposition is most of the saving.
+      const prompt = `Mavzu: ${prepared.presentation.topic}\n\nIshonchli manbalardan qidiring: rasmiy saytlar, ilmiy nashrlar, statistika idoralari, universitetlar.\nQuyidagilarni QISQA ro'yxat qilib yozing — izoh va kirish so'zlarisiz:\n- FAKTLAR: 8–12 ta aniq dalil, har biri bir qatorda, qavsda manba.\n- RAQAMLAR: 4–8 ta statistika, yil va manba bilan.\n- TA'RIFLAR: 2–4 ta asosiy tushuncha, bir jumladan.\n- MANBALAR: 5–8 ta havola.\nManbasi yo'q da'voni yozmang. Uzun paragraf yozmang.\nBiriktirilgan fayllar bo'lsa, ular ham kontekst hisoblanadi.`;
       try {
-        const result = await openai.research([{ role: "system", content: system }, ...userInput(prompt, context.fileIds)], input.safetyIdentifier);
+        const result = await writer.research({
+          prompt: `${system}\n\n${prompt}`,
+          system,
+          openaiInput: [{ role: "system", content: system }, ...userInput(prompt, context.fileIds)],
+          safetyIdentifier: input.safetyIdentifier,
+          maxOutputTokens: 2_500,
+        });
         return { ...result, failure: null as string | null };
       } catch (error) {
         // A provider that cannot search must not cost the user the whole deck.
@@ -376,7 +404,14 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
       if (mode === "mock") return { data: mockOutline(prepared.presentation.topic, contentCount), usage: {}, requestId: null };
       const system = "You are Jaxongir AI, a senior presentation strategist. Produce academically usable Uzbek Latin content architecture grounded in the supplied research. Every slide must advance a specific, concrete idea — never a vague heading. The visual design is fixed by the chosen design, so never propose colours, fonts or decoration. Return only the required schema.";
       const prompt = `Mavzu: ${prepared.presentation.topic}\nMazmun slaydlari soni: ${contentCount}\nUslub: ${prepared.presentation.style}\nTanlangan dizayn: ${jslayd.document.design.name} — ${jslayd.document.design.description}.\n\nSarlavha, mavzular rejasi, foydalanilgan adabiyotlar va yakuniy slaydlarni server o'zi qo'shadi — ularni rejalashtirmang. Faqat ${contentCount} ta mazmun slaydini rejalashtiring va ularni mantiqiy ketma-ketlikda joylashtiring: tushuncha → tahlil → dalillar → amaliyot → xulosa.\nHar bir sarlavha aniq bo'lsin: "Kirish" emas, mavzu haqida nima aytilishini ayting.\nRaqam yoki statistika bor slayd uchun statistic yoki chart layoutini tanlang.\nVisual prompt faqat matnsiz illyustratsiyani tasvirlaydi va yuqoridagi art directionga mos bo'lishi kerak.${researchBrief}`;
-      return openai.structured<Outline>([{ role: "system", content: system }, ...userInput(prompt, context.fileIds)], "presentation_outline", outlineSchema(contentCount), input.safetyIdentifier);
+      return writer.structured<Outline>({
+        prompt: `${system}\n\n${prompt}`,
+        system,
+        schemaName: "presentation_outline",
+        schema: outlineSchema(contentCount),
+        openaiInput: [{ role: "system", content: system }, ...userInput(prompt, context.fileIds)],
+        safetyIdentifier: input.safetyIdentifier,
+      });
     }, (value) => `${value.data.slides.length} ta mazmun slaydi rejalashtirildi`);
 
     /**
@@ -408,7 +443,15 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
       if (mode === "mock") return { data: mockContent(outlineResult.data), usage: {}, requestId: null };
       const system = "You are an expert Uzbek Latin academic presentation writer working to a fixed layout. Follow the supplied outline exactly and ground every sentence in the supplied research. Write specific, checkable content: real numbers, dates, names and definitions instead of generalities. Grammar must be flawless Uzbek Latin. Never fabricate a quotation, statistic or date — if the research does not support it, write something the research does support instead. The layout is fixed and is not yours to change: write copy that fits the boxes you are given. Return only the required schema.";
       const prompt = `Mavzu: ${prepared.presentation.topic}\nReja:\n${JSON.stringify(outlineResult.data.slides)}\n\nAynan ${contentCount} ta slayd uchun matn yozing.\n- subtitle: sarlavhani ochib beruvchi bitta qisqa jumla (bezakli yozuv). Har slaydda bo'lsin.\n- bullets: 3–5 ta band. Har biri to'liq, aniq fikr: raqam, sana, ism yoki aniq ta'rif bo'lsin. "Muhim ahamiyatga ega" kabi quruq iboralarni yozmang.\n- body: bandlarni bog'lovchi 1–2 jumlalik izoh, agar slayd shuni talab qilsa.\n- statistic: faqat tadqiqotda haqiqatan uchragan raqamni yozing.\n- chart: faqat tadqiqotdagi haqiqiy qiymatlar bilan to'ldiring.\n- table: faqat tadqiqotda haqiqatan jadval ko'rinishidagi ma'lumot bo'lsa to'ldiring; 2-6 ustun, 2-8 qator.\nBibliografiya yozmang — uni server alohida qo'shadi.${researchBrief}${layoutInstruction}`;
-      return openai.structured<Content>([{ role: "system", content: system }, ...userInput(prompt, context.fileIds)], "presentation_content", contentSchema(contentCount), input.safetyIdentifier);
+      return writer.structured<Content>({
+        prompt: `${system}\n\n${prompt}`,
+        system,
+        schemaName: "presentation_content",
+        schema: contentSchema(contentCount),
+        openaiInput: [{ role: "system", content: system }, ...userInput(prompt, context.fileIds)],
+        safetyIdentifier: input.safetyIdentifier,
+        maxOutputTokens: 16_000,
+      });
     }, () => "Slayd matnlari yozildi va manbalarga bog‘landi");
 
 
@@ -447,6 +490,8 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
     const writtenSlides = [...contentResult.data.slides];
     let rewriteUsage = { input_tokens: 0, output_tokens: 0 };
     let rewrites = 0;
+    let rewriteAttribution: { provider: string; model: string; fallbackFrom?: string; fallbackReason?: string } =
+      { provider: "openai", model: openai.textModel };
 
     if (mode !== "mock") {
       const briefById = new Map(layoutPlan.briefs.map((brief) => [brief.archetypeId, brief]));
@@ -484,12 +529,21 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
 
         const rewriteSystem = "You are rewriting presentation copy to fit a fixed layout. Preserve the meaning and the facts exactly. Shorten by removing unnecessary words, simplifying sentences and dropping duplicated ideas — in that order. Never invent a new fact to fill space, never change a number, and never mention the layout. Return only the required schema.";
         const rewritePrompt = `Quyidagi matnlar dizayndagi qutilarga sig'madi. Ma'noni saqlagan holda qisqartiring.\nHar bir maydon uchun "aimCharacters" atrofida yozing, "maxCharacters" dan oshmang.\n"last line is a single short word" bo'lsa, qator ajratishni o'zgartiring yoki qisqartiring.\n\n${JSON.stringify(request)}`;
-        const rewritten = await openai.structured<{ slides: { slide: number; fields: { field: string; text: string }[] }[] }>(
-          [{ role: "system", content: rewriteSystem }, { role: "user", content: rewritePrompt }],
-          "content_rewrite", rewriteSchema(), input.safetyIdentifier,
-        );
+        const rewritten = await writer.structured<{ slides: { slide: number; fields: { field: string; text: string }[] }[] }>({
+          prompt: `${rewriteSystem}\n\n${rewritePrompt}`,
+          system: rewriteSystem,
+          schemaName: "content_rewrite",
+          schema: rewriteSchema(),
+          openaiInput: [{ role: "system", content: rewriteSystem }, { role: "user", content: rewritePrompt }],
+          safetyIdentifier: input.safetyIdentifier,
+          maxOutputTokens: 4_000,
+        });
 
         rewrites += 1;
+        rewriteAttribution = {
+          provider: rewritten.provider, model: rewritten.model,
+          ...(rewritten.fallbackFrom ? { fallbackFrom: rewritten.fallbackFrom, fallbackReason: rewritten.fallbackReason } : {}),
+        };
         rewriteUsage = {
           input_tokens: (rewriteUsage.input_tokens ?? 0) + (rewritten.usage.input_tokens ?? 0),
           output_tokens: (rewriteUsage.output_tokens ?? 0) + (rewritten.usage.output_tokens ?? 0),
@@ -526,18 +580,38 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
       }),
       () => `«${jslayd.document.design.name}» dizayni (v${jslayd.version}) qo‘llandi`,
     );
-    const pricing = await providerPricing(input.service, openai.textModel, openai.imageModel);
-    const researchCost = usageCost(research.usage, pricing);
-    const outlineCost = usageCost(outlineResult.usage, pricing);
-    const contentCost = usageCost(contentResult.usage, pricing);
-    totalCost += researchCost + outlineCost + contentCost;
-    if (mode === "real") {
-      await input.service.from("ai_usage").insert([
-        { owner_id: input.ownerId, presentation_id: input.presentationId, job_id: input.jobId, provider: "openai", model: openai.textModel, operation: "topic_research", input_tokens: research.usage.input_tokens ?? 0, output_tokens: research.usage.output_tokens ?? 0, provider_cost_usd: researchCost, request_id: research.requestId },
-        { owner_id: input.ownerId, presentation_id: input.presentationId, job_id: input.jobId, provider: "openai", model: openai.textModel, operation: "presentation_outline", input_tokens: outlineResult.usage.input_tokens ?? 0, output_tokens: outlineResult.usage.output_tokens ?? 0, provider_cost_usd: outlineCost, request_id: outlineResult.requestId },
-        { owner_id: input.ownerId, presentation_id: input.presentationId, job_id: input.jobId, provider: "openai", model: openai.textModel, operation: "presentation_content", input_tokens: contentResult.usage.input_tokens ?? 0, output_tokens: contentResult.usage.output_tokens ?? 0, provider_cost_usd: contentCost, request_id: contentResult.requestId },
-      ]);
+    const pricing = await providerPricing(input.service, openai.imageModel);
+
+    /**
+     * One row per stage, naming the model that actually ran it.
+     *
+     * Not "openai" for everything: a deck may be researched by Gemini and
+     * written by OpenAI in the same job, and a dashboard that says otherwise
+     * makes the fallback invisible — which is how a month of unexpectedly
+     * paying the more expensive vendor goes unnoticed until the invoice.
+     */
+    const stages: { operation: string; answer: { usage: { input_tokens?: number; output_tokens?: number }; requestId: string | null; provider: string; model: string; fallbackFrom?: string; fallbackReason?: string } }[] = [
+      { operation: "topic_research", answer: research },
+      { operation: "presentation_outline", answer: outlineResult },
+      { operation: "presentation_content", answer: contentResult },
+    ];
+    if (rewrites > 0) {
+      stages.push({ operation: "content_rewrite", answer: { ...rewriteAttribution, usage: rewriteUsage, requestId: null } });
     }
+
+    const rows = stages.map((stage) => {
+      const cost = usageCost(stage.answer.usage, pricing.for(stage.answer.model));
+      totalCost += cost;
+      return {
+        owner_id: input.ownerId, presentation_id: input.presentationId, job_id: input.jobId,
+        provider: stage.answer.provider, model: stage.answer.model, operation: stage.operation,
+        input_tokens: stage.answer.usage.input_tokens ?? 0,
+        output_tokens: stage.answer.usage.output_tokens ?? 0,
+        provider_cost_usd: cost, request_id: stage.answer.requestId,
+        metadata: attributionMetadata(stage.answer as never),
+      };
+    });
+    if (mode === "real") await input.service.from("ai_usage").insert(rows);
 
     await runStage(input.service, input, "building_layouts", async () => plan.slides, (value) => `${value.length} ta layout tanlandi`);
 
