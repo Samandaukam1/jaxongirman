@@ -1,14 +1,10 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js";
-import type { PaletteFamily, SlideTemplate } from "./design-types.ts";
 import { familyOf } from "./jslayd/index.ts";
 import { buildJslaydSlides, readDesign, type ResolvedDesign } from "./jslayd-layout.ts";
-import { buildSlides } from "./layout.ts";
 import { OpenAIClient } from "./openai.ts";
-import { resolvePalette } from "./palettes.ts";
 import { contentSchema, outlineSchema } from "./plan-schema.ts";
-import type { GeneratedImage, LayoutName, PresentationPlan, PresentationStyle, ResearchSource, SemanticSlide, VisualDna } from "./presentation-types.ts";
+import type { GeneratedImage, LayoutName, PresentationPlan, ResearchSource, SemanticSlide, VisualDna } from "./presentation-types.ts";
 import { OpenAIImageProvider } from "./providers/image.ts";
-import { resolveTemplate } from "./templates/index.ts";
 
 type PipelineInput = { jobId: string; presentationId: string; ownerId: string; service: SupabaseClient; safetyIdentifier: string };
 /** The model supplies narrative direction only — never colours or typography. */
@@ -16,47 +12,74 @@ type ModelDna = Pick<VisualDna, "mood" | "era" | "visualStyle" | "textures" | "i
 type Outline = { visualDna: ModelDna; slides: Array<{ title: string; purpose: string; layout: LayoutName; visualPrompt: string | null }> };
 type Content = { slides: Array<Omit<SemanticSlide, "purpose" | "layout" | "visualPrompt">> };
 
-/** Merges the user's chosen design with the model's narrative direction. */
-function composeVisualDna(model: ModelDna, template: SlideTemplate, palette: PaletteFamily): VisualDna {
-  const { chartSeries: _series, ...tokens } = palette.tokens;
+/**
+ * How each visual DNA field reads for an image model.
+ *
+ * JSLAYD states a design's imagery as two enumerations rather than as prose,
+ * because an enumeration is what an admin can pick and a renderer can honour.
+ * The prose has to exist somewhere for the image prompt, and here is the one
+ * place it is needed — so it is written once, against the vocabulary, instead
+ * of being carried per design and drifting between them.
+ */
+const IMAGE_TREATMENT: Record<string, string> = {
+  photo: "editorial photography, natural light, shallow depth of field, no text",
+  illustration: "flat vector illustration, clean shapes, limited palette, no text",
+  render3d: "isolated 3D clay render, matte finish, soft contact shadow, generous negative space",
+  abstract: "abstract geometric composition, layered shapes, no recognisable objects",
+  mixed: "modern editorial collage of photography and flat shapes, no text",
+};
+
+const DECORATION: Record<string, { elements: string[]; spacing: string }> = {
+  none: { elements: [], spacing: "austere, wide margins, nothing but type and image" },
+  low: { elements: ["thin rules", "restrained accent marks"], spacing: "calm, generous margins, strong vertical rhythm" },
+  medium: { elements: ["accent shapes", "rounded cards", "thin outlined rings"], spacing: "balanced, clear grid, comfortable margins" },
+  high: { elements: ["layered shapes", "edge-cropped circles", "solid accent discs", "pill buttons"], spacing: "dense, energetic, deliberate overlap" },
+};
+
+/**
+ * The direction the image provider reads, built from the design the deck will
+ * actually be laid into.
+ *
+ * This used to come from a built-in template even when the deck used a JSLAYD
+ * design — so a deck could be laid out by one design and illustrated for
+ * another. Reading both from the same document is what makes the imagery and
+ * the layout the same design.
+ *
+ * The model contributes mood, era, texture and framing; it is never asked for
+ * colours or typography, which belong to the design and to nothing else.
+ */
+function composeJslaydDna(model: ModelDna, design: ResolvedDesign, paletteCode: string | null): VisualDna {
+  const document = design.document;
+  const family = familyOf(document, paletteCode);
+  const dna = document.visualDNA;
+  const decoration = DECORATION[dna.decorationDensity] ?? DECORATION.medium;
+
+  const roleFont = (role: string): string | undefined =>
+    document.fonts.find((font) => font.roles.includes(role as never))?.name;
+
   return {
     ...model,
     palette: {
-      background: tokens.background, surface: tokens.surface, primary: tokens.primary,
-      secondary: tokens.secondary, accent: tokens.accent, textPrimary: tokens.textPrimary,
-      textSecondary: tokens.textSecondary, border: tokens.border,
+      background: family.colors.background,
+      surface: family.colors.surface,
+      primary: family.colors.primary,
+      secondary: family.colors.secondary,
+      accent: family.colors.accent,
+      textPrimary: family.colors.text,
+      textSecondary: family.colors.textSecondary,
+      border: family.colors.border,
     },
-    typography: template.artDirection.typography,
-    illustrationStyle: template.artDirection.illustrationStyle,
-    iconStyle: template.artDirection.decorativeElements.join(", "),
-    decorativeElements: [...template.artDirection.decorativeElements],
-    spacingStyle: template.artDirection.spacingStyle,
-    chartStyle: template.artDirection.chartStyle,
-    templateCode: template.code,
-    paletteCode: palette.code,
-  };
-}
-
-/**
- * Swaps a JSLAYD design's own colours into the direction the image provider
- * reads, so a generated photograph is lit for the design it will sit inside
- * rather than for a palette family the deck never uses.
- */
-function applyJslaydColors(dna: VisualDna, design: ResolvedDesign, paletteCode: string | null): VisualDna {
-  const colors = familyOf(design.document, paletteCode).colors;
-  return {
-    ...dna,
-    palette: {
-      background: colors.background,
-      surface: colors.surface,
-      primary: colors.primary,
-      secondary: colors.secondary,
-      accent: colors.accent,
-      textPrimary: colors.text,
-      textSecondary: colors.textSecondary,
-      border: colors.border,
+    typography: {
+      display: roleFont("display") ?? roleFont("heading") ?? document.fonts[0]?.name ?? "Manrope",
+      body: roleFont("body") ?? document.fonts[0]?.name ?? "Manrope",
     },
-    templateCode: design.document.design.slug,
+    illustrationStyle: IMAGE_TREATMENT[dna.imageTreatment] ?? IMAGE_TREATMENT.illustration,
+    iconStyle: decoration.elements.join(", "),
+    decorativeElements: [...decoration.elements],
+    spacingStyle: decoration.spacing,
+    chartStyle: `two-tone charts drawn from ${family.chartPalette.slice(0, 2).join(" and ")}, no gridlines`,
+    templateCode: document.design.slug,
+    paletteCode: family.code,
   };
 }
 
@@ -329,9 +352,8 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
 
     const outlineResult = await runStage(input.service, input, "creating_outline", async () => {
       if (mode === "mock") return { data: mockOutline(prepared.presentation.topic, contentCount), usage: {}, requestId: null };
-      const system = "You are Jaxongir AI, a senior presentation strategist. Produce academically usable Uzbek Latin content architecture grounded in the supplied research. Every slide must advance a specific, concrete idea — never a vague heading. The visual design is fixed by the chosen template, so never propose colours, fonts or decoration. Return only the required schema.";
-      const chosen = resolveTemplate(prepared.presentation.template_code, prepared.presentation.style as PresentationStyle);
-      const prompt = `Mavzu: ${prepared.presentation.topic}\nMazmun slaydlari soni: ${contentCount}\nUslub: ${prepared.presentation.style}\nTanlangan dizayn: ${chosen.name} — ${chosen.tagline}. Art direction: ${chosen.artDirection.mood}; ${chosen.artDirection.illustrationStyle}.\n\nSarlavha, mavzular rejasi, foydalanilgan adabiyotlar va yakuniy slaydlarni server o'zi qo'shadi — ularni rejalashtirmang. Faqat ${contentCount} ta mazmun slaydini rejalashtiring va ularni mantiqiy ketma-ketlikda joylashtiring: tushuncha → tahlil → dalillar → amaliyot → xulosa.\nHar bir sarlavha aniq bo'lsin: "Kirish" emas, mavzu haqida nima aytilishini ayting.\nRaqam yoki statistika bor slayd uchun statistic yoki chart layoutini tanlang.\nVisual prompt faqat matnsiz illyustratsiyani tasvirlaydi va yuqoridagi art directionga mos bo'lishi kerak.${researchBrief}`;
+      const system = "You are Jaxongir AI, a senior presentation strategist. Produce academically usable Uzbek Latin content architecture grounded in the supplied research. Every slide must advance a specific, concrete idea — never a vague heading. The visual design is fixed by the chosen design, so never propose colours, fonts or decoration. Return only the required schema.";
+      const prompt = `Mavzu: ${prepared.presentation.topic}\nMazmun slaydlari soni: ${contentCount}\nUslub: ${prepared.presentation.style}\nTanlangan dizayn: ${jslayd.document.design.name} — ${jslayd.document.design.description}.\n\nSarlavha, mavzular rejasi, foydalanilgan adabiyotlar va yakuniy slaydlarni server o'zi qo'shadi — ularni rejalashtirmang. Faqat ${contentCount} ta mazmun slaydini rejalashtiring va ularni mantiqiy ketma-ketlikda joylashtiring: tushuncha → tahlil → dalillar → amaliyot → xulosa.\nHar bir sarlavha aniq bo'lsin: "Kirish" emas, mavzu haqida nima aytilishini ayting.\nRaqam yoki statistika bor slayd uchun statistic yoki chart layoutini tanlang.\nVisual prompt faqat matnsiz illyustratsiyani tasvirlaydi va yuqoridagi art directionga mos bo'lishi kerak.${researchBrief}`;
       return openai.structured<Outline>([{ role: "system", content: system }, ...userInput(prompt, context.fileIds)], "presentation_outline", outlineSchema(contentCount), input.safetyIdentifier);
     }, (value) => `${value.data.slides.length} ta mazmun slaydi rejalashtirildi`);
 
@@ -342,15 +364,21 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
       return openai.structured<Content>([{ role: "system", content: system }, ...userInput(prompt, context.fileIds)], "presentation_content", contentSchema(contentCount), input.safetyIdentifier);
     }, () => "Slayd matnlari yozildi va manbalarga bog‘landi");
 
-    const template = resolveTemplate(prepared.presentation.template_code, prepared.presentation.style as PresentationStyle);
-    const palette = resolvePalette(prepared.presentation.palette_code);
-
-    // The design the user picked, when they picked a JSLAYD one. Resolved here
-    // rather than at build time so a design that cannot be read is known before
-    // a single credit is spent on imagery for a layout it will not use.
-    const jslayd: ResolvedDesign | null = prepared.presentation.design_id
-      ? await loadJslaydDesign(input.service, prepared.presentation.design_id, prepared.presentation.design_version)
-      : null;
+    // A deck is laid out by a published design and by nothing else. There used
+    // to be a built-in blueprint behind this, so a deck with no design — or with
+    // one that could not be read — still produced slides. That fallback is what
+    // kept withdrawn designs alive in the product: a design removed from the
+    // catalogue went on rendering because the blueprint for it was compiled into
+    // the server.
+    //
+    // Resolved before any credit is spent, so an unreadable design costs the job
+    // nothing rather than costing it a deck's worth of imagery first.
+    const jslayd = await loadJslaydDesign(
+      input.service, prepared.presentation.design_id, prepared.presentation.design_version,
+    );
+    if (!jslayd) {
+      throw new Error("Tanlangan dizayn topilmadi yoki nashr qilinmagan. Iltimos, boshqa dizayn tanlang.");
+    }
 
     // User-entered labels come first — they are what the author explicitly cited —
     // then every page the research actually opened, deduplicated by address.
@@ -387,13 +415,9 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
         // so the design's own colours replace the picked palette family in the
         // direction the image provider reads. Everything else the model wrote —
         // mood, era, texture — is untouched.
-        visualDna: jslayd
-          ? applyJslaydColors(composeVisualDna(outlineResult.data.visualDna, template, palette), jslayd, prepared.presentation.palette_code)
-          : composeVisualDna(outlineResult.data.visualDna, template, palette),
+        visualDna: composeJslaydDna(outlineResult.data.visualDna, jslayd, prepared.presentation.palette_code),
       }),
-      () => jslayd
-        ? `«${jslayd.document.design.name}» JSLAYD dizayni (v${jslayd.version}) qo‘llandi`
-        : `«${template.name}» shabloni va «${palette.name}» rang oilasi qo‘llandi`,
+      () => `«${jslayd.document.design.name}» dizayni (v${jslayd.version}) qo‘llandi`,
     );
     const pricing = await providerPricing(input.service, openai.textModel, openai.imageModel);
     const researchCost = usageCost(research.usage, pricing);
@@ -420,7 +444,16 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
       // The template decides how much imagery its composition needs. A slide
       // without one falls back to the palette ground, which several templates
       // treat as a deliberate composition rather than a missing asset.
-      const policy = template.artDirection.imagePolicy ?? "all";
+      // How much imagery a design wants, read from the design: an archetype
+      // that supports an image is a slide the design has somewhere to put one.
+      // A design whose slides are all type gets no images at all rather than
+      // images it will drop.
+      const imageArchetypes = jslayd.document.archetypes.filter((archetype) => archetype.selection.supportsImage).length;
+      const policy = imageArchetypes === 0
+        ? "none"
+        : imageArchetypes <= 2
+          ? "cover"
+          : imageArchetypes <= 4 ? "contextual" : "all";
       // A typographic design has nowhere to put a photograph, so it must not be
       // charged for one either.
       if (policy === "none") return [] as GeneratedImage[];
@@ -435,7 +468,7 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
       const provider = new OpenAIImageProvider(openai, input.service, pricing.imageCost);
       const results: GeneratedImage[] = [];
       for (const target of targets) {
-        const generated = await provider.generate({ ownerId: input.ownerId, presentationId: input.presentationId, slideIndex: target.index, topic: prepared.presentation.topic, direction: target.slide.visualPrompt ?? plan.visualDna.imageDirection, visualDna: plan.visualDna, template, palette });
+        const generated = await provider.generate({ ownerId: input.ownerId, presentationId: input.presentationId, slideIndex: target.index, topic: prepared.presentation.topic, direction: target.slide.visualPrompt ?? plan.visualDna.imageDirection, visualDna: plan.visualDna });
         results.push(generated);
         totalCost += generated.costUsd;
         await input.service.from("presentation_assets").insert({ presentation_id: input.presentationId, owner_id: input.ownerId, kind: "generated", storage_bucket: generated.bucket, storage_path: generated.path, mime_type: "image/png", provider: generated.provider, metadata: { slide_index: target.index } });
@@ -453,20 +486,13 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
         generatedImages,
         uploadedImages: assets.uploadedImages,
       };
-      // A deck laid out by a published JSLAYD design, or — when the user never
-      // chose one, or the design turns out to be unreadable — by the built-in
-      // blueprint that has always built this deck. The fallback is the whole
-      // point: a broken remote design costs a deck its new look, never its
-      // existence (§72, §99).
-      const rows = jslayd
-        ? buildJslaydSlides({
-            ...shared,
-            design: jslayd,
-            authorName: prepared.presentation.author_name,
-            teacherName: prepared.presentation.teacher_name,
-            paletteCode: prepared.presentation.palette_code,
-          })
-        : buildSlides({ ...shared, template, palette });
+      const rows = buildJslaydSlides({
+        ...shared,
+        design: jslayd,
+        authorName: prepared.presentation.author_name,
+        teacherName: prepared.presentation.teacher_name,
+        paletteCode: prepared.presentation.palette_code,
+      });
       const deleteResult = await input.service.from("slides").delete().eq("presentation_id", input.presentationId);
       if (deleteResult.error) throw deleteResult.error;
       const slideInsert = await input.service.from("slides").insert(rows.slides);
@@ -492,7 +518,7 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
         // Pin the deck to the version it was actually laid out with, so a later
         // publish of the same design cannot change what this deck looks like.
         // Left alone when the JSLAYD path was not taken.
-        ...(jslayd ? { design_version: jslayd.version } : {}),
+        design_version: jslayd.version,
       }).eq("id", input.presentationId);
       if (updateResult.error) throw updateResult.error;
       const { error } = await input.service.rpc("settle_generation", { p_job_id: input.jobId, p_actual_credits: actualCredits, p_provider_cost_usd: totalCost });

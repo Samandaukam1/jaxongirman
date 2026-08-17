@@ -172,7 +172,8 @@ select set_config('request.jwt.claim.sub', 'f1110000-0000-0000-0000-000000000001
 -- anything is written rather than trimmed silently.
 select throws_ok(
   $$ select public.start_generation(
-       gen_random_uuid(), 'Mavzu matni', 'Sarlavha', 'simple'::public.presentation_style, 17) $$,
+       gen_random_uuid(), 'Mavzu matni', 'Sarlavha', 'simple'::public.presentation_style, 17,
+       null, null, '{}', null, null, null, 'toza-qogoz') $$,
   '22023', null, 'a member cannot exceed the plan''s slide ceiling');
 
 reset role;

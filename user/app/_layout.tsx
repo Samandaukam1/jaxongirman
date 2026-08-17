@@ -17,9 +17,12 @@ import { colors } from "@/theme/tokens";
 void SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  // Manrope carries the app chrome; the rest are slide-template voices. Inter
-  // and Caveat Brush are Toza osmon's only two faces — that design uses nothing
-  // else, so both must be present before a slide renders.
+  // Manrope carries the app chrome. The rest are here because published designs
+  // ask for them by name and ship no files of their own — a design that names
+  // "Inter" and uploads nothing is relying on the app to have it. Checked
+  // against the catalogue, not assumed: these six are every family the current
+  // designs reference. Dropping one does not fail loudly; it renders that
+  // design's type in whatever the platform substitutes.
   const [loaded] = useFonts({
     Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold,
     LeagueSpartan_700Bold, LeagueSpartan_800ExtraBold,

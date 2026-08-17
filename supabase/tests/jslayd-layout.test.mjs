@@ -8,15 +8,58 @@ const edge = buildEdgeModules();
 const pkg = buildJslayd();
 
 const { buildJslaydSlides, readDesign } = await import(`${edge}/jslayd-layout.js`);
-const { buildSlides } = await import(`${edge}/layout.js`);
-const { resolveTemplate } = await import(`${edge}/templates/index.js`);
-const { resolvePalette } = await import(`${edge}/palettes.js`);
 const { compile } = await import(`${pkg}/compile.js`);
-const { convert } = await import("../scripts/migrate-designs-to-jslayd.mjs");
 const { SAMPLE_PROMPT } = await import(`${pkg}/standard.js`);
 
 const { document: DOCUMENT, diagnostics } = compile(SAMPLE_PROMPT);
 assert.deepEqual(diagnostics.errors, [], "the sample design must compile");
+
+/**
+ * A design that deliberately hangs two photographs off the canvas.
+ *
+ * This used to be borrowed from a built-in blueprint, which meant a test of the
+ * repair pass depended on a production design continuing to be composed that
+ * way. Written here instead: the behaviour under test is "authored geometry is
+ * not damage", and the fixture should be the smallest thing that states it.
+ */
+const BLEEDING_PROMPT = `${SAMPLE_PROMPT}
+
+[SLIDE comparison_bleed]
+purpose: comparison
+background: background
+priority: 95
+supportsImage: true
+
+[ELEMENT left_photo]
+type: image
+x: -120
+y: 80
+width: 900
+height: 620
+fit: cover
+
+[ELEMENT right_photo]
+type: image
+x: 1140
+y: 80
+width: 900
+height: 620
+fit: cover
+
+[ELEMENT caption]
+type: text
+text: {{title}}
+x: 120
+y: 760
+width: 1680
+height: 120
+font: font_1
+fontSize: 44
+color: text
+`;
+
+const { document: BLEEDING, diagnostics: bleedingDiagnostics } = compile(BLEEDING_PROMPT);
+assert.deepEqual(bleedingDiagnostics.errors, [], "the bleeding fixture must compile");
 
 const DESIGN_ROW = { id: "11110000-0000-4000-8000-000000000001", slug: "apelsen-futuristik", version: 3, compiled_config: DOCUMENT };
 const PRESENTATION = "22220000-0000-4000-8000-000000000002";
@@ -206,14 +249,13 @@ test("building the same deck twice produces the same layout", () => {
 /* ----------------------------------------------- authored geometry ------ */
 
 test("a deliberately bleeding image is not dragged back onto the slide", () => {
-  // Reproduces the live failure that stopped a real deck: `toza_osmon` composes
-  // its comparison slide around two photographs that hang off both edges. The
-  // generic repair pass clamped them inward and scored the slide down for it,
+  // Reproduces the live failure that stopped a real deck: a design composed its
+  // comparison slide around two photographs hanging off both edges, and the
+  // generic repair pass clamped them inward and scored the slide down for it —
   // even though the design placed them there on purpose.
-  const template = resolveTemplate("toza_osmon", "super_professional");
-  const document = convert(template);
+  const document = BLEEDING;
   const archetype = document.archetypes.find((entry) => entry.purpose === "comparison");
-  assert.ok(archetype, "toza osmon draws a comparison slide");
+  assert.ok(archetype, "the fixture draws a comparison slide");
 
   const bleeding = archetype.elements.filter(
     (element) => element.type === "image" &&
@@ -235,7 +277,7 @@ test("a deliberately bleeding image is not dragged back onto the slide", () => {
     uploadedImages: [],
     authorName: null,
     teacherName: null,
-    paletteCode: "toza_osmon",
+    paletteCode: null,
   });
 
   const slide = built.slides[0];
@@ -248,10 +290,8 @@ test("a deliberately bleeding image is not dragged back onto the slide", () => {
 });
 
 test("text is still repaired, because only text moves with the content", () => {
-  const template = resolveTemplate("toza_osmon", "super_professional");
-  const document = convert(template);
-  const archetype = document.archetypes.find((entry) => entry.purpose === "comparison");
-  const design = readDesign({ ...DESIGN_ROW, compiled_config: document }).design;
+  const archetype = BLEEDING.archetypes.find((entry) => entry.purpose === "comparison");
+  const design = readDesign({ ...DESIGN_ROW, compiled_config: BLEEDING }).design;
 
   const built = buildJslaydSlides({
     presentationId: PRESENTATION, ownerId: OWNER, design,
@@ -270,25 +310,4 @@ test("text is still repaired, because only text moves with the content", () => {
     assert.ok(Number(element.style.fontSize) >= 12,
       `font ${element.style.fontSize} is below what every renderer keeps`);
   }
-});
-
-/* -------------------------------------------- the built-in path is intact */
-
-test("the built-in blueprint path still builds the same deck it always did", () => {
-  const built = buildSlides({
-    presentationId: PRESENTATION,
-    ownerId: OWNER,
-    template: resolveTemplate("toza_osmon", "super_professional"),
-    palette: resolvePalette("toza_osmon"),
-    slides: deck(),
-    sources: SOURCES,
-    generatedImages: [],
-    uploadedImages: [],
-  });
-  assert.equal(built.slides.length, 8);
-  assert.ok(built.elements.length > 0);
-  // The legacy path records no JSLAYD provenance, which is how a reader tells
-  // the two apart without guessing.
-  assert.equal(built.slides[0].quality_report.engine, undefined);
-  assert.equal(built.slides[0].quality_report.template, "toza_osmon");
 });

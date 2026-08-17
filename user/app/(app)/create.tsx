@@ -13,12 +13,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { FormField } from "@/components/FormField";
 import { IconChip } from "@/components/IconChip";
-import { PalettePicker } from "@/components/PalettePicker";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { DesignPicker } from "@/components/DesignPicker";
-import { TemplatePicker } from "@/components/TemplatePicker";
-import { loadDesignCatalogue, type PaletteFamilyRow, type SlideTemplateRow } from "@/lib/design";
-import { loadRemoteDesigns, type RemoteDesign } from "@/lib/jslayd-designs";
+import { familiesOf, loadRemoteDesigns, type RemoteDesign } from "@/lib/jslayd-designs";
 import { asFunctionErrorMessage } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
@@ -55,9 +52,6 @@ export default function CreatePresentationScreen() {
   const [balance, setBalance] = useState<number | null>(null);
   const [estimating, setEstimating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [templates, setTemplates] = useState<SlideTemplateRow[]>([]);
-  const [palettes, setPalettes] = useState<PaletteFamilyRow[]>([]);
-  const [templateCode, setTemplateCode] = useState<string | null>(null);
   /** When on, the finished deck is followed by an AI-written O‘yingoh match. */
   const [withGame, setWithGame] = useState(false);
   const [paletteCode, setPaletteCode] = useState<string | null>(null);
@@ -72,46 +66,44 @@ export default function CreatePresentationScreen() {
     return () => subscription.remove();
   }, []);
 
-  const styleTemplates = useMemo(() => templates.filter((template) => template.style === style), [style, templates]);
   const styleDesigns = useMemo(() => remoteDesigns.filter((design) => design.row.tier === style), [remoteDesigns, style]);
-  const activePalette = useMemo(() => palettes.find((family) => family.code === paletteCode) ?? palettes[0] ?? null, [paletteCode, palettes]);
 
-  useEffect(() => {
-    let active = true;
-    void loadDesignCatalogue()
-      .then((catalogue) => {
-        if (!active) return;
-        setTemplates(catalogue.templates);
-        setPalettes(catalogue.palettes);
-        setPaletteCode((current) => current ?? catalogue.palettes[0]?.code ?? null);
-      })
-      .catch(() => {
-        // A missing catalogue is not fatal: the server falls back to defaults.
-      });
-    return () => { active = false; };
-  }, []);
+  const activeDesign = useMemo(
+    () => styleDesigns.find((design) => design.row.slug === designSlug) ?? null,
+    [designSlug, styleDesigns],
+  );
 
-  // Published JSLAYD designs. Their absence is not a failure: the built-in
-  // catalogue above is what the deck falls back to, and always has been.
+  // A design carries its own colour families. There is no separate palette
+  // catalogue any more: a family that the chosen design does not define is a
+  // colour the renderer cannot produce.
+  const families = useMemo(() => (activeDesign ? familiesOf(activeDesign.row) : []), [activeDesign]);
+
+  // Published designs, and nothing else. This used to sit beside a built-in
+  // catalogue that the deck fell back to; the fallback is gone, so an empty
+  // answer here means there is genuinely nothing to choose and the screen says
+  // so rather than offering something the server would not honour.
+  const [designsLoaded, setDesignsLoaded] = useState(false);
   useEffect(() => {
     let active = true;
     void loadRemoteDesigns()
-      .then((designs) => { if (active) setRemoteDesigns(designs); })
-      .catch(() => {});
+      .then((designs) => { if (active) { setRemoteDesigns(designs); setDesignsLoaded(true); } })
+      .catch(() => { if (active) setDesignsLoaded(true); });
     return () => { active = false; };
   }, []);
-
-  // Templates belong to one style, so the choice resets when the style changes.
-  useEffect(() => {
-    setTemplateCode((current) => (styleTemplates.some((template) => template.code === current) ? current : styleTemplates[0]?.code ?? null));
-  }, [styleTemplates]);
 
   // A design belongs to one tier too, so switching tier drops a choice that no
   // longer applies rather than silently sending it to a generator that would
   // ignore it.
   useEffect(() => {
-    setDesignSlug((current) => (styleDesigns.some((design) => design.row.slug === current) ? current : null));
+    setDesignSlug((current) =>
+      styleDesigns.some((design) => design.row.slug === current) ? current : styleDesigns[0]?.row.slug ?? null);
   }, [styleDesigns]);
+
+  // The family choice belongs to the design, so changing design drops a family
+  // the new one may not define.
+  useEffect(() => {
+    setPaletteCode((current) => (families.some((family) => family.code === current) ? current : families[0]?.code ?? null));
+  }, [families]);
 
   const effectiveCount = useMemo(() => {
     const custom = Number(customCount);
@@ -197,8 +189,7 @@ export default function CreatePresentationScreen() {
           teacherName: teacherName.trim() || null,
           sources: sourceList,
           uploadPaths: uploadedPaths,
-          templateCode,
-          paletteCode: activePalette?.code ?? null,
+          paletteCode,
           designSlug,
           idempotencyKey: presentationId,
         },
@@ -267,24 +258,43 @@ export default function CreatePresentationScreen() {
           </View>
         </View>
 
-        {styleDesigns.length ? (
-          <View style={styles.group}>
-            <View style={styles.labelRow}><Text style={styles.label}>Premium dizaynlar</Text><Text style={styles.hint}>{styleDesigns.length} ta</Text></View>
+        <View style={styles.group}>
+          <View style={styles.labelRow}>
+            <Text style={styles.label}>Dizayn</Text>
+            {styleDesigns.length ? <Text style={styles.hint}>{styleDesigns.length} ta</Text> : null}
+          </View>
+          {styleDesigns.length ? (
             <DesignPicker designs={styleDesigns} selected={designSlug} onSelect={setDesignSlug} />
-          </View>
-        ) : null}
+          ) : (
+            // Said plainly rather than papered over with a built-in. A deck is
+            // laid out by a published design and by nothing else, so with none
+            // published there is nothing to generate — and somebody waiting for
+            // a spinner to finish deserves to know that now.
+            <Text style={styles.emptyDesigns}>
+              {designsLoaded
+                ? "Bu daraja uchun hozircha dizayn nashr qilinmagan. Boshqa darajani tanlang."
+                : "Dizaynlar yuklanmoqda…"}
+            </Text>
+          )}
+        </View>
 
-        {styleTemplates.length && !designSlug ? (
+        {/* The families the chosen design defines — not a catalogue of its own.
+            A family the design does not carry is a colour the renderer cannot
+            produce, so offering one would be offering a result nobody can get. */}
+        {families.length > 1 ? (
           <View style={styles.group}>
-            <View style={styles.labelRow}><Text style={styles.label}>Namunaviy dizayn</Text><Text style={styles.hint}>{styleTemplates.length} ta</Text></View>
-            <TemplatePicker templates={styleTemplates} palette={activePalette} selected={templateCode} onSelect={setTemplateCode} />
-          </View>
-        ) : null}
-
-        {palettes.length ? (
-          <View style={styles.group}>
-            <View style={styles.labelRow}><Text style={styles.label}>Ranglar oilasi</Text><Text style={styles.hint}>{palettes.length} ta</Text></View>
-            <PalettePicker palettes={palettes} selected={activePalette?.code ?? null} onSelect={setPaletteCode} />
+            <View style={styles.labelRow}><Text style={styles.label}>Ranglar oilasi</Text><Text style={styles.hint}>{families.length} ta</Text></View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+              {families.map((family) => (
+                <Pressable
+                  key={family.code}
+                  onPress={() => setPaletteCode(family.code)}
+                  style={[styles.chip, paletteCode === family.code && styles.chipSelected]}
+                >
+                  <Text style={[styles.chipText, paletteCode === family.code && styles.chipTextSelected]}>{family.name}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
           </View>
         ) : null}
 
@@ -374,6 +384,7 @@ const styles = StyleSheet.create({
   labelRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" },
   label: { ...typography.bodyMedium, color: colors.ink },
   hint: { ...typography.caption, color: colors.inkSoft },
+  emptyDesigns: { ...typography.body, color: colors.inkSoft, lineHeight: 22, paddingVertical: spacing.sm },
   upload: { minHeight: 76, borderRadius: radius.md, backgroundColor: colors.primarySoft, borderWidth: 1, borderStyle: "dashed", borderColor: colors.accentSoft, padding: spacing.md, flexDirection: "row", alignItems: "center", gap: spacing.md },
   uploadText: { flex: 1 },
   uploadTitle: { ...typography.bodyMedium, color: colors.ink },

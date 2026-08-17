@@ -396,36 +396,46 @@ select is(
   'archiving is audited'
 );
 
--- ------------------------------------------------- existing decks untouched --
+-- --------------------------------------------- the built-in catalogue is gone --
 
+/**
+ * The old catalogue is retired, not merely unused.
+ *
+ * Deleting a design from `presentation_designs` did not remove it from the
+ * product while `slide_templates` still answered `is_active = true`: the app
+ * offered that table as a second catalogue, and generation fell back to it. The
+ * rows stay — a deck generated while they were live recorded one — but nothing
+ * active is left for a client to find.
+ */
 select is(
   (select count(*)::integer from public.slide_templates where is_active),
-  15,
-  'the built-in template catalogue is untouched by the JSLAYD migration'
+  0,
+  'no built-in template is active any more'
+);
+select is(
+  (select count(*)::integer from public.palette_families where is_active),
+  0,
+  'and neither is any built-in palette family'
 );
 
--- ------------------------------------------------ the built-in catalogue --
---
--- Regression for a policy that read as "anon sees the active catalogue" and
--- did not: `is_admin` has no EXECUTE for `anon`, and its ACL is checked when
--- the expression is initialised, so the OR never short-circuited.
+-- The rows themselves are kept: a deck that recorded a template_code should
+-- still be explicable, and the migrations that seeded them are history.
+select ok(
+  (select count(*) from public.slide_templates) > 0,
+  'the rows are kept so an old deck can still be read back'
+);
+
+-- Regression for a policy that read as "anon sees the active catalogue" and did
+-- not: `is_admin` has no EXECUTE for `anon`, and its ACL is checked when the
+-- expression is initialised, so the OR never short-circuited. The policy still
+-- has to answer without erroring — it now simply has nothing to show.
 set local role anon;
 select set_config('request.jwt.claim.role', 'anon', true);
 
 select is(
   (select count(*)::integer from public.slide_templates),
-  15,
-  'a signed-out reader sees the active templates and no error'
-);
-select is(
-  (select count(*)::integer from public.palette_families),
-  8,
-  'a signed-out reader sees the active palette families'
-);
-select is(
-  (select count(*)::integer from public.slide_templates where not is_active),
   0,
-  'and retired templates stay hidden from them'
+  'a signed-out reader sees an empty catalogue and no error'
 );
 
 reset role;

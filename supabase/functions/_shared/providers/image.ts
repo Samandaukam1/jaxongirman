@@ -1,5 +1,4 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js";
-import type { PaletteFamily, SlideTemplate } from "../design-types.ts";
 import { OpenAIClient } from "../openai.ts";
 import type { GeneratedImage, VisualDna } from "../presentation-types.ts";
 
@@ -10,8 +9,6 @@ type GenerateInput = {
   topic: string;
   direction: string;
   visualDna: VisualDna;
-  template: SlideTemplate;
-  palette: PaletteFamily;
 };
 
 export interface ImageProvider {
@@ -22,14 +19,16 @@ export class OpenAIImageProvider implements ImageProvider {
   constructor(private readonly openai: OpenAIClient, private readonly service: SupabaseClient, private readonly costPerImage: number) {}
 
   async generate(input: GenerateInput): Promise<GeneratedImage> {
-    // The template dictates the look; the model only contributes subject matter.
-    const art = input.template.artDirection;
-    const { chartSeries: _series, ...colors } = input.palette.tokens;
+    // The design dictates the look; the model only contributes subject matter.
+    // Both halves now come from `visualDna`, which is composed from the JSLAYD
+    // document the deck will actually be laid into — so the imagery cannot be
+    // directed by one design while the slides are built by another.
+    const dna = input.visualDna;
     const prompt = [
       "Professional presentation visual asset.",
       `Topic: ${input.topic}.`,
-      `Art direction: ${art.imageStyle || art.illustrationStyle}; mood ${art.mood}.`,
-      `Strictly use this colour palette: ${Object.values(colors).join(", ")}.`,
+      `Art direction: ${dna.illustrationStyle}; mood ${dna.mood}.`,
+      `Strictly use this colour palette: ${Object.values(dna.palette).join(", ")}.`,
       input.direction,
       "Single coherent visual asset, generous negative space, clean composition, presentation-safe crop.",
       "No typography, no letters, no numerals, no logo, no watermark, no slide screenshot, no UI frame.",

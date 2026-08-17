@@ -1,22 +1,16 @@
-import type { PaletteFamily, SlideTemplate } from "./design-types.ts";
-import type { ElementRow, GeneratedImage, SemanticSlide, SlideRow } from "./presentation-types.ts";
-import { MODEL_HEIGHT, MODEL_WIDTH, renderSlide } from "./template-engine.ts";
-
-type BuildInput = {
-  presentationId: string;
-  ownerId: string;
-  template: SlideTemplate;
-  palette: PaletteFamily;
-  slides: SemanticSlide[];
-  sources: string[];
-  generatedImages: GeneratedImage[];
-  uploadedImages: string[];
-};
+import { MODEL_HEIGHT, MODEL_WIDTH } from "./export-model.ts";
+import type { ElementRow } from "./presentation-types.ts";
 
 /**
- * Last line of defence after the template engine. Content-bearing elements are
- * clamped into the canvas; decorative shapes and icons are left alone because
- * bleeding past the edge is a deliberate motif in several templates.
+ * Last line of defence after a design has placed its elements.
+ *
+ * Content-bearing elements are clamped into the canvas; decorative shapes and
+ * icons are left alone, because bleeding past the edge is a deliberate motif
+ * and not damage to repair.
+ *
+ * This is the only thing left of the built-in renderer. It knows nothing about
+ * any particular design — it takes rows and returns rows — which is why it
+ * outlived the blueprints it was written beside.
  */
 export function validateAndRepair(
   rows: ElementRow[],
@@ -60,51 +54,4 @@ export function validateAndRepair(
     score: Math.max(70, 100 - issues.length * 8),
     report: { passed: issues.length === 0, issues, checked: ["bounds", "font_size", "text_overlap", "margins"] },
   };
-}
-
-export function buildSlides(input: BuildInput): { slides: SlideRow[]; elements: ElementRow[] } {
-  const slideRows: SlideRow[] = [];
-  const elementRows: ElementRow[] = [];
-  const generated = new Map(input.generatedImages.map((item) => [item.slideIndex, item]));
-  let uploadedIndex = 0;
-
-  input.slides.forEach((semantic, index) => {
-    const slideId = crypto.randomUUID();
-    const generatedImage = generated.get(index);
-    const uploadedPath = !generatedImage && input.uploadedImages.length
-      ? input.uploadedImages[uploadedIndex++ % input.uploadedImages.length]
-      : null;
-    const image = generatedImage
-      ? { bucket: generatedImage.bucket, path: generatedImage.path }
-      : uploadedPath
-        ? { bucket: "user-uploads", path: uploadedPath }
-        : null;
-
-    const rendered = renderSlide(input.template, input.palette, {
-      presentationId: input.presentationId,
-      ownerId: input.ownerId,
-      slideId,
-      index,
-      total: input.slides.length,
-      semantic,
-      image,
-      sources: input.sources,
-    });
-
-    const checked = validateAndRepair(rendered.elements);
-    slideRows.push({
-      id: slideId,
-      presentation_id: input.presentationId,
-      owner_id: input.ownerId,
-      position: index,
-      title: semantic.title,
-      layout: semantic.layout,
-      background: { color: rendered.background },
-      quality_score: checked.score,
-      quality_report: { ...checked.report, template: input.template.code, palette: input.palette.code },
-    });
-    elementRows.push(...checked.rows);
-  });
-
-  return { slides: slideRows, elements: elementRows };
 }

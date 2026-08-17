@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { buildJslayd } from "./build.mjs";
@@ -9,11 +10,23 @@ const { decompile } = await import(`${dir}/decompile.js`);
 const { serialize } = await import(`${dir}/serialize.js`);
 const { SAMPLE_PROMPT } = await import(`${dir}/standard.js`);
 const jslayd = await import(`${dir}/serialize.js`);
-const { convert } = await import("../../../supabase/scripts/migrate-designs-to-jslayd.mjs");
-const { buildEdgeModules } = await import("../../../supabase/scripts/build-edge.mjs");
 
-const edge = buildEdgeModules();
-const { slideTemplates } = await import(`${edge}/templates/index.js`);
+/**
+ * Fifteen real designs, frozen.
+ *
+ * These are the documents the catalogue was built from — every published design
+ * in the product descends from one of them — so round-tripping them is
+ * round-tripping production data rather than a sample chosen to be easy. They
+ * were snapshotted when the TypeScript blueprints they were converted from were
+ * removed: the corpus is the part that was worth keeping, and freezing it also
+ * means this test no longer depends on code that ships.
+ *
+ * 195 archetypes and 120 colour families between them. Do not trim it to make
+ * the file smaller — the variety is the entire point.
+ */
+const CORPUS = JSON.parse(
+  readFileSync(new URL("./fixtures/design-corpus.json", import.meta.url), "utf8"),
+);
 
 /**
  * A design opened for editing must be the design, not something like it.
@@ -45,9 +58,9 @@ test("the sample design survives a decompile and recompile unchanged", () => {
   roundTrip(document, "sample");
 });
 
-test("every built-in design can be edited as text without changing", () => {
-  for (const template of slideTemplates) {
-    roundTrip(convert(template), template.code);
+test("every real design can be edited as text without changing", () => {
+  for (const document of CORPUS) {
+    roundTrip(document, document.design.slug);
   }
 });
 
@@ -63,7 +76,7 @@ test("the decompiled prompt is a prompt, not a dump", () => {
 });
 
 test("a design with several colour families keeps all of them", () => {
-  const document = convert(slideTemplates[0]);
+  const document = CORPUS[0];
   const prompt = roundTrip(document, "families");
   assert.equal(document.colorFamilies.length, 8);
   for (const family of document.colorFamilies.slice(1)) {
@@ -90,12 +103,12 @@ function shuffleKeys(value) {
 
 test("a design read back out of the database is still exactly itself", () => {
   const { readDocument } = jslayd;
-  for (const template of slideTemplates) {
-    const stored = shuffleKeys(JSON.parse(JSON.stringify(convert(template))));
+  for (const entry of CORPUS) {
+    const stored = shuffleKeys(JSON.parse(JSON.stringify(entry)));
     const { document, diagnostics } = readDocument(stored);
-    assert.ok(document, `${template.code}: the stored document did not read back:\n${
+    assert.ok(document, `${entry.design.slug}: the stored document did not read back:\n${
       diagnostics.errors.slice(0, 5).map((item) => `  ${item.message}`).join("\n")}`);
-    roundTrip(document, `${template.code} (jsonb)`);
+    roundTrip(document, `${entry.design.slug} (jsonb)`);
   }
 });
 

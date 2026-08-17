@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(19);
+select plan(21);
 
 select has_table('public', 'presentations', 'presentations table exists');
 select has_table('public', 'credit_transactions', 'credit ledger exists');
@@ -21,6 +21,16 @@ insert into auth.users (
 insert into public.user_roles (user_id, role, granted_by)
 values ('30000000-0000-0000-0000-000000000003', 'admin', '30000000-0000-0000-0000-000000000003');
 
+-- A deck is laid out by a published design and by nothing else, so a test that
+-- starts a generation has to publish one first. That is the rule under test as
+-- much as the credit arithmetic is.
+insert into public.presentation_design_versions (design_id, version, source_prompt, compiled_config, content_hash)
+select id, 1, '', compiled_config, md5(compiled_config::text)
+  from public.presentation_designs where slug = 'jurnal-muqovasi';
+update public.presentation_designs
+   set status = 'published', published_version = 1
+ where slug = 'jurnal-muqovasi';
+
 select is((select balance from public.credit_wallets where user_id = '10000000-0000-0000-0000-000000000001'), 100, 'signup trigger grants configured credits');
 
 set local role authenticated;
@@ -28,10 +38,23 @@ select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
 select is(public.estimate_presentation_credits('great', 10), 41, 'great 10-slide estimate is configuration-driven');
+
+-- The fallback that kept withdrawn designs alive is gone: with no design named,
+-- and with one that is not published, nothing is generated and no credit moves.
+select throws_ok(
+  $$select * from public.start_generation(
+    'a0000000-0000-0000-0000-0000000000ff', 'Mavzu matni', 'Sarlavha', 'great', 10)$$,
+  '22023', null, 'a generation with no design is refused');
+select throws_ok(
+  $$select * from public.start_generation(
+    'a0000000-0000-0000-0000-0000000000fe', 'Mavzu matni', 'Sarlavha', 'great', 10,
+    null, null, '{}', null, null, null, 'toza-qogoz')$$,
+  '22023', null, 'and so is one naming a design nobody published');
 select lives_ok(
   $$select * from public.start_generation(
     'a0000000-0000-0000-0000-000000000001', 'Alisher Navoiy hayoti va ijodi', 'Alisher Navoiy',
-    'great', 10, 'Jahongir', 'D. Karimova', array['Wikipedia', 'Darslik'], 'test-generation-1'
+    'great', 10, 'Jahongir', 'D. Karimova', array['Wikipedia', 'Darslik'], 'test-generation-1',
+    null, null, 'jurnal-muqovasi'
   )$$,
   'owner can atomically start generation'
 );
@@ -41,7 +64,8 @@ select is((select count(*)::integer from public.presentation_sources where prese
 select lives_ok(
   $$select * from public.start_generation(
     'a0000000-0000-0000-0000-000000000001', 'Alisher Navoiy hayoti va ijodi', 'Alisher Navoiy',
-    'great', 10, 'Jahongir', 'D. Karimova', array['Wikipedia'], 'test-generation-1'
+    'great', 10, 'Jahongir', 'D. Karimova', array['Wikipedia'], 'test-generation-1',
+    null, null, 'jurnal-muqovasi'
   )$$,
   'generation start is idempotent'
 );

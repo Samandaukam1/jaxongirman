@@ -17,7 +17,6 @@ type RequestBody = {
   sources?: string[];
   uploadPaths?: string[];
   idempotencyKey?: string;
-  templateCode?: string;
   paletteCode?: string;
   designSlug?: string;
   retry?: boolean;
@@ -73,10 +72,11 @@ Deno.serve(async (request) => {
         p_teacher_name: body.teacherName?.trim().slice(0, 120) || undefined,
         p_sources: sources,
         p_idempotency_key: body.idempotencyKey?.trim() || body.presentationId,
-        p_template_code: designCode(body.templateCode),
+        p_template_code: null,
         p_palette_code: designCode(body.paletteCode),
-        // An unknown or unpublished slug resolves to nothing and the deck
-        // takes the built-in path, exactly as an unknown template code does.
+        // A deck is laid out by a published design and by nothing else. An
+        // unknown or unpublished slug is refused by the RPC before a credit is
+        // reserved; there is no built-in path left for it to fall to.
         p_design_slug: designSlug(body.designSlug),
       });
       if (error) throw new HttpError(error.code === "P0001" ? 402 : 400, error.message, error.code ?? "generation_start_failed");
