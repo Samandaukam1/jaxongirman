@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(40);
+select plan(48);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -235,6 +235,76 @@ select is(
      join public.jelement_families f on f.id = e.family_id
     where f.slug = 'mining-neon'),
   2, 'no version was destroyed by archiving');
+
+
+-- ----------------------------------------------------------- recolouring --
+
+/**
+ * One row changes and every element follows.
+ *
+ * That is only possible because no element ever wrote a colour down — the
+ * compiler refuses a literal hex on a shape, and this is the function that
+ * makes the refusal worth having.
+ */
+select throws_ok(
+  $$select public.admin_recolor_jelement_family(
+      (select id from public.jelement_families where slug = 'mining-neon'),
+      '{"accent": "lime"}'::jsonb)$$,
+  '22023', null, 'a value that is not a colour is refused before it reaches every element');
+
+select throws_ok(
+  $$select public.admin_recolor_jelement_family(
+      (select id from public.jelement_families where slug = 'mining-neon'), '{}'::jsonb)$$,
+  '22023', null, 'and a family cannot be left with no colours at all');
+
+reset role;
+update public.jelement_families set status = 'published' where slug = 'mining-neon';
+update public.jelements set status = 'published'
+ where family_id = (select id from public.jelement_families where slug = 'mining-neon');
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'a1110000-0000-0000-0000-00000000000a', true);
+
+select lives_ok(
+  $$select public.admin_recolor_jelement_family(
+      (select id from public.jelement_families where slug = 'mining-neon'),
+      '{"primary": "#101214", "accent": "#5B5BFF"}'::jsonb)$$,
+  'a palette can be changed');
+
+select is(
+  (select color_tokens ->> 'accent' from public.jelement_families where slug = 'mining-neon'),
+  '#5B5BFF', 'the family carries the new colour');
+
+/**
+ * A published family that has been recoloured is not what was published.
+ *
+ * Sent back to draft rather than left claiming a version it no longer matches.
+ * Silently changing what a published version means is the one thing versioning
+ * exists to prevent.
+ */
+select is(
+  (select status::text from public.jelement_families where slug = 'mining-neon'),
+  'draft', 'recolouring a published family returns it to draft');
+select is(
+  (select count(*)::integer from public.jelements
+    where family_id = (select id from public.jelement_families where slug = 'mining-neon')
+      and status = 'published'),
+  0, 'and its elements come back with it');
+
+-- The decks that pinned a version are untouched by any of this.
+select is(
+  (select count(*)::integer from public.jelement_versions v
+     join public.jelements e on e.id = v.element_id
+     join public.jelement_families f on f.id = e.family_id
+    where f.slug = 'mining-neon'),
+  2, 'no version was rewritten by a recolour');
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'b2220000-0000-0000-0000-00000000000b', true);
+select throws_ok(
+  $$select public.admin_recolor_jelement_family(
+      (select id from public.jelement_families where slug = 'mining-neon'),
+      '{"accent": "#000000"}'::jsonb)$$,
+  '42501', null, 'and a member cannot repaint the library');
 
 select * from finish();
 rollback;

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ErrorState, Modal, PageHeader, TableSkeleton } from "@/components/AdminUI";
 import { errorMessage, stamp } from "@/lib/format";
+import { navigate } from "@/lib/router";
 import { supabase } from "@/lib/supabase";
 
 /**
@@ -182,8 +183,11 @@ export function JElementsPage() {
             </dl>
 
             <div className="family-actions">
+              <button className="primary-button" type="button" onClick={() => navigate(`/jelements/${family.id}`)}>
+                Ochish
+              </button>
               {family.status !== "published" && family.status !== "archived" ? (
-                <button className="primary-button" type="button" disabled={busy === family.id} onClick={() => void publish(family)}>
+                <button className="secondary-button" type="button" disabled={busy === family.id} onClick={() => void publish(family)}>
                   Nashr qilish
                 </button>
               ) : null}

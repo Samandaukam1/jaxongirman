@@ -10,6 +10,7 @@ import { FinancePage } from "@/pages/FinancePage";
 import { GamesPage } from "@/pages/GamesPage";
 import { GiftsPage } from "@/pages/GiftsPage";
 import { LoginPage } from "@/pages/LoginPage";
+import { JElementFamilyPage } from "@/pages/JElementFamilyPage";
 import { JElementsPage } from "@/pages/JElementsPage";
 import { JslaydDesignsPage } from "@/pages/JslaydDesignsPage";
 import { PresentationsPage } from "@/pages/PresentationsPage";
@@ -54,11 +55,21 @@ export default function App() {
 
   useEffect(() => {
     if (!loading && !session && pathname !== "/login") navigate("/login", true);
-    else if (session && accessChecked && isAdmin && (pathname === "/login" || !pages[pathname])) navigate("/", true);
+    else if (session && accessChecked && isAdmin
+      && (pathname === "/login" || (!pages[pathname] && !/^\/jelements\/[0-9a-f-]{36}$/.test(pathname)))) navigate("/", true);
   }, [accessChecked, isAdmin, loading, pathname, session]);
 
   if (loading || (session && !accessChecked)) return <LoadingScreen />;
   if (!session) return <LoginPage />;
   if (!isAdmin) return <AccessDeniedPage />;
-  return <AdminLayout pathname={pathname}>{pages[pathname] ?? pages["/"]}</AdminLayout>;
+
+  // One parameterised route. The rest of this console is a flat table of
+  // paths, and adding a router for a single detail page would be a dependency
+  // bought for one screen.
+  const family = /^\/jelements\/([0-9a-f-]{36})$/.exec(pathname);
+  const page = family
+    ? <JElementFamilyPage familyId={family[1]!} />
+    : pages[pathname] ?? pages["/"];
+
+  return <AdminLayout pathname={pathname}>{page}</AdminLayout>;
 }

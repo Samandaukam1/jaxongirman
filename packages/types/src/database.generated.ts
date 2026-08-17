@@ -4490,6 +4490,37 @@ export type Database = {
         Args: { p_family_id: string }
         Returns: number
       }
+      admin_recolor_jelement_family: {
+        Args: { p_color_tokens: Json; p_family_id: string }
+        Returns: {
+          category: string
+          color_tokens: Json
+          content_hash: string | null
+          created_at: string
+          created_by: string | null
+          description: string
+          format_version: string
+          id: string
+          name: string
+          published_at: string | null
+          published_version: number
+          search_metadata: Json
+          slug: string
+          source_prompt: string
+          status: Database["public"]["Enums"]["jelement_status"]
+          style: string
+          subcategory: string
+          thumbnail_path: string | null
+          updated_at: string
+          visual_dna: Json
+        }
+        SetofOptions: {
+          from: "*"
+          to: "jelement_families"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       admin_record_finance_entry: {
         Args: {
           p_amount_usd: number
