@@ -39,6 +39,7 @@ export function buildEdgeModules() {
       // toolchain, which no developer machine in this repo has.
       path.join(shared, "presentation-types.ts"),
       path.join(shared, "gemini-schema.ts"),
+      path.join(shared, "writer.ts"),
       path.join(shared, "photo-query.ts"),
       path.join(shared, "export-model.ts"),
       path.join(shared, "fonts.ts"),

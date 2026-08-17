@@ -53,17 +53,3 @@ export function toGeminiSchema(schema: unknown): unknown {
 
   return out;
 }
-
-/**
- * Failures worth answering by trying the other provider.
- *
- * A timeout, a rate limit, an outage, an answer that is not the JSON it was
- * asked for. Not a request this code built wrongly — OpenAI would refuse that
- * the same way, and falling back would hide it.
- */
-export function fallbackReason(error: { name?: string; reason?: string; message?: string } | null | undefined): string | null {
-  if (!error) return null;
-  if (error.name === "GeminiUnavailable" && typeof error.reason === "string") return error.reason;
-  if (typeof error.message === "string" && /timeout|aborted|network|fetch failed/i.test(error.message)) return "network";
-  return null;
-}

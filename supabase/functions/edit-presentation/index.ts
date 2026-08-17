@@ -1,7 +1,7 @@
-import { privacySafeIdentifier, requestContext } from "../_shared/auth.ts";
+import { requestContext } from "../_shared/auth.ts";
 import { preflight } from "../_shared/cors.ts";
 import { bodyJson, errorResponse, HttpError, json } from "../_shared/http.ts";
-import { OpenAIClient } from "../_shared/openai.ts";
+import { geminiWriter } from "../_shared/gemini.ts";
 import { editorOperationsSchema } from "../_shared/plan-schema.ts";
 
 type Body = { presentationId?: string; slideId?: string; command?: string };
@@ -62,23 +62,30 @@ Deno.serve(async (request) => {
       return json({ changed, explanation: "Barcha slaydlarga professional ko‘k rang yo‘nalishi qo‘llandi" });
     }
 
-    const openai = new OpenAIClient();
+    // The same provider that writes a deck edits one. Routing this elsewhere
+    // would put the editor back on a second bill for no benefit.
+    const writer = geminiWriter();
     const mode = Deno.env.get("GENERATION_MODE") ?? "real";
     let result: AiResult;
     let usage: { input_tokens?: number; output_tokens?: number } = {};
     let requestId: string | null = null;
+    let model = writer.writingModel;
     if (mode === "mock") {
       result = deterministicEdit(command, elements);
     } else {
-      if (!openai.configured) throw new HttpError(503, "OpenAI is not configured", "provider_not_configured");
-      const safetyIdentifier = await privacySafeIdentifier(context.user.id);
-      const response = await openai.structured<AiResult>([
-        { role: "system", content: "You translate a user's Uzbek or English presentation edit request into safe structured element patches. Use only existing element IDs. Keep all geometry inside a 1000 by 562.5 canvas. Preserve readability: body font >=16, titles >=28, opacity 0..1, width/height >10. Make the smallest set of changes that fulfills the request. Return only the schema." },
-        { role: "user", content: `Presentation: ${presentationResult.data.title}\nVisual DNA: ${JSON.stringify(presentationResult.data.visual_dna)}\nSlide: ${JSON.stringify(slideResult.data)}\nElements: ${JSON.stringify(elements)}\nCommand: ${command}` },
-      ], "editor_operations", editorOperationsSchema, safetyIdentifier);
+      if (!writer.configured) throw new HttpError(503, "AI xizmati sozlanmagan", "provider_not_configured");
+      const system = "You translate a user's Uzbek or English presentation edit request into safe structured element patches. Use only existing element IDs. Keep all geometry inside a 1000 by 562.5 canvas. Preserve readability: body font >=16, titles >=28, opacity 0..1, width/height >10. Make the smallest set of changes that fulfills the request. Return only the schema.";
+      const prompt = `Presentation: ${presentationResult.data.title}\nVisual DNA: ${JSON.stringify(presentationResult.data.visual_dna)}\nSlide: ${JSON.stringify(slideResult.data)}\nElements: ${JSON.stringify(elements)}\nCommand: ${command}`;
+      const response = await writer.structured<AiResult>({
+        prompt: `${system}\n\n${prompt}`,
+        system,
+        schemaName: "editor_operations",
+        schema: editorOperationsSchema,
+      });
       result = response.data;
       usage = response.usage;
       requestId = response.requestId;
+      model = response.model;
     }
 
     const byId = new Map(elements.map((element) => [element.id, element]));
@@ -119,7 +126,7 @@ Deno.serve(async (request) => {
       changed += 1;
     }
 
-    if (mode === "real") await context.serviceClient.from("ai_usage").insert({ owner_id: context.user.id, presentation_id: body.presentationId, provider: "openai", model: openai.textModel, operation: "editor_command", input_tokens: usage.input_tokens ?? 0, output_tokens: usage.output_tokens ?? 0, request_id: requestId, metadata: { slide_id: body.slideId, changed } });
+    if (mode === "real") await context.serviceClient.from("ai_usage").insert({ owner_id: context.user.id, presentation_id: body.presentationId, provider: "google", model, operation: "editor_command", input_tokens: usage.input_tokens ?? 0, output_tokens: usage.output_tokens ?? 0, request_id: requestId, metadata: { slide_id: body.slideId, changed } });
     return json({ changed, explanation: result.explanation });
   } catch (error) {
     return errorResponse(error);

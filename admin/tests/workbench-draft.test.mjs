@@ -52,7 +52,6 @@ const base = {
   premium: false,
   source: "JSLAYD-DESIGN 1.0\n",
   recovered: false,
-  thumbnailPath: null,
 };
 
 test("work left in the editor comes back after the page is lost", () => {

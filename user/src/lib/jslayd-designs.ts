@@ -22,15 +22,10 @@ export type RemoteDesign = {
 };
 
 const FONT_BUCKET = "design-fonts";
-const PREVIEW_BUCKET = "design-previews";
 
 export function assetUrl(bucket: string, path: string | null): string | null {
   if (!path) return null;
   return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
-}
-
-export function thumbnailUrl(design: DesignRow): string | null {
-  return assetUrl(PREVIEW_BUCKET, design.thumbnail_path);
 }
 
 /**

@@ -414,6 +414,11 @@ verify_jwt = false
 [functions.pay-marketplace]
 verify_jwt = false
 
+# Reports which provider the text pipeline will actually use. Admin-only, checked
+# in SQL — the same pattern as every other function here.
+[functions.ai-diagnose]
+verify_jwt = false
+
 # The sweep authenticates against the service-role key or SURVEY_PURGE_SECRET
 # itself; gateway JWT parsing would reject the scheduler's own credential.
 [functions.purge-survey-responses]

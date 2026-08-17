@@ -1,4 +1,4 @@
-import { requestContext, privacySafeIdentifier } from "../_shared/auth.ts";
+import { requestContext } from "../_shared/auth.ts";
 import { preflight } from "../_shared/cors.ts";
 import { bodyJson, errorResponse, HttpError, json } from "../_shared/http.ts";
 import { runGenerationPipeline } from "../_shared/pipeline.ts";
@@ -95,8 +95,7 @@ Deno.serve(async (request) => {
     }
 
     if (!job?.job_id) throw new Error("Generation job was not created");
-    const safetyIdentifier = await privacySafeIdentifier(context.user.id);
-    const pipeline = runGenerationPipeline({ jobId: job.job_id, presentationId: body.presentationId, ownerId: context.user.id, service: context.serviceClient, safetyIdentifier });
+    const pipeline = runGenerationPipeline({ jobId: job.job_id, presentationId: body.presentationId, ownerId: context.user.id, service: context.serviceClient });
     if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(pipeline);
     else await pipeline;
 

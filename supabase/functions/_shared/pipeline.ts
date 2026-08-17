@@ -6,13 +6,15 @@ import {
   type SlotProblem,
 } from "./layout-brief.ts";
 import { buildJslaydSlides, readDesign, type ResolvedDesign } from "./jslayd-layout.ts";
-import { OpenAIClient } from "./openai.ts";
-import { attributionMetadata, Writer } from "./writer.ts";
+import { geminiWriter } from "./gemini.ts";
+import {
+  attributionMetadata, ProviderUnavailable, userFacingFailure, type Attachment,
+} from "./writer.ts";
 import { contentSchema, outlineSchema, rewriteSchema } from "./plan-schema.ts";
 import type { GeneratedImage, LayoutName, PresentationPlan, ResearchSource, SemanticSlide, VisualDna } from "./presentation-types.ts";
 import { findPhoto } from "./providers/photo.ts";
 
-type PipelineInput = { jobId: string; presentationId: string; ownerId: string; service: SupabaseClient; safetyIdentifier: string };
+type PipelineInput = { jobId: string; presentationId: string; ownerId: string; service: SupabaseClient };
 /** The model supplies narrative direction only — never colours or typography. */
 type ModelDna = Pick<VisualDna, "mood" | "era" | "visualStyle" | "textures" | "imageDirection">;
 type Outline = { visualDna: ModelDna; slides: Array<{ title: string; purpose: string; layout: LayoutName; visualPrompt: string | null }> };
@@ -187,7 +189,11 @@ async function runStage<T>(service: SupabaseClient, input: PipelineInput, key: t
     await service.from("generation_steps").update({ status: "succeeded", progress: 100, completed_at: new Date().toISOString(), message: successMessage?.(value) ?? null }).eq("job_id", input.jobId).eq("key", key);
     return value;
   } catch (error) {
-    await service.from("generation_steps").update({ status: "failed", message: error instanceof Error ? error.message.slice(0, 500) : "Stage failed", completed_at: new Date().toISOString() }).eq("job_id", input.jobId).eq("key", key);
+    // The step list is on the author's screen while they wait, so it is subject
+    // to the same rule as the failure itself: a provider's sentence about our
+    // account never reaches it.
+    const { message } = userFacingFailure(error);
+    await service.from("generation_steps").update({ status: "failed", message: message.slice(0, 500), completed_at: new Date().toISOString() }).eq("job_id", input.jobId).eq("key", key);
     throw error;
   }
 }
@@ -218,8 +224,69 @@ function mockContent(outline: Outline): Content {
   })) };
 }
 
-function userInput(text: string, fileIds: string[]) {
-  return [{ role: "user", content: [{ type: "input_text", text }, ...fileIds.map((fileId) => ({ type: "input_file", file_id: fileId }))] }];
+/**
+ * What Gemini will accept inline, and nothing else.
+ *
+ * A Word document is not on the list. It was not really on the previous
+ * provider's list either — it was uploaded and then largely ignored — so
+ * skipping it loses nothing except the pretence that it was read.
+ */
+const READABLE = new Set([
+  "application/pdf", "text/plain", "text/markdown", "text/csv", "application/json",
+  "image/png", "image/jpeg", "image/webp",
+]);
+
+/** One request carries the files. Ten megabytes of source is already far more than a deck needs. */
+const ATTACHMENT_BUDGET = 10 * 1024 * 1024;
+
+function base64(bytes: Uint8Array): string {
+  // Chunked: spreading a multi-megabyte array into `String.fromCharCode`
+  // overflows the argument stack, and does it only for large files, which is
+  // the worst possible time to find out.
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  }
+  return btoa(binary);
+}
+
+/**
+ * The author's own material, carried in the request rather than uploaded.
+ *
+ * The files used to go to OpenAI's file store, which meant a deck's context
+ * depended on an account balance and left objects behind that had to be
+ * deleted in a `finally`. Inline data has neither problem: it exists for the
+ * length of one HTTP request and belongs to nobody.
+ *
+ * A file that cannot be read is skipped, never fatal. Somebody who attached a
+ * spreadsheet to a deck about mining wants the deck.
+ */
+async function readAttachments(
+  service: SupabaseClient,
+  assets: Array<{ storage_bucket?: string | null; storage_path?: string | null; mime_type?: string | null; byte_size?: number | null }>,
+): Promise<Attachment[]> {
+  const attachments: Attachment[] = [];
+  let budget = ATTACHMENT_BUDGET;
+
+  for (const asset of assets.slice(0, 5)) {
+    if (!asset.storage_path) continue;
+    if (asset.byte_size && asset.byte_size > budget) continue;
+
+    const { data, error } = await service.storage
+      .from(asset.storage_bucket ?? "user-uploads").download(asset.storage_path);
+    if (error || !data) continue;
+
+    const mimeType = (asset.mime_type ?? data.type ?? "").split(";")[0]?.trim() ?? "";
+    if (!READABLE.has(mimeType)) continue;
+
+    const bytes = new Uint8Array(await data.arrayBuffer());
+    if (bytes.byteLength === 0 || bytes.byteLength > budget) continue;
+
+    attachments.push({ mimeType, data: base64(bytes) });
+    budget -= bytes.byteLength;
+  }
+
+  return attachments;
 }
 
 /** A slide with nothing on it but its own headline. */
@@ -306,12 +373,10 @@ function usageCost(usage: { input_tokens?: number; output_tokens?: number }, pri
 }
 
 export async function runGenerationPipeline(input: PipelineInput): Promise<void> {
-  const openai = new OpenAIClient();
-  // Research and copy go to Gemini when it is configured, and to OpenAI when it
-  // is not or when it fails. Image generation is deliberately not routed: the
-  // imagery was never the problem this change is solving.
-  const writer = new Writer(openai);
-  const uploadedFileIds: string[] = [];
+  // Every word of the deck comes from here. There is no second text provider to
+  // fall to, which is the point: the one that used to be there is what failed a
+  // paid generation at twenty-eight per cent when nobody had topped it up.
+  const writer = geminiWriter();
   let totalCost = 0;
   try {
     await initializeSteps(input.service, input);
@@ -329,19 +394,27 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
 
     const mode = Deno.env.get("GENERATION_MODE") ?? "real";
     if (mode !== "real" && mode !== "mock") throw new Error("GENERATION_MODE must be real or mock");
-    if (mode === "real" && !openai.configured) throw new Error("OPENAI_API_KEY is not configured; production never falls back to mock mode");
+    // Fail here rather than at twenty-eight per cent. A job that cannot be
+    // written should never have charged for a progress bar.
+    if (mode === "real" && !writer.configured) {
+      throw new ProviderUnavailable("not_configured", "GEMINI_API_KEY is not set");
+    }
+
+    // A boolean and two model names. Enough to tell, from a production log,
+    // which model wrote a given deck; never enough to reconstruct a key.
+    console.log(JSON.stringify({
+      event: "generation_provider",
+      job_id: input.jobId,
+      gemini_configured: writer.configured,
+      gemini_research_model: writer.researchModel,
+      gemini_writing_model: writer.writingModel,
+    }));
 
     const context = await runStage(input.service, input, "understanding_topic", async () => {
-      if (mode === "mock") return { fileIds: [] as string[] };
-      for (const asset of prepared.assets.slice(0, 5)) {
-        if (!asset.storage_path || (asset.byte_size && asset.byte_size > 20 * 1024 * 1024)) continue;
-        const { data, error } = await input.service.storage.from(asset.storage_bucket ?? "user-uploads").download(asset.storage_path);
-        if (error || !data) continue;
-        const fileId = await openai.uploadFile(data, asset.storage_path.split("/").pop() ?? "source-file");
-        uploadedFileIds.push(fileId);
-      }
-      return { fileIds: uploadedFileIds };
-    }, (value) => value.fileIds.length ? `${value.fileIds.length} ta material kontekst sifatida tayyorlandi` : "Mavzu tahlilga tayyorlandi");
+      if (mode === "mock") return { attachments: [] as Attachment[] };
+      const attachments = await readAttachments(input.service, prepared.assets);
+      return { attachments };
+    }, (value) => value.attachments.length ? `${value.attachments.length} ta material kontekst sifatida tayyorlandi` : "Mavzu tahlilga tayyorlandi");
 
     // The deck always opens with a title page and an agenda and closes with a
     // bibliography and a thank-you, so the model only writes what sits between.
@@ -353,6 +426,10 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
         citations: [] as { title: string; url: string }[],
         usage: {} as { input_tokens?: number; output_tokens?: number },
         requestId: null as string | null,
+        provider: "google" as const,
+        model: writer.researchModel,
+        attempts: 0,
+        groundedSearch: false,
       };
       if (mode === "mock") return { ...empty, failure: null as string | null };
       const system = "You are a research assistant for Uzbek-language academic presentations. Search the live web before answering and report only what the pages you opened actually say. Never state a fact you could not find a source for. Write in Uzbek Latin script.";
@@ -365,24 +442,27 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
         const result = await writer.research({
           prompt: `${system}\n\n${prompt}`,
           system,
-          openaiInput: [{ role: "system", content: system }, ...userInput(prompt, context.fileIds)],
-          safetyIdentifier: input.safetyIdentifier,
+          attachments: context.attachments,
           maxOutputTokens: 2_500,
         });
         return { ...result, failure: null as string | null };
       } catch (error) {
-        // A provider that cannot search must not cost the user the whole deck.
-        // Writing falls back to the model's own knowledge, and the step says so
-        // out loud so an unsourced deck is never mistaken for a researched one.
-        const message = error instanceof Error ? error.message : "web search unavailable";
-        console.error("web research failed", input.jobId, message);
-        return { ...empty, failure: message.slice(0, 160) };
+        // The writer already tried the live web three times and then tried the
+        // same question without it. Reaching here means Gemini itself is not
+        // answering at all — but a deck can still be written from what the
+        // outline and writing stages know, so this is reported and survived
+        // rather than thrown.
+        const reason = error instanceof ProviderUnavailable ? error.reason : "unknown";
+        console.error(JSON.stringify({ event: "research_failed", job_id: input.jobId, reason }));
+        return { ...empty, failure: reason };
       }
     }, (value) => value.failure
-      ? `Internet qidiruvi ishlamadi (${value.failure}) — matn model bilimidan yozildi`
-      : value.citations.length
-        ? `${value.citations.length} ta manba topildi va tekshirildi`
-        : "Internetdan qo‘shimcha manba topilmadi");
+      ? "Internet qidiruvi ishlamadi — matn model bilimidan yozildi"
+      : !value.groundedSearch
+        ? "Internet qidiruvi mavjud emas — matn model bilimidan yozildi"
+        : value.citations.length
+          ? `${value.citations.length} ta manba topildi va tekshirildi`
+          : "Internetdan qo‘shimcha manba topilmadi");
 
     // A deck is laid out by a published design and by nothing else, and the
     // design is read here — before the outline — because everything downstream
@@ -404,7 +484,7 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
       : "";
 
     const outlineResult = await runStage(input.service, input, "creating_outline", async () => {
-      if (mode === "mock") return { data: mockOutline(prepared.presentation.topic, contentCount), usage: {}, requestId: null };
+      if (mode === "mock") return { data: mockOutline(prepared.presentation.topic, contentCount), usage: {}, requestId: null, provider: "google" as const, model: writer.writingModel, attempts: 1 };
       const system = "You are Jaxongir AI, a senior presentation strategist. Produce academically usable Uzbek Latin content architecture grounded in the supplied research. Every slide must advance a specific, concrete idea — never a vague heading. The visual design is fixed by the chosen design, so never propose colours, fonts or decoration. Return only the required schema.";
       const prompt = `Mavzu: ${prepared.presentation.topic}\nMazmun slaydlari soni: ${contentCount}\nUslub: ${prepared.presentation.style}\nTanlangan dizayn: ${jslayd.document.design.name} — ${jslayd.document.design.description}.\n\nSarlavha, mavzular rejasi, foydalanilgan adabiyotlar va yakuniy slaydlarni server o'zi qo'shadi — ularni rejalashtirmang. Faqat ${contentCount} ta mazmun slaydini rejalashtiring va ularni mantiqiy ketma-ketlikda joylashtiring: tushuncha → tahlil → dalillar → amaliyot → xulosa.\nHar bir sarlavha aniq bo'lsin: "Kirish" emas, mavzu haqida nima aytilishini ayting.\nRaqam yoki statistika bor slayd uchun statistic yoki chart layoutini tanlang.\nVisual prompt faqat matnsiz illyustratsiyani tasvirlaydi va yuqoridagi art directionga mos bo'lishi kerak.${researchBrief}`;
       return writer.structured<Outline>({
@@ -412,8 +492,7 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
         system,
         schemaName: "presentation_outline",
         schema: outlineSchema(contentCount),
-        openaiInput: [{ role: "system", content: system }, ...userInput(prompt, context.fileIds)],
-        safetyIdentifier: input.safetyIdentifier,
+        attachments: context.attachments,
       });
     }, (value) => `${value.data.slides.length} ta mazmun slaydi rejalashtirildi`);
 
@@ -443,7 +522,7 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
       + `Slaydlar: ${JSON.stringify(layoutPlan.slides.map((slide) => ({ i: slide.index, archetype: slide.archetypeId })))}`;
 
     const contentResult = await runStage(input.service, input, "writing_content", async () => {
-      if (mode === "mock") return { data: mockContent(outlineResult.data), usage: {}, requestId: null };
+      if (mode === "mock") return { data: mockContent(outlineResult.data), usage: {}, requestId: null, provider: "google" as const, model: writer.writingModel, attempts: 1 };
       const system = "You are an expert Uzbek Latin academic presentation writer working to a fixed layout. Follow the supplied outline exactly and ground every sentence in the supplied research. Write specific, checkable content: real numbers, dates, names and definitions instead of generalities. Grammar must be flawless Uzbek Latin. Never fabricate a quotation, statistic or date — if the research does not support it, write something the research does support instead. The layout is fixed and is not yours to change: write copy that fits the boxes you are given. Return only the required schema.";
       const prompt = `Mavzu: ${prepared.presentation.topic}\nReja:\n${JSON.stringify(outlineResult.data.slides)}\n\nAynan ${contentCount} ta slayd uchun matn yozing.\n- subtitle: sarlavhani ochib beruvchi bitta qisqa jumla (bezakli yozuv). Har slaydda bo'lsin.\n- bullets: 3–5 ta band. Har biri to'liq, aniq fikr: raqam, sana, ism yoki aniq ta'rif bo'lsin. "Muhim ahamiyatga ega" kabi quruq iboralarni yozmang.\n- body: bandlarni bog'lovchi 1–2 jumlalik izoh, agar slayd shuni talab qilsa.\n- statistic: faqat tadqiqotda haqiqatan uchragan raqamni yozing.\n- chart: faqat tadqiqotdagi haqiqiy qiymatlar bilan to'ldiring.\n- table: faqat tadqiqotda haqiqatan jadval ko'rinishidagi ma'lumot bo'lsa to'ldiring; 2-6 ustun, 2-8 qator.\nBibliografiya yozmang — uni server alohida qo'shadi.${researchBrief}${layoutInstruction}`;
       return writer.structured<Content>({
@@ -451,8 +530,7 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
         system,
         schemaName: "presentation_content",
         schema: contentSchema(contentCount),
-        openaiInput: [{ role: "system", content: system }, ...userInput(prompt, context.fileIds)],
-        safetyIdentifier: input.safetyIdentifier,
+        attachments: context.attachments,
         maxOutputTokens: 16_000,
       });
     }, () => "Slayd matnlari yozildi va manbalarga bog‘landi");
@@ -493,8 +571,8 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
     const writtenSlides = [...contentResult.data.slides];
     let rewriteUsage = { input_tokens: 0, output_tokens: 0 };
     let rewrites = 0;
-    let rewriteAttribution: { provider: string; model: string; fallbackFrom?: string; fallbackReason?: string } =
-      { provider: "openai", model: openai.textModel };
+    let rewriteAttribution: { provider: string; model: string; attempts: number } =
+      { provider: "google", model: writer.writingModel, attempts: 0 };
 
     if (mode !== "mock") {
       const briefById = new Map(layoutPlan.briefs.map((brief) => [brief.archetypeId, brief]));
@@ -537,15 +615,13 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
           system: rewriteSystem,
           schemaName: "content_rewrite",
           schema: rewriteSchema(),
-          openaiInput: [{ role: "system", content: rewriteSystem }, { role: "user", content: rewritePrompt }],
-          safetyIdentifier: input.safetyIdentifier,
           maxOutputTokens: 4_000,
         });
 
         rewrites += 1;
         rewriteAttribution = {
           provider: rewritten.provider, model: rewritten.model,
-          ...(rewritten.fallbackFrom ? { fallbackFrom: rewritten.fallbackFrom, fallbackReason: rewritten.fallbackReason } : {}),
+          attempts: rewriteAttribution.attempts + rewritten.attempts,
         };
         rewriteUsage = {
           input_tokens: (rewriteUsage.input_tokens ?? 0) + (rewritten.usage.input_tokens ?? 0),
@@ -586,14 +662,14 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
     const pricing = await providerPricing(input.service);
 
     /**
-     * One row per stage, naming the model that actually ran it.
+     * One row per stage, priced against the model that actually ran it.
      *
-     * Not "openai" for everything: a deck may be researched by Gemini and
-     * written by OpenAI in the same job, and a dashboard that says otherwise
-     * makes the fallback invisible — which is how a month of unexpectedly
-     * paying the more expensive vendor goes unnoticed until the invoice.
+     * Research and writing can be pointed at different Gemini models by
+     * configuration, so the cost is looked up per row rather than once per job:
+     * a table that prices every stage at the writing model's rate is wrong the
+     * moment somebody sets `GEMINI_RESEARCH_MODEL` to something else.
      */
-    const stages: { operation: string; answer: { usage: { input_tokens?: number; output_tokens?: number }; requestId: string | null; provider: string; model: string; fallbackFrom?: string; fallbackReason?: string } }[] = [
+    const stages: { operation: string; answer: { usage: { input_tokens?: number; output_tokens?: number }; requestId: string | null; provider: string; model: string; attempts: number; groundedSearch?: boolean } }[] = [
       { operation: "topic_research", answer: research },
       { operation: "presentation_outline", answer: outlineResult },
       { operation: "presentation_content", answer: contentResult },
@@ -801,10 +877,23 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
 
     await input.service.from("generation_steps").update({ status: "succeeded", progress: 100, started_at: new Date().toISOString(), completed_at: new Date().toISOString(), message: "Taqdimot tayyor" }).eq("job_id", input.jobId).eq("key", "ready");
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Generation failed";
-    console.error("generation pipeline failed", input.jobId, message);
-    await input.service.rpc("fail_generation", { p_job_id: input.jobId, p_error_code: "pipeline_failed", p_error_message: message.slice(0, 1800) });
-  } finally {
-    await Promise.allSettled(uploadedFileIds.map((fileId) => openai.deleteFile(fileId)));
+    /**
+     * The author is told what they can act on, and nothing else.
+     *
+     * A provider's own sentence used to be written straight into the job and
+     * shown on the phone, which is how "You have no credits remaining — add to
+     * your billing" ended up on a paying customer's screen. The full text still
+     * exists, in the server log, where the person who can act on it will look.
+     */
+    const { code, message } = userFacingFailure(error);
+    console.error(JSON.stringify({
+      event: "generation_failed",
+      job_id: input.jobId,
+      code,
+      detail: (error instanceof Error ? error.message : String(error)).slice(0, 600),
+    }));
+    await input.service.rpc("fail_generation", {
+      p_job_id: input.jobId, p_error_code: code, p_error_message: message,
+    });
   }
 }

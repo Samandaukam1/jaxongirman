@@ -1,9 +1,9 @@
 import { Check, Sparkles } from "lucide-react-native";
-import { useEffect, useMemo, useState } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useMemo } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { SlideCanvas } from "@/components/SlideCanvas";
-import { familiesOf, loadDesignFonts, previewToCanvas, thumbnailUrl, type RemoteDesign } from "@/lib/jslayd-designs";
+import { familiesOf, loadDesignFonts, previewToCanvas, type RemoteDesign } from "@/lib/jslayd-designs";
 import { colors, icon, radius, shadow, spacing, typography } from "@/theme/tokens";
 
 const MODEL_WIDTH = 1000;
@@ -13,32 +13,22 @@ const CARD_WIDTH = 232;
 /**
  * The remote-design picker (§64, §65, §66).
  *
- * A card shows the admin's own cover artwork when there is one, and otherwise
- * the design rendered on sample content — which is the same engine output the
- * generator will produce, not an illustration of it.
+ * A card draws the design itself, on sample content, through the same engine
+ * that will draw the deck. There used to be an uploaded cover picture in front
+ * of this, and it was a second version of the design that nothing kept in step:
+ * edit a design's colours and the card went on advertising the old ones, so the
+ * deck a person chose was not the deck they saw. The render cannot drift,
+ * because there is nothing for it to drift from.
  *
  * The design's typefaces are fetched as its card appears. Until they arrive the
- * thumbnail draws in the fallback the design itself declared, so the card is
+ * preview draws in the fallback the design itself declared, so the card is
  * never blank and never lies about which face it is showing.
  */
 function DesignThumbnail({ design }: { design: RemoteDesign }) {
-  const cover = thumbnailUrl(design.row);
-  const [coverFailed, setCoverFailed] = useState(false);
   const { slide, elements } = useMemo(() => previewToCanvas(design.row), [design.row]);
   const scale = CARD_WIDTH / MODEL_WIDTH;
 
   useEffect(() => { void loadDesignFonts(design); }, [design]);
-
-  if (cover && !coverFailed) {
-    return (
-      <Image
-        onError={() => setCoverFailed(true)}
-        source={{ uri: cover }}
-        style={[styles.thumb, { width: CARD_WIDTH, height: MODEL_HEIGHT * scale }]}
-        resizeMode="cover"
-      />
-    );
-  }
 
   return (
     <View pointerEvents="none" style={[styles.thumb, { width: CARD_WIDTH, height: MODEL_HEIGHT * scale }]}>

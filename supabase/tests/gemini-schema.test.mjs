@@ -4,7 +4,7 @@ import test from "node:test";
 import { buildEdgeModules } from "../scripts/build-edge.mjs";
 
 const edge = buildEdgeModules();
-const { toGeminiSchema, fallbackReason } = await import(`${edge}/gemini-schema.js`);
+const { toGeminiSchema } = await import(`${edge}/gemini-schema.js`);
 
 /**
  * One schema, two vendors.
@@ -83,25 +83,4 @@ test("enums and array bounds survive, because they are what constrain the answer
   assert.equal(converted.minItems, 3);
   assert.equal(converted.maxItems, 5);
   assert.deepEqual(converted.items.enum, ["cover", "statistic", "quote"]);
-});
-
-/* ------------------------------------------------------------- fallback */
-
-test("an outage, a rate limit and a malformed answer all fall back", () => {
-  for (const reason of ["rate_limited", "http_503", "malformed_json", "empty_response", "not_configured"]) {
-    assert.equal(
-      fallbackReason({ name: "GeminiUnavailable", reason }),
-      reason,
-      `${reason} should be answered by trying the other provider`,
-    );
-  }
-  assert.equal(fallbackReason(new TypeError("fetch failed")), "network");
-});
-
-test("a request this code built wrongly is not hidden behind a fallback", () => {
-  // OpenAI would refuse the same thing the same way. Falling back would turn a
-  // bug into a bill.
-  assert.equal(fallbackReason(new Error("schemaName is required")), null);
-  assert.equal(fallbackReason(null), null);
-  assert.equal(fallbackReason(undefined), null);
 });

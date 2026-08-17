@@ -24,7 +24,6 @@ export type WorkbenchDraft = {
   premium: boolean;
   source: string;
   recovered: boolean;
-  thumbnailPath: string | null;
 };
 
 export type KeptDraft<T extends WorkbenchDraft = WorkbenchDraft> = {
@@ -112,6 +111,5 @@ export function sameDraft(first: WorkbenchDraft, second: WorkbenchDraft): boolea
     && first.name === second.name
     && first.tier === second.tier
     && first.description === second.description
-    && first.premium === second.premium
-    && first.thumbnailPath === second.thumbnailPath;
+    && first.premium === second.premium;
 }

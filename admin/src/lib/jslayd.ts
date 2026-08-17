@@ -31,7 +31,6 @@ export type DesignRow = Database["public"]["Functions"]["admin_list_designs"]["R
 export type DesignStatus = Database["public"]["Enums"]["jslayd_design_status"];
 
 export const FONT_BUCKET = "design-fonts";
-export const PREVIEW_BUCKET = "design-previews";
 
 export type CompileOutcome = {
   document: JslaydDocument | null;
@@ -113,7 +112,6 @@ export type SaveInput = {
   premium: boolean;
   source: string;
   outcome: CompileOutcome;
-  thumbnailPath: string | null;
 };
 
 export async function saveDesign(input: SaveInput): Promise<string> {
@@ -126,10 +124,13 @@ export async function saveDesign(input: SaveInput): Promise<string> {
     p_is_premium: input.premium,
     p_source_prompt: input.source,
     p_compiled_config: (input.outcome.document ?? null) as never,
+    // The design's own cover, rendered by the engine that will draw the deck.
+    // There is no uploaded picture beside it any more: a hand-made JPEG was a
+    // second version of the design that nothing kept in step, so a design could
+    // advertise a look it no longer had.
     p_preview: (input.outcome.document ? previewOf(input.outcome.document) : {}) as never,
     p_content_hash: input.outcome.hash ?? undefined,
     p_health_score: input.outcome.health?.score ?? undefined,
-    p_thumbnail_path: input.thumbnailPath ?? undefined,
   });
   if (error) throw error;
   return data as string;
@@ -201,16 +202,6 @@ export async function uploadFont(params: {
   });
   if (error) throw error;
   return `${params.slug}/${fileName}`;
-}
-
-export async function uploadThumbnail(slug: string, file: File): Promise<string> {
-  const extension = file.name.toLowerCase().split(".").pop() ?? "png";
-  const key = `${slug}/cover.${extension}`;
-  const { error } = await supabase.storage
-    .from(PREVIEW_BUCKET)
-    .upload(key, file, { upsert: true, contentType: file.type || "image/png" });
-  if (error) throw error;
-  return key;
 }
 
 export type DesignFontFace = {

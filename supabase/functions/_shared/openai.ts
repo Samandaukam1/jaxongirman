@@ -1,11 +1,25 @@
 import { HttpError } from "./http.ts";
 
+/**
+ * What is left of OpenAI.
+ *
+ * Nothing on the presentation path reaches this file any more. Research,
+ * outlines, slide copy, rewrites and the slide editor are all written by
+ * Gemini, and they were moved because this vendor's balance reaching zero was
+ * enough to fail a deck a customer had already paid for — a second provider
+ * that can fail is a second way to fail, not a spare.
+ *
+ * The one caller left is the game generator, which is a different product and
+ * was deliberately not disturbed. The web-search and file-upload methods went
+ * with the pipeline: they existed only to serve it, and code kept "in case"
+ * is code nobody maintains.
+ */
+
 type ResponseUsage = { input_tokens?: number; output_tokens?: number };
-type Annotation = { type?: string; url?: string; title?: string };
 type OpenAIResponse = {
   id?: string;
   output_text?: string;
-  output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string; annotations?: Annotation[] }> }>;
+  output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string }> }>;
   usage?: ResponseUsage;
   error?: { message?: string };
 };
@@ -18,20 +32,6 @@ function outputText(response: OpenAIResponse): string {
     }
   }
   throw new Error("OpenAI response did not contain text output");
-}
-
-/** Every page the web-search tool actually cited, in the order it used them. */
-function urlCitations(response: OpenAIResponse): { title: string; url: string }[] {
-  const seen = new Map<string, string>();
-  for (const item of response.output ?? []) {
-    for (const content of item.content ?? []) {
-      for (const annotation of content.annotations ?? []) {
-        if (annotation.type !== "url_citation" || !annotation.url) continue;
-        if (!seen.has(annotation.url)) seen.set(annotation.url, annotation.title?.trim() || annotation.url);
-      }
-    }
-  }
-  return [...seen].map(([url, title]) => ({ title, url }));
 }
 
 async function fetchWithRetry(url: string, init: RequestInit, attempts = 3): Promise<Response> {
@@ -77,44 +77,5 @@ export class OpenAIClient {
     const payload = await response.json() as OpenAIResponse;
     if (!response.ok) throw new Error(payload.error?.message ?? `OpenAI request failed (${response.status})`);
     return { data: JSON.parse(outputText(payload)) as T, usage: payload.usage ?? {}, requestId: payload.id ?? null };
-  }
-
-  /**
-   * Searches the live web and returns the notes plus the pages actually cited.
-   * Kept separate from `structured` because a tool call and a strict schema in
-   * one request fight each other; the writing stages consume these notes.
-   */
-  async research(input: unknown[], safetyIdentifier: string): Promise<{ text: string; citations: { title: string; url: string }[]; usage: ResponseUsage; requestId: string | null }> {
-    if (!this.configured) throw new HttpError(503, "OpenAI is not configured", "provider_not_configured");
-    const response = await fetchWithRetry("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: this.headers(),
-      body: JSON.stringify({
-        model: this.textModel,
-        input,
-        tools: [{ type: "web_search" }],
-        tool_choice: "auto",
-        max_output_tokens: 12_000,
-        store: false,
-        safety_identifier: safetyIdentifier,
-      }),
-    });
-    const payload = await response.json() as OpenAIResponse;
-    if (!response.ok) throw new Error(payload.error?.message ?? `OpenAI web search failed (${response.status})`);
-    return { text: outputText(payload), citations: urlCitations(payload), usage: payload.usage ?? {}, requestId: payload.id ?? null };
-  }
-
-  async uploadFile(blob: Blob, filename: string): Promise<string> {
-    const form = new FormData();
-    form.append("purpose", "user_data");
-    form.append("file", blob, filename);
-    const response = await fetchWithRetry("https://api.openai.com/v1/files", { method: "POST", headers: this.headers(false), body: form });
-    const payload = await response.json() as { id?: string; error?: { message?: string } };
-    if (!response.ok || !payload.id) throw new Error(payload.error?.message ?? "OpenAI file upload failed");
-    return payload.id;
-  }
-
-  async deleteFile(fileId: string): Promise<void> {
-    await fetch(`https://api.openai.com/v1/files/${encodeURIComponent(fileId)}`, { method: "DELETE", headers: this.headers(false) });
   }
 }
