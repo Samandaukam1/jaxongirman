@@ -232,6 +232,11 @@ export type TextEffect = (typeof TEXT_EFFECTS)[number];
  * wants a reusable object rather than a photograph, and something upstream
  * finds one. JSLAYD still owns the geometry — the slot's box, its rounding, its
  * z-order — and the element only fills it.
+ *
+ * `ai_generated` is kept because published designs declare it and dropping it
+ * would stop them compiling — but nothing generates any more. A slot asking for
+ * it is served by the same licensed photo search as `internet_search`, and the
+ * compiler says so. New designs should say what they mean.
  */
 export const IMAGE_SOURCE_STRATEGIES = ["internet_search", "ai_generated", "user_upload", "jelement", "none"] as const;
 export type ImageSourceStrategy = (typeof IMAGE_SOURCE_STRATEGIES)[number];

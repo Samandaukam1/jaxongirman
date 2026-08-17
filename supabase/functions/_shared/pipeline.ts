@@ -10,7 +10,7 @@ import { OpenAIClient } from "./openai.ts";
 import { attributionMetadata, Writer } from "./writer.ts";
 import { contentSchema, outlineSchema, rewriteSchema } from "./plan-schema.ts";
 import type { GeneratedImage, LayoutName, PresentationPlan, ResearchSource, SemanticSlide, VisualDna } from "./presentation-types.ts";
-import { OpenAIImageProvider } from "./providers/image.ts";
+import { findPhoto } from "./providers/photo.ts";
 
 type PipelineInput = { jobId: string; presentationId: string; ownerId: string; service: SupabaseClient; safetyIdentifier: string };
 /** The model supplies narrative direction only — never colours or typography. */
@@ -281,21 +281,23 @@ function assembleDeck(params: {
 /**
  * What each model costs, from the one configured price list.
  *
- * Keyed by model name, so adding Gemini is a settings row rather than a code
- * change — and a stage that ran on a model nobody priced logs a zero rather
- * than a guess, which is visible in the dashboard as a gap instead of being
- * quietly wrong.
+ * Keyed by model name, so adding a provider is a settings row rather than a
+ * code change — and a stage that ran on a model nobody priced logs a zero
+ * rather than a guess, which is visible in the dashboard as a gap instead of
+ * being quietly wrong.
+ *
+ * There is no image price any more. Pictures are found, not generated: an
+ * openly licensed photograph costs nothing, and a library element costs nothing
+ * twice.
  */
-async function providerPricing(service: SupabaseClient, imageModel: string) {
+async function providerPricing(service: SupabaseClient) {
   const { data } = await service.from("app_settings").select("value").eq("key", "ai.provider_pricing").maybeSingle();
   const value = data?.value && typeof data.value === "object" && !Array.isArray(data.value) ? data.value as Record<string, unknown> : {};
-  const image = value[imageModel] as Record<string, number> | undefined;
   return {
     for(model: string) {
       const row = value[model] as Record<string, number> | undefined;
       return { inputPerMillion: Number(row?.input_per_million ?? 0), outputPerMillion: Number(row?.output_per_million ?? 0) };
     },
-    imageCost: Number(image?.medium_landscape_per_image ?? 0),
   };
 }
 
@@ -581,7 +583,7 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
       }),
       () => `«${jslayd.document.design.name}» dizayni (v${jslayd.version}) qo‘llandi`,
     );
-    const pricing = await providerPricing(input.service, openai.imageModel);
+    const pricing = await providerPricing(input.service);
 
     /**
      * One row per stage, naming the model that actually ran it.
@@ -669,27 +671,27 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
 
     const generatedImages = await runStage(input.service, input, "generating_images", async () => {
       if (prepared.presentation.style !== "super_professional" || mode === "mock") return [] as GeneratedImage[];
-      // The template decides how much imagery its composition needs. A slide
-      // without one falls back to the palette ground, which several templates
-      // treat as a deliberate composition rather than a missing asset.
-      // How much imagery a design wants, read from the design: an archetype
-      // that supports an image is a slide the design has somewhere to put one.
-      // A design whose slides are all type gets no images at all rather than
-      // images it will drop.
+      /**
+       * How much photography a design wants, read from the design.
+       *
+       * An archetype that supports an image is a slide with somewhere to put
+       * one. A design whose slides are all type gets no pictures rather than
+       * pictures it will drop.
+       */
       const imageArchetypes = jslayd.document.archetypes.filter((archetype) => archetype.selection.supportsImage).length;
       const policy = imageArchetypes === 0
         ? "none"
         : imageArchetypes <= 2
           ? "cover"
           : imageArchetypes <= 4 ? "contextual" : "all";
-      // A typographic design has nowhere to put a photograph, so it must not be
-      // charged for one either.
       if (policy === "none") return [] as GeneratedImage[];
-      // A slide whose every visual slot is an element needs no picture. This is
-      // the saving that pays for the library: retrieval instead of generation.
+
+      // A slide whose every visual slot is a library element needs no
+      // photograph: the object is the picture.
       const indexed = plan.slides
         .map((slide, index) => ({ slide, index }))
         .filter(({ index }) => !elementCovered.has(index));
+
       const targets = policy === "cover"
         ? indexed.filter(({ index }) => index === 0)
         // `contextual` always dresses the opening slide and always leaves the
@@ -697,17 +699,43 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
         : policy === "contextual"
           ? indexed.filter(({ slide, index }) => index === 0 || (index > 1 && Boolean(slide.visualPrompt))).slice(0, Math.ceil(plan.slides.length * 0.5))
           : indexed.filter(({ slide, index }) => index > 0 && Boolean(slide.visualPrompt)).slice(0, Math.ceil(plan.slides.length * 0.6));
-      const provider = new OpenAIImageProvider(openai, input.service, pricing.imageCost);
+
       const results: GeneratedImage[] = [];
       for (const target of targets) {
-        const generated = await provider.generate({ ownerId: input.ownerId, presentationId: input.presentationId, slideIndex: target.index, topic: prepared.presentation.topic, direction: target.slide.visualPrompt ?? plan.visualDna.imageDirection, visualDna: plan.visualDna });
-        results.push(generated);
-        totalCost += generated.costUsd;
-        await input.service.from("presentation_assets").insert({ presentation_id: input.presentationId, owner_id: input.ownerId, kind: "generated", storage_bucket: generated.bucket, storage_path: generated.path, mime_type: "image/png", provider: generated.provider, metadata: { slide_index: target.index } });
+        const photo = await findPhoto(input.service, {
+          ownerId: input.ownerId,
+          presentationId: input.presentationId,
+          slideIndex: target.index,
+          direction: target.slide.visualPrompt ?? plan.visualDna.imageDirection,
+          topic: prepared.presentation.topic,
+        });
+        // No photograph is a slide on the palette ground, which several designs
+        // treat as a deliberate composition. It is never a reason to stop.
+        if (!photo) continue;
+
+        results.push({
+          slideIndex: photo.slideIndex, bucket: photo.bucket, path: photo.path,
+          provider: photo.attribution.provider, costUsd: 0,
+        });
+
+        // The licence and the author travel with the file. An openly licensed
+        // photograph usually has to be credited, and provenance that was not
+        // stored cannot be recovered later.
+        await input.service.from("presentation_assets").insert({
+          presentation_id: input.presentationId,
+          owner_id: input.ownerId,
+          kind: "stock",
+          storage_bucket: photo.bucket,
+          storage_path: photo.path,
+          mime_type: "image/jpeg",
+          provider: photo.attribution.provider,
+          metadata: { slide_index: target.index, attribution: photo.attribution },
+        });
       }
-      if (results.length) await input.service.from("ai_usage").insert({ owner_id: input.ownerId, presentation_id: input.presentationId, job_id: input.jobId, provider: "openai", model: openai.imageModel, operation: "image_generation", generated_images: results.length, provider_cost_usd: results.reduce((sum, item) => sum + item.costUsd, 0) });
       return results;
-    }, (value) => value.length ? `${value.length} ta professional vizual yaratildi` : "Qo‘shimcha generativ rasm talab qilinmadi");
+    }, (value) => value.length
+      ? `${value.length} ta litsenziyalangan foto topildi`
+      : "Ushbu dizayn uchun foto talab qilinmadi");
 
     const built = await runStage(input.service, input, "building_slides", async () => {
       const shared = {

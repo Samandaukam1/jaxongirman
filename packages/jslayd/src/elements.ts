@@ -416,6 +416,20 @@ function imageElement(
   const binding = bindNode ? coerceBinding(bindNode.value, "bind", bindNode.line, bag) : undefined;
   const strategy = readEnum(nodes, "sourceStrategy", IMAGE_SOURCE_STRATEGIES, bag) ?? defaults.imageStrategy;
 
+  // Nothing generates any more: a slot asking for it is served by the same
+  // licensed photo search as `internet_search`. The value still compiles,
+  // because published designs declare it and refusing them would take working
+  // decks offline — but a design being written now should say what it means.
+  if (strategy === "ai_generated") {
+    const node = findNode(nodes, "sourceStrategy");
+    bag.warn(
+      "generation_retired",
+      "`sourceStrategy: ai_generated` endi rasm yaratmaydi.",
+      node?.line ?? 0,
+      "Rasm internetdan litsenziya bilan topiladi. `internet_search` yoki `jelement` deb yozing.",
+    );
+  }
+
   const queryNode = findNode(nodes, "queryFrom") ?? findNode(nodes, "queryStrategy");
   const queryFrom: string[] = [];
   if (queryNode) {

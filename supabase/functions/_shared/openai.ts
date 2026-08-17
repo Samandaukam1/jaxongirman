@@ -48,12 +48,10 @@ async function fetchWithRetry(url: string, init: RequestInit, attempts = 3): Pro
 export class OpenAIClient {
   private readonly key: string;
   readonly textModel: string;
-  readonly imageModel: string;
 
   constructor() {
     this.key = Deno.env.get("OPENAI_API_KEY") ?? "";
     this.textModel = Deno.env.get("OPENAI_TEXT_MODEL") ?? "gpt-5.6-terra";
-    this.imageModel = Deno.env.get("OPENAI_IMAGE_MODEL") ?? "gpt-image-1.5";
   }
 
   get configured() { return this.key.length > 10; }
@@ -118,23 +116,5 @@ export class OpenAIClient {
 
   async deleteFile(fileId: string): Promise<void> {
     await fetch(`https://api.openai.com/v1/files/${encodeURIComponent(fileId)}`, { method: "DELETE", headers: this.headers(false) });
-  }
-
-  async generateImage(prompt: string): Promise<{ bytes: Uint8Array; requestId: string | null }> {
-    if (!this.configured) throw new HttpError(503, "OpenAI is not configured", "provider_not_configured");
-    const quality = Deno.env.get("OPENAI_IMAGE_QUALITY") ?? "medium";
-    const size = Deno.env.get("OPENAI_IMAGE_SIZE") ?? "1536x1024";
-    const response = await fetchWithRetry("https://api.openai.com/v1/images/generations", {
-      method: "POST",
-      headers: this.headers(),
-      body: JSON.stringify({ model: this.imageModel, prompt, quality, size, output_format: "png", background: "opaque", n: 1 }),
-    });
-    const payload = await response.json() as { data?: Array<{ b64_json?: string }>; error?: { message?: string }; id?: string };
-    const encoded = payload.data?.[0]?.b64_json;
-    if (!response.ok || !encoded) throw new Error(payload.error?.message ?? `Image generation failed (${response.status})`);
-    const binary = atob(encoded);
-    const bytes = new Uint8Array(binary.length);
-    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-    return { bytes, requestId: payload.id ?? null };
   }
 }
