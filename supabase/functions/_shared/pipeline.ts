@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js";
+import { elementSlotsFor, fillElementSlots, slidesWithElements } from "./jelement-visuals.ts";
 import { familyOf } from "./jslayd/index.ts";
 import {
   applyRewrite, briefForPrompt, findSlotProblems, planDeckLayout,
@@ -615,10 +616,56 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
 
     await runStage(input.service, input, "building_layouts", async () => plan.slides, (value) => `${value.length} ta layout tanlandi`);
 
+    /**
+     * Which archetype each deck slide is drawn by, in deck order.
+     *
+     * `layoutPlan` covers the written body; the cover, agenda, bibliography and
+     * closing slides sit around it and are laid out by the design's own choice.
+     */
+    const archetypesInOrder = plan.slides.map((_, position) => {
+      const planned = layoutPlan.slides[position - DECK_PREFIX];
+      return planned ? jslayd.document.archetypes.find((entry) => entry.id === planned.archetypeId) : undefined;
+    });
+
+    /**
+     * Materials: what the user uploaded, and the reusable objects the design
+     * asked for.
+     *
+     * Both in one stage because both are the same question — what is there to
+     * put on these slides — and because finding an element has to happen before
+     * imagery is generated. A slide whose visual is an element must not also pay
+     * an image model for a picture nobody will see.
+     *
+     * A design declaring no element slots costs nothing here: no query is built
+     * and no search runs.
+     */
     const assets = await runStage(input.service, input, "finding_assets", async () => {
-      const uploadedImages = prepared.assets.filter((asset) => /\.(png|jpe?g|webp)$/i.test(asset.storage_path ?? "")).map((asset) => asset.storage_path as string);
-      return { uploadedImages };
-    }, (value) => value.uploadedImages.length ? `${value.uploadedImages.length} ta yuklangan rasm tayyorlandi` : "Vektor elementlar tayyorlandi");
+      const uploadedImages = prepared.assets
+        .filter((asset) => /\.(png|jpe?g|webp)$/i.test(asset.storage_path ?? ""))
+        .map((asset) => asset.storage_path as string);
+
+      const slots = elementSlotsFor(
+        archetypesInOrder as never,
+        plan.slides.map((slide) => ({ title: slide.title, visualPrompt: slide.visualPrompt, layout: slide.layout })),
+      );
+
+      const drawn = slots.length === 0
+        ? { elements: plan.slides.map(() => ({})), used: 0 }
+        : await fillElementSlots(input.service, slots, {
+            slideCount: plan.slides.length,
+            presentationId: input.presentationId,
+            accent: plan.visualDna.palette.accent,
+          });
+
+      return { uploadedImages, elements: drawn.elements, elementsUsed: drawn.used };
+    }, (value) => {
+      const parts: string[] = [];
+      if (value.elementsUsed > 0) parts.push(`${value.elementsUsed} ta JElement joylashtirildi`);
+      if (value.uploadedImages.length > 0) parts.push(`${value.uploadedImages.length} ta yuklangan rasm tayyorlandi`);
+      return parts.length > 0 ? parts.join(", ") : "Vektor elementlar tayyorlandi";
+    });
+
+    const elementCovered = slidesWithElements(jslayd.document, archetypesInOrder as never);
 
     const generatedImages = await runStage(input.service, input, "generating_images", async () => {
       if (prepared.presentation.style !== "super_professional" || mode === "mock") return [] as GeneratedImage[];
@@ -638,7 +685,11 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
       // A typographic design has nowhere to put a photograph, so it must not be
       // charged for one either.
       if (policy === "none") return [] as GeneratedImage[];
-      const indexed = plan.slides.map((slide, index) => ({ slide, index }));
+      // A slide whose every visual slot is an element needs no picture. This is
+      // the saving that pays for the library: retrieval instead of generation.
+      const indexed = plan.slides
+        .map((slide, index) => ({ slide, index }))
+        .filter(({ index }) => !elementCovered.has(index));
       const targets = policy === "cover"
         ? indexed.filter(({ index }) => index === 0)
         // `contextual` always dresses the opening slide and always leaves the
@@ -670,6 +721,7 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
       const rows = buildJslaydSlides({
         ...shared,
         design: jslayd,
+        slideElements: assets.elements,
         // The compositions the copy was written for. Without this the renderer
         // would choose again from the finished text and could land somewhere
         // else, throwing away the one thing choosing early bought.

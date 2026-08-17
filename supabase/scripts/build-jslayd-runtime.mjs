@@ -8,6 +8,21 @@ const source = path.join(repoRoot, "packages", "jslayd", "src");
 const target = path.join(repoRoot, "supabase", "functions", "_shared", "jslayd");
 
 /**
+ * The JElement drawing half, projected the same way and for the same reason.
+ *
+ * Only the reading and drawing modules travel: the compiler and the standard
+ * prompt stay in the package, because importing a specification happens in the
+ * console and the server has no business carrying a parser it never runs.
+ */
+const ELEMENT_SOURCE = path.join(repoRoot, "packages", "jelement", "src");
+const ELEMENT_TARGET = path.join(repoRoot, "supabase", "functions", "_shared", "jelement");
+const ELEMENT_MODULES = ["spec.ts", "document.ts", "render.ts"];
+const ELEMENT_INDEX = `export * from "./spec.ts";
+export * from "./document.ts";
+export * from "./render.ts";
+`;
+
+/**
  * Projects the JSLAYD *runtime* into the Edge function tree.
  *
  *   node supabase/scripts/build-jslayd-runtime.mjs
@@ -71,36 +86,44 @@ export * from "./budget.ts";
  * import to `render.ts` breaks the build here rather than at deploy time, in a
  * container, with a module-not-found nobody can read.
  */
-function assertClosed(name, body) {
-  const allowed = new Set(MODULES);
+function assertClosed(name, body, modules = MODULES, label = "JSLAYD") {
+  const allowed = new Set(modules);
   for (const match of body.matchAll(/from\s+"\.\/([A-Za-z0-9_.-]+)"/g)) {
     const imported = match[1];
     if (allowed.has(imported)) continue;
     throw new Error(
-      `${name} imports "./${imported}", which is not part of the JSLAYD runtime.\n` +
+      `${name} imports "./${imported}", which is not part of the ${label} runtime.\n` +
       `Either move that code out of the runtime, or add the module to MODULES in ` +
       `supabase/scripts/build-jslayd-runtime.mjs and re-check what the Edge bundle now carries.`,
     );
   }
 }
 
-const generated = new Map();
-for (const name of MODULES) {
-  const body = readFileSync(path.join(source, name), "utf8");
-  assertClosed(name, body);
-  generated.set(name, BANNER.replace("%NAME%", name) + body);
+/** One projection: a source directory, a module list, an index, a destination. */
+function project(sourceDir, modules, indexBody, label) {
+  const files = new Map();
+  for (const name of modules) {
+    const body = readFileSync(path.join(sourceDir, name), "utf8");
+    assertClosed(name, body, modules, label);
+    files.set(name, BANNER.replace("%NAME%", name) + body);
+  }
+  files.set("index.ts", indexBody);
+  return files;
 }
-generated.set("index.ts", INDEX);
+
+const generated = project(source, MODULES, INDEX, "JSLAYD");
+const elementFiles = project(ELEMENT_SOURCE, ELEMENT_MODULES, ELEMENT_INDEX, "JElement");
 
 const check = process.argv.includes("--check");
-if (check) {
-  const existing = new Set(readdirSync(target, { withFileTypes: true }).filter((entry) => entry.isFile()).map((entry) => entry.name));
+
+function verify(dir, files, label) {
+  const existing = new Set(readdirSync(dir, { withFileTypes: true }).filter((entry) => entry.isFile()).map((entry) => entry.name));
   const stale = [];
-  for (const [name, body] of generated) {
+  for (const [name, body] of files) {
     existing.delete(name);
     let current = null;
     try {
-      current = readFileSync(path.join(target, name), "utf8");
+      current = readFileSync(path.join(dir, name), "utf8");
     } catch {
       stale.push(`${name} is missing`);
       continue;
@@ -109,15 +132,27 @@ if (check) {
   }
   for (const orphan of existing) stale.push(`${orphan} is no longer generated`);
   if (stale.length) {
-    console.error("The JSLAYD Edge runtime is out of sync with packages/jslayd:");
+    console.error(`The ${label} Edge runtime is out of sync:`);
     for (const line of stale) console.error(`  - ${line}`);
     console.error("\nRun: node supabase/scripts/build-jslayd-runtime.mjs");
     process.exit(1);
   }
-  console.log(`✓ JSLAYD Edge runtime is in sync (${generated.size} modules)`);
+  console.log(`✓ ${label} Edge runtime is in sync (${files.size} modules)`);
+}
+
+function write(dir, files) {
+  rmSync(dir, { recursive: true, force: true });
+  mkdirSync(dir, { recursive: true });
+  for (const [name, body] of files) writeFileSync(path.join(dir, name), body);
+}
+
+if (check) {
+  verify(target, generated, "JSLAYD");
+  verify(ELEMENT_TARGET, elementFiles, "JElement");
 } else {
-  rmSync(target, { recursive: true, force: true });
-  mkdirSync(target, { recursive: true });
-  for (const [name, body] of generated) writeFileSync(path.join(target, name), body);
+  write(target, generated);
+  write(ELEMENT_TARGET, elementFiles);
+
   console.log(`✓ JSLAYD Edge runtime written to supabase/functions/_shared/jslayd (${generated.size} modules)`);
+  console.log(`✓ JElement Edge runtime written to supabase/functions/_shared/jelement (${elementFiles.size} modules)`);
 }
