@@ -27,6 +27,12 @@
 		<dict>
 			<key>CFBundleURLSchemes</key>
 			<array>
+				<string>com.googleusercontent.apps.909226398103-dbmc51rvftk519467is0e0u5hhfejcut</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
 				<string>jaxongirman</string>
 				<string>uz.jaxongirman.app</string>
 			</array>
