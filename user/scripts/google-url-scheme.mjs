@@ -20,6 +20,8 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { CLIENT_ID, CLIENT_ID_EXAMPLE } from "./client-id.mjs";
+
 const userRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const plistPath = path.join(userRoot, "ios", "Jaxongirman", "Info.plist");
 const SUFFIX = ".apps.googleusercontent.com";
@@ -55,12 +57,10 @@ if (!clientId) {
  * fails the moment somebody presses the button. A real client ID is a project
  * number, a hyphen, then an identifier.
  */
-const SHAPE = /^\d{6,}-[a-z0-9]+\.apps\.googleusercontent\.com$/;
-
-if (!SHAPE.test(clientId)) {
+if (!CLIENT_ID.test(clientId)) {
   console.error(
     `Bu iOS client ID ga o‘xshamaydi:\n  ${clientId}\n\n` +
-      "Kutilgan ko‘rinish: 123456789012-abcdef.apps.googleusercontent.com\n" +
+      `Kutilgan ko‘rinish: ${CLIENT_ID_EXAMPLE}\n` +
       "Google Cloud → APIs & Services → Credentials → OAuth 2.0 Client IDs →\n" +
       "turi «iOS» bo‘lganini oling.",
   );

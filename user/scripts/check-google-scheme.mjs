@@ -20,6 +20,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { CLIENT_ID, CLIENT_ID_EXAMPLE } from "./client-id.mjs";
+
 const userRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SUFFIX = ".apps.googleusercontent.com";
 
@@ -34,10 +36,10 @@ const clientId = (process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? "").trim();
 // nothing native is ever called. That build is safe to make.
 if (!clientId) process.exit(0);
 
-if (!clientId.endsWith(SUFFIX)) {
+if (!CLIENT_ID.test(clientId)) {
   console.error(
     `\n✖ EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID iOS client ID ga o‘xshamaydi:\n  ${clientId}\n` +
-      `  Kutilgan oxiri: ${SUFFIX}\n`,
+      `  Kutilgan ko‘rinish: ${CLIENT_ID_EXAMPLE}\n`,
   );
   process.exit(1);
 }

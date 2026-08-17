@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -48,12 +48,12 @@ test("Google is unconfigured until the web client id exists", () => {
   // The platform ids alone are not enough: Supabase verifies the token against
   // the web client, so a build with only an iOS id would sign somebody in on
   // the device and then fail at the exchange, which is the confusing half.
-  const partial = core.getGoogleAuthConfig({ ios: "123456789012-a1b2.apps.googleusercontent.com" });
+  const partial = core.getGoogleAuthConfig({ ios: "123456789012-k3m9d2ba7qp1vn8s.apps.googleusercontent.com" });
   assert.equal(partial.configured, false, "an iOS id without a web id is not a configuration");
 
-  const ready = core.getGoogleAuthConfig({ web: " 123456789012-a1b2.apps.googleusercontent.com " });
+  const ready = core.getGoogleAuthConfig({ web: " 123456789012-k3m9d2ba7qp1vn8s.apps.googleusercontent.com " });
   assert.equal(ready.configured, true);
-  assert.equal(ready.webClientId, "123456789012-a1b2.apps.googleusercontent.com",
+  assert.equal(ready.webClientId, "123456789012-k3m9d2ba7qp1vn8s.apps.googleusercontent.com",
     "surrounding space in an env var is not part of the id");
 });
 
@@ -66,7 +66,11 @@ test("a value that is not a client id means unconfigured, not a crash", () => {
     "<haqiqiy web client id>",
     "YOUR_WEB_CLIENT_ID.apps.googleusercontent.com",
     "changeme",
-    "123456789012-a1b2.apps.googleusercontent.com.evil.example",
+    "123456789012-k3m9d2ba7qp1vn8s.apps.googleusercontent.com.evil.example",
+    // Well-formed at both ends and still a placeholder: this is the exact
+    // shape of the example values that got pasted, and the reason the
+    // identifier has a length floor at all.
+    "847263910284-xxxx.apps.googleusercontent.com",
   ]) {
     const config = core.getGoogleAuthConfig({ web: junk, ios: junk });
     assert.equal(config.configured, false, `"${junk}" must not read as a configuration`);
@@ -79,13 +83,31 @@ test("on iOS a web id alone is not enough to attempt a sign-in", () => {
   // is asked to sign in without an iOS client ID, and an NSException kills the
   // process — the app does not show an error, it disappears. The adapter refuses
   // before reaching native code, and this is the arithmetic it refuses on.
-  const config = core.getGoogleAuthConfig({ web: "123456789012-a1b2.apps.googleusercontent.com" });
+  const config = core.getGoogleAuthConfig({ web: "123456789012-k3m9d2ba7qp1vn8s.apps.googleusercontent.com" });
   assert.equal(config.configured, true, "configured is about the exchange, which the web id governs");
   assert.equal(config.iosClientId, null, "but there is nothing for the iOS sheet to identify itself with");
 });
 
 test("a blank string is as unset as an absent one", () => {
   assert.equal(core.getGoogleAuthConfig({ web: "   " }).configured, false);
+});
+
+test("the app and the setup scripts agree on what a client id is", () => {
+  // Two copies exist because the core is compiled standalone by this harness
+  // and may import nothing, while the scripts are plain node. Two copies of a
+  // rule drift, so this compares them rather than trusting they were both
+  // edited — the pattern text has to match exactly.
+  const fromCore = readFileSync(
+    path.join(userRoot, "src", "lib", "auth", "social-auth-core.ts"), "utf8",
+  ).match(/const CLIENT_ID = (\/.+\/);/);
+  const fromScripts = readFileSync(
+    path.join(userRoot, "scripts", "client-id.mjs"), "utf8",
+  ).match(/export const CLIENT_ID = (\/.+\/);/);
+
+  assert.ok(fromCore, "the core must declare CLIENT_ID as a literal regex");
+  assert.ok(fromScripts, "and so must scripts/client-id.mjs");
+  assert.equal(fromCore[1], fromScripts[1],
+    "the app would accept a value the setup script refuses, or the reverse");
 });
 
 /* ------------------------------------------------------------------ errors */

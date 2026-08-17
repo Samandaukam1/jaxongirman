@@ -31,11 +31,19 @@ export type GoogleAuthConfig = {
  * non-empty string, and reached the Google SDK — which answers a malformed
  * client ID with an Objective-C exception that kills the process.
  *
+ * The identifier after the hyphen must be long, because the short fakes are the
+ * ones that get pasted: `xxxx` out of an example is well-formed by every other
+ * measure. Google's own are around thirty characters.
+ *
  * A value that is not a client ID means the provider is not configured. That
  * is the honest reading, and it is also the safe one: the button says so and
  * nothing native is called.
+ *
+ * `scripts/client-id.mjs` holds the same pattern for the setup scripts, which
+ * cannot import this file — it is compiled standalone by the test harness and
+ * must stay dependency-free. A test compares the two and fails if they drift.
  */
-const CLIENT_ID = /^\d{6,}-[a-z0-9]+\.apps\.googleusercontent\.com$/;
+const CLIENT_ID = /^\d{6,}-[a-z0-9]{12,}\.apps\.googleusercontent\.com$/;
 
 function clientId(value: string | undefined): string | null {
   const text = (value ?? "").trim();
