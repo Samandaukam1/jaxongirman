@@ -46,6 +46,29 @@ const PROPERTY_PATTERN = /^([A-Za-z_][A-Za-z0-9_]*|\d+(?:\.\d+)?)\s*:\s*(.*)$/;
 /** Sections that hang off the preceding `[SLIDE …]` rather than the document. */
 const SLIDE_CHILD_SECTIONS = new Set(["ELEMENT"]);
 
+/**
+ * The one thing that is not JSLAYD-specific about this lexer.
+ *
+ * A second block language landed in this repo — JElement, which describes
+ * reusable visual objects rather than slide compositions — and it is the same
+ * shape: a header, `[SECTION arg]` blocks, indented `key: value` trees. Writing
+ * a second lexer for it would mean two places to fix an indentation bug.
+ *
+ * So the vocabulary is a parameter and the lexing is not. The defaults are
+ * JSLAYD's, so every existing caller is unchanged.
+ */
+export type Dialect = {
+  /** `JSLAYD-DESIGN 1.0` — matched exactly on the first line. */
+  header: string;
+  /** The token before the version, used in error messages and the pattern. */
+  keyword: string;
+  supportedVersions: readonly string[];
+  /** Sections that hang off the preceding parent rather than the document. */
+  childSections: ReadonlySet<string>;
+  /** The section a child attaches to. */
+  parentSection: string;
+};
+
 type RawLine = { text: string; indent: number; line: number };
 
 /**
@@ -118,7 +141,15 @@ function readProperties(lines: RawLine[], start: number, floor: number, bag: Dia
   return { nodes, next: cursor };
 }
 
-export function parse(source: string, bag: DiagnosticBag): ParseResult {
+export function parse(source: string, bag: DiagnosticBag, dialect?: Dialect): ParseResult {
+  const lang: Dialect = dialect ?? {
+    header: JSLAYD_HEADER,
+    keyword: "JSLAYD-DESIGN",
+    supportedVersions: SUPPORTED_VERSIONS,
+    childSections: SLIDE_CHILD_SECTIONS,
+    parentSection: "SLIDE",
+  };
+
   if (source.length > LIMITS.sourceBytes) {
     bag.error(
       "source_too_large",
@@ -132,30 +163,30 @@ export function parse(source: string, bag: DiagnosticBag): ParseResult {
   const lines = scan(source, bag);
   const result: ParseResult = { header: null, sections: [] };
   if (lines.length === 0) {
-    bag.error("empty_source", "Prompt bo'sh.", 0, `Birinchi qator "${JSLAYD_HEADER}" bo'lishi kerak.`);
+    bag.error("empty_source", "Prompt bo'sh.", 0, `Birinchi qator "${lang.header}" bo'lishi kerak.`);
     return result;
   }
 
   let cursor = 0;
   const first = lines[0]!;
-  const headerMatch = /^JSLAYD-DESIGN\s+(\d+\.\d+)$/.exec(first.text);
+  const headerMatch = new RegExp(`^${lang.keyword}\\s+(\\d+\\.\\d+)$`).exec(first.text);
   if (!headerMatch) {
-    bag.error("missing_header", "Hujjat sarlavhasi topilmadi.", first.line, `Birinchi qator aynan "${JSLAYD_HEADER}" bo'lishi kerak.`);
+    bag.error("missing_header", "Hujjat sarlavhasi topilmadi.", first.line, `Birinchi qator aynan "${lang.header}" bo'lishi kerak.`);
   } else {
     const version = headerMatch[1]!;
-    if (!SUPPORTED_VERSIONS.includes(version)) {
+    if (!lang.supportedVersions.includes(version)) {
       bag.error(
         "unsupported_version",
-        `JSLAYD ${version} versiyasi qo'llab-quvvatlanmaydi.`,
+        `${lang.keyword} ${version} versiyasi qo'llab-quvvatlanmaydi.`,
         first.line,
-        `Mavjud versiyalar: ${SUPPORTED_VERSIONS.join(", ")}.`,
+        `Mavjud versiyalar: ${lang.supportedVersions.join(", ")}.`,
       );
     }
     result.header = { version, line: first.line };
     cursor = 1;
   }
 
-  let currentSlide: ParseSection | null = null;
+  let currentParent: ParseSection | null = null;
   while (cursor < lines.length) {
     const current = lines[cursor]!;
     const sectionMatch = SECTION_PATTERN.exec(current.text);
@@ -180,21 +211,21 @@ export function parse(source: string, bag: DiagnosticBag): ParseResult {
     section.properties = body.nodes;
     cursor = body.next;
 
-    if (SLIDE_CHILD_SECTIONS.has(section.name)) {
-      if (!currentSlide) {
+    if (lang.childSections.has(section.name)) {
+      if (!currentParent) {
         bag.error(
           "element_without_slide",
-          `[${section.name} ${section.arg}] hech qaysi slaydga tegishli emas.`,
+          `[${section.name} ${section.arg}] hech qaysi ${lang.parentSection.toLowerCase()}ga tegishli emas.`,
           section.line,
-          "Har bir `[ELEMENT …]` o'zidan oldingi `[SLIDE …]` ichida bo'lishi kerak.",
+          `Har bir \`[${section.name} …]\` o'zidan oldingi \`[${lang.parentSection} …]\` ichida bo'lishi kerak.`,
         );
         continue;
       }
-      currentSlide.sections.push(section);
+      currentParent.sections.push(section);
       continue;
     }
 
-    if (section.name === "SLIDE") currentSlide = section;
+    if (section.name === lang.parentSection) currentParent = section;
     result.sections.push(section);
   }
 
