@@ -13,3 +13,7 @@ export {
   fitToBox, placementFor, renderElement, shouldFlip,
   type RenderedShape, type RenderTarget,
 } from "./render.ts";
+export {
+  elementHealth, familyHealth, previewMatrix,
+  type HealthDeduction, type HealthReport,
+} from "./health.ts";

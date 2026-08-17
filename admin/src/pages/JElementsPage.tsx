@@ -1,4 +1,4 @@
-import { ANALYZER_PROMPT, compile, expansionPrompt, type JElementFamily } from "@jaxongirman/jelement";
+import { ANALYZER_PROMPT, compile, elementHealth, expansionPrompt, familyHealth, type JElementFamily } from "@jaxongirman/jelement";
 import { Copy, Download, FileCode2, Plus, Search, Shapes, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -388,23 +388,39 @@ function ImportModal({ onClose, onSaved }: { onClose: () => void; onSaved: (name
               <h3>{result.family.family.name}</h3>
               <p className="family-meta">
                 {result.family.family.category} · {result.family.family.style} ·
-                {" "}{result.family.elements.length} ta element
+                {" "}{result.family.elements.length} ta element ·
+                {" "}<strong>{familyHealth(result.family).score}/100</strong>
               </p>
               <div className="token-row">
                 {Object.entries(result.family.colorTokens).map(([role, value]) => (
                   <span key={role} className="token-swatch" title={`${role} ${value}`} style={{ background: value }} />
                 ))}
               </div>
+              {/* The score is a way of sorting; the deductions are what an
+                  admin can act on, so those are what is shown. A total on its
+                  own says something is wrong and never says what. */}
               <ol className="element-list">
-                {result.family.elements.map((element) => (
-                  <li key={element.canonicalName}>
-                    <strong>{element.canonicalName}</strong>
-                    <span>
-                      {element.geometry.components.length} komponent ·
-                      {" "}{element.semantic.uzbekTerms.length} o‘zbekcha atama
-                    </span>
-                  </li>
-                ))}
+                {result.family.elements.map((element) => {
+                  const health = elementHealth(element, result.family!);
+                  return (
+                    <li key={element.canonicalName}>
+                      <strong>{element.canonicalName}</strong>
+                      <span className={health.score >= 85 ? "health-good" : health.score >= 65 ? "health-fair" : "health-poor"}>
+                        {health.score}/100 · {element.geometry.components.length} komponent
+                      </span>
+                      {health.deductions.length > 0 ? (
+                        <ul className="deduction-list">
+                          {health.deductions.slice(0, 4).map((deduction, index) => (
+                            <li key={`${deduction.dimension}-${index}`}>
+                              −{deduction.points} {deduction.reason}
+                              {deduction.fix ? <em> {deduction.fix}</em> : null}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </li>
+                  );
+                })}
               </ol>
             </section>
           ) : null}

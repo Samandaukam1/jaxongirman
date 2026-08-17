@@ -92,6 +92,17 @@ export const ANCHORS = [
 ] as const;
 export type Anchor = (typeof ANCHORS)[number];
 
+/**
+ * The sizes and angles every element is previewed at.
+ *
+ * Small first, because that is where detail disappears: a hairline that reads
+ * at 320px is gone at 64, and nobody notices looking at one large preview.
+ * The angles include a right angle because an element rotated 90° is where a
+ * wrong aspect ratio finally shows.
+ */
+export const MIN_PREVIEW_SIZES = [64, 160, 320] as const;
+export const PREVIEW_ROTATIONS = [0, 15, -15, 45] as const;
+
 export const LANGUAGES = ["uz", "en", "ru"] as const;
 export type Language = (typeof LANGUAGES)[number];
 
