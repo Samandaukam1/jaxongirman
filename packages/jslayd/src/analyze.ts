@@ -9,6 +9,7 @@ import type {
 } from "./document.ts";
 import { DiagnosticBag, type Diagnostic } from "./diagnostics.ts";
 import { CANVAS_HEIGHT, CANVAS_WIDTH, MIN_READABLE_FONT_SIZE } from "./spec.ts";
+import { cellCapacity, characterCapacity } from "./text-metrics.ts";
 
 /**
  * The design health analyzer (§92).
@@ -49,9 +50,6 @@ const LABELS: Record<CheckName, string> = {
   tables: "Jadvallar",
   assets: "Fayllar",
 };
-
-/** Mean glyph advance as a fraction of font size — the engine's own estimate. */
-const GLYPH_RATIO = 0.53;
 
 /** Types whose geometry may bleed past the canvas on purpose (§18). */
 const MAY_BLEED = new Set(["shape", "decorative", "divider", "line", "image", "frame", "icon", "group"]);
@@ -164,13 +162,6 @@ function checkOverflow(document: JslaydDocument, bag: DiagnosticBag): void {
   }
 }
 
-/** Rough character budget at the declared size — the same estimate the engine uses. */
-function characterCapacity(width: number, height: number, style: TextStyle): number {
-  const perLine = Math.max(1, Math.floor(width / Math.max(1, style.fontSize * GLYPH_RATIO)));
-  const lines = Math.max(1, Math.floor(height / Math.max(1, style.fontSize * style.lineHeight)));
-  return perLine * Math.min(lines, style.maxLines ?? lines);
-}
-
 function checkContrast(document: JslaydDocument, bag: DiagnosticBag): void {
   for (const archetype of document.archetypes) {
     bag.within(archetype.id, () => {
@@ -278,7 +269,7 @@ function checkTables(document: JslaydDocument, bag: DiagnosticBag): void {
         );
       }
       const columnWidth = element.geometry.width / element.columns;
-      const charsPerCell = Math.floor((columnWidth - element.table.padding * 2) / (element.table.cellSize * GLYPH_RATIO));
+      const charsPerCell = cellCapacity(columnWidth, element.table.padding, element.table.cellSize);
       if (charsPerCell < 6) {
         bag.warn("table_columns_narrow", `\`${element.id}\` ustunlariga taxminan ${Math.max(0, charsPerCell)} belgi sig'adi.`, 0, "Ustun sonini kamaytiring yoki kengaytiring.");
       }

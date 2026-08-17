@@ -151,3 +151,19 @@ export {
   type RenderedSlide,
 } from "./render.ts";
 export { purposeForLayout, selectArchetypes, selectOne, type Selection } from "./select.ts";
+export {
+  buildWritingBrief,
+  checkFit,
+  type ArchetypeWritingBrief,
+  type SlotFit,
+  type SlotRole,
+  type TextSlotBudget,
+  type VisualZone,
+} from "./budget.ts";
+export {
+  characterCapacity,
+  charactersPerLine,
+  densityFor,
+  linesThatFit,
+  GLYPH_RATIO,
+} from "./text-metrics.ts";

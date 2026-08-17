@@ -34,15 +34,11 @@ export function buildEdgeModules() {
       rootDir: shared,
     },
     include: [
-      path.join(shared, "design-types.ts"),
+      // Everything here is dependency-free on purpose — no Supabase client, no
+      // `Deno.env` — so it can be type-checked and unit-tested without a Deno
+      // toolchain, which no developer machine in this repo has.
       path.join(shared, "presentation-types.ts"),
-      path.join(shared, "palettes.ts"),
-      path.join(shared, "template-engine.ts"),
-      path.join(shared, "templates", "*.ts"),
-      // `layout.ts` and the JSLAYD bridge are dependency-free on purpose — the
-      // Supabase client never reaches them — so they can be type-checked and
-      // unit-tested here without a Deno toolchain, which no developer machine
-      // in this repo has.
+      path.join(shared, "gemini-schema.ts"),
       path.join(shared, "export-model.ts"),
       path.join(shared, "fonts.ts"),
       path.join(shared, "layout.ts"),
