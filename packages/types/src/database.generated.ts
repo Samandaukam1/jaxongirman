@@ -1039,6 +1039,283 @@ export type Database = {
           },
         ]
       }
+      jelement_aliases: {
+        Row: {
+          alias: string
+          element_id: string
+          id: string
+          kind: string
+          language: string
+          normalized: string
+        }
+        Insert: {
+          alias: string
+          element_id: string
+          id?: string
+          kind?: string
+          language?: string
+          normalized: string
+        }
+        Update: {
+          alias?: string
+          element_id?: string
+          id?: string
+          kind?: string
+          language?: string
+          normalized?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jelement_aliases_element_id_fkey"
+            columns: ["element_id"]
+            isOneToOne: false
+            referencedRelation: "jelements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      jelement_families: {
+        Row: {
+          category: string
+          color_tokens: Json
+          content_hash: string | null
+          created_at: string
+          created_by: string | null
+          description: string
+          format_version: string
+          id: string
+          name: string
+          published_at: string | null
+          published_version: number
+          search_metadata: Json
+          slug: string
+          source_prompt: string
+          status: Database["public"]["Enums"]["jelement_status"]
+          style: string
+          subcategory: string
+          thumbnail_path: string | null
+          updated_at: string
+          visual_dna: Json
+        }
+        Insert: {
+          category?: string
+          color_tokens?: Json
+          content_hash?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          format_version?: string
+          id?: string
+          name: string
+          published_at?: string | null
+          published_version?: number
+          search_metadata?: Json
+          slug: string
+          source_prompt?: string
+          status?: Database["public"]["Enums"]["jelement_status"]
+          style?: string
+          subcategory?: string
+          thumbnail_path?: string | null
+          updated_at?: string
+          visual_dna?: Json
+        }
+        Update: {
+          category?: string
+          color_tokens?: Json
+          content_hash?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          format_version?: string
+          id?: string
+          name?: string
+          published_at?: string | null
+          published_version?: number
+          search_metadata?: Json
+          slug?: string
+          source_prompt?: string
+          status?: Database["public"]["Enums"]["jelement_status"]
+          style?: string
+          subcategory?: string
+          thumbnail_path?: string | null
+          updated_at?: string
+          visual_dna?: Json
+        }
+        Relationships: []
+      }
+      jelement_usage: {
+        Row: {
+          created_at: string
+          element_id: string
+          id: string
+          presentation_id: string | null
+          query: string | null
+          slide_id: string | null
+          slide_role: string | null
+        }
+        Insert: {
+          created_at?: string
+          element_id: string
+          id?: string
+          presentation_id?: string | null
+          query?: string | null
+          slide_id?: string | null
+          slide_role?: string | null
+        }
+        Update: {
+          created_at?: string
+          element_id?: string
+          id?: string
+          presentation_id?: string | null
+          query?: string | null
+          slide_id?: string | null
+          slide_role?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jelement_usage_element_id_fkey"
+            columns: ["element_id"]
+            isOneToOne: false
+            referencedRelation: "jelements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "jelement_usage_presentation_id_fkey"
+            columns: ["presentation_id"]
+            isOneToOne: false
+            referencedRelation: "presentations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "jelement_usage_slide_id_fkey"
+            columns: ["slide_id"]
+            isOneToOne: false
+            referencedRelation: "slides"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      jelement_versions: {
+        Row: {
+          content_hash: string
+          element_id: string
+          id: string
+          published_at: string
+          published_by: string | null
+          spec: Json
+          version: number
+        }
+        Insert: {
+          content_hash: string
+          element_id: string
+          id?: string
+          published_at?: string
+          published_by?: string | null
+          spec: Json
+          version: number
+        }
+        Update: {
+          content_hash?: string
+          element_id?: string
+          id?: string
+          published_at?: string
+          published_by?: string | null
+          spec?: Json
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jelement_versions_element_id_fkey"
+            columns: ["element_id"]
+            isOneToOne: false
+            referencedRelation: "jelements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      jelements: {
+        Row: {
+          appearance: Json
+          asset_path: string | null
+          canonical_name: string
+          category: string
+          created_at: string
+          display_name: string
+          family_id: string
+          geometry: Json
+          id: string
+          object_class: string
+          position: number
+          published_at: string | null
+          published_version: number
+          render_spec: Json | null
+          semantic: Json
+          status: Database["public"]["Enums"]["jelement_status"]
+          subcategory: string
+          thumbnail_path: string | null
+          transform_rules: Json
+          updated_at: string
+          usage_count: number
+          usage_rules: Json
+        }
+        Insert: {
+          appearance?: Json
+          asset_path?: string | null
+          canonical_name: string
+          category?: string
+          created_at?: string
+          display_name?: string
+          family_id: string
+          geometry?: Json
+          id?: string
+          object_class?: string
+          position?: number
+          published_at?: string | null
+          published_version?: number
+          render_spec?: Json | null
+          semantic?: Json
+          status?: Database["public"]["Enums"]["jelement_status"]
+          subcategory?: string
+          thumbnail_path?: string | null
+          transform_rules?: Json
+          updated_at?: string
+          usage_count?: number
+          usage_rules?: Json
+        }
+        Update: {
+          appearance?: Json
+          asset_path?: string | null
+          canonical_name?: string
+          category?: string
+          created_at?: string
+          display_name?: string
+          family_id?: string
+          geometry?: Json
+          id?: string
+          object_class?: string
+          position?: number
+          published_at?: string | null
+          published_version?: number
+          render_spec?: Json | null
+          semantic?: Json
+          status?: Database["public"]["Enums"]["jelement_status"]
+          subcategory?: string
+          thumbnail_path?: string | null
+          transform_rules?: Json
+          updated_at?: string
+          usage_count?: number
+          usage_rules?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jelements_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "jelement_families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       marketplace_categories: {
         Row: {
           code: string
@@ -3792,6 +4069,37 @@ export type Database = {
         Args: { p_design_id: string; p_reason?: string }
         Returns: undefined
       }
+      admin_archive_jelement_family: {
+        Args: { p_family_id: string; p_restore?: boolean }
+        Returns: {
+          category: string
+          color_tokens: Json
+          content_hash: string | null
+          created_at: string
+          created_by: string | null
+          description: string
+          format_version: string
+          id: string
+          name: string
+          published_at: string | null
+          published_version: number
+          search_metadata: Json
+          slug: string
+          source_prompt: string
+          status: Database["public"]["Enums"]["jelement_status"]
+          style: string
+          subcategory: string
+          thumbnail_path: string | null
+          updated_at: string
+          visual_dna: Json
+        }
+        SetofOptions: {
+          from: "*"
+          to: "jelement_families"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       admin_create_settlement: {
         Args: {
           p_period_end: string
@@ -3954,6 +4262,7 @@ export type Database = {
           title: string
         }[]
       }
+      admin_list_jelement_families: { Args: never; Returns: Json }
       admin_list_marketplace_products: {
         Args: {
           p_limit?: number
@@ -4177,6 +4486,10 @@ export type Database = {
         }[]
       }
       admin_publish_design: { Args: { p_design_id: string }; Returns: number }
+      admin_publish_jelement_family: {
+        Args: { p_family_id: string }
+        Returns: number
+      }
       admin_record_finance_entry: {
         Args: {
           p_amount_usd: number
@@ -4274,6 +4587,37 @@ export type Database = {
           p_sort_order?: number
         }
         Returns: string
+      }
+      admin_save_jelement_family: {
+        Args: { p_family_id: string; p_source_prompt?: string; p_spec: Json }
+        Returns: {
+          category: string
+          color_tokens: Json
+          content_hash: string | null
+          created_at: string
+          created_by: string | null
+          description: string
+          format_version: string
+          id: string
+          name: string
+          published_at: string | null
+          published_version: number
+          search_metadata: Json
+          slug: string
+          source_prompt: string
+          status: Database["public"]["Enums"]["jelement_status"]
+          style: string
+          subcategory: string
+          thumbnail_path: string | null
+          updated_at: string
+          visual_dna: Json
+        }
+        SetofOptions: {
+          from: "*"
+          to: "jelement_families"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       admin_save_qr_video_experience: {
         Args: {
@@ -4794,6 +5138,29 @@ export type Database = {
       }
       jcoin_settle: {
         Args: { p_idempotency_key: string; p_user_id?: string }
+        Returns: Json
+      }
+      jelement_normalize: { Args: { p_term: string }; Returns: string }
+      jelement_record_usage: {
+        Args: {
+          p_element_id: string
+          p_presentation_id?: string
+          p_query?: string
+          p_slide_id?: string
+          p_slide_role?: string
+        }
+        Returns: undefined
+      }
+      jelement_reindex_aliases: {
+        Args: { p_element_id: string }
+        Returns: undefined
+      }
+      jelement_resolve: {
+        Args: { p_element_id: string; p_version?: number }
+        Returns: Json
+      }
+      jelement_search: {
+        Args: { p_limit?: number; p_query: string; p_slide_role?: string }
         Returns: Json
       }
       mark_notifications_read: { Args: { p_id?: string }; Returns: number }
@@ -5663,6 +6030,7 @@ export type Database = {
         | "expired"
       game_source: "manual" | "ai" | "text" | "file" | "presentation"
       game_status: "generating" | "draft" | "ready" | "archived" | "failed"
+      jelement_status: "draft" | "published" | "archived"
       job_status: "queued" | "running" | "succeeded" | "failed" | "cancelled"
       jslayd_design_status: "draft" | "published" | "archived"
       marketplace_file_kind: "main" | "study_guide" | "preview"
@@ -5955,6 +6323,7 @@ export const Constants = {
       ],
       game_source: ["manual", "ai", "text", "file", "presentation"],
       game_status: ["generating", "draft", "ready", "archived", "failed"],
+      jelement_status: ["draft", "published", "archived"],
       job_status: ["queued", "running", "succeeded", "failed", "cancelled"],
       jslayd_design_status: ["draft", "published", "archived"],
       marketplace_file_kind: ["main", "study_guide", "preview"],
