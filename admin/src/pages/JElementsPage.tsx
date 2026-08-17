@@ -1,4 +1,7 @@
-import { ANALYZER_PROMPT, compile, elementHealth, expansionPrompt, familyHealth, type JElementFamily } from "@jaxongirman/jelement";
+import {
+  ANALYZER_PROMPT, compile, elementHealth, expansionPrompt, familyHealth,
+  findDuplicates, findInternalDuplicates, type JElementFamily,
+} from "@jaxongirman/jelement";
 import { Copy, Download, FileCode2, Plus, Search, Shapes, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -330,8 +333,58 @@ function ImportModal({ onClose, onSaved }: { onClose: () => void; onSaved: (name
   const [source, setSource] = useState("");
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const [existing, setExisting] = useState<{ canonicalName: string; semantic: Record<string, unknown> }[]>([]);
 
   const result = useMemo(() => (source.trim() ? compile(source) : null), [source]);
+
+  /**
+   * What the family being imported already holds, when it is not new.
+   *
+   * An expansion returns siblings, and an analyzer that does not know an
+   * excavator is taken will return another one under a different name. Checking
+   * before the save is what makes the duplicate cost a click rather than
+   * living in the library forever.
+   */
+  useEffect(() => {
+    const slug = result?.family?.family.slug;
+    if (!slug) { setExisting([]); return; }
+
+    let active = true;
+    void (async () => {
+      const { data } = await supabase
+        .from("jelements")
+        .select("canonical_name, semantic, jelement_families!inner(slug)")
+        .eq("jelement_families.slug", slug)
+        .neq("status", "archived");
+
+      if (!active) return;
+      setExisting((data ?? []).map((row) => ({
+        canonicalName: (row as { canonical_name: string }).canonical_name,
+        semantic: (row as { semantic: Record<string, unknown> }).semantic ?? {},
+      })));
+    })();
+    return () => { active = false; };
+  }, [result?.family?.family.slug]);
+
+  const duplicates = useMemo(() => {
+    if (!result?.family) return [];
+    const shaped = result.family.elements.map((element) => ({
+      canonicalName: element.canonicalName, semantic: element.semantic,
+    }));
+    const shapedExisting = existing.map((row) => ({
+      canonicalName: row.canonicalName,
+      semantic: {
+        aliases: [], uzbekTerms: [], englishTerms: [], russianTerms: [],
+        industries: [], concepts: [], actions: [], contexts: [],
+        ...(row.semantic as object),
+      },
+    })) as never;
+
+    return [
+      ...findInternalDuplicates(shaped as never),
+      ...findDuplicates(shaped as never, shapedExisting),
+    ];
+  }, [result, existing]);
 
   async function save() {
     if (!result?.family) return;
@@ -373,6 +426,23 @@ function ImportModal({ onClose, onSaved }: { onClose: () => void; onSaved: (name
                   </li>
                 ))}
               </ul>
+            </section>
+          ) : null}
+
+          {duplicates.length > 0 ? (
+            <section className="diagnostics diagnostics-warning">
+              <h3>{duplicates.length} ta ehtimoliy takror</h3>
+              <ul>
+                {duplicates.map((match, index) => (
+                  <li key={`${match.candidate}-${index}`}>
+                    <strong>{match.candidate}</strong> ↔ {match.existing}
+                    <span> {match.reason}</span>
+                  </li>
+                ))}
+              </ul>
+              {/* A warning, not a refusal: two similar names are sometimes two
+                  objects, and the admin has the reference sheet in front of
+                  them. Saving is still allowed. */}
             </section>
           ) : null}
 

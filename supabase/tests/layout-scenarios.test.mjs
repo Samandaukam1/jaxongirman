@@ -340,3 +340,67 @@ test("copy written to a slot's budget fits that slot", () => {
 
   assert.ok(checked > 500, `the corpus should exercise hundreds of slots, checked ${checked}`);
 });
+
+/* ------------------------------------------------- a placed JElement ----- */
+
+/**
+ * An element on a slide reaches the exporters unchanged.
+ *
+ * The claim JElement rests on: what it emits is the same filled, rounded,
+ * rotatable box the slide engine already draws, so the web view, the phone and
+ * the PPTX exporter each handle it without being told the library exists. If
+ * that were untrue it would be untrue here, where the rows are inspected in the
+ * shape the exporters read.
+ */
+test("a placed element becomes rows the exporters already understand", () => {
+  const document = CORPUS[0];
+  const archetype = document.archetypes.find((entry) => entry.purpose === "title_content")
+    ?? document.archetypes[0];
+
+  // Two shapes, in the element's own 0-1 space, as `renderElement` produces.
+  const drawn = [
+    { x: 0.1, y: 0.3, width: 0.8, height: 0.4, rotation: 0, zIndex: 1, opacity: 1, style: { backgroundColor: "#101214", shape: "rect" } },
+    { x: 0.3, y: 0.55, width: 0.2, height: 0.2, rotation: -8, zIndex: 2, opacity: 1, style: { backgroundColor: "#A7FF00", shape: "circle", borderRadius: 20 } },
+  ];
+
+  const imageSlot = archetype.elements.find((entry) => entry.type === "image" || entry.type === "frame");
+  if (!imageSlot) return; // This design draws no pictures; nothing to fill.
+
+  const withElementSlot = structuredClone(document);
+  const target = withElementSlot.archetypes.find((entry) => entry.id === archetype.id);
+  for (const entry of target.elements) {
+    if (entry.type === "image" || entry.type === "frame") entry.strategy = "jelement";
+  }
+
+  const built = buildJslaydSlides({
+    presentationId: PRESENTATION,
+    ownerId: OWNER,
+    design: readDesign({ id: "11110000-0000-4000-8000-000000000001", slug: document.design.slug, version: 1, compiled_config: withElementSlot }).design,
+    slides: [slide("Konchilikda raqamli texnologiyalar", "title_body", { body: "Qisqa izoh.", bullets: ["Bir", "Ikki"] })],
+    sources: [],
+    generatedImages: [],
+    uploadedImages: [],
+    authorName: null,
+    teacherName: null,
+    paletteCode: null,
+    archetypeIds: [archetype.id],
+    slideElements: [{ [imageSlot.slot]: drawn }],
+  });
+
+  const placed = built.elements.filter((row) => row.content?.kind === "jelement");
+  assert.equal(placed.length, 2, "both shapes reached the slide");
+
+  for (const row of placed) {
+    // Every exporter switches on `type`, and `shape` is one it already has.
+    assert.equal(row.type, "shape", "no exporter needs a new element type");
+    assert.equal(typeof row.style.backgroundColor, "string", "with a colour it can fill");
+    assert.ok(Number.isFinite(row.x) && Number.isFinite(row.width), "and finite geometry");
+    assert.ok(row.width > 0 && row.height > 0, "that a renderer can draw");
+  }
+
+  // Rotation survives, because a PPTX shape carries one and a lost angle is a
+  // composition that silently straightens on export.
+  assert.ok(placed.some((row) => row.rotation !== 0), "the angled component kept its angle");
+
+  assertClean(built, "placed element");
+});

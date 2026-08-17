@@ -17,3 +17,6 @@ export {
   elementHealth, familyHealth, previewMatrix,
   type HealthDeduction, type HealthReport,
 } from "./health.ts";
+export {
+  findDuplicates, findInternalDuplicates, type DuplicateMatch,
+} from "./duplicates.ts";
