@@ -36,8 +36,35 @@ export type SlideData = {
   table: TableData | null;
   /** Resolved pictures, keyed by the archetype's image slot id (§27). */
   images: Record<string, ImageRef | null>;
+  /**
+   * Resolved JElements, keyed by the same slot ids.
+   *
+   * Already drawn to rows by the caller, so this package never imports the
+   * element library: JSLAYD decides where a visual goes and how big it is, and
+   * an element is one kind of thing that can go there. Keeping the two apart at
+   * this seam is what lets either be changed without the other.
+   */
+  elements: Record<string, readonly PlacedShape[]>;
   sources: string[];
   meta: DeckMeta;
+};
+
+/**
+ * One shape of a drawn element, in the element's own 0–1 space.
+ *
+ * Positioned relative to the slot rather than the slide, so the design stays in
+ * charge of where the visual sits: moving the slot moves the object, and the
+ * object never has to know what it was placed into.
+ */
+export type PlacedShape = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  zIndex: number;
+  opacity: number;
+  style: Record<string, unknown>;
 };
 
 export type DeckMeta = {
@@ -165,6 +192,7 @@ export function previewSlide(purpose: ArchetypePurpose, index = 0, total = 8): S
       ],
     },
     images: {},
+    elements: {},
     sources: ["Jaxongir AI ichki tahlili, 2025", "O'zbekiston statistika qo'mitasi"],
     meta: { ...DEFAULT_META },
   };

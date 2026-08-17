@@ -5,6 +5,7 @@ import {
   renderArchetype,
   selectArchetypes,
   type JslaydDocument,
+  type PlacedShape,
   type SlideData,
 } from "./jslayd/index.ts";
 import { validateAndRepair } from "./layout.ts";
@@ -76,6 +77,15 @@ type BuildInput = {
   authorName: string | null;
   teacherName: string | null;
   /**
+   * Drawn JElements per slide, keyed by the archetype's slot id.
+   *
+   * Already rendered to shapes by the caller, so this file never imports the
+   * element library. JSLAYD decides where a visual goes; an element is one of
+   * the things that can go there, and keeping them apart at this seam is what
+   * lets either change without the other.
+   */
+  slideElements?: readonly Record<string, readonly PlacedShape[]>[];
+  /**
    * One archetype id per slide, chosen before the copy was written.
    *
    * `null` for a slide the caller did not plan — the four fixed slides are
@@ -96,8 +106,8 @@ type BuildInput = {
 /**
  * The pipeline's semantic slide, as the render engine wants to read it.
  *
- * Image slots stay empty here and are filled once the archetype is known —
- * which slots exist is a property of the design, not of the content.
+ * Image and element slots stay empty here and are filled once the archetype is
+ * known — which slots exist is a property of the design, not of the content.
  */
 function toSlideData(
   semantic: SemanticSlide,
@@ -120,6 +130,7 @@ function toSlideData(
     chart: semantic.chart,
     table: semantic.table,
     images: {},
+    elements: {},
     // The bibliography is the deck's second-to-last slide, and it is the only
     // one a `{{sources}}` binding should fill — every other slide would repeat
     // the whole list.
@@ -177,6 +188,11 @@ export function buildJslaydSlides(input: BuildInput): { slides: SlideRow[]; elem
         if (element.type === "image" || element.type === "frame") slide.images[element.slot] = picture;
       }
     }
+
+    // Elements are keyed by slot already, so they are handed straight over —
+    // a slot the design does not declare is simply never read.
+    const drawn = input.slideElements?.[index];
+    if (drawn) slide.elements = { ...drawn };
 
     const rendered = renderArchetype(input.design.document, selection.archetype, slide, input.paletteCode);
     const rows: ElementRow[] = rendered.elements.map((element) => ({

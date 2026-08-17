@@ -583,7 +583,41 @@ function renderStat(element: StatElement, box: Box, geometry: Geometry, context:
 
 /* ------------------------------------------------------------------ media */
 
+/**
+ * A slot filled by a reusable object rather than a photograph.
+ *
+ * The shapes arrive already drawn, in the element's own 0–1 space, and are
+ * projected into the slot the design placed. That order matters: JSLAYD decides
+ * where a visual sits and how big it is, and the element only fills it. An
+ * element that could move itself would be a design deciding its own layout.
+ */
+function renderPlacedElement(element: ImageElement, box: Box, geometry: Geometry, context: RenderContext): RenderedElement[] {
+  const shapes = context.slide.elements[element.slot] ?? [];
+  if (shapes.length === 0) return [];
+
+  const baseZ = zOf(geometry);
+  return [...shapes]
+    .sort((first, second) => first.zIndex - second.zIndex)
+    .map((shape, order) => ({
+      ...base("shape", {
+        x: box.x + shape.x * box.width,
+        y: box.y + shape.y * box.height,
+        width: shape.width * box.width,
+        height: shape.height * box.height,
+      }, geometry, element.opacity * shape.opacity),
+      rotation: shape.rotation,
+      // Stacked above whatever the slot sits on, in the order the element
+      // declared, so the design's own layering is preserved around it.
+      z_index: baseZ + order,
+      style: shape.style,
+      content: { kind: "jelement", slot: element.slot },
+    }));
+}
+
 function renderImage(element: ImageElement, box: Box, geometry: Geometry, context: RenderContext): RenderedElement[] {
+  // A design may declare the slot takes an element instead of a picture.
+  if (element.strategy === "jelement") return renderPlacedElement(element, box, geometry, context);
+
   const picture = context.slide.images[element.slot] ?? null;
   // A slot with no picture still draws when the design says the image is
   // required: the renderer shows a placeholder, which is a composition with a

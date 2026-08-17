@@ -225,7 +225,15 @@ export const TEXT_EFFECTS = ["none", "shadow", "stroke", "outline", "highlight",
 export type TextEffect = (typeof TEXT_EFFECTS)[number];
 
 /** Where a slot's picture comes from at generation time (§25). */
-export const IMAGE_SOURCE_STRATEGIES = ["internet_search", "ai_generated", "user_upload", "none"] as const;
+/**
+ * Where the picture in a slot comes from.
+ *
+ * `jelement` is the seam with the element library: the design says this slot
+ * wants a reusable object rather than a photograph, and something upstream
+ * finds one. JSLAYD still owns the geometry — the slot's box, its rounding, its
+ * z-order — and the element only fills it.
+ */
+export const IMAGE_SOURCE_STRATEGIES = ["internet_search", "ai_generated", "user_upload", "jelement", "none"] as const;
 export type ImageSourceStrategy = (typeof IMAGE_SOURCE_STRATEGIES)[number];
 
 export const IMAGE_QUERY_SOURCES = ["slide_title", "slide_body", "keywords", "topic", "presentation_title"] as const;

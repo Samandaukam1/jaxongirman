@@ -311,3 +311,114 @@ test("text is still repaired, because only text moves with the content", () => {
       `font ${element.style.fontSize} is below what every renderer keeps`);
   }
 });
+
+/* ------------------------------------------------ the JElement seam ------ */
+
+/**
+ * A design that says "a reusable object goes here".
+ *
+ * The seam is one enum value. JSLAYD owns the slot — where it sits, how big it
+ * is, what it is layered against — and an element is one of the things that can
+ * fill it. An element that could move itself would be a design deciding its own
+ * layout, which is the thing this whole system exists to prevent.
+ */
+const ELEMENT_SLOT_PROMPT = `${SAMPLE_PROMPT}
+
+[SLIDE jelement_slot]
+purpose: text_image
+background: background
+priority: 96
+supportsImage: true
+
+[ELEMENT hero_object]
+type: image
+slot: hero_object
+sourceStrategy: jelement
+x: 1000
+y: 200
+width: 700
+height: 600
+fit: contain
+
+[ELEMENT caption]
+type: text
+text: {{title}}
+x: 120
+y: 400
+width: 760
+height: 160
+font: font_1
+fontSize: 56
+color: text
+`;
+
+const { document: WITH_SLOT, diagnostics: slotDiagnostics } = compile(ELEMENT_SLOT_PROMPT);
+assert.deepEqual(slotDiagnostics.errors, [], "a jelement slot must compile");
+
+/** Two shapes of a drawn element, in the element's own 0-1 space. */
+const DRAWN = [
+  { x: 0.1, y: 0.3, width: 0.8, height: 0.4, rotation: 0, zIndex: 1, opacity: 1, style: { backgroundColor: "#101214", shape: "rect" } },
+  { x: 0.2, y: 0.6, width: 0.2, height: 0.2, rotation: 0, zIndex: 2, opacity: 1, style: { backgroundColor: "#A7FF00", shape: "circle" } },
+];
+
+function buildWithElement(elements) {
+  return buildJslaydSlides({
+    presentationId: PRESENTATION,
+    ownerId: OWNER,
+    design: readDesign({ ...DESIGN_ROW, compiled_config: WITH_SLOT }).design,
+    slides: [{
+      title: "Konchilikda raqamli texnologiyalar", subtitle: null, purpose: "Namuna",
+      layout: "text_image", bullets: [], body: null, quote: null,
+      statistic: null, chart: null, table: null, visualPrompt: null,
+    }],
+    sources: [],
+    generatedImages: [],
+    uploadedImages: [],
+    authorName: null,
+    teacherName: null,
+    paletteCode: null,
+    slideElements: elements,
+  });
+}
+
+test("an element fills the slot the design placed, not one of its own choosing", () => {
+  const built = buildWithElement([{ hero_object: DRAWN }]);
+  const drawn = built.elements.filter((row) => row.content?.kind === "jelement");
+  assert.equal(drawn.length, 2, "both shapes were drawn");
+
+  // The slot is at 1000,200 700×600 on a 1920-wide canvas, projected to the
+  // 1000-wide model the renderers use.
+  const scale = 1000 / 1920;
+  const slotX = 1000 * scale;
+  const slotWidth = 700 * scale;
+
+  const [body] = drawn;
+  assert.ok(Math.abs(body.x - (slotX + 0.1 * slotWidth)) < 0.5, "positioned inside the slot");
+  assert.ok(Math.abs(body.width - 0.8 * slotWidth) < 0.5, "and scaled to it");
+});
+
+test("a slot with no element drawn for it leaves nothing behind", () => {
+  // A design offers more slots than every slide fills. An empty one is
+  // whitespace, not a hole to paper over.
+  const built = buildWithElement([{}]);
+  assert.equal(built.elements.filter((row) => row.content?.kind === "jelement").length, 0);
+  assert.ok(built.elements.some((row) => row.type === "text"), "the rest of the slide still draws");
+});
+
+test("the element never escapes its slot", () => {
+  const built = buildWithElement([{ hero_object: DRAWN }]);
+  const scale = 1000 / 1920;
+  const left = 1000 * scale;
+  const right = left + 700 * scale;
+
+  for (const row of built.elements.filter((entry) => entry.content?.kind === "jelement")) {
+    assert.ok(row.x >= left - 0.5, `${row.id} started left of the slot`);
+    assert.ok(row.x + row.width <= right + 0.5, `${row.id} ran past the slot`);
+  }
+});
+
+test("the element's own layering survives inside the slot", () => {
+  const built = buildWithElement([{ hero_object: DRAWN }]);
+  const drawn = built.elements.filter((row) => row.content?.kind === "jelement");
+  assert.ok(drawn[1].z_index > drawn[0].z_index, "the accent sits above the body, as the element said");
+});
