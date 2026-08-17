@@ -8,7 +8,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "eas-build-pre-install": "node scripts/check-google-scheme.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/arimo": "^0.4.3",

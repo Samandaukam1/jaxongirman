@@ -187,7 +187,19 @@ export async function signInWithGoogle(
   google: GoogleModule | null = loadGoogle(),
 ): Promise<SocialAuthResult> {
   const config = googleAuthConfig();
-  if (!config.configured || !google) {
+
+  // iOS is checked separately and strictly. The Google SDK raises an
+  // Objective-C exception rather than rejecting a promise when it is asked to
+  // sign in without an iOS client ID, and an NSException kills the process —
+  // no `try` below can catch it. Refusing here is the only way this stays a
+  // message instead of the app disappearing.
+  //
+  // The URL scheme that pairs with the ID is checked at build time instead
+  // (scripts/check-google-scheme.mjs); a native project cannot be interrogated
+  // for it from JavaScript, and a build is a better place to fail than a tap.
+  const usable = config.configured && (Platform.OS !== "ios" || config.iosClientId !== null);
+
+  if (!usable || !google) {
     note("google", "provider_not_configured");
     return { ok: false, error: authError("provider_not_configured") };
   }

@@ -56,6 +56,16 @@ test("Google is unconfigured until the web client id exists", () => {
   assert.equal(ready.webClientId, "9.apps.googleusercontent.com", "surrounding space in an env var is not part of the id");
 });
 
+test("on iOS a web id alone is not enough to attempt a sign-in", () => {
+  // This one has teeth: the Google SDK raises an Objective-C exception when it
+  // is asked to sign in without an iOS client ID, and an NSException kills the
+  // process — the app does not show an error, it disappears. The adapter refuses
+  // before reaching native code, and this is the arithmetic it refuses on.
+  const config = core.getGoogleAuthConfig({ web: "9.apps.googleusercontent.com" });
+  assert.equal(config.configured, true, "configured is about the exchange, which the web id governs");
+  assert.equal(config.iosClientId, null, "but there is nothing for the iOS sheet to identify itself with");
+});
+
 test("a blank string is as unset as an absent one", () => {
   assert.equal(core.getGoogleAuthConfig({ web: "   " }).configured, false);
 });
