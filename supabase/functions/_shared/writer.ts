@@ -201,6 +201,16 @@ export class GeminiWriter {
     throw last;
   }
 
+  /**
+   * No sampling parameters are sent, deliberately.
+   *
+   * `temperature`, `topP` and `topK` are deprecated on Gemini 3.x: they are
+   * ignored today and a later generation answers a request carrying them with
+   * an HTTP 400. A 400 is not retryable and there is no second provider behind
+   * this one, so a stray knob would not degrade a deck — it would end it. The
+   * model's own defaults are also what its reasoning is tuned against, which is
+   * the better reason to leave them alone.
+   */
   private parts(prompt: string, attachments: readonly Attachment[]): unknown[] {
     return [
       { text: prompt },
@@ -236,7 +246,6 @@ export class GeminiWriter {
           responseMimeType: "application/json",
           responseSchema: toGeminiSchema(input.schema),
           maxOutputTokens: input.maxOutputTokens ?? 8_000,
-          temperature: 0.7,
         },
       });
 
@@ -281,7 +290,6 @@ export class GeminiWriter {
       ...(grounded ? { tools: [{ google_search: {} }] } : {}),
       generationConfig: {
         maxOutputTokens: input.maxOutputTokens ?? 3_000,
-        temperature: 0.4,
       },
     });
 

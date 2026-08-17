@@ -18,17 +18,43 @@ import { ProviderUnavailable } from "../_shared/writer.ts";
  * credential is worse than the fault it describes.
  */
 
+function secretsMatch(candidate: string, expected: string): boolean {
+  if (candidate.length !== expected.length) return false;
+  let difference = 0;
+  for (let index = 0; index < candidate.length; index += 1) {
+    difference |= candidate.charCodeAt(index) ^ expected.charCodeAt(index);
+  }
+  return difference === 0;
+}
+
+/**
+ * Two ways in, both operator-level.
+ *
+ * An admin's own session, for the button in the console — and the service-role
+ * key, for whoever is running the deploy. The second matters because the moment
+ * you most need to know whether the writing model answers is the minute after
+ * you changed it, and nobody has a browser open during a deploy.
+ *
+ * The service key already reads and writes everything in the project. Letting
+ * it read three booleans adds no exposure; refusing it would only mean the
+ * check gets skipped.
+ */
+async function authorize(request: Request): Promise<void> {
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const presented = (request.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+  if (serviceKey && presented && secretsMatch(presented, serviceKey)) return;
+
+  const context = await requestContext(request);
+  const { data: isAdmin } = await context.serviceClient.rpc("is_admin", { p_user_id: context.user.id });
+  if (!isAdmin) throw new HttpError(403, "forbidden", "forbidden");
+}
+
 Deno.serve(async (request) => {
   const early = preflight(request);
   if (early) return early;
 
   try {
-    const context = await requestContext(request);
-
-    // Admin only. Which models are configured is operational detail, and a
-    // probe costs a request — neither belongs on an endpoint members can call.
-    const { data: isAdmin } = await context.serviceClient.rpc("is_admin", { p_user_id: context.user.id });
-    if (!isAdmin) throw new HttpError(403, "forbidden", "forbidden");
+    await authorize(request);
 
     const writer = geminiWriter();
 

@@ -53,8 +53,8 @@ function fakeFetch(script) {
 function writerWith(script, options = {}) {
   return new GeminiWriter({
     apiKey: "test-key-long-enough",
-    researchModel: "gemini-2.5-flash-lite",
-    writingModel: "gemini-2.5-flash-lite",
+    researchModel: "gemini-3.5-flash-lite",
+    writingModel: "gemini-3.5-flash-lite",
     fetchImpl: fakeFetch(script),
     sleep: async () => {},
     ...options,
@@ -92,8 +92,8 @@ test("a dead OpenAI account cannot fail a deck, because it is never asked", asyn
 
   const writer = new GeminiWriter({
     apiKey: "test-key-long-enough",
-    researchModel: "gemini-2.5-flash-lite",
-    writingModel: "gemini-2.5-flash-lite",
+    researchModel: "gemini-3.5-flash-lite",
+    writingModel: "gemini-3.5-flash-lite",
     fetchImpl: guarded,
     sleep: async () => {},
   });
@@ -106,7 +106,7 @@ test("a dead OpenAI account cannot fail a deck, because it is never asked", asyn
   assert.equal(openAiTextCalls, 0, "the text pipeline must not touch OpenAI even once");
   for (const [name, answer] of Object.entries({ research, outline, content, rewrite })) {
     assert.equal(answer.provider, "google", `${name} must be written by Google`);
-    assert.equal(answer.model, "gemini-2.5-flash-lite");
+    assert.equal(answer.model, "gemini-3.5-flash-lite");
   }
   assert.equal(outline.data.slides.length, 10, "a ten-slide deck is planned end to end");
   assert.equal(content.data.slides.length, 10);
@@ -143,8 +143,8 @@ test("every request goes to generativelanguage.googleapis.com and nowhere else",
   const impl = fakeFetch([GROUNDED("notes", []), OK_TEXT("{}")]);
   const writer = new GeminiWriter({
     apiKey: "test-key-long-enough",
-    researchModel: "gemini-2.5-flash-lite",
-    writingModel: "gemini-2.5-flash-lite",
+    researchModel: "gemini-3.5-flash-lite",
+    writingModel: "gemini-3.5-flash-lite",
     fetchImpl: impl,
     sleep: async () => {},
   });
@@ -281,6 +281,57 @@ test("attached files ride inline, in the same request", async () => {
   const parts = impl.calls[0].body.contents[0].parts;
   assert.equal(parts.length, 2);
   assert.deepEqual(parts[1], { inline_data: { mime_type: "application/pdf", data: "QUJD" } });
+});
+
+/* ------------------------------------------------------ Gemini 3.x shape */
+
+test("no sampling parameter is ever sent", async () => {
+  /**
+   * `temperature`, `topP` and `topK` are deprecated on Gemini 3.x: ignored now,
+   * and a later generation answers a request carrying one with an HTTP 400.
+   *
+   * A 400 is not retryable and there is no second provider behind this one, so
+   * a stray knob would not make decks slightly worse — it would stop them. That
+   * is worth a test rather than a comment, because the tempting fix for "the
+   * copy feels samey" is to reach for exactly this.
+   */
+  const impl = fakeFetch([GROUNDED("notes", []), OK_TEXT("{}")]);
+  const writer = new GeminiWriter({
+    apiKey: "test-key-long-enough", researchModel: "m", writingModel: "m",
+    fetchImpl: impl, sleep: async () => {},
+  });
+
+  await writer.research({ prompt: "x" });
+  await writer.structured({ prompt: "y", schemaName: "s", schema: {} });
+
+  for (const call of impl.calls) {
+    const config = call.body.generationConfig ?? {};
+    for (const banned of ["temperature", "topP", "topK", "top_p", "top_k", "candidateCount", "candidate_count"]) {
+      assert.equal(banned in config, false, `${banned} must not be sent to a Gemini 3.x model`);
+    }
+    assert.ok(config.maxOutputTokens > 0, "the one limit that is still ours to set survives");
+  }
+});
+
+test("the default models are the generation the pricing table knows about", async () => {
+  /**
+   * The default and the price live in two files that nothing links, so a model
+   * bumped in one and forgotten in the other logs every deck at zero cost. This
+   * reads the real default out of the factory and the real rate out of the real
+   * migration.
+   */
+  const { readFileSync } = await import("node:fs");
+  const factory = readFileSync(new URL("../functions/_shared/gemini.ts", import.meta.url), "utf8");
+
+  const models = [...factory.matchAll(/\?\?\s*"(gemini-[\w.-]+)"/g)].map((match) => match[1]);
+  assert.equal(models.length, 2, "a research default and a writing default");
+
+  const migrations = readFileSync(new URL("../migrations/202608170011_gemini_35_pricing.sql", import.meta.url), "utf8")
+    + readFileSync(new URL("../migrations/202608170002_gemini_pricing.sql", import.meta.url), "utf8");
+
+  for (const model of models) {
+    assert.ok(migrations.includes(`'${model}'`), `${model} has no price, so its decks would cost zero`);
+  }
 });
 
 /* -------------------------------------------------------------- retries */
