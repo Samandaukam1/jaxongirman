@@ -7,12 +7,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 
 import { AddElementBar, type AddKind } from "@/components/AddElementBar";
+import { ElementPicker } from "@/components/ElementPicker";
 import { ElementToolbar, type ToolPanel } from "@/components/ElementToolbar";
 import { ExportSheet } from "@/components/ExportSheet";
 import { IconChip } from "@/components/IconChip";
 import { SelectionOverlay } from "@/components/SelectionOverlay";
 import { MODEL_HEIGHT, MODEL_WIDTH, SlideCanvas } from "@/components/SlideCanvas";
 import { asErrorMessage, asFunctionErrorMessage } from "@/lib/format";
+import {
+  initialPlacement, placementOf, resolveElement, rowsFor,
+  type Placement, type ResolvedElement,
+} from "@/lib/jelement";
 import { supabase } from "@/lib/supabase";
 import { bag, isDarkColor, slideSwatches, str } from "@/lib/textStyle";
 import { useAuth } from "@/providers/AuthProvider";
@@ -73,6 +78,9 @@ export default function PresentationEditorScreen() {
   const [elements, setElements] = useState<Element[]>([]);
   const [currentSlideId, setCurrentSlideId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  /** Resolved geometry per element id, so a redraw never refetches. */
+  const resolvedElements = useRef<Record<string, ResolvedElement>>({});
   const [toolPanel, setToolPanel] = useState<ToolPanel>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -95,6 +103,64 @@ export default function PresentationEditorScreen() {
   const currentSlide = slides.find((slide) => slide.id === currentSlideId) ?? null;
   const currentElements = useMemo(() => elements.filter((element) => element.slide_id === currentSlideId).sort((a, b) => a.z_index - b.z_index), [currentSlideId, elements]);
   const selected = elements.find((element) => element.id === selectedId) ?? null;
+
+  /**
+   * The placement of the library element the selection belongs to, if any.
+   *
+   * An element is several shapes that behave as one thing, so selecting any of
+   * them selects the whole placement — and every transform below acts on that
+   * rather than on the shape the finger happened to land on.
+   */
+  const selectedPlacement = selected ? placementOf(selected) : null;
+
+  const groupRows = useMemo(
+    () => selectedPlacement
+      ? elements.filter((element) => placementOf(element)?.groupId === selectedPlacement.groupId)
+      : [],
+    [elements, selectedPlacement],
+  );
+
+  /**
+   * What the selection frame is drawn around.
+   *
+   * For a library element that is the placement box, not one component's — a
+   * handle on the wheel would resize the wheel, and the thing the person
+   * selected is the truck.
+   */
+  const selectionTarget = useMemo<Element | null>(() => {
+    if (!selected) return null;
+    if (!selectedPlacement) return selected;
+    return {
+      ...selected,
+      x: selectedPlacement.x,
+      y: selectedPlacement.y,
+      width: selectedPlacement.width,
+      height: selectedPlacement.height,
+      rotation: selectedPlacement.rotation,
+    };
+  }, [selected, selectedPlacement]);
+
+  /** Redraws every member of a placement from the element's own geometry. */
+  function redrawPlacement(placement: Placement, base: Element[]): Element[] {
+    const element = resolvedElements.current[placement.elementId];
+    if (!element || !currentSlideId || !presentationId || !user) return base;
+
+    const members = base.filter((row) => placementOf(row)?.groupId === placement.groupId);
+    const others = base.filter((row) => placementOf(row)?.groupId !== placement.groupId);
+    const zIndex = Math.min(...members.map((row) => row.z_index));
+
+    const drawn = rowsFor(element, placement, {
+      slideId: currentSlideId, presentationId, ownerId: user.id, zIndex,
+    }, {});
+
+    // Ids are kept so the rows stay the same rows across a gesture — a new id
+    // every frame would make the history unreadable and the selection jump.
+    return [...others, ...drawn.map((row, index) => ({
+      ...(members[index] ?? members[0]!),
+      ...row,
+      id: members[index]?.id ?? Crypto.randomUUID(),
+    } as Element))];
+  }
   const swatches = useMemo(
     () => slideSwatches(currentSlide?.background, currentElements.map((element) => bag(element.style))),
     [currentElements, currentSlide],
@@ -181,6 +247,26 @@ export default function PresentationEditorScreen() {
 
   /** Live gesture feedback — local only, so nothing hits the network per frame. */
   function applyTransform(id: string, patch: Patch) {
+    // A library element transforms as a placement: the patch changes the box
+    // the whole object sits in, and its shapes are redrawn from that. There is
+    // no delta arithmetic anywhere, so a long gesture cannot drift.
+    const placement = selectedPlacement && selectedPlacement.groupId === placementOf(
+      elements.find((element) => element.id === id) ?? { content: null },
+    )?.groupId ? selectedPlacement : null;
+
+    if (placement) {
+      const next: Placement = {
+        ...placement,
+        x: patch.x ?? placement.x,
+        y: patch.y ?? placement.y,
+        width: patch.width ?? placement.width,
+        height: patch.height ?? placement.height,
+        rotation: patch.rotation ?? placement.rotation,
+      };
+      setElements((rows) => redrawPlacement(next, rows));
+      return;
+    }
+
     // A sideways stretch rewraps text, so that one gesture lets the box height
     // follow the line count. Corner drags scale the type instead and opt out.
     fitTarget.current = patch.width !== undefined && patch.height === undefined ? id : null;
@@ -213,6 +299,34 @@ export default function PresentationEditorScreen() {
     fitTarget.current = null;
     const old = before?.find((element) => element.id === id);
     if (!before || !old) return;
+
+    // A library element is persisted as a set rather than as a patch to each
+    // shape: one operation, so a half-saved drag cannot leave a truck with its
+    // wheels somewhere else.
+    const placement = placementOf(old);
+    if (placement) {
+      const next: Placement = {
+        ...placement,
+        x: patch.x ?? placement.x,
+        y: patch.y ?? placement.y,
+        width: patch.width ?? placement.width,
+        height: patch.height ?? placement.height,
+        rotation: patch.rotation ?? placement.rotation,
+      };
+      const drawn = redrawPlacement(next, before);
+      const members = drawn.filter((row) => placementOf(row)?.groupId === placement.groupId);
+      const previous = before.filter((row) => placementOf(row)?.groupId === placement.groupId);
+
+      setPast((history) => [...history.slice(-39), before]);
+      setFuture([]);
+      setElements(drawn);
+      void persist(
+        { action: "group", groupId: placement.groupId, elements: members.map(serializableElement) },
+        { action: "group", groupId: placement.groupId, elements: previous.map(serializableElement) },
+      );
+      return;
+    }
+
     const changed: Patch = {};
     const inverse: Patch = {};
     for (const key of Object.keys(patch) as (keyof Patch)[]) {
@@ -243,6 +357,22 @@ export default function PresentationEditorScreen() {
 
   function deleteSelected() {
     if (!selected) return;
+
+    // Deleting one shape of an object would leave the rest of it behind, which
+    // reads as a broken slide rather than as a deletion.
+    if (selectedPlacement) {
+      const removed = groupRows.map(serializableElement);
+      setPast((history) => [...history.slice(-39), elements]);
+      setFuture([]);
+      setElements((rows) => rows.filter((row) => placementOf(row)?.groupId !== selectedPlacement.groupId));
+      setSelectedId(null);
+      void persist(
+        { action: "group", groupId: selectedPlacement.groupId, elements: [] },
+        { action: "group", groupId: selectedPlacement.groupId, elements: removed },
+      );
+      return;
+    }
+
     setPast((history) => [...history.slice(-39), elements]);
     setFuture([]);
     setElements((rows) => rows.filter((element) => element.id !== selected.id));
@@ -296,9 +426,61 @@ export default function PresentationEditorScreen() {
     return { x: (MODEL_WIDTH - width) / 2, y: (MODEL_HEIGHT - height) / 2, width, height };
   }
 
+  /**
+   * Puts a library element on the slide.
+   *
+   * The geometry is fetched once and kept, so dragging redraws from memory
+   * rather than from the network. The version is pinned on every member row:
+   * an admin improving this element later must not silently redraw a deck
+   * somebody already exported.
+   */
+  async function addLibraryElement(candidate: { id: string; published_version: number }) {
+    if (!currentSlideId || !presentationId || !user) return;
+    setPickerOpen(false);
+
+    try {
+      const element = resolvedElements.current[candidate.id]
+        ?? await resolveElement(candidate.id, candidate.published_version);
+      if (!element) {
+        Alert.alert("Element qo‘shilmadi", "Bu elementning chizmasi topilmadi.");
+        return;
+      }
+      resolvedElements.current[candidate.id] = element;
+
+      const placement = initialPlacement(
+        candidate.id, element.version,
+        { width: MODEL_WIDTH, height: MODEL_HEIGHT },
+        Crypto.randomUUID(),
+      );
+
+      const drawn = rowsFor(element, placement, {
+        slideId: currentSlideId, presentationId, ownerId: user.id, zIndex: zRange.max + 1,
+      }).map((row) => ({
+        ...row,
+        id: Crypto.randomUUID(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })) as Element[];
+
+      setPast((history) => [...history.slice(-39), elements]);
+      setFuture([]);
+      setElements((rows) => [...rows, ...drawn]);
+      setSelectedId(drawn[0]?.id ?? null);
+      void persist(
+        { action: "group", groupId: placement.groupId, elements: drawn.map(serializableElement) },
+        { action: "group", groupId: placement.groupId, elements: [] },
+      );
+    } catch (failure) {
+      Alert.alert("Element qo‘shilmadi", asErrorMessage(failure));
+    }
+  }
+
   async function addElement(kind: AddKind) {
     if (!currentSlide || !currentSlideId || !presentationId || !user) return;
     setAddOpen(false);
+
+    // The library opens a search instead of adding something straight away.
+    if (kind === "element") { setPickerOpen(true); return; }
     const base = {
       id: Crypto.randomUUID(),
       slide_id: currentSlideId,
@@ -468,15 +650,18 @@ export default function PresentationEditorScreen() {
               />
             </View>
           </View>
-          {selected ? (
+          {selectionTarget ? (
             <SelectionOverlay
-              element={selected}
+              // For a library element this frames the whole placement rather
+              // than the component the finger landed on: a handle on the wheel
+              // would resize the wheel, and what was selected is the truck.
+              element={selectionTarget}
               scale={displayScale}
               stageWidth={canvasWidth}
               stageHeight={canvasHeight}
               onTransformStart={() => { dragStart.current = elements; }}
-              onTransform={(patch) => applyTransform(selected.id, patch)}
-              onTransformEnd={(patch) => endTransform(selected.id, fitTextHeight(selected, patch))}
+              onTransform={(patch) => applyTransform(selectionTarget.id, patch)}
+              onTransformEnd={(patch) => endTransform(selectionTarget.id, fitTextHeight(selectionTarget, patch))}
               onDuplicate={duplicateSelected}
               onDelete={deleteSelected}
             />
@@ -541,6 +726,12 @@ export default function PresentationEditorScreen() {
           <Pressable disabled={aiLoading || !aiCommand.trim()} onPress={() => void runAiEdit()} style={[styles.sendButton, (!aiCommand.trim() || aiLoading) && styles.disabled]}>{aiLoading ? <ActivityIndicator color={colors.onPrimary} size="small" /> : <Send color={colors.onPrimary} size={icon.sm} strokeWidth={icon.stroke} />}</Pressable>
         </View>
       </View>
+      <ElementPicker
+        visible={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onPick={(candidate) => void addLibraryElement(candidate)}
+      />
+
       <ExportSheet
         visible={exportOpen}
         presentationId={presentation.id}

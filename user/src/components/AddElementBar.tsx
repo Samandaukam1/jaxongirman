@@ -1,9 +1,9 @@
-import { Frame, Image as ImageIcon, Plus, Shapes, Type, Video, X, type LucideIcon } from "lucide-react-native";
+import { Frame, Image as ImageIcon, Library, Plus, Shapes, Type, Video, X, type LucideIcon } from "lucide-react-native";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { colors, icon, radius, shadow, spacing, typography } from "@/theme/tokens";
 
-export type AddKind = "text" | "shape" | "image" | "video" | "frame";
+export type AddKind = "text" | "shape" | "image" | "video" | "frame" | "element";
 
 const OPTIONS: { kind: AddKind; label: string; icon: LucideIcon }[] = [
   { kind: "text", label: "Matn", icon: Type },
@@ -11,6 +11,9 @@ const OPTIONS: { kind: AddKind; label: string; icon: LucideIcon }[] = [
   { kind: "image", label: "Rasm", icon: ImageIcon },
   { kind: "video", label: "Video", icon: Video },
   { kind: "frame", label: "Ramka", icon: Frame },
+  // The library. Last in the row because it opens a search rather than adding
+  // something immediately, and the four before it are one tap each.
+  { kind: "element", label: "Kutubxona", icon: Library },
 ];
 
 /**
