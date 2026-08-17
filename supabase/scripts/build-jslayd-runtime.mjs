@@ -34,6 +34,11 @@ const MODULES = [
   "render.ts",
   "select.ts",
   "serialize.ts",
+  // The writing side needs to know how big a box is before anything is written
+  // into it, and that arithmetic belongs beside the geometry rather than in a
+  // second copy on the server.
+  "text-metrics.ts",
+  "budget.ts",
 ];
 
 const BANNER = `// GENERATED FILE — do not edit by hand.
@@ -55,6 +60,8 @@ export * from "./content.ts";
 export * from "./render.ts";
 export * from "./select.ts";
 export * from "./serialize.ts";
+export * from "./text-metrics.ts";
+export * from "./budget.ts";
 `;
 
 /**

@@ -364,3 +364,42 @@ export const editorOperationsSchema = {
     "explanation"
   ]
 };
+
+/**
+ * What comes back when copy is asked to be shorter.
+ *
+ * Only the fields that did not fit, and only their text. Nothing about type
+ * size: shrinking is the renderer's last resort and is not the writer's to
+ * offer, which is the whole point of asking for a rewrite instead.
+ */ export function rewriteSchema() {
+  return {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      slides: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            slide: { type: "integer" },
+            fields: {
+              type: "array",
+              items: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  field: { type: "string" },
+                  text: { type: "string" }
+                },
+                required: ["field", "text"]
+              }
+            }
+          },
+          required: ["slide", "fields"]
+        }
+      }
+    },
+    required: ["slides"]
+  };
+}

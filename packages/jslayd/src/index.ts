@@ -150,7 +150,7 @@ export {
   type RenderedElement,
   type RenderedSlide,
 } from "./render.ts";
-export { purposeForLayout, selectArchetypes, selectOne, type Selection } from "./select.ts";
+export { planArchetypes, purposeForLayout, selectArchetypes, selectOne, type Selection } from "./select.ts";
 export {
   buildWritingBrief,
   checkFit,

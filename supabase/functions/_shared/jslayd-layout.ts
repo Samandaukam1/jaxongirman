@@ -76,6 +76,16 @@ type BuildInput = {
   authorName: string | null;
   teacherName: string | null;
   /**
+   * One archetype id per slide, chosen before the copy was written.
+   *
+   * `null` for a slide the caller did not plan — the four fixed slides are
+   * built from data the server holds and need no budget. An id that is not in
+   * the document is ignored rather than fatal: a design republished between
+   * planning and rendering should cost a deck its ideal composition, not its
+   * existence.
+   */
+  archetypeIds?: readonly (string | null)[];
+  /**
    * The colour family the user picked. A migrated design carries all eight, so
    * this is what keeps a JSLAYD deck as recolourable as the blueprint it came
    * from (§29). Unknown or absent resolves to the design's default.
@@ -133,9 +143,21 @@ export function buildJslaydSlides(input: BuildInput): { slides: SlideRow[]; elem
     toSlideData(semantic, index, input.slides.length, input.sources, input.authorName, input.teacherName),
   );
 
-  // Selection runs over the whole deck so repetition can be avoided; a chooser
-  // that sees one slide at a time cannot know it already used a composition.
-  const chosen = selectArchetypes(input.design.document, data);
+  // The archetypes the copy was written for, when the caller chose them before
+  // writing. Honoured rather than re-derived: the writer was given this
+  // archetype's boxes and wrote to their budgets, so laying the result into a
+  // different composition would waste the one thing the early choice bought.
+  //
+  // Selection still runs over the whole deck when no choice was made, because
+  // avoiding repetition is a property of the sequence and a chooser seeing one
+  // slide cannot know it already used a composition.
+  const preselected = input.archetypeIds ?? [];
+  const chosen = selectArchetypes(input.design.document, data).map((selection, index) => {
+    const wanted = preselected[index];
+    if (!wanted) return selection;
+    const archetype = input.design.document.archetypes.find((entry) => entry.id === wanted);
+    return archetype ? { archetype, substituted: false } : selection;
+  });
 
   const slideRows: SlideRow[] = [];
   const elementRows: ElementRow[] = [];

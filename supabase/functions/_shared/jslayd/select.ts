@@ -76,6 +76,55 @@ export function selectArchetypes(document: JslaydDocument, slides: readonly Slid
   });
 }
 
+/**
+ * Chooses the archetypes for a deck before a word of it is written.
+ *
+ * `selectArchetypes` reads the copy — `suits` gates on how much text a slide
+ * carries — which is right at render time and impossible at planning time,
+ * when the whole reason for choosing early is to know how much to write.
+ *
+ * So this gates on what is already known: the slide's purpose, and whether the
+ * archetype can carry a chart, a table, a statistic or a quotation. The volume
+ * band is skipped, because the copy is about to be written to fit whatever this
+ * returns rather than the other way round.
+ *
+ * The caller is expected to carry the result through to `buildJslaydSlides`.
+ * Selecting again afterwards would usually land in the same place — the copy
+ * was written to this archetype's budget — but "usually" is not a property to
+ * build a renderer on.
+ */
+export function planArchetypes(
+  document: JslaydDocument,
+  plans: readonly { purpose: ArchetypePurpose; needsChart?: boolean; needsTable?: boolean; needsStats?: boolean; needsQuote?: boolean }[],
+): Selection[] {
+  const used = new Map<string, number>();
+
+  return plans.map((plan) => {
+    const wanted = [plan.purpose, ...(SUBSTITUTES[plan.purpose] ?? [])];
+
+    for (const [rank, purpose] of wanted.entries()) {
+      const fitting = document.archetypes.filter((archetype) => {
+        if (archetype.purpose !== purpose) return false;
+        const rules = archetype.selection;
+        if (plan.needsChart && !rules.supportsChart) return false;
+        if (plan.needsTable && !rules.supportsTable) return false;
+        if (plan.needsStats && !rules.supportsStats) return false;
+        if (plan.needsQuote && !rules.supportsQuote) return false;
+        return true;
+      });
+      if (fitting.length > 0) {
+        const chosen = pick(fitting, used);
+        used.set(chosen.id, (used.get(chosen.id) ?? 0) + 1);
+        return { archetype: chosen, substituted: rank > 0 };
+      }
+    }
+
+    const chosen = document.archetypes[0]!;
+    used.set(chosen.id, (used.get(chosen.id) ?? 0) + 1);
+    return { archetype: chosen, substituted: true };
+  });
+}
+
 export function selectOne(document: JslaydDocument, slide: SlideData, used: ReadonlyMap<string, number>): Selection {
   const wanted = [slide.purpose, ...(SUBSTITUTES[slide.purpose] ?? [])];
   for (const [rank, purpose] of wanted.entries()) {

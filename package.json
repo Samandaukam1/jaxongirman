@@ -44,7 +44,7 @@
     "test:cards": "node --test packages/types/tests/payment-cards.test.mjs web/tests/partial-card-checkout.test.mjs",
     "test:tariff": "node --test packages/tariff-card/tests/tariff-card.test.mjs",
     "test:auth": "node --test user/tests/social-auth.test.mjs",
-    "test:gemini": "node --test supabase/tests/gemini-schema.test.mjs"
+    "test:gemini": "node --test supabase/tests/gemini-schema.test.mjs supabase/tests/layout-brief.test.mjs"
   },
   "engines": {
     "node": ">=20"

@@ -9,3 +9,5 @@ export * from "./content.ts";
 export * from "./render.ts";
 export * from "./select.ts";
 export * from "./serialize.ts";
+export * from "./text-metrics.ts";
+export * from "./budget.ts";

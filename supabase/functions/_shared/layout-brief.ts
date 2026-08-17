@@ -1,0 +1,196 @@
+import {
+  buildWritingBrief, checkFit, planArchetypes, purposeForLayout,
+  type ArchetypeWritingBrief, type JslaydDocument, type SlotFit, type TextSlotBudget,
+} from "./jslayd/index.ts";
+import type { LayoutName, SemanticSlide } from "./presentation-types.ts";
+
+/**
+ * The bridge between a design's geometry and the model that writes into it.
+ *
+ * Everything here is arithmetic on the chosen design. No model is consulted:
+ * which archetype draws a slide, how big its boxes are and how much copy they
+ * hold are facts, and a generator that asked an LLM for them would be asking a
+ * guess to stand in for a measurement.
+ *
+ * What the model gets back is small. A full JSLAYD document runs to tens of
+ * kilobytes and would be resent for every slide; a deck's worth of briefs is a
+ * few kilobytes once, because slides sharing an archetype share its brief.
+ */
+
+/** One slide, planned but not yet written. */
+export type PlannedSlide = {
+  index: number;
+  layout: LayoutName;
+  title: string;
+  purpose: string;
+  archetypeId: string;
+};
+
+export type DeckLayoutPlan = {
+  slides: PlannedSlide[];
+  /** Each distinct archetype once, however many slides use it. */
+  briefs: ArchetypeWritingBrief[];
+};
+
+/**
+ * Chooses a composition for every planned slide, before a word is written.
+ *
+ * The layout the outline asked for decides the purpose; the design decides
+ * which of its archetypes serves that purpose best and least recently. What
+ * comes back is carried through to the renderer, so the boxes the writer was
+ * given are the boxes the copy lands in.
+ */
+export function planDeckLayout(
+  document: JslaydDocument,
+  slides: readonly { layout: LayoutName; title: string; purpose: string }[],
+  options: { language?: string } = {},
+): DeckLayoutPlan {
+  const selections = planArchetypes(
+    document,
+    slides.map((slide) => {
+      const purpose = purposeForLayout(slide.layout);
+      return {
+        purpose,
+        needsChart: purpose === "chart",
+        needsTable: purpose === "table",
+        needsStats: purpose === "statistics",
+        needsQuote: purpose === "quote",
+      };
+    }),
+  );
+
+  const briefs = new Map<string, ArchetypeWritingBrief>();
+  const planned = selections.map((selection, index): PlannedSlide => {
+    if (!briefs.has(selection.archetype.id)) {
+      briefs.set(selection.archetype.id, buildWritingBrief(document, selection.archetype, options));
+    }
+    const slide = slides[index]!;
+    return {
+      index,
+      layout: slide.layout,
+      title: slide.title,
+      purpose: slide.purpose,
+      archetypeId: selection.archetype.id,
+    };
+  });
+
+  return { slides: planned, briefs: [...briefs.values()] };
+}
+
+/* -------------------------------------------------------------- the prompt */
+
+/**
+ * The brief as the model reads it.
+ *
+ * Trimmed to what changes what gets written: the box, the type it is set in,
+ * and the budget. A model does not need `letterSpacing` to decide how many
+ * words to use, and every field that does not change the answer is tokens spent
+ * on every slide of every deck.
+ */
+function slotLine(slot: TextSlotBudget): Record<string, unknown> {
+  return {
+    id: slot.elementId,
+    field: slot.binding,
+    role: slot.role,
+    box: `${slot.geometry.width}×${slot.geometry.height}`,
+    fontSize: slot.typography.fontSize,
+    maxLines: slot.typography.maxLines ?? slot.budget.estimatedLines,
+    charsPerLine: slot.budget.estimatedCharactersPerLine,
+    aim: slot.budget.preferredCharacters,
+    limit: slot.budget.maximumCharacters,
+    ...(slot.budget.maximumItems === undefined ? {} : { maxItems: slot.budget.maximumItems }),
+  };
+}
+
+export function briefForPrompt(brief: ArchetypeWritingBrief): Record<string, unknown> {
+  return {
+    archetype: brief.archetypeId,
+    purpose: brief.purpose,
+    slots: brief.slots.map(slotLine),
+    ...(brief.visualZones.length === 0 ? {} : {
+      // Only that a picture is there and how big it is. Copy is written around
+      // it; it is not the writer's to move.
+      visuals: brief.visualZones.map((zone) => `${zone.type} ${zone.width}×${zone.height}`),
+    }),
+  };
+}
+
+/* ------------------------------------------------------------- validation */
+
+/** Which written field feeds which slot. */
+function textFor(slide: SemanticSlide, binding: string): string | null {
+  switch (binding) {
+    case "title": return slide.title;
+    case "subtitle": return slide.subtitle;
+    case "body": return slide.body;
+    case "bullets": return slide.bullets.join("\n");
+    case "quote_text": return slide.quote?.text ?? null;
+    case "quote_attribution": return slide.quote?.attribution ?? null;
+    case "stat_value": return slide.statistic?.value ?? null;
+    case "stat_label": return slide.statistic?.label ?? null;
+    case "chart_title": return slide.chart ? slide.title : null;
+    case "table_title": return slide.table ? slide.title : null;
+    default: return null;
+  }
+}
+
+export type SlotProblem = SlotFit & {
+  binding: string;
+  role: string;
+  /** What to aim for on the rewrite. */
+  aim: number;
+  text: string;
+};
+
+/**
+ * What does not fit, and by how much.
+ *
+ * Deliberately not "make the type smaller". Shrinking is the renderer's last
+ * resort and it is what produced the eleven-point body text this whole change
+ * exists to stop; the first answer to copy that does not fit is less copy.
+ *
+ * A slot the writer left empty is not a problem — a design offers more boxes
+ * than every slide needs, and an empty one is whitespace rather than a hole.
+ */
+export function findSlotProblems(brief: ArchetypeWritingBrief, slide: SemanticSlide): SlotProblem[] {
+  const problems: SlotProblem[] = [];
+
+  for (const slot of brief.slots) {
+    const text = textFor(slide, slot.binding);
+    if (!text || !text.trim()) continue;
+
+    const fit = checkFit(slot, text);
+    if (fit.fits) continue;
+
+    problems.push({
+      ...fit,
+      binding: slot.binding,
+      role: slot.role,
+      aim: slot.budget.preferredCharacters,
+      text,
+    });
+  }
+
+  // Loudest first: a title that does not fit is worth more attention than a
+  // caption that does not, and a rewrite request has a budget of its own.
+  return problems.sort((a, b) => b.overBy - a.overBy);
+}
+
+/** Applies a rewritten field back onto the slide it belongs to. */
+export function applyRewrite(slide: SemanticSlide, binding: string, text: string): SemanticSlide {
+  switch (binding) {
+    case "title": return { ...slide, title: text };
+    case "subtitle": return { ...slide, subtitle: text };
+    case "body": return { ...slide, body: text };
+    case "bullets": return { ...slide, bullets: text.split("\n").map((line) => line.trim()).filter(Boolean) };
+    case "quote_text":
+      return slide.quote ? { ...slide, quote: { ...slide.quote, text } } : slide;
+    case "quote_attribution":
+      return slide.quote ? { ...slide, quote: { ...slide.quote, attribution: text } } : slide;
+    case "stat_value":
+      return slide.statistic ? { ...slide, statistic: { ...slide.statistic, value: text } } : slide;
+    case "stat_label":
+      return slide.statistic ? { ...slide, statistic: { ...slide.statistic, label: text } } : slide;
+    default: return slide;
+  }
+}

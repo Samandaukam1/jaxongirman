@@ -1,8 +1,12 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js";
 import { familyOf } from "./jslayd/index.ts";
+import {
+  applyRewrite, briefForPrompt, findSlotProblems, planDeckLayout,
+  type SlotProblem,
+} from "./layout-brief.ts";
 import { buildJslaydSlides, readDesign, type ResolvedDesign } from "./jslayd-layout.ts";
 import { OpenAIClient } from "./openai.ts";
-import { contentSchema, outlineSchema } from "./plan-schema.ts";
+import { contentSchema, outlineSchema, rewriteSchema } from "./plan-schema.ts";
 import type { GeneratedImage, LayoutName, PresentationPlan, ResearchSource, SemanticSlide, VisualDna } from "./presentation-types.ts";
 import { OpenAIImageProvider } from "./providers/image.ts";
 
@@ -246,6 +250,9 @@ function citationLine(source: ResearchSource): string {
  * a closing line. Only the middle is written by the model; the four fixed slides
  * are built from data the server already has, so they cost nothing to produce.
  */
+/** Cover and agenda sit in front of the written body; both are server-built. */
+const DECK_PREFIX = 2;
+
 function assembleDeck(params: {
   topic: string;
   authorName: string | null;
@@ -346,6 +353,21 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
         ? `${value.citations.length} ta manba topildi va tekshirildi`
         : "Internetdan qo‘shimcha manba topilmadi");
 
+    // A deck is laid out by a published design and by nothing else, and the
+    // design is read here — before the outline — because everything downstream
+    // is written to fit it. There used to be a built-in blueprint behind this,
+    // so a deck with no design still produced slides; that fallback is what kept
+    // withdrawn designs alive in the product.
+    //
+    // Resolved before a credit is spent, so an unreadable design costs the job
+    // nothing rather than costing it a deck's worth of imagery first.
+    const jslayd = await loadJslaydDesign(
+      input.service, prepared.presentation.design_id, prepared.presentation.design_version,
+    );
+    if (!jslayd) {
+      throw new Error("Tanlangan dizayn topilmadi yoki nashr qilinmagan. Iltimos, boshqa dizayn tanlang.");
+    }
+
     const researchBrief = research.text.trim()
       ? `\n\nTEKSHIRILGAN MANBALAR VA DALILLAR (faqat shulardan foydalaning):\n${research.text.trim()}`
       : "";
@@ -357,28 +379,38 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
       return openai.structured<Outline>([{ role: "system", content: system }, ...userInput(prompt, context.fileIds)], "presentation_outline", outlineSchema(contentCount), input.safetyIdentifier);
     }, (value) => `${value.data.slides.length} ta mazmun slaydi rejalashtirildi`);
 
+    /**
+     * The composition each slide will be laid into, chosen before its copy is
+     * written.
+     *
+     * This is the whole change. The old order wrote the copy, chose a layout,
+     * pushed one into the other and shrank the type until it stopped
+     * overflowing — so the design was decided by how much somebody happened to
+     * write. Choosing first means the writer can be told how much the box
+     * holds, and the renderer lays the result into the same archetype the
+     * budget came from.
+     */
+    const layoutPlan = planDeckLayout(
+      jslayd.document,
+      outlineResult.data.slides.map((slide) => ({
+        layout: slide.layout, title: slide.title, purpose: slide.purpose,
+      })),
+    );
+
+    const layoutInstruction = `\n\nDIZAYN O'LCHOVLARI — matn shu qutilarga yozilishi kerak.\n`
+      + `Har slayd o'z arxetipiga ega. "aim" — mo'ljal, "limit" — qat'iy chegara (belgi soni).\n`
+      + `Bo'sh joy dizaynning bir qismi: limitgacha yozish SHART EMAS, aim atrofida to'xtang.\n`
+      + `Sarlavhada zarur bo'lsa \\n bilan mantiqiy joydan qator ajrating; oxirgi qator bitta qisqa so'z bo'lib qolmasin.\n`
+      + `Arxetiplar:\n${JSON.stringify(layoutPlan.briefs.map(briefForPrompt))}\n`
+      + `Slaydlar: ${JSON.stringify(layoutPlan.slides.map((slide) => ({ i: slide.index, archetype: slide.archetypeId })))}`;
+
     const contentResult = await runStage(input.service, input, "writing_content", async () => {
       if (mode === "mock") return { data: mockContent(outlineResult.data), usage: {}, requestId: null };
-      const system = "You are an expert Uzbek Latin academic presentation writer. Follow the supplied outline exactly and ground every sentence in the supplied research. Write specific, checkable content: real numbers, dates, names and definitions instead of generalities. Grammar must be flawless Uzbek Latin. Never fabricate a quotation, statistic or date — if the research does not support it, write something the research does support instead. Return only the required schema.";
-      const prompt = `Mavzu: ${prepared.presentation.topic}\nReja:\n${JSON.stringify(outlineResult.data.slides)}\n\nAynan ${contentCount} ta slayd uchun matn yozing.\n- subtitle: sarlavhani ochib beruvchi bitta qisqa jumla (bezakli yozuv). Har slaydda bo'lsin.\n- bullets: 3–5 ta band. Har biri to'liq, aniq fikr: raqam, sana, ism yoki aniq ta'rif bo'lsin. "Muhim ahamiyatga ega" kabi quruq iboralarni yozmang.\n- body: bandlarni bog'lovchi 1–2 jumlalik izoh, agar slayd shuni talab qilsa.\n- statistic: faqat tadqiqotda haqiqatan uchragan raqamni yozing.\n- chart: faqat tadqiqotdagi haqiqiy qiymatlar bilan to'ldiring.\n- table: faqat tadqiqotda haqiqatan jadval ko'rinishidagi ma'lumot bo'lsa to'ldiring; 2-6 ustun, 2-8 qator.\nBibliografiya yozmang — uni server alohida qo'shadi.${researchBrief}`;
+      const system = "You are an expert Uzbek Latin academic presentation writer working to a fixed layout. Follow the supplied outline exactly and ground every sentence in the supplied research. Write specific, checkable content: real numbers, dates, names and definitions instead of generalities. Grammar must be flawless Uzbek Latin. Never fabricate a quotation, statistic or date — if the research does not support it, write something the research does support instead. The layout is fixed and is not yours to change: write copy that fits the boxes you are given. Return only the required schema.";
+      const prompt = `Mavzu: ${prepared.presentation.topic}\nReja:\n${JSON.stringify(outlineResult.data.slides)}\n\nAynan ${contentCount} ta slayd uchun matn yozing.\n- subtitle: sarlavhani ochib beruvchi bitta qisqa jumla (bezakli yozuv). Har slaydda bo'lsin.\n- bullets: 3–5 ta band. Har biri to'liq, aniq fikr: raqam, sana, ism yoki aniq ta'rif bo'lsin. "Muhim ahamiyatga ega" kabi quruq iboralarni yozmang.\n- body: bandlarni bog'lovchi 1–2 jumlalik izoh, agar slayd shuni talab qilsa.\n- statistic: faqat tadqiqotda haqiqatan uchragan raqamni yozing.\n- chart: faqat tadqiqotdagi haqiqiy qiymatlar bilan to'ldiring.\n- table: faqat tadqiqotda haqiqatan jadval ko'rinishidagi ma'lumot bo'lsa to'ldiring; 2-6 ustun, 2-8 qator.\nBibliografiya yozmang — uni server alohida qo'shadi.${researchBrief}${layoutInstruction}`;
       return openai.structured<Content>([{ role: "system", content: system }, ...userInput(prompt, context.fileIds)], "presentation_content", contentSchema(contentCount), input.safetyIdentifier);
     }, () => "Slayd matnlari yozildi va manbalarga bog‘landi");
 
-    // A deck is laid out by a published design and by nothing else. There used
-    // to be a built-in blueprint behind this, so a deck with no design — or with
-    // one that could not be read — still produced slides. That fallback is what
-    // kept withdrawn designs alive in the product: a design removed from the
-    // catalogue went on rendering because the blueprint for it was compiled into
-    // the server.
-    //
-    // Resolved before any credit is spent, so an unreadable design costs the job
-    // nothing rather than costing it a deck's worth of imagery first.
-    const jslayd = await loadJslaydDesign(
-      input.service, prepared.presentation.design_id, prepared.presentation.design_version,
-    );
-    if (!jslayd) {
-      throw new Error("Tanlangan dizayn topilmadi yoki nashr qilinmagan. Iltimos, boshqa dizayn tanlang.");
-    }
 
     // User-entered labels come first — they are what the author explicitly cited —
     // then every page the research actually opened, deduplicated by address.
@@ -400,6 +432,81 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
       );
     }
 
+    /**
+     * Copy that does not fit is rewritten, not shrunk.
+     *
+     * The renderer has a shrink pass and it stays — it is the last line of
+     * defence and some slides will always need it. But reaching for it first is
+     * what produced eleven-point body text: the type gets quietly smaller until
+     * the words fit, and nobody ever sees that the words were the problem.
+     *
+     * Two attempts, no more. A third is a slide whose content genuinely does
+     * not belong in that composition, and grinding at it costs a person real
+     * money for a result that is not going to improve.
+     */
+    const writtenSlides = [...contentResult.data.slides];
+    let rewriteUsage = { input_tokens: 0, output_tokens: 0 };
+    let rewrites = 0;
+
+    if (mode !== "mock") {
+      const briefById = new Map(layoutPlan.briefs.map((brief) => [brief.archetypeId, brief]));
+
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const failing: { index: number; problems: SlotProblem[] }[] = [];
+
+        layoutPlan.slides.forEach((planned) => {
+          const brief = briefById.get(planned.archetypeId);
+          const written = writtenSlides[planned.index];
+          if (!brief || !written) return;
+          const outlineSlide = outlineResult.data.slides[planned.index];
+          const problems = findSlotProblems(brief, {
+            ...written,
+            title: outlineSlide?.title ?? "",
+            purpose: outlineSlide?.purpose ?? "",
+            layout: planned.layout,
+          } as never);
+          if (problems.length > 0) failing.push({ index: planned.index, problems });
+        });
+
+        if (failing.length === 0) break;
+
+        const request = failing.map((entry) => ({
+          slide: entry.index,
+          fields: entry.problems.map((problem) => ({
+            field: problem.binding,
+            current: problem.text,
+            maxCharacters: problem.maximumCharacters,
+            aimCharacters: problem.aim,
+            maxLines: problem.maximumLines,
+            issue: problem.orphan ? "last line is a single short word" : `${problem.overBy} characters too long`,
+          })),
+        }));
+
+        const rewriteSystem = "You are rewriting presentation copy to fit a fixed layout. Preserve the meaning and the facts exactly. Shorten by removing unnecessary words, simplifying sentences and dropping duplicated ideas — in that order. Never invent a new fact to fill space, never change a number, and never mention the layout. Return only the required schema.";
+        const rewritePrompt = `Quyidagi matnlar dizayndagi qutilarga sig'madi. Ma'noni saqlagan holda qisqartiring.\nHar bir maydon uchun "aimCharacters" atrofida yozing, "maxCharacters" dan oshmang.\n"last line is a single short word" bo'lsa, qator ajratishni o'zgartiring yoki qisqartiring.\n\n${JSON.stringify(request)}`;
+        const rewritten = await openai.structured<{ slides: { slide: number; fields: { field: string; text: string }[] }[] }>(
+          [{ role: "system", content: rewriteSystem }, { role: "user", content: rewritePrompt }],
+          "content_rewrite", rewriteSchema(), input.safetyIdentifier,
+        );
+
+        rewrites += 1;
+        rewriteUsage = {
+          input_tokens: (rewriteUsage.input_tokens ?? 0) + (rewritten.usage.input_tokens ?? 0),
+          output_tokens: (rewriteUsage.output_tokens ?? 0) + (rewritten.usage.output_tokens ?? 0),
+        };
+
+        for (const entry of rewritten.data.slides ?? []) {
+          const current = writtenSlides[entry.slide];
+          if (!current) continue;
+          let next = current;
+          for (const field of entry.fields ?? []) {
+            next = applyRewrite(next as never, field.field, field.text) as never;
+          }
+          writtenSlides[entry.slide] = next;
+        }
+      }
+    }
+
     const plan = await runStage(
       input.service,
       input,
@@ -409,7 +516,7 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
         authorName: prepared.presentation.author_name,
         teacherName: prepared.presentation.teacher_name,
         outline: outlineResult.data,
-        content: contentResult.data,
+        content: { slides: writtenSlides },
         sources: deckSources,
         // A JSLAYD deck's imagery has to match the design it will be laid into,
         // so the design's own colours replace the picked palette family in the
@@ -489,6 +596,18 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
       const rows = buildJslaydSlides({
         ...shared,
         design: jslayd,
+        // The compositions the copy was written for. Without this the renderer
+        // would choose again from the finished text and could land somewhere
+        // else, throwing away the one thing choosing early bought.
+        //
+        // Matched by position, not by title: `assembleDeck` puts the cover and
+        // the agenda in front of the body and the bibliography and the closing
+        // line behind it, so a planned slide `i` is deck slide `i + 2`. Matching
+        // on the title would break precisely when a rewrite shortened one, which
+        // is the case this exists for. The four fixed slides get `null` and the
+        // renderer chooses for them as it always has.
+        archetypeIds: plan.slides.map((_, position) =>
+          layoutPlan.slides[position - DECK_PREFIX]?.archetypeId ?? null),
         authorName: prepared.presentation.author_name,
         teacherName: prepared.presentation.teacher_name,
         paletteCode: prepared.presentation.palette_code,
