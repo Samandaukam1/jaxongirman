@@ -48,12 +48,30 @@ test("Google is unconfigured until the web client id exists", () => {
   // The platform ids alone are not enough: Supabase verifies the token against
   // the web client, so a build with only an iOS id would sign somebody in on
   // the device and then fail at the exchange, which is the confusing half.
-  const partial = core.getGoogleAuthConfig({ ios: "123.apps.googleusercontent.com" });
+  const partial = core.getGoogleAuthConfig({ ios: "123456789012-a1b2.apps.googleusercontent.com" });
   assert.equal(partial.configured, false, "an iOS id without a web id is not a configuration");
 
-  const ready = core.getGoogleAuthConfig({ web: " 9.apps.googleusercontent.com " });
+  const ready = core.getGoogleAuthConfig({ web: " 123456789012-a1b2.apps.googleusercontent.com " });
   assert.equal(ready.configured, true);
-  assert.equal(ready.webClientId, "9.apps.googleusercontent.com", "surrounding space in an env var is not part of the id");
+  assert.equal(ready.webClientId, "123456789012-a1b2.apps.googleusercontent.com",
+    "surrounding space in an env var is not part of the id");
+});
+
+test("a value that is not a client id means unconfigured, not a crash", () => {
+  // How the app actually came to close on a tap: placeholder text out of a set
+  // of instructions was stored in EAS, passed a non-empty check, and reached
+  // the Google SDK — which answers a malformed client id with an Objective-C
+  // exception that no JavaScript can catch.
+  for (const junk of [
+    "<haqiqiy web client id>",
+    "YOUR_WEB_CLIENT_ID.apps.googleusercontent.com",
+    "changeme",
+    "123456789012-a1b2.apps.googleusercontent.com.evil.example",
+  ]) {
+    const config = core.getGoogleAuthConfig({ web: junk, ios: junk });
+    assert.equal(config.configured, false, `"${junk}" must not read as a configuration`);
+    assert.equal(config.iosClientId, null);
+  }
 });
 
 test("on iOS a web id alone is not enough to attempt a sign-in", () => {
@@ -61,7 +79,7 @@ test("on iOS a web id alone is not enough to attempt a sign-in", () => {
   // is asked to sign in without an iOS client ID, and an NSException kills the
   // process — the app does not show an error, it disappears. The adapter refuses
   // before reaching native code, and this is the arithmetic it refuses on.
-  const config = core.getGoogleAuthConfig({ web: "9.apps.googleusercontent.com" });
+  const config = core.getGoogleAuthConfig({ web: "123456789012-a1b2.apps.googleusercontent.com" });
   assert.equal(config.configured, true, "configured is about the exchange, which the web id governs");
   assert.equal(config.iosClientId, null, "but there is nothing for the iOS sheet to identify itself with");
 });

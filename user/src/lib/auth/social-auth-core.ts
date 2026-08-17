@@ -22,9 +22,24 @@ export type GoogleAuthConfig = {
   androidClientId: string | null;
 };
 
-function trimmed(value: string | undefined): string | null {
+/**
+ * A Google OAuth client ID: a project number, a hyphen, an identifier.
+ *
+ * Checking the shape rather than merely that something was set, because
+ * "something was set" is exactly how the app came to crash: the placeholder
+ * text out of a set of instructions was stored in EAS, passed this gate as a
+ * non-empty string, and reached the Google SDK — which answers a malformed
+ * client ID with an Objective-C exception that kills the process.
+ *
+ * A value that is not a client ID means the provider is not configured. That
+ * is the honest reading, and it is also the safe one: the button says so and
+ * nothing native is called.
+ */
+const CLIENT_ID = /^\d{6,}-[a-z0-9]+\.apps\.googleusercontent\.com$/;
+
+function clientId(value: string | undefined): string | null {
   const text = (value ?? "").trim();
-  return text.length > 0 ? text : null;
+  return CLIENT_ID.test(text) ? text : null;
 }
 
 /**
@@ -50,12 +65,12 @@ function trimmed(value: string | undefined): string | null {
 export function getGoogleAuthConfig(
   source: { web?: string; ios?: string; android?: string },
 ): GoogleAuthConfig {
-  const webClientId = trimmed(source.web);
+  const webClientId = clientId(source.web);
   return {
     configured: webClientId !== null,
     webClientId,
-    iosClientId: trimmed(source.ios),
-    androidClientId: trimmed(source.android),
+    iosClientId: clientId(source.ios),
+    androidClientId: clientId(source.android),
   };
 }
 
