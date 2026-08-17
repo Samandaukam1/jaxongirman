@@ -401,3 +401,76 @@ test("slugs are stable and safe", () => {
   assert.equal(toSlug("O'zbek sanoat 2024"), "ozbek-sanoat-2024");
   assert.equal(toSlug("3D Render Kit"), "d-render-kit", "a slug may not begin with a digit");
 });
+
+/* ------------------------------------------------- the prompt and the reader */
+
+const { ANALYZER_PROMPT, expansionPrompt } = await import(`${dir}/standard.js`);
+
+test("the prompt describes the grammar the compiler actually reads", () => {
+  // The failure this prevents: a prompt that produces output the importer
+  // rejects, discovered only after somebody has spent a round trip through
+  // another product. Every section name and key the compiler looks for has to
+  // appear in the instructions.
+  for (const section of ["[FAMILY]", "[COLOR_TOKENS]", "[VISUAL_DNA]", "[SEARCH]", "[ELEMENT 01]"]) {
+    assert.ok(ANALYZER_PROMPT.includes(section), `the prompt must name ${section}`);
+  }
+  for (const key of [
+    "canonicalName", "displayName", "objectClass", "semantic", "uzbekTerms",
+    "geometry", "visualBounds", "safeBounds", "components", "usage", "slideRoles", "transform",
+  ]) {
+    assert.ok(ANALYZER_PROMPT.includes(key), `the prompt must name the \`${key}\` key`);
+  }
+});
+
+test("the prompt's header is the one the compiler requires", () => {
+  const header = ANALYZER_PROMPT.split("\n").find((line) => line.startsWith("JELEMENT-FAMILY"));
+  assert.equal(header, "JELEMENT-FAMILY 1.0");
+  // And a spec starting with anything else is refused, so the two agree.
+  assert.equal(compile("JELEMENT-DESIGN 1.0\n\n[FAMILY]\nname: X\n").family, null);
+});
+
+test("the prompt lists the colour roles the compiler accepts, and no others", () => {
+  const { family } = compile(MINING);
+  for (const role of Object.keys(family.colorTokens)) {
+    assert.ok(ANALYZER_PROMPT.includes(role), `the prompt must offer the \`${role}\` role`);
+  }
+  // A role the prompt invented would be refused at import.
+  assert.ok(ANALYZER_PROMPT.includes("roles available:"), "the prompt enumerates them rather than leaving it open");
+});
+
+test("the prompt states the two rules the compiler enforces", () => {
+  // Both are errors, not warnings, so a prompt that fails to say so produces
+  // specs that are rejected wholesale.
+  assert.match(ANALYZER_PROMPT, /rejected by the importer/, "a literal hex is refused, and the prompt says so");
+  assert.match(ANALYZER_PROMPT, /WHAT AN OBJECT IS is separate from HOW IT LOOKS/);
+});
+
+test("an expansion prompt carries what already exists, so nothing is redrawn", () => {
+  const { family } = compile(MINING);
+  const prompt = expansionPrompt(family, 12);
+
+  assert.ok(prompt.includes("mining haul truck"), "the analyzer must know the truck is taken");
+  assert.ok(prompt.includes("survey total station"), "and the total station");
+  assert.ok(prompt.includes("#A7FF00"), "and which colours to bind to");
+  assert.ok(prompt.includes("matte graphite"), "and the visual language to obey");
+  assert.ok(prompt.includes("Exactly 12 new objects"), "and how many are wanted");
+});
+
+test("an expansion prompt asks for the same format the compiler reads", () => {
+  const { family } = compile(MINING);
+  const prompt = expansionPrompt(family);
+  assert.ok(prompt.includes("JELEMENT-FAMILY 1.0"));
+  assert.ok(prompt.includes("[COLOR_TOKENS]"));
+  assert.ok(prompt.includes("[ELEMENT 01]"));
+});
+
+test("a family with no elements still produces a usable expansion prompt", () => {
+  // The first expansion of a family imported from a thin sheet: nothing to
+  // avoid duplicating, and the prompt must not say "already in this family"
+  // followed by nothing useful.
+  const { family } = compile(MINING);
+  const empty = { ...family, elements: [] };
+  const prompt = expansionPrompt(empty, 6);
+  assert.ok(prompt.includes("Exactly 6 new objects"));
+  assert.ok(prompt.includes(family.family.name));
+});

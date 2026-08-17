@@ -8,3 +8,4 @@
 export * from "./spec.ts";
 export * from "./document.ts";
 export { compile, type CompileResult } from "./compile.ts";
+export { ANALYZER_PROMPT, expansionPrompt } from "./standard.ts";

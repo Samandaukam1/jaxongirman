@@ -22,7 +22,7 @@ const target = path.join(repoRoot, "admin", "packages");
  * when the two have drifted. `packages/` is always the source; nothing is ever
  * edited under `admin/packages/`.
  */
-const VENDORED = ["types", "jslayd", "slide-dom", "qr-video", "tariff-card"];
+const VENDORED = ["types", "jslayd", "jelement", "slide-dom", "qr-video", "tariff-card"];
 
 /** Source files only: a build artefact or an installed tree is not the package. */
 const SKIP = new Set(["node_modules", "dist", ".turbo", "tests"]);

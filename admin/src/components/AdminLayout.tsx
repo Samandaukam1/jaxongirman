@@ -1,6 +1,6 @@
 import {
   BadgeCheck,
-  MonitorPlay, Blocks, ClipboardList, Coins, Cpu, Gamepad2, Gift, LayoutDashboard, LogOut, Menu, Palette, Presentation, Receipt, ScrollText, Smartphone, Store, TrendingUp, Users, Wallet, X } from "lucide-react";
+  MonitorPlay, Blocks, ClipboardList, Coins, Cpu, Gamepad2, Gift, LayoutDashboard, LogOut, Menu, Palette, Presentation, Receipt, ScrollText, Shapes, Smartphone, Store, TrendingUp, Users, Wallet, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { AppLink } from "@/lib/router";
@@ -11,6 +11,7 @@ const navigation = [
   { to: "/users", label: "Foydalanuvchilar", icon: Users },
   { to: "/presentations", label: "Prezentatsiyalar", icon: Presentation },
   { to: "/jslayd", label: "JSLAYD dizaynlar", icon: Palette },
+  { to: "/jelements", label: "JElement kutubxonasi", icon: Shapes },
   { to: "/qr-video", label: "QR Video Experience", icon: MonitorPlay },
   { to: "/usage", label: "AI xarajatlari", icon: Cpu },
   { to: "/pricing", label: "Kredit va narxlar", icon: Coins },

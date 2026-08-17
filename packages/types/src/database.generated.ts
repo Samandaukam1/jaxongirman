@@ -4589,7 +4589,7 @@ export type Database = {
         Returns: string
       }
       admin_save_jelement_family: {
-        Args: { p_family_id: string; p_source_prompt?: string; p_spec: Json }
+        Args: { p_family_id?: string; p_source_prompt?: string; p_spec: Json }
         Returns: {
           category: string
           color_tokens: Json

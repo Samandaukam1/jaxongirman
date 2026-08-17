@@ -17,8 +17,11 @@
  * catalogue (§22).
  */
 create or replace function public.admin_save_jelement_family(
-  p_family_id uuid,
   p_spec jsonb,
+  -- Defaulted, because creating a family is the common case and requiring a
+  -- caller to pass `null` to say "this is new" is a parameter that exists only
+  -- to be filled in with nothing.
+  p_family_id uuid default null,
   p_source_prompt text default ''
 )
 returns public.jelement_families
@@ -373,13 +376,13 @@ begin
 end;
 $$;
 
-revoke all on function public.admin_save_jelement_family(uuid, jsonb, text) from public, anon;
+revoke all on function public.admin_save_jelement_family(jsonb, uuid, text) from public, anon;
 revoke all on function public.admin_publish_jelement_family(uuid) from public, anon;
 revoke all on function public.admin_archive_jelement_family(uuid, boolean) from public, anon;
 revoke all on function public.admin_list_jelement_families() from public, anon;
 revoke all on function public.jelement_reindex_aliases(uuid) from public, anon, authenticated;
 
-grant execute on function public.admin_save_jelement_family(uuid, jsonb, text) to authenticated;
+grant execute on function public.admin_save_jelement_family(jsonb, uuid, text) to authenticated;
 grant execute on function public.admin_publish_jelement_family(uuid) to authenticated;
 grant execute on function public.admin_archive_jelement_family(uuid, boolean) to authenticated;
 grant execute on function public.admin_list_jelement_families() to authenticated;

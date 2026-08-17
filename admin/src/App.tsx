@@ -10,6 +10,7 @@ import { FinancePage } from "@/pages/FinancePage";
 import { GamesPage } from "@/pages/GamesPage";
 import { GiftsPage } from "@/pages/GiftsPage";
 import { LoginPage } from "@/pages/LoginPage";
+import { JElementsPage } from "@/pages/JElementsPage";
 import { JslaydDesignsPage } from "@/pages/JslaydDesignsPage";
 import { PresentationsPage } from "@/pages/PresentationsPage";
 import { MarketplaceFinancePage } from "@/pages/MarketplaceFinancePage";
@@ -30,6 +31,7 @@ const pages: Record<string, ReactNode> = {
   "/users": <UsersPage />,
   "/presentations": <PresentationsPage />,
   "/jslayd": <JslaydDesignsPage />,
+  "/jelements": <JElementsPage />,
   "/qr-video": <QrVideoPage />,
   "/tariflar": <TariffsPage />,
   "/usage": <UsagePage />,

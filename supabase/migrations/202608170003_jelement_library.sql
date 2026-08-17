@@ -282,7 +282,10 @@ grant select on
   to anon, authenticated;
 
 grant select on public.jelement_usage to authenticated;
-grant select, insert, update on
+-- Delete is included deliberately: the service role is what a smoke test and a
+-- support script act through, and a role that cannot remove what it created
+-- leaves rows behind that break whatever runs next.
+grant select, insert, update, delete on
   public.jelement_families, public.jelements, public.jelement_aliases,
   public.jelement_versions, public.jelement_usage
   to service_role;

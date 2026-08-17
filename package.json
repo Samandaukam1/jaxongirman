@@ -45,7 +45,8 @@
     "test:tariff": "node --test packages/tariff-card/tests/tariff-card.test.mjs",
     "test:auth": "node --test user/tests/social-auth.test.mjs",
     "test:gemini": "node --test supabase/tests/gemini-schema.test.mjs supabase/tests/layout-brief.test.mjs supabase/tests/layout-scenarios.test.mjs",
-    "test:jelement": "node --test packages/jelement/tests/compile.test.mjs"
+    "test:jelement": "node --test packages/jelement/tests/compile.test.mjs",
+    "test:jelement:smoke": "node supabase/tests/jelement-smoke.mjs"
   },
   "engines": {
     "node": ">=20"

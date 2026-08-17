@@ -61,17 +61,17 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', 'b2220000-0000-0000-0000-00000000000b', true);
 
 select throws_ok(
-  $$select public.admin_save_jelement_family(null, '{"format":"JELEMENT"}'::jsonb)$$,
+  $$select public.admin_save_jelement_family('{"format":"JELEMENT"}'::jsonb)$$,
   '42501', null, 'a member cannot import a family');
 
 select set_config('request.jwt.claim.sub', 'a1110000-0000-0000-0000-00000000000a', true);
 
 select throws_ok(
-  $$select public.admin_save_jelement_family(null, '{"format":"JSLAYD"}'::jsonb)$$,
+  $$select public.admin_save_jelement_family('{"format":"JSLAYD"}'::jsonb)$$,
   '22023', null, 'and an admin cannot import something that is not a JElement spec');
 
 create temporary table t_family as
-select public.admin_save_jelement_family(null, jsonb_build_object(
+select public.admin_save_jelement_family(jsonb_build_object(
   'format', 'JELEMENT',
   'family', jsonb_build_object('slug', 'mining-neon', 'name', 'Mining Neon', 'category', 'Mining', 'style', 'Industrial CGI'),
   'colorTokens', jsonb_build_object('primary', '#101214', 'accent', '#A7FF00'),
@@ -104,7 +104,11 @@ select public.admin_save_jelement_family(null, jsonb_build_object(
 
 select is((select count(*)::integer from public.jelement_families where slug = 'mining-neon'), 1,
   'the family was saved');
-select is((select count(*)::integer from public.jelements), 2, 'with both of its elements');
+select is(
+  (select count(*)::integer from public.jelements e
+     join public.jelement_families f on f.id = e.family_id
+    where f.slug = 'mining-neon'),
+  2, 'with both of its elements');
 select is((select status::text from public.jelement_families where slug = 'mining-neon'), 'draft',
   'and nothing is published by an import');
 
@@ -112,7 +116,10 @@ select is((select status::text from public.jelement_families where slug = 'minin
 select ok((select count(*) from public.jelement_aliases) >= 8,
   'every way of naming the objects became a searchable row');
 select is(
-  (select count(*)::integer from public.jelement_aliases where kind = 'canonical'),
+  (select count(*)::integer from public.jelement_aliases a
+     join public.jelements e on e.id = a.element_id
+     join public.jelement_families f on f.id = e.family_id
+    where f.slug = 'mining-neon' and a.kind = 'canonical'),
   2, 'each element indexes its own name');
 select ok(
   exists (select 1 from public.jelement_aliases where normalized = 'karer samosvali' and language = 'uz'),
@@ -129,8 +136,12 @@ select is((select status::text from public.jelement_families where slug = 'minin
   'the family is published');
 select is((select count(*)::integer from public.jelements where status = 'published'), 2,
   'and so is every element in it');
-select is((select count(*)::integer from public.jelement_versions), 2,
-  'each element records the version it was published as');
+select is(
+  (select count(*)::integer from public.jelement_versions v
+     join public.jelements e on e.id = v.element_id
+     join public.jelement_families f on f.id = e.family_id
+    where f.slug = 'mining-neon'),
+  2, 'each element records the version it was published as');
 select is((select published_version from public.jelements where canonical_name = 'mining haul truck'), 1,
   'starting at one');
 
@@ -139,8 +150,12 @@ select lives_ok(
   $$select public.admin_publish_jelement_family(
       (select id from public.jelement_families where slug = 'mining-neon'))$$,
   'republishing is allowed');
-select is((select count(*)::integer from public.jelement_versions), 2,
-  'but an unchanged element does not get a second version row');
+select is(
+  (select count(*)::integer from public.jelement_versions v
+     join public.jelements e on e.id = v.element_id
+     join public.jelement_families f on f.id = e.family_id
+    where f.slug = 'mining-neon'),
+  2, 'but an unchanged element does not get a second version row');
 
 -- ---------------------------------------------------------------- search --
 
@@ -215,8 +230,11 @@ select ok(
   'and its pinned version still resolves for the decks that hold it');
 
 select is(
-  (select count(*)::integer from public.jelement_versions), 2,
-  'no version was destroyed by archiving');
+  (select count(*)::integer from public.jelement_versions v
+     join public.jelements e on e.id = v.element_id
+     join public.jelement_families f on f.id = e.family_id
+    where f.slug = 'mining-neon'),
+  2, 'no version was destroyed by archiving');
 
 select * from finish();
 rollback;
