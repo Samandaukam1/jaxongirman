@@ -474,3 +474,58 @@ test("a family with no elements still produces a usable expansion prompt", () =>
   assert.ok(prompt.includes("Exactly 6 new objects"));
   assert.ok(prompt.includes(family.family.name));
 });
+
+/* ------------------------------------------------------- undrawable elements */
+
+test("a components block whose contents lost their indentation is refused, by name", () => {
+  /**
+   * What actually happened in production.
+   *
+   * A 1,536-line family specification was pasted with every line flush left.
+   * The lexer nests by indentation, so `components:` and `anchors:` both ended
+   * up with no children — while `bounds:`, `safeBounds:` and the rest, being
+   * flat keys, read perfectly. Thirteen elements were saved, each rendering to
+   * nothing, each scoring 83/100.
+   *
+   * The refusal has to name indentation. "Geometriya komponentlari yo'q" is
+   * true and useless: the author can see the components in their own text.
+   */
+  const flattened = MINING
+    .replace(/^ +/gm, "")
+    // The flat text now has `components:` immediately followed by sibling keys,
+    // which is exactly the shape the paste produced.
+    ;
+
+  const { family, diagnostics } = compile(flattened);
+
+  assert.equal(family, null, "an element nothing can draw must not compile");
+  const empty = diagnostics.errors.find((item) => item.code === "empty_components");
+  assert.ok(empty, `expected empty_components, got ${diagnostics.errors.map((e) => e.code).join(", ")}`);
+  assert.match(empty.message, /chekintirilmagan/, "the message must say what is actually wrong");
+  assert.match(empty.hint ?? "", /chekinish/i, "and the hint must say how to fix it");
+});
+
+test("an element with no components at all is refused too, with its own sentence", () => {
+  // Different fault, different fix: nothing was written rather than written
+  // wrongly, so the hint shows the shape to write.
+  const withoutComponents = MINING.replace(/\n {2}components:\n(?: {4,}.*\n)+/, "\n");
+
+  const { family, diagnostics } = compile(withoutComponents);
+
+  assert.equal(family, null);
+  const missing = diagnostics.errors.find((item) => item.code === "no_components");
+  assert.ok(missing, `expected no_components, got ${diagnostics.errors.map((e) => e.code).join(", ")}`);
+  assert.match(missing.hint ?? "", /components:/);
+});
+
+test("the indentation fault is not silently survivable", () => {
+  // The guarantee, stated plainly: no path through the compiler returns a
+  // family containing an element that renders to nothing.
+  for (const source of [MINING.replace(/^ +/gm, ""), MINING.replace(/\n {2}components:\n(?: {4,}.*\n)+/, "\n")]) {
+    const { family } = compile(source);
+    if (!family) continue;
+    for (const element of family.elements) {
+      assert.notEqual(element.geometry.components.length, 0, `${element.canonicalName} would draw nothing`);
+    }
+  }
+});

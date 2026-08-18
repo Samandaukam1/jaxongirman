@@ -232,3 +232,32 @@ test("every element is previewed small, rotated, and on both grounds", () => {
   assert.ok(matrix.some((entry) => entry.rotation === 45), "and angled enough for a wrong ratio to show");
   assert.equal(matrix.length, 2 * 3 * 4);
 });
+
+test("an element that draws nothing does not score in the eighties", () => {
+  /**
+   * The number that let thirteen undrawable elements into the library.
+   *
+   * Zero components cost twelve points of a hundred, and every dimension that
+   * inspects components — recolourability, render stability — returned full
+   * marks because it had nothing to inspect. Absence was being scored as
+   * quality, and the total came to 83/100, which looks like a good element.
+   */
+  const drawable = GOOD_FAMILY.elements[0];
+  const blank = { ...drawable, geometry: { ...drawable.geometry, components: [] } };
+
+  const report = elementHealth(blank, GOOD_FAMILY);
+
+  // What is left — 45 — is search metadata and semantics, which are genuinely
+  // good on this element and have nothing to do with whether it draws. The
+  // report is a diagnosis rather than a verdict, so those keep their marks and
+  // the geometry dimensions lose all of theirs. What matters is that the total
+  // can no longer be mistaken for a healthy element.
+  assert.ok(report.score < 50, `an undrawable element scored ${report.score}/100`);
+  assert.equal(report.dimensions.geometry.earned, 0, "there is no geometry to earn marks for");
+  assert.equal(report.dimensions.recolorability.earned, 0, "nothing to recolour is not recolourable");
+  assert.equal(report.dimensions.renderStability.earned, 0, "nothing to render is not stable");
+
+  const said = report.deductions.find((item) => item.dimension === "geometry");
+  assert.ok(said, "the score must come with the reason");
+  assert.match(said.fix ?? "", /chekinish/i, "and point at the usual cause");
+});

@@ -272,11 +272,40 @@ function readGeometry(map: Map<string, ParseNode>, bag: DiagnosticBag, line: num
     if (parts.length >= 2) anchors[name] = { x: parts[0]!, y: parts[1]! };
   }
 
-  const components = readComponents(source.get("components"), bag);
+  /**
+   * An element with no components cannot be drawn by anything.
+   *
+   * This was a warning, excused by a comment saying such an element "ships as
+   * an asset instead". There is no asset field on `JElement` and never was, so
+   * that excuse described a state that cannot exist — and thirteen elements
+   * were saved into the library on the strength of it, each rendering to
+   * nothing while the health score read 83/100.
+   *
+   * The two ways to arrive here need different sentences. A missing block is
+   * something the author has not written yet. A block that is present and empty
+   * is almost always indentation: the analyzer's output was pasted through
+   * something that flattened it, so `components:` has no children and neither
+   * does `anchors:`. Saying which one it is turns a mystifying refusal into a
+   * one-line fix.
+   */
+  const componentNode = source.get("components");
+  const components = readComponents(componentNode, bag);
   if (components.length === 0) {
-    // Not fatal: an element may ship as an asset rather than as geometry. But a
-    // spec with neither is a description of a thing nobody can draw.
-    bag.warn("no_components", "Geometriya komponentlari yo'q — bu element faqat asset bilan chiziladi.", line);
+    if (componentNode && (componentNode.children ?? []).length === 0) {
+      bag.error(
+        "empty_components",
+        "`components:` bloki bo'sh — ostidagi qatorlar chekintirilmagan.",
+        componentNode.line,
+        "Har bir komponent `components:` dan ichkarida turishi kerak. Matnni chekinishlari bilan birga qayta joylashtiring.",
+      );
+    } else {
+      bag.error(
+        "no_components",
+        "Geometriya komponentlari yo'q — bu elementni hech narsa chiza olmaydi.",
+        line,
+        "Kamida bitta komponent yozing: `components:` ostida `<id>:` va uning `shape`, `box`, `fill` qiymatlari.",
+      );
+    }
   }
 
   return {

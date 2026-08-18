@@ -48,16 +48,23 @@ const WEIGHTS = {
  */
 function checkGeometry(element: JElement, out: HealthDeduction[]): number {
   const { geometry } = element;
-  let earned = WEIGHTS.geometry;
+  let earned: number = WEIGHTS.geometry;
 
   if (geometry.components.length === 0) {
-    earned -= 12;
+    // The whole dimension, because there is no drawing. This used to cost
+    // twelve points of a hundred, on the theory that such an element "ships as
+    // an asset" — but `JElement` has no asset field, so what it actually ships
+    // as is nothing.
+    earned = 0;
     out.push({
-      dimension: "geometry", points: 12,
-      reason: "Geometriya komponentlari yo'q.",
-      fix: "Element faqat asset bilan chiziladi — vektor sifatida chizilmaydi.",
+      dimension: "geometry", points: WEIGHTS.geometry,
+      reason: "Geometriya komponentlari yo'q — bu elementni hech narsa chiza olmaydi.",
+      fix: "`components:` ostiga kamida bitta shakl yozing. Chekinishlarga e'tibor bering: chekintirilmagan qatorlar blokka kirmaydi.",
     });
-  } else if (geometry.components.length < 3) {
+    return earned;
+  }
+
+  if (geometry.components.length < 3) {
     earned -= 4;
     out.push({
       dimension: "geometry", points: 4,
@@ -107,7 +114,7 @@ function checkGeometry(element: JElement, out: HealthDeduction[]): number {
 /** Search: can anybody find this, in the language they are working in? */
 function checkSearch(element: JElement, out: HealthDeduction[]): number {
   const { semantic } = element;
-  let earned = WEIGHTS.search;
+  let earned: number = WEIGHTS.search;
 
   // Half the dimension, and defensibly so: the planner builds its queries from
   // the slide's own copy, which is Uzbek. An element with no Uzbek terms is not
@@ -151,9 +158,12 @@ function checkSearch(element: JElement, out: HealthDeduction[]): number {
 
 /** Recolouring: does changing the family's accent actually reach this? */
 function checkRecolorability(element: JElement, family: JElementFamily, out: HealthDeduction[]): number {
-  let earned = WEIGHTS.recolorability;
+  let earned: number = WEIGHTS.recolorability;
   const components = element.geometry.components;
-  if (components.length === 0) return earned;
+  // Nothing to inspect is not a pass. An element with no components cannot be
+  // recoloured and cannot render stably, because it cannot render; awarding
+  // this dimension in full is how thirteen undrawable elements scored 83/100.
+  if (components.length === 0) return 0;
 
   const bound = components.filter((component) => component.fill !== null);
   if (bound.length === 0) {
@@ -200,9 +210,12 @@ function checkRecolorability(element: JElement, family: JElementFamily, out: Hea
  * kind of failure nobody sees until a real deck is exported.
  */
 function checkRenderStability(element: JElement, out: HealthDeduction[]): number {
-  let earned = WEIGHTS.renderStability;
+  let earned: number = WEIGHTS.renderStability;
   const components = element.geometry.components;
-  if (components.length === 0) return earned;
+  // Nothing to inspect is not a pass. An element with no components cannot be
+  // recoloured and cannot render stably, because it cannot render; awarding
+  // this dimension in full is how thirteen undrawable elements scored 83/100.
+  if (components.length === 0) return 0;
 
   const smallest = MIN_PREVIEW_SIZES[0]!;
   const vanishing = components.filter(
@@ -239,7 +252,7 @@ function checkRenderStability(element: JElement, out: HealthDeduction[]): number
 
 /** Semantics: is this named for what it is, and does it say where it belongs? */
 function checkSemantics(element: JElement, out: HealthDeduction[]): number {
-  let earned = WEIGHTS.semantics;
+  let earned: number = WEIGHTS.semantics;
 
   if (element.usage.slideRoles.length === 0) {
     earned -= 6;
@@ -276,7 +289,7 @@ function checkSemantics(element: JElement, out: HealthDeduction[]): number {
 
 /** Mobile: is it usable on a phone, at a phone's size and with a finger? */
 function checkMobile(element: JElement, out: HealthDeduction[]): number {
-  let earned = WEIGHTS.mobile;
+  let earned: number = WEIGHTS.mobile;
 
   if (element.usage.recommendedMaxSlideCoverage > 0.75) {
     earned -= 4;
