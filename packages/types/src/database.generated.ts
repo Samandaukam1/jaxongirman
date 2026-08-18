@@ -4771,6 +4771,16 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_set_jelement_asset: {
+        Args: {
+          p_accent_hue?: number
+          p_asset_path: string
+          p_aspect_ratio?: number
+          p_element_id: string
+          p_variants?: Json
+        }
+        Returns: undefined
+      }
       admin_set_subscription_plans: {
         Args: { p_currency?: string; p_plans: Json; p_reason?: string }
         Returns: Json

@@ -632,3 +632,30 @@ td small { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; 
 .preview-matrix { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end; }
 .preview-matrix figure { margin: 0; display: grid; gap: 6px; justify-items: center; }
 .preview-matrix figcaption { font-size: 11px; color: var(--ink-soft); }
+
+/* ------------------------------------------------- JElement sheet cutter --- */
+
+/* A sheet arrives as one image and leaves as twelve elements. The grid below is
+ * the only place anybody can check that cut n really is element n, so the
+ * pairing is shown rather than assumed. */
+.sheet-controls { display: flex; align-items: end; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+.sheet-controls label { display: grid; gap: 4px; font-size: 12px; font-weight: 700; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .07em; }
+.sheet-controls input { width: 86px; }
+.sheet-accent { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-muted); }
+.sheet-accent i { width: 18px; height: 18px; border-radius: 6px; border: 1px solid var(--border); }
+
+.sheet-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 12px; margin: 4px 0 18px; }
+.sheet-grid figure { display: grid; gap: 6px; margin: 0; padding: 10px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-muted); }
+/* Checkerboard, because these are transparent PNGs and a white square behind a
+ * white page edge hides exactly the mistake this preview is for. */
+.sheet-grid img {
+  width: 100%; height: 96px; object-fit: contain; border-radius: 8px;
+  background-color: #fff;
+  background-image: linear-gradient(45deg, #eceaf2 25%, transparent 25%), linear-gradient(-45deg, #eceaf2 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #eceaf2 75%), linear-gradient(-45deg, transparent 75%, #eceaf2 75%);
+  background-size: 12px 12px;
+  background-position: 0 0, 0 6px, 6px -6px, -6px 0;
+}
+.sheet-grid figcaption { display: grid; gap: 2px; }
+.sheet-grid figcaption strong { font-size: 12.5px; line-height: 1.35; }
+.sheet-grid figcaption small { color: var(--ink-soft); font-size: 11.5px; }
+.sheet-grid .is-orphan { border-color: #e0b4b0; background: #fdf4f3; }

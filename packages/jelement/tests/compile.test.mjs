@@ -529,3 +529,41 @@ test("the indentation fault is not silently survivable", () => {
     }
   }
 });
+
+/* --------------------------------------------------------- picture elements */
+
+test("an element drawn from a picture may have no components", () => {
+  /**
+   * The two ways to have no components mean different things.
+   *
+   * A rendered object — lit, shadowed, reflective — cannot be described as
+   * boxes and paths, and asking for it anyway produced twelve unidentifiable
+   * shapes. Such an element declares itself and carries meaning instead: names,
+   * search terms, bounds, usage. Its picture is attached afterwards from the
+   * reference sheet, so at import there is nothing here to have written.
+   */
+  const asAsset = MINING
+    .replace(/^canonicalName:/m, "rendering: asset\ncanonicalName:")
+    .replace(/\n {2}components:\n(?: {4,}.*\n)+/, "\n");
+
+  const { family, diagnostics } = compile(asAsset);
+
+  assert.ok(family, `expected a family, got ${diagnostics.errors.map((e) => e.code).join(", ")}`);
+  assert.equal(family.elements[0].rendering, "asset");
+  assert.deepEqual(family.elements[0].geometry.components, []);
+});
+
+test("an element that never said so is still refused for having nothing", () => {
+  // The default is geometry, so silence means "I meant to draw this" and an
+  // empty components block is still the indentation fault it always was.
+  const withoutComponents = MINING.replace(/\n {2}components:\n(?: {4,}.*\n)+/, "\n");
+  const { family } = compile(withoutComponents);
+  assert.equal(family, null);
+});
+
+test("the prompt tells an analyzer which kind of sheet it is looking at", () => {
+  // The instruction and the compiler's vocabulary have to agree, or the format
+  // accepts a word the prompt never offers.
+  assert.match(ANALYZER_PROMPT, /rendering: asset/);
+  assert.match(ANALYZER_PROMPT, /rendering: geometry/);
+});

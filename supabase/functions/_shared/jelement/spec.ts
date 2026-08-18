@@ -69,6 +69,22 @@ export const SHAPE_PRIMITIVES = [
 ] as const;
 export type ShapePrimitive = (typeof SHAPE_PRIMITIVES)[number];
 
+/**
+ * How an element is drawn.
+ *
+ * `geometry` is components with boxes, tokens and outlines — right for a chart,
+ * a diagram, a flag, anything whose shape is its meaning. `asset` is a rendered
+ * picture, which is right for a lit, shadowed, physically plausible object: ask
+ * an analyzer to describe one of those as boxes and it produces something
+ * nobody can identify, and that is a limit of the format rather than of the
+ * model.
+ *
+ * An `asset` element carries semantics, bounds and usage rules but no
+ * components. Its picture is attached afterwards, from a reference sheet.
+ */
+export const RENDERING_MODES = ["geometry", "asset"] as const;
+export type RenderingMode = (typeof RENDERING_MODES)[number];
+
 export const OBJECT_CLASSES = [
   "vehicle", "machine", "tool", "device", "structure", "material",
   "person", "symbol", "diagram", "nature", "container", "other",

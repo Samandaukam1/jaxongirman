@@ -1,6 +1,8 @@
 import { renderElement, type JElement, type JElementFamily } from "@jaxongirman/jelement";
 import { useMemo } from "react";
 
+import { assetUrl } from "@/lib/jelement";
+
 /**
  * An element, actually drawn.
  *
@@ -56,6 +58,21 @@ export function JElementPreview({
           opacity: shape.opacity,
           zIndex: shape.zIndex,
         };
+
+        if (shape.type === "image") {
+          // The render itself. Contained rather than stretched: the crop is
+          // already tight to the object, so a ratio the box does not share
+          // means the box is wrong and squashing it would hide that.
+          const source = assetUrl(shape.content.assetPath as string | undefined);
+          return source ? (
+            <img
+              key={`${shape.zIndex}-${index}`}
+              src={source}
+              alt=""
+              style={{ ...frame, objectFit: "contain" }}
+            />
+          ) : null;
+        }
 
         const outline = shape.style.path as string | undefined;
         if (outline) {

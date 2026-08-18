@@ -50,16 +50,37 @@ function checkGeometry(element: JElement, out: HealthDeduction[]): number {
   const { geometry } = element;
   let earned: number = WEIGHTS.geometry;
 
+  /**
+   * An element with a picture is drawn by the picture.
+   *
+   * This rule was written when zero components meant nothing could be drawn,
+   * and it was right then: the escape hatch the old comment pointed at — "it
+   * ships as an asset instead" — did not exist. It does now, so the same
+   * condition has two meanings and they need telling apart. A render of a bust
+   * with no components is complete; a specification of a bust with no
+   * components is empty.
+   */
+  if (element.assetPath) {
+    // A little short of full marks. A picture cannot be re-laid-out around its
+    // own parts the way geometry can, and `visualBounds` is a crop rather than
+    // a judgement about where the mass reads.
+    earned -= 2;
+    out.push({
+      dimension: "geometry", points: 2,
+      reason: "Element rasm bilan chiziladi — geometriya emas.",
+      fix: "Rasm slaydda bitta butun obyekt sifatida joylashadi; qismlarini alohida siljitib bo'lmaydi.",
+    });
+    return earned;
+  }
+
   if (geometry.components.length === 0) {
-    // The whole dimension, because there is no drawing. This used to cost
-    // twelve points of a hundred, on the theory that such an element "ships as
-    // an asset" — but `JElement` has no asset field, so what it actually ships
-    // as is nothing.
+    // The whole dimension, because there is no drawing at all: no components
+    // and no picture either.
     earned = 0;
     out.push({
       dimension: "geometry", points: WEIGHTS.geometry,
       reason: "Geometriya komponentlari yo'q — bu elementni hech narsa chiza olmaydi.",
-      fix: "`components:` ostiga kamida bitta shakl yozing. Chekinishlarga e'tibor bering: chekintirilmagan qatorlar blokka kirmaydi.",
+      fix: "`components:` ostiga kamida bitta shakl yozing yoki elementga rasm biriktiring. Chekinishlarga e'tibor bering: chekintirilmagan qatorlar blokka kirmaydi.",
     });
     return earned;
   }
@@ -160,9 +181,14 @@ function checkSearch(element: JElement, out: HealthDeduction[]): number {
 function checkRecolorability(element: JElement, family: JElementFamily, out: HealthDeduction[]): number {
   let earned: number = WEIGHTS.recolorability;
   const components = element.geometry.components;
-  // Nothing to inspect is not a pass. An element with no components cannot be
-  // recoloured and cannot render stably, because it cannot render; awarding
-  // this dimension in full is how thirteen undrawable elements scored 83/100.
+  // A picture is inspected as a picture: it recolours through its pre-rendered
+  // variants and renders as one image, so there are no components to fault and
+  // no marks to withhold.
+  if (element.assetPath) return earned;
+  // Otherwise, nothing to inspect is not a pass. An element with no components
+  // cannot be recoloured and cannot render stably, because it cannot render;
+  // awarding this dimension in full is how thirteen undrawable elements scored
+  // 83/100.
   if (components.length === 0) return 0;
 
   const bound = components.filter((component) => component.fill !== null);
@@ -212,9 +238,14 @@ function checkRecolorability(element: JElement, family: JElementFamily, out: Hea
 function checkRenderStability(element: JElement, out: HealthDeduction[]): number {
   let earned: number = WEIGHTS.renderStability;
   const components = element.geometry.components;
-  // Nothing to inspect is not a pass. An element with no components cannot be
-  // recoloured and cannot render stably, because it cannot render; awarding
-  // this dimension in full is how thirteen undrawable elements scored 83/100.
+  // A picture is inspected as a picture: it recolours through its pre-rendered
+  // variants and renders as one image, so there are no components to fault and
+  // no marks to withhold.
+  if (element.assetPath) return earned;
+  // Otherwise, nothing to inspect is not a pass. An element with no components
+  // cannot be recoloured and cannot render stably, because it cannot render;
+  // awarding this dimension in full is how thirteen undrawable elements scored
+  // 83/100.
   if (components.length === 0) return 0;
 
   const smallest = MIN_PREVIEW_SIZES[0]!;

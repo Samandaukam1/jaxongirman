@@ -6,6 +6,7 @@ import { ArrowLeft, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { JElementPreview } from "@/components/JElementPreview";
+import { JElementSheet } from "@/components/JElementSheet";
 import { ErrorState, PageHeader, TableSkeleton } from "@/components/AdminUI";
 import { errorMessage } from "@/lib/format";
 import { navigate } from "@/lib/router";
@@ -48,6 +49,9 @@ type ElementRow = {
   transform_rules: Record<string, unknown>;
   usage_count: number;
   published_version: number;
+  asset_path: string | null;
+  asset_accent_hue: number | null;
+  asset_variants: Record<string, string> | null;
 };
 
 /** The database row, in the shape the drawing code reads. */
@@ -55,6 +59,12 @@ function toElement(row: ElementRow): JElement {
   return {
     index: 0,
     canonicalName: row.canonical_name,
+    // A row with a picture is drawn by the picture; one without is drawn by its
+    // components, which is what the compiler defaulted it to.
+    rendering: row.asset_path ? "asset" : "geometry",
+    assetPath: row.asset_path,
+    assetAccentHue: row.asset_accent_hue,
+    assetVariants: row.asset_variants ?? {},
     displayName: row.display_name || row.canonical_name,
     objectClass: row.object_class as JElement["objectClass"],
     category: "",
@@ -211,6 +221,18 @@ export function JElementFamilyPage({ familyId }: { familyId: string }) {
         ))}
       </div>
     </section>
+
+    {family ? (
+      <JElementSheet
+        familySlug={family.slug}
+        elements={elements.map((row) => ({
+          id: row.id,
+          canonicalName: row.canonical_name,
+          displayName: row.display_name || row.canonical_name,
+        }))}
+        onDone={(text) => { setMessage(text); void load(); }}
+      />
+    ) : null}
 
     <section className="panel">
       <div className="panel-heading">

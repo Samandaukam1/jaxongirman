@@ -112,6 +112,56 @@ function radiusFor(component: Component, width: number, height: number): Record<
   return {};
 }
 
+/**
+ * Which file to draw, given the colour the deck wants.
+ *
+ * The variants were produced when the sheet was cut up, one per accent a design
+ * might ask for, because neither a phone nor a PPTX can recolour a PNG. So the
+ * choice here is a lookup rather than an image operation: find the variant
+ * whose hue is nearest what was asked for, and fall back to the original file
+ * when nothing is close enough.
+ *
+ * Twenty degrees of tolerance. Wider starts serving a green asset to a deck
+ * that asked for teal, which reads as a mistake rather than a near miss.
+ */
+export function assetFor(element: JElement, accent: string | undefined, tolerance = 20): string | null {
+  const master = element.assetPath ?? null;
+  if (!master) return null;
+
+  const wanted = accent ? hueOf(accent) : null;
+  if (wanted === null) return master;
+
+  // Already the right colour: the original file is the best quality available,
+  // having never been through a recolour at all.
+  const own = element.assetAccentHue;
+  if (typeof own === "number" && Math.abs(hueGap(own, wanted)) <= tolerance) return master;
+
+  let best: string | null = null;
+  let bestGap = tolerance;
+  for (const [hue, path] of Object.entries(element.assetVariants ?? {})) {
+    const gap = Math.abs(hueGap(Number(hue), wanted));
+    if (Number.isFinite(gap) && gap <= bestGap) { bestGap = gap; best = path; }
+  }
+  return best ?? master;
+}
+
+function hueOf(hex: string): number | null {
+  const match = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!match) return null;
+  const value = parseInt(match[1]!, 16);
+  const r = ((value >> 16) & 255) / 255, g = ((value >> 8) & 255) / 255, b = (value & 255) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  if (max === min) return null;
+  const span = max - min;
+  if (max === r) return ((g - b) / span + (g < b ? 6 : 0)) * 60;
+  if (max === g) return ((b - r) / span + 2) * 60;
+  return ((r - g) / span + 4) * 60;
+}
+
+function hueGap(first: number, second: number): number {
+  return ((second - first + 540) % 360) - 180;
+}
+
 export function renderElement(
   element: JElement,
   family: JElementFamily,
@@ -120,6 +170,27 @@ export function renderElement(
 ): RenderedShape[] {
   const rotation = target.rotation ?? 0;
   const opacity = target.opacity ?? 1;
+
+  /**
+   * A picture is one row, not a stack of them.
+   *
+   * Checked before the components because an element that has both uses its
+   * components for placement — an anchor, a focus point — and its asset for
+   * the drawing. Emitting both would draw the boxes on top of the render.
+   */
+  const asset = assetFor(element, overrides.accent ?? family.colorTokens.accent);
+  if (asset) {
+    return [{
+      type: "image",
+      x: target.x, y: target.y, width: target.width, height: target.height,
+      rotation, zIndex: 0, opacity,
+      style: {},
+      // The path, not a URL. Resolving one to the other needs a storage client,
+      // and this module deliberately has none — the admin, the phone and the
+      // exporter each already know how to turn a bucket path into an address.
+      content: { assetPath: asset },
+    }];
+  }
 
   return [...element.geometry.components]
     .sort((first, second) => first.zIndex - second.zIndex)

@@ -205,3 +205,29 @@ test("a placed element carries its outline onto the slide", () => {
   assert.equal(bucket.style.viewBox, "0 0 100 100");
   assert.equal(bucket.style.fill, "#101214", "and still take its colour from the token");
 });
+
+test("a picture element becomes one image row, not a stack of shapes", () => {
+  /**
+   * The library holds two kinds of element and the editor holds neither
+   * differently: both carry the same placement, so both drag, scale and rotate
+   * through the same code. What changes is how many rows come out — a render is
+   * one image, and emitting its components as well would draw boxes over it.
+   */
+  const rows = rowsFor(
+    { ...ELEMENT, assetUrl: "https://example.test/bust.png" },
+    PLACEMENT,
+    BASE,
+    {},
+  );
+
+  assert.equal(rows.length, 1, "one picture, one row");
+  assert.equal(rows[0].type, "image");
+  assert.equal(rows[0].content.url, "https://example.test/bust.png");
+  assert.equal(rows[0].style.objectFit, "contain", "a trimmed file must not be stretched");
+});
+
+test("a picture row still carries the placement, so it can be moved like any other", () => {
+  const rows = rowsFor({ ...ELEMENT, assetUrl: "https://example.test/bust.png" }, PLACEMENT, BASE, {});
+  assert.deepEqual(placementOf(rows[0]), PLACEMENT);
+  assert.equal(isElementRow(rows[0]), true);
+});

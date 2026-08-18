@@ -1,5 +1,6 @@
 import type {
   Anchor, ColorToken, Facing, ObjectClass, ShapePrimitive, SlideRole,
+  RenderingMode,
 } from "./spec.ts";
 
 /**
@@ -71,6 +72,22 @@ export type FamilySearch = {
 export type JElement = {
   index: number;
   canonicalName: string;
+  /** Whether this element is drawn from components or from a picture. */
+  rendering: RenderingMode;
+  /**
+   * The rendered picture, when this element is one.
+   *
+   * Geometry is right for a chart and wrong for a studio render of a bust: a
+   * lit, shadowed, physically-plausible object described as boxes and paths
+   * comes out unrecognisable, and that is a limit of the format rather than of
+   * the analyzer. An element with an asset draws the asset; its components, if
+   * any, are then a placement aid rather than the drawing.
+   */
+  assetPath?: string | null;
+  /** The accent hue measured in that file, 0-360. What a recolour moves away from. */
+  assetAccentHue?: number | null;
+  /** Pre-rendered recolours by target hue, because a phone cannot process a PNG. */
+  assetVariants?: Record<string, string>;
   displayName: string;
   objectClass: ObjectClass;
   category: string;

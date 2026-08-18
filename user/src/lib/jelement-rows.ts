@@ -19,7 +19,7 @@ export type Row = {
   slide_id: string;
   presentation_id: string;
   owner_id: string;
-  type: "shape";
+  type: "shape" | "image";
   x: number;
   y: number;
   width: number;
@@ -64,6 +64,8 @@ export type ResolvedElement = {
   name: string;
   components: Component[];
   colorTokens: Record<string, string>;
+  /** A public URL, when this element is a picture rather than geometry. */
+  assetUrl?: string | null;
 };
 
 /* -------------------------------------------------------------- drawing */
@@ -91,6 +93,35 @@ export function rowsFor(
   overrides: Record<string, string> = {},
 ): Row[] {
   const colours = { ...element.colorTokens, ...overrides };
+
+  /**
+   * A picture is one row, not a stack of them.
+   *
+   * It still carries the placement, so it drags, scales and rotates exactly
+   * like a geometry element and the editor needs to know nothing about which
+   * kind it is holding.
+   */
+  if (element.assetUrl) {
+    return [{
+      slide_id: base.slideId,
+      presentation_id: base.presentationId,
+      owner_id: base.ownerId,
+      type: "image" as const,
+      x: placement.x,
+      y: placement.y,
+      width: placement.width,
+      height: placement.height,
+      rotation: placement.rotation,
+      z_index: base.zIndex,
+      opacity: 1,
+      locked: false,
+      // Contained rather than cropped: the file is already trimmed to the
+      // object, so a box of another ratio means the box is wrong and stretching
+      // it would hide that.
+      style: { objectFit: "contain" },
+      content: { jelement: placement, component: "asset", url: element.assetUrl },
+    }];
+  }
 
   return [...element.components]
     .sort((first, second) => first.zIndex - second.zIndex)

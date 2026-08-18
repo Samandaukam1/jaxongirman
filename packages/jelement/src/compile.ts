@@ -6,9 +6,10 @@ import type {
 } from "./document.ts";
 import {
   ANCHORS, COLOR_TOKENS, FACINGS, JELEMENT_HEADER, JELEMENT_KEYWORD, LIMITS,
-  OBJECT_CLASSES, SHAPE_PRIMITIVES, SLIDE_ROLES, SUPPORTED_VERSIONS,
+  OBJECT_CLASSES, RENDERING_MODES, SHAPE_PRIMITIVES, SLIDE_ROLES, SUPPORTED_VERSIONS,
   normalizeTerm, toSlug,
-  type ColorToken, type Facing, type ObjectClass, type ShapePrimitive, type SlideRole,
+  type ColorToken, type Facing, type ObjectClass, type RenderingMode, type ShapePrimitive,
+  type SlideRole,
 } from "./spec.ts";
 
 /**
@@ -255,7 +256,12 @@ function readComponents(node: ParseNode | undefined, bag: DiagnosticBag): Compon
   return components;
 }
 
-function readGeometry(map: Map<string, ParseNode>, bag: DiagnosticBag, line: number): ElementGeometry {
+function readGeometry(
+  map: Map<string, ParseNode>,
+  bag: DiagnosticBag,
+  line: number,
+  rendering: RenderingMode = "geometry",
+): ElementGeometry {
   const nested = map.get("geometry");
   const source = nested && nested.children.length > 0 ? propertyMap(nested.children) : map;
 
@@ -290,7 +296,10 @@ function readGeometry(map: Map<string, ParseNode>, bag: DiagnosticBag, line: num
    */
   const componentNode = source.get("components");
   const components = readComponents(componentNode, bag);
-  if (components.length === 0) {
+  // An element that says it is drawn from a picture is allowed to have none.
+  // Its artwork is attached from a reference sheet afterwards, so at import
+  // there is nothing here to have written.
+  if (components.length === 0 && rendering !== "asset") {
     if (componentNode && (componentNode.children ?? []).length === 0) {
       bag.error(
         "empty_components",
@@ -382,6 +391,9 @@ function readTransform(map: Map<string, ParseNode>): TransformRules {
 function readElement(section: ParseSection, index: number, bag: DiagnosticBag): JElement | null {
   const map = propertyMap(section.properties);
   const canonicalName = text(map, "canonicalName");
+  const rendering = oneOf<RenderingMode>(
+    text(map, "rendering"), RENDERING_MODES, "geometry", bag, "rendering", section.line,
+  );
 
   if (!canonicalName) {
     bag.error("missing_canonical_name", `[ELEMENT ${section.arg || index + 1}] nomsiz.`, section.line,
@@ -405,7 +417,8 @@ function readElement(section: ParseSection, index: number, bag: DiagnosticBag): 
     category: text(map, "category"),
     subcategory: text(map, "subcategory"),
     semantic: readSemantics(map, bag, section.line),
-    geometry: readGeometry(map, bag, section.line),
+    rendering,
+    geometry: readGeometry(map, bag, section.line, rendering),
     appearance: readAppearance(map),
     usage: readUsage(map, bag, section.line),
     transform: readTransform(map),

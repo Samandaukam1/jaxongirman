@@ -99,6 +99,7 @@ displayName: <how it reads in Uzbek>
 objectClass: <${list(OBJECT_CLASSES)}>
 category: <same vocabulary as the family>
 subcategory: <optional>
+rendering: <geometry | asset — see BEFORE YOU START>
 semantic:
   aliases: <other English names for it>
   uzbekTerms: <Uzbek names — REQUIRED, this is the product's language>
@@ -155,6 +156,34 @@ transform:
 
 [ELEMENT 02]
 … repeat for every distinct object …
+
+${"-".repeat(58)}
+BEFORE YOU START: WHICH KIND OF SHEET IS THIS
+${"-".repeat(58)}
+
+Look at the reference before describing anything, and decide once for the whole
+sheet.
+
+If the objects are flat — icons, diagrams, symbols, charts, silhouettes, one or
+two colours, no lighting — write rendering: geometry and describe them fully,
+components and outlines included. Their shape is their meaning and the format
+holds it exactly.
+
+If the objects are rendered — studio lighting, contact shadows, reflections,
+material response, gradients, a photographic or CGI look — write
+rendering: asset on every element and DO NOT write a components block at all.
+Describe everything else: the names, the search terms, the bounds, the anchors,
+the usage rules.
+
+That second case is not a limitation you should try to work around. A lit,
+shadowed, physically plausible object described as boxes and paths comes back
+unrecognisable — it has been tried, and it produced twelve objects nobody could
+identify. The picture itself becomes the element: the sheet is cut up in the
+console and each object is attached to the element it belongs to, in the order
+you return them. Your job for those is the meaning, not the drawing.
+
+Everything below about outlines, components and colour tokens applies only to
+rendering: geometry. Skip it entirely for a rendered sheet.
 
 ${"-".repeat(58)}
 SEGMENTATION
