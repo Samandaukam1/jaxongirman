@@ -1,7 +1,7 @@
 import { renderElement, type JElement, type JElementFamily } from "@jaxongirman/jelement";
 import { useMemo } from "react";
 
-import { assetUrl } from "@/lib/jelement";
+import { assetUrl, hueOf } from "@/lib/jelement";
 
 /**
  * An element, actually drawn.
@@ -38,6 +38,41 @@ export function JElementPreview({
     [element, family, size, rotation, overrides],
   );
 
+  /**
+   * The colour the palette asks for, live, without waiting for a file.
+   *
+   * A picture element recolours by serving a different file, and those files
+   * are made when the sheet is cut — so before this existed, dragging the
+   * accent to magenta changed five swatches and nothing else, because no
+   * magenta file had ever been rendered. Two colours appeared to work and the
+   * rest appeared broken.
+   *
+   * `assetFor` has already picked the nearest file it has; whatever gap is
+   * left is closed here with a hue rotation. It is a rotation of the whole
+   * image rather than of the accent alone, which for these renders is very
+   * nearly the same thing — graphite, black and white have no hue to rotate,
+   * so only the accent moves. Nearly, not exactly: a gold rim would follow
+   * along. That is why this is the preview and the rendered file is the deck.
+   */
+  const rotation360 = useMemo(() => {
+    if (!element.assetPath || typeof element.assetAccentHue !== "number") return 0;
+    const wanted = hueOf(overrides.accent ?? family.colorTokens.accent ?? "");
+    if (wanted === null) return 0;
+
+    // Which file `assetFor` settled on, and therefore what it is already
+    // showing. Applying the whole difference would double-count a variant.
+    let showing = element.assetAccentHue;
+    let best = 20;
+    for (const hue of Object.keys(element.assetVariants ?? {})) {
+      const gap = Math.abs(((wanted - Number(hue) + 540) % 360) - 180);
+      if (gap <= best) { best = gap; showing = Number(hue); }
+    }
+    const own = Math.abs(((wanted - element.assetAccentHue + 540) % 360) - 180);
+    if (own <= 20) showing = element.assetAccentHue;
+
+    return ((wanted - showing + 540) % 360) - 180;
+  }, [element, family, overrides]);
+
   return (
     <div
       className="jelement-preview"
@@ -69,7 +104,11 @@ export function JElementPreview({
               key={`${shape.zIndex}-${index}`}
               src={source}
               alt=""
-              style={{ ...frame, objectFit: "contain" }}
+              style={{
+                ...frame,
+                objectFit: "contain",
+                ...(Math.abs(rotation360) > 1 ? { filter: `hue-rotate(${rotation360}deg)` } : {}),
+              }}
             />
           ) : null;
         }

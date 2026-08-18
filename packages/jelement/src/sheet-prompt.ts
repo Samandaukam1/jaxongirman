@@ -146,6 +146,7 @@ element in the library is mislabelled.
       "displayName": "Ochiq kitob",
       "objectClass": "other",
       "group": "Klassik adabiyot",
+      "recolorable": true,
       "aliases": ["book", "opened book", "reading book"],
       "uzbekTerms": ["ochiq kitob", "kitob", "mutolaa"],
       "englishTerms": ["open book", "reading"],
@@ -173,6 +174,14 @@ FIELD RULES
                  searching for the section finds everything in it. Use few
                  sections and spell each one identically across the sheet:
                  "Kardiologiya" and "kardiologiya" are two sections.
+  recolorable    Whether this object may take the deck's colour. Default true,
+                 and true is right for almost everything: the lime trim on a
+                 stethoscope is a house style, so a deck in amber should get an
+                 amber stethoscope. Set it false only when the colour IS the
+                 object — a red cross, a national flag, a blood sample, a
+                 traffic light. Shifting those does not restyle the object, it
+                 makes it something else. Do not set it false merely because
+                 the colour looks good.
   objectClass    One of: ${list(OBJECT_CLASSES)}
   uzbekTerms     REQUIRED. The product is used in Uzbek — an element with no
                  Uzbek name is invisible to the people it exists for. Include

@@ -88,6 +88,14 @@ export type JElement = {
   assetAccentHue?: number | null;
   /** Pre-rendered recolours by target hue, because a phone cannot process a PNG. */
   assetVariants?: Record<string, string>;
+  /**
+   * False when the colour is part of what the object is.
+   *
+   * A red cross, a national flag, a blood sample. Shifting those does not
+   * restyle the object, it makes it something else — so such an element keeps
+   * its own render whatever accent the deck asks for.
+   */
+  assetRecolorable?: boolean;
   displayName: string;
   objectClass: ObjectClass;
   category: string;

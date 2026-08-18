@@ -1,11 +1,9 @@
-import {
-  dominantHue, hexToHsl, recolour, sliceSheet, type Pixels,
-} from "@jaxongirman/jelement";
+import { dominantHue, sliceSheet, type Pixels } from "@jaxongirman/jelement";
 import { Scissors, Upload } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
 
 import { errorMessage } from "@/lib/format";
-import { attachAsset, deckAccents, uploadElementAsset } from "@/lib/jelement";
+import { attachCuts } from "@/lib/jelement";
 
 /**
  * A reference sheet, cut into the library's elements.
@@ -65,7 +63,10 @@ export function JElementSheet({
 }: {
   familySlug: string;
   /** In position order, which is the order sheets are cut in. */
-  elements: { id: string; canonicalName: string; displayName: string; hasAsset: boolean }[];
+  elements: {
+    id: string; canonicalName: string; displayName: string;
+    hasAsset: boolean; recolorable: boolean;
+  }[];
   onDone: (message: string) => void;
 }) {
   const [columns, setColumns] = useState(4);
@@ -161,49 +162,19 @@ export function JElementSheet({
     setBusy("Saqlanmoqda…");
     setProblem(null);
     try {
-      /**
-       * The colours a deck can actually ask for.
-       *
-       * Read from the published designs rather than invented, so the variants
-       * that get made are exactly the ones something will request — and no
-       * more. Twelve elements against forty guessed hues would be five hundred
-       * files nobody fetches.
-       */
-      const targets = await deckAccents();
+      const cutouts = pairs
+        .filter((pair): pair is { cut: Cut; element: NonNullable<typeof pair.element> } => Boolean(pair.element))
+        .map((pair) => ({
+          elementId: pair.element.id,
+          pixels: pair.cut.pixels,
+          // The existing rows already know whether they may be recoloured; a
+          // sheet re-cut must not quietly reset that.
+          recolorable: pair.element.recolorable,
+        }));
 
-      let saved = 0;
-      for (const { cut, element } of pairs) {
-        if (!element) continue;
-
-        const master = await uploadElementAsset(familySlug, element.id, "master", await toPng(cut.pixels));
-
-        const variants: Record<string, string> = {};
-        if (accent !== null) {
-          for (const target of targets) {
-            const parsed = hexToHsl(target);
-            if (!parsed) continue;
-            const hue = Math.round(parsed[0]);
-            // Already this colour. Serving the original is both cheaper and
-            // better: it has never been through a recolour.
-            if (Math.abs(((hue - accent + 540) % 360) - 180) <= 20) continue;
-            const shifted = recolour(cut.pixels, accent, hue);
-            variants[String(hue)] = await uploadElementAsset(
-              familySlug, element.id, String(hue), await toPng(shifted),
-            );
-          }
-        }
-
-        await attachAsset({
-          elementId: element.id,
-          assetPath: master,
-          accentHue: accent,
-          variants,
-          aspectRatio: cut.pixels.width / cut.pixels.height,
-        });
-        saved += 1;
-        setBusy(`Saqlanmoqda… ${saved}/${pairs.length}`);
-      }
-
+      const saved = await attachCuts(familySlug, accent, cutouts, (done, total) => {
+        setBusy(`Saqlanmoqda… ${done}/${total}`);
+      });
       onDone(`${saved} ta elementga rasm biriktirildi.`);
     } catch (failure) {
       setProblem(errorMessage(failure));

@@ -8,7 +8,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { JElementPreview } from "@/components/JElementPreview";
 import { JElementExpand } from "@/components/JElementExpand";
 import { JElementSheet } from "@/components/JElementSheet";
-import { deleteElement } from "@/lib/jelement";
+import { deleteElement, renderAccent } from "@/lib/jelement";
 import { ErrorState, PageHeader, TableSkeleton } from "@/components/AdminUI";
 import { errorMessage } from "@/lib/format";
 import { navigate } from "@/lib/router";
@@ -53,6 +53,7 @@ type ElementRow = {
   published_version: number;
   subcategory: string | null;
   asset_path: string | null;
+  asset_recolorable: boolean | null;
   asset_accent_hue: number | null;
   asset_variants: Record<string, string> | null;
 };
@@ -213,8 +214,41 @@ export function JElementFamilyPage({ familyId }: { familyId: string }) {
       p_color_tokens: tokens as never,
     });
 
-    if (saveError) setError(errorMessage(saveError));
-    else { setMessage("Ranglar saqlandi — barcha bog'langan elementlar yangilandi."); await load(); }
+    if (saveError) { setError(errorMessage(saveError)); setSaving(false); return; }
+
+    /**
+     * The pictures are rendered into the new accent, here and now.
+     *
+     * A geometry element follows a token the moment it changes. A picture does
+     * not: it recolours by being a different file, so an accent nobody has
+     * rendered is an accent that does not exist — which is why setting one
+     * outside the handful made at import moved the swatches and nothing else.
+     *
+     * Done on save rather than on every drag: it fetches and rewrites a PNG per
+     * element, which is far too much to do while somebody is still choosing.
+     */
+    try {
+      const rendered = await renderAccent(
+        family.slug,
+        elements.map((row) => ({
+          id: row.id,
+          assetPath: row.asset_path,
+          accentHue: row.asset_accent_hue,
+          variants: row.asset_variants ?? {},
+        })),
+        tokens.accent ?? "",
+        (done, total) => setMessage(`Rasmlar bo‘yalmoqda… ${done}/${total}`),
+      );
+      setMessage(rendered > 0
+        ? `Ranglar saqlandi — ${rendered} ta rasm yangi aksentda tayyorlandi.`
+        : "Ranglar saqlandi.");
+    } catch (failure) {
+      // The colours are saved either way. Saying the whole thing failed would
+      // be untrue and would send somebody looking for a problem in the palette.
+      setMessage("Ranglar saqlandi, lekin rasmlar bo‘yalmadi.");
+      console.warn("accent render failed", failure);
+    }
+    await load();
     setSaving(false);
   }
 
@@ -272,7 +306,8 @@ export function JElementFamilyPage({ familyId }: { familyId: string }) {
     {family ? (
       <JElementExpand
         familyId={family.id}
-        onAdded={(count) => { setMessage(`${count} ta element qo‘shildi — endi ularga varaq biriktiring.`); void load(); }}
+        familySlug={family.slug}
+        onAdded={(count) => { setMessage(`${count} ta element rasmlari bilan qo‘shildi.`); void load(); }}
       />
     ) : null}
 
@@ -284,6 +319,7 @@ export function JElementFamilyPage({ familyId }: { familyId: string }) {
           canonicalName: row.canonical_name,
           displayName: row.display_name || row.canonical_name,
           hasAsset: Boolean(row.asset_path),
+          recolorable: row.asset_recolorable !== false,
         }))}
         onDone={(text) => { setMessage(text); void load(); }}
       />

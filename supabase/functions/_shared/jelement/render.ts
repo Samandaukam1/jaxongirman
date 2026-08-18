@@ -128,6 +128,9 @@ export function assetFor(element: JElement, accent: string | undefined, toleranc
   const master = element.assetPath ?? null;
   if (!master) return null;
 
+  // An object whose colour is its meaning does not follow the deck.
+  if (element.assetRecolorable === false) return master;
+
   const wanted = accent ? hueOf(accent) : null;
   if (wanted === null) return master;
 

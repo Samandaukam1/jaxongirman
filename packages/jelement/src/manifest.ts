@@ -28,6 +28,8 @@ export type ManifestElement = {
   objectClass: ObjectClass;
   /** The section within the family — kardiologiya, LOR, diagnostika. */
   group: string;
+  /** False when the object's colour is part of what it is. */
+  recolorable: boolean;
   aliases: string[];
   uzbekTerms: string[];
   englishTerms: string[];
@@ -174,6 +176,9 @@ export function readManifest(source: string): ManifestResult {
       // it is called in the manifest, because that is the word somebody
       // sectioning a library reaches for. Both are read, so neither is wrong.
       group: text(item.group, text(item.subcategory)),
+      // Absent means yes. Most objects should follow the deck, and an analyzer
+      // that forgets the field should not accidentally freeze a whole sheet.
+      recolorable: item.recolorable !== false,
       aliases: strings(item.aliases),
       uzbekTerms,
       englishTerms: strings(item.englishTerms),

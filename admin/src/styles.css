@@ -689,3 +689,11 @@ td small { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; 
   padding: 1px 7px; border-radius: 999px; background: var(--surface-muted);
   font-size: 11px; letter-spacing: 0; color: var(--ink-muted);
 }
+
+/* Three steps, in order, so a half-finished import is visible as one. */
+.import-steps { display: flex; gap: 8px; margin: 0 0 14px; padding: 0; list-style: none; flex-wrap: wrap; }
+.import-steps li {
+  padding: 5px 11px; border-radius: 999px; font-size: 12px; font-weight: 700;
+  border: 1px solid var(--border); background: var(--surface-muted); color: var(--ink-soft);
+}
+.import-steps li.is-done { border-color: #b9dfc9; background: #f2fbf5; color: #17683f; }

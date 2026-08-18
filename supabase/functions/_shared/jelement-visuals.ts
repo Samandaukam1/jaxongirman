@@ -159,6 +159,7 @@ export async function fillElementSlots(
               assetPath,
               assetAccentHue: typeof row?.asset_accent_hue === "number" ? row.asset_accent_hue : null,
               assetVariants: (row?.asset_variants ?? {}) as Record<string, string>,
+              assetRecolorable: row?.asset_recolorable !== false,
             },
             family: {
               colorTokens: (payload!.family as { colorTokens?: JElementFamily["colorTokens"] }).colorTokens ?? {},
