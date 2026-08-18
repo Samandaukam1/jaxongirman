@@ -1236,7 +1236,9 @@ export type Database = {
       jelements: {
         Row: {
           appearance: Json
+          asset_accent_hue: number | null
           asset_path: string | null
+          asset_variants: Json
           canonical_name: string
           category: string
           created_at: string
@@ -1260,7 +1262,9 @@ export type Database = {
         }
         Insert: {
           appearance?: Json
+          asset_accent_hue?: number | null
           asset_path?: string | null
+          asset_variants?: Json
           canonical_name: string
           category?: string
           created_at?: string
@@ -1284,7 +1288,9 @@ export type Database = {
         }
         Update: {
           appearance?: Json
+          asset_accent_hue?: number | null
           asset_path?: string | null
+          asset_variants?: Json
           canonical_name?: string
           category?: string
           created_at?: string
@@ -4774,8 +4780,8 @@ export type Database = {
       admin_set_jelement_asset: {
         Args: {
           p_accent_hue?: number
-          p_asset_path: string
           p_aspect_ratio?: number
+          p_asset_path: string
           p_element_id: string
           p_variants?: Json
         }
