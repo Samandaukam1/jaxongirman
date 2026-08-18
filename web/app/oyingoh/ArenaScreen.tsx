@@ -395,6 +395,11 @@ export function ArenaScreen({ handoff, experienceRow }: {
               <>
                 <span className={`arena-timer${remaining <= 5 ? " urgent" : ""}`}>{remaining}</span>
                 <span className="arena-pill">{snapshot.answered_count ?? 0} / {snapshot.player_count} javob</span>
+                <span className="arena-answered-bar" aria-hidden>
+                  <i style={{
+                    width: `${Math.round(((snapshot.answered_count ?? 0) / Math.max(snapshot.player_count, 1)) * 100)}%`,
+                  }} />
+                </span>
               </>
             ) : null}
           </div>
@@ -417,7 +422,7 @@ export function ArenaScreen({ handoff, experienceRow }: {
               </div>
             </div>
           ) : options.length > 0 ? (
-            <div className={`arena-options${options.length <= 2 ? " two" : ""}`}>
+            <div className={`arena-options${options.length <= 2 ? " two" : ""}${snapshot.status === "question_result" ? " revealed" : ""}`}>
               {options.map((option, index) => {
                 const style = OPTION_STYLES[index % OPTION_STYLES.length]!;
                 const isCorrect = Array.isArray(correct) ? correct.includes(option.id) : correct === option.id;
@@ -551,6 +556,9 @@ function Finish({ players }: { players: { id: string; nickname: string; avatar_i
   const order = [players.find((p) => p.rank === 2), players.find((p) => p.rank === 1), players.find((p) => p.rank === 3)];
   const medals = ["🥈", "🥇", "🥉"];
   const heights = [180, 250, 140];
+  const champion = players.find((player) => player.rank === 1);
+  const rest = players.filter((player) => player.rank > 3).slice(0, 7);
+
   return (
     <div className="arena-finish">
       <div className="arena-confetti" aria-hidden>
@@ -562,19 +570,44 @@ function Finish({ players }: { players: { id: string; nickname: string; avatar_i
           }} />
         ))}
       </div>
-      <h1 className="arena-title">G&lsquo;oliblar</h1>
+
+      {/* Named, because "G'oliblar" is a heading and a person's name is the
+          thing the room is looking for. */}
+      <p className="arena-finish-eyebrow">O‘yin yakunlandi</p>
+      <h1 className="arena-finish-title">
+        {champion ? <><span className="arena-crown" aria-hidden>👑</span>{champion.nickname}</> : "G‘oliblar"}
+      </h1>
+
       <div className="arena-podium">
         {order.map((player, index) => player ? (
-          <div className="arena-podium-column" key={player.id}>
-            <GameAvatar id={player.avatar_id} size={index === 1 ? 104 : 78} />
+          <div className={`arena-podium-column${index === 1 ? " is-champion" : ""}`} key={player.id}>
+            <span className="arena-podium-medal" aria-hidden>{medals[index]}</span>
+            <GameAvatar id={player.avatar_id} size={index === 1 ? 116 : 82} />
             <span className="arena-podium-name">{player.nickname}</span>
             <span className="arena-podium-score">{player.total_score.toLocaleString("uz-UZ")}</span>
-            <div className="arena-podium-block" style={{ height: heights[index] }}>
-              <span>{medals[index]}</span>
+            <div
+              className="arena-podium-block"
+              style={{ height: heights[index], animationDelay: `${[240, 0, 420][index]}ms` }}
+            >
+              <span className="arena-podium-place">{[2, 1, 3][index]}</span>
             </div>
           </div>
         ) : <div className="arena-podium-column" key={`empty-${index}`} />)}
       </div>
+
+      {/* Everyone else, because a room of twenty has seventeen people who are
+          not on the podium and would otherwise watch three names. */}
+      {rest.length > 0 ? (
+        <div className="arena-finish-rest">
+          {rest.map((player) => (
+            <span className="arena-finish-chip" key={player.id}>
+              <b>{player.rank}</b>
+              {player.nickname}
+              <i>{player.total_score.toLocaleString("uz-UZ")}</i>
+            </span>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

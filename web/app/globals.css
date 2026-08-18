@@ -943,3 +943,183 @@ body:has(.qrx-page) > .site-footer { display: none; }
     50%      { box-shadow: 0 0 0 1px rgba(255,255,255,.05) inset, 0 30px 80px rgba(10, 6, 22, .45), 0 0 92px rgba(124, 58, 237, .26); }
   }
 }
+
+/* ═══════════════════════════════════════════════ join page (rebuilt) ═══ */
+
+/* Somebody arrives here having just pointed a camera at a projector, standing
+ * in a lit room full of people. The old page was a bullseye character and three
+ * paragraphs, which reads as a form. This reads as the game they can see. */
+.join-page {
+  position: relative; min-height: 100dvh; overflow: hidden;
+  display: grid; place-items: center; padding: 24px 18px 40px;
+  background: radial-gradient(120% 90% at 50% -10%, #2A1364 0%, #150A33 55%, #0C0620 100%);
+  color: #fff;
+}
+.join-glow {
+  position: absolute; border-radius: 50%; filter: blur(90px); opacity: .55;
+  pointer-events: none; animation: join-drift 14s ease-in-out infinite alternate;
+}
+.join-glow.one { width: 52vmax; height: 52vmax; left: -18vmax; top: -14vmax; background: #7C3AED; }
+.join-glow.two { width: 44vmax; height: 44vmax; right: -16vmax; bottom: -18vmax; background: #2563EB; animation-delay: -6s; }
+@keyframes join-drift { from { transform: translate3d(0,0,0) scale(1); } to { transform: translate3d(0,4vmax,0) scale(1.12); } }
+
+.join-shell { position: relative; width: min(560px, 100%); }
+.join-panel {
+  display: grid; gap: 18px; justify-items: center; text-align: center;
+  padding: clamp(24px, 5vw, 40px);
+  border-radius: 28px;
+  background: rgba(255,255,255,.07);
+  border: 1px solid rgba(255,255,255,.14);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 30px 90px rgba(6,2,24,.55);
+  animation: join-in 520ms cubic-bezier(.2,.9,.3,1) both;
+}
+@keyframes join-in { from { opacity: 0; transform: translateY(18px) scale(.98); } to { opacity: 1; transform: none; } }
+
+.join-status {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 700;
+  background: rgba(255,255,255,.1); color: rgba(255,255,255,.72);
+}
+.join-status i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+/* The dot only pulses when the room is actually open, so it is information
+ * rather than decoration. */
+.join-status.is-live { background: rgba(23,178,131,.18); color: #4FE3B0; }
+.join-status.is-live i { animation: join-pulse 1.6s ease-in-out infinite; }
+@keyframes join-pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .45; transform: scale(.7); } }
+
+.join-eyebrow { margin: 0; font-size: 12px; letter-spacing: .18em; font-weight: 800; color: rgba(255,255,255,.5); }
+.join-title { margin: 0; font-size: clamp(28px, 6vw, 44px); line-height: 1.1; font-weight: 800; text-wrap: balance; }
+.join-lede { margin: 0; color: rgba(255,255,255,.72); line-height: 1.6; }
+
+.join-code {
+  display: grid; gap: 4px; width: 100%; padding: 18px 20px; border: 0;
+  border-radius: 20px; cursor: pointer; font: inherit; color: #fff;
+  background: linear-gradient(135deg, rgba(124,58,237,.85), rgba(37,99,235,.75));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.22), 0 14px 34px rgba(37,16,90,.5);
+  transition: transform 160ms ease;
+}
+.join-code:active { transform: scale(.985); }
+.join-code.is-loading { opacity: .5; cursor: default; }
+.join-code-label { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; font-weight: 800; opacity: .8; }
+.join-code-digits {
+  font-size: clamp(38px, 11vw, 60px); font-weight: 800; letter-spacing: .12em;
+  font-variant-numeric: tabular-nums; line-height: 1.1;
+}
+.join-code-hint { font-size: 12px; opacity: .7; }
+
+.join-steps { display: grid; gap: 10px; width: 100%; margin: 0; padding: 0; list-style: none; }
+.join-steps li {
+  position: relative; display: flex; align-items: center; gap: 14px; text-align: left;
+  padding: 14px 16px; border-radius: 16px;
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1);
+  animation: join-step-in 420ms cubic-bezier(.2,.9,.3,1) both;
+}
+@keyframes join-step-in { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
+.join-step-icon {
+  flex: none; width: 40px; height: 40px; display: grid; place-items: center;
+  border-radius: 12px; background: rgba(255,255,255,.12); color: #C9B6FF;
+}
+.join-step-icon svg { width: 21px; height: 21px; }
+.join-step-text { display: grid; gap: 2px; }
+.join-step-text strong { font-size: 15px; font-weight: 700; }
+.join-step-text small { font-size: 13px; color: rgba(255,255,255,.6); }
+.join-step-number {
+  margin-left: auto; font-size: 20px; font-weight: 800; color: rgba(255,255,255,.22);
+  font-variant-numeric: tabular-nums;
+}
+
+.join-stores { display: grid; gap: 10px; width: 100%; }
+@media (min-width: 430px) { .join-stores { grid-template-columns: 1fr 1fr; } }
+.join-store {
+  display: flex; align-items: center; gap: 12px; padding: 13px 16px;
+  border-radius: 15px; text-decoration: none; color: #14082E;
+  background: #fff; font-weight: 700;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+.join-store:hover { transform: translateY(-2px); box-shadow: 0 12px 26px rgba(0,0,0,.28); }
+.join-store svg { width: 24px; height: 24px; flex: none; }
+.join-store span { display: grid; text-align: left; line-height: 1.15; }
+.join-store small { font-size: 11px; font-weight: 600; opacity: .6; }
+.join-store strong { font-size: 15px; }
+
+.join-note { margin: 0; font-size: 13px; line-height: 1.6; color: rgba(255,255,255,.55); }
+
+@media (prefers-reduced-motion: reduce) {
+  .join-glow, .join-panel, .join-steps li, .join-status.is-live i { animation: none; }
+}
+
+/* ────────────────────────────────────── arena: question & podium polish ── */
+
+/* A projected answer tile is read from the back of a room. Depth and a lift on
+ * the correct one do more for that than a larger font, which was already at the
+ * limit of the grid. */
+.arena-option {
+  position: relative; overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 10px 26px rgba(0,0,0,.28);
+}
+.arena-option::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(160deg, rgba(255,255,255,.18), rgba(255,255,255,0) 58%);
+  pointer-events: none;
+}
+.arena-option-glyph {
+  display: grid; place-items: center; flex: none;
+  width: clamp(38px, 4vw, 62px); height: clamp(38px, 4vw, 62px);
+  border-radius: 14px; background: rgba(0,0,0,.18);
+}
+/* The right answer stands up out of the row rather than the wrong ones merely
+ * dimming — visible at a glance from twenty metres. */
+.arena-option:not(.faded) { transition: transform 320ms cubic-bezier(.2,.9,.3,1), box-shadow 320ms ease; }
+.arena-options.revealed .arena-option:not(.faded) {
+  transform: translateY(-6px) scale(1.02);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 18px 44px rgba(0,0,0,.42);
+}
+.arena-option-share {
+  padding: 4px 10px; border-radius: 999px; background: rgba(0,0,0,.24); font-weight: 800;
+}
+
+/* How many have answered, as a bar rather than a number nobody reads in time. */
+.arena-answered-bar {
+  height: 8px; border-radius: 999px; background: rgba(255,255,255,.14); overflow: hidden;
+}
+.arena-answered-bar i {
+  display: block; height: 100%; border-radius: inherit;
+  background: linear-gradient(90deg, #7C3AED, #22D3EE);
+  transition: width 420ms cubic-bezier(.2,.9,.3,1);
+}
+
+.arena-finish-eyebrow {
+  margin: 0; font-size: clamp(12px, 1.2vw, 16px); letter-spacing: .2em;
+  font-weight: 800; color: rgba(255,255,255,.5);
+}
+.arena-finish-title {
+  margin: 0; font-size: clamp(34px, 5.5vw, 84px); font-weight: 800; line-height: 1.05;
+  display: flex; align-items: center; gap: .35em; text-wrap: balance;
+}
+.arena-crown { font-size: .8em; animation: arena-crown 2.6s ease-in-out infinite; }
+@keyframes arena-crown { 0%,100% { transform: translateY(0) rotate(-6deg); } 50% { transform: translateY(-8px) rotate(6deg); } }
+
+.arena-podium-column.is-champion .arena-podium-name { font-size: clamp(19px, 2.1vw, 32px); }
+.arena-podium-medal { font-size: clamp(26px, 2.6vw, 44px); line-height: 1; }
+.arena-podium-place {
+  font-size: clamp(28px, 3.2vw, 52px); font-weight: 800; color: rgba(255,255,255,.55);
+  font-variant-numeric: tabular-nums;
+}
+.arena-podium-column.is-champion .arena-podium-block {
+  background: linear-gradient(180deg, rgba(250,204,21,.92), rgba(180,110,10,.6));
+}
+
+.arena-finish-rest {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 10px;
+  max-width: min(1100px, 92vw);
+}
+.arena-finish-chip {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 8px 14px; border-radius: 999px; font-size: clamp(13px, 1.2vw, 18px);
+  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12);
+}
+.arena-finish-chip b { color: rgba(255,255,255,.45); font-variant-numeric: tabular-nums; }
+.arena-finish-chip i { font-style: normal; color: rgba(255,255,255,.6); font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) { .arena-crown { animation: none; } }

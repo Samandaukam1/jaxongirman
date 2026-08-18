@@ -30,6 +30,10 @@ export type HostState = {
   reward_reserved: number;
   player_count: number;
   state_version: number;
+  /** When the current phase runs out, so the host can advance itself. */
+  phase_deadline: string | null;
+  /** How many have answered the open question. Zero outside one. */
+  answered_count: number;
 };
 
 export type SanitizedQuestion = {

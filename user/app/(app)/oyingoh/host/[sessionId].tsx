@@ -51,6 +51,16 @@ const REWARD_STEPS: { key: keyof GameRewardPlan; label: string }[] = [
  * A plan the wallet cannot cover refuses to start rather than failing at the
  * podium.
  */
+/**
+ * How long a finished question and a leaderboard stay on screen.
+ *
+ * Long enough to read the answer and find your own name, short enough that a
+ * room of twenty starts talking. Named here because it is a pacing decision
+ * rather than an implementation detail.
+ */
+const RESULT_SECONDS = 6;
+const LEADERBOARD_SECONDS = 8;
+
 export default function HostGameScreen() {
   const router = useRouter();
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
@@ -64,6 +74,9 @@ export default function HostGameScreen() {
   /** Loaded only when the screen was claimed without a game already chosen. */
   const [hostable, setHostable] = useState<Hostable[] | null>(null);
   const [busy, setBusy] = useState(false);
+  // A host who wants to talk over a question turns the clock off. The game is
+  // theirs; running itself is the default, not the rule.
+  const [autoPaused, setAutoPaused] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fatal, setFatal] = useState<string | null>(null);
 
@@ -111,6 +124,67 @@ export default function HostGameScreen() {
     const channel = subscribeToSession(sessionId, () => { void refresh(); });
     return () => { void supabase.removeChannel(channel); };
   }, [refresh, sessionId]);
+
+  const advance = useCallback(async (action: "next" | "finish" | "cancel") => {
+    if (!sessionId) return;
+    setBusy(true);
+    setError(null);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    try {
+      await advanceSession(sessionId, action);
+      await refresh();
+      if (action === "finish" || action === "cancel") await refreshWallet();
+    } catch (failure) {
+      setError(asErrorMessage(failure));
+    } finally {
+      setBusy(false);
+    }
+  }, [refresh, refreshWallet, sessionId]);
+
+  /**
+   * The game runs itself.
+   *
+   * Every phase used to wait for a tap, so the person running the room watched
+   * a phone instead of the players — and with one player answering instantly,
+   * everybody sat looking at a finished question until somebody noticed.
+   *
+   * Three rules, and all of them are things a host would have done anyway:
+   * close a question when its time is up or when everyone has answered, and
+   * move on from a result after long enough to read it. The lobby is left
+   * alone — starting is a decision, not a timeout — and so are open answers,
+   * which need a human verdict before anyone's score is right.
+   *
+   * `advance` is idempotent through `state_version`: a late tap and this timer
+   * firing together do not skip a question.
+   */
+  useEffect(() => {
+    if (!state || busy || autoPaused) return;
+
+    const everyoneAnswered = state.status === "question"
+      && state.player_count > 0
+      && (state.answered_count ?? 0) >= state.player_count;
+
+    // An open answer is scored by the host, so a result holding one waits.
+    const waitingOnVerdict = state.status === "question_result" && openAnswers.length > 0;
+
+    let delay: number | null = null;
+    if (state.status === "question") {
+      if (everyoneAnswered) {
+        // A beat, so the last player sees their own answer land.
+        delay = 900;
+      } else if (state.phase_deadline) {
+        delay = Math.max(0, new Date(state.phase_deadline).getTime() - Date.now());
+      }
+    } else if (state.status === "question_result" && !waitingOnVerdict) {
+      delay = RESULT_SECONDS * 1000;
+    } else if (state.status === "leaderboard") {
+      delay = LEADERBOARD_SECONDS * 1000;
+    }
+
+    if (delay === null) return;
+    const timer = setTimeout(() => { void advance("next"); }, delay);
+    return () => clearTimeout(timer);
+  }, [advance, autoPaused, busy, openAnswers.length, state]);
 
   // Open answers need a human verdict, so they are loaded whenever a result is
   // on screen.
@@ -186,21 +260,7 @@ export default function HostGameScreen() {
     }
   }
 
-  async function advance(action: "next" | "finish" | "cancel") {
-    if (!sessionId) return;
-    setBusy(true);
-    setError(null);
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    try {
-      await advanceSession(sessionId, action);
-      await refresh();
-      if (action === "finish" || action === "cancel") await refreshWallet();
-    } catch (failure) {
-      setError(asErrorMessage(failure));
-    } finally {
-      setBusy(false);
-    }
-  }
+
 
   function confirmCancel() {
     Alert.alert("O‘yinni bekor qilish", "Mukofot jamg‘armasi balansingizga qaytariladi.", [
@@ -455,7 +515,17 @@ export default function HostGameScreen() {
               onPress={() => void advance("next")}
             />
             {state.status !== "lobby" ? (
-              <PrimaryButton label="O‘yinni yakunlash" tone="secondary" disabled={busy} onPress={() => void advance("finish")} />
+              <>
+                {/* The game paces itself; this is how a host takes it back to
+                    talk over a question without the clock moving on. */}
+                <PrimaryButton
+                  label={autoPaused ? "Avtomatik o‘tishni yoqish" : "Avtomatik o‘tishni to‘xtatish"}
+                  tone="ghost"
+                  disabled={busy}
+                  onPress={() => setAutoPaused((value) => !value)}
+                />
+                <PrimaryButton label="O‘yinni yakunlash" tone="secondary" disabled={busy} onPress={() => void advance("finish")} />
+              </>
             ) : null}
             <PrimaryButton label="Bekor qilish" tone="ghost" disabled={busy} onPress={confirmCancel} />
           </>
