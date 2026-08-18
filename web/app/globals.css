@@ -336,6 +336,9 @@ body:has(.arena) .arena { min-height: 100vh; }
   margin: 0;
   font-weight: 800;
 }
+/* A single digit at 22vw fills the screen handsomely. The same size applied to
+ * a ten-letter word runs off both edges of it, which is what happened — so the
+ * word gets its own size rather than the digit's. */
 .arena-countdown {
   font-size: clamp(96px, 22vw, 320px);
   font-weight: 800;
@@ -343,6 +346,14 @@ body:has(.arena) .arena { min-height: 100vh; }
   margin: 0;
   color: var(--primary-bright);
   animation: arena-pop 500ms cubic-bezier(.2,.9,.3,1);
+}
+.arena-countdown.is-go {
+  font-size: clamp(40px, 9vw, 132px);
+  letter-spacing: -1px;
+  max-width: min(92vw, 1100px);
+  text-align: center;
+  line-height: 1.02;
+  text-wrap: balance;
 }
 @keyframes arena-pop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 

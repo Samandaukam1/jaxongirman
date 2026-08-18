@@ -380,7 +380,9 @@ export function ArenaScreen({ handoff, experienceRow }: {
 
       {snapshot?.status === "countdown" ? (
         <div className="arena-center">
-          <p className="arena-countdown">{remaining > 0 ? remaining : "BOSHLADIK!"}</p>
+          <p className={`arena-countdown${remaining > 0 ? "" : " is-go"}`}>
+            {remaining > 0 ? remaining : "BOSHLADIK!"}
+          </p>
         </div>
       ) : null}
 

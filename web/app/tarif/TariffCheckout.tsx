@@ -176,7 +176,23 @@ export function TariffCheckout() {
       setMissingDigits("");
 
       const started = await request;
-      if (!started.attemptId) throw new Error("To‘lov urinishi ochilmadi.");
+      /**
+       * Two answers that are not an attempt id, and only one is a failure.
+       *
+       * An order already paid comes back saying so — an app reopened after a
+       * dropped connection asking about a finished purchase is normal, and
+       * reporting it as "the attempt did not open" sends somebody to support
+       * about a payment that went through.
+       */
+      if ((started as { alreadyPaid?: boolean }).alreadyPaid) {
+        setStep("done");
+        return;
+      }
+      if (!started.attemptId) {
+        throw new Error(
+          "To‘lov urinishi ochilmadi. Agar SMS kelgan bo‘lsa, «To‘lash» tugmasini qayta bosing — kod saqlanib qoladi.",
+        );
+      }
       setAttemptId(started.attemptId);
       setMaskedCard(started.maskedCard);
       setSandbox(started.sandbox);

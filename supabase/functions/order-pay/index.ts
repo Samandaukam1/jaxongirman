@@ -133,6 +133,40 @@ Deno.serve(async (request) => {
 
     /* ------------------------------------------------------------- start */
     if (body.step !== "verify") {
+      /**
+       * An order already waiting on a code resumes it rather than starting over.
+       *
+       * The reply to `start` carries the attempt id, and a client that loses it
+       * — a dropped connection, an app sent to the background — is left holding
+       * an SMS for an attempt it can no longer name. Pressing pay again used to
+       * buy a second card and a second code from Payme and waste the first;
+       * worse, the buyer saw "the attempt did not open" about an attempt that
+       * had opened perfectly, which is what happened to JAX-2026-000008.
+       *
+       * So the live attempt is handed back. No provider call, no second text,
+       * and the buyer types the code they are already looking at.
+       */
+      if (order.status === "awaiting_verification") {
+        const { data: active } = await serviceClient.rpc("payment_card_attempt_active", {
+          p_subject_kind: "order", p_subject_id: orderId,
+        });
+        const live = active as
+          { ok?: boolean; attemptId?: string; displayPan?: string; expiryHint?: string } | null;
+        if (live?.ok && live.attemptId) {
+          return json({
+            status: "awaiting_verification",
+            orderNumber: order.order_number,
+            sandbox,
+            maskedCard: live.displayPan ?? null,
+            expiryHint: live.expiryHint ?? null,
+            attemptId: live.attemptId,
+            // Said plainly, because the buyer is about to be shown a code field
+            // for a message that arrived minutes ago.
+            resumed: true,
+          });
+        }
+      }
+
       // Clear the pre-unification column too, so an order opened by an older
       // deployed function cannot leave a live token behind after restart.
       await serviceClient.rpc("order_clear_attempt_token", { p_order_id: orderId });

@@ -84,6 +84,8 @@ export type PayStart = {
   sandbox: boolean;
   /** Opaque identity binding the next OTP call to this exact card attempt. */
   attemptId: string;
+  /** True when this is the attempt already texted, handed back rather than remade. */
+  resumed?: boolean;
   /** Trusted display-only mask returned by the server; never built in the client. */
   maskedCard: string | null;
   expiryHint: string | null;

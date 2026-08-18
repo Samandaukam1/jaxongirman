@@ -156,7 +156,17 @@ export default function PlayGameScreen() {
 
       {state.status === "countdown" ? (
         <View style={styles.center}>
-          <Text style={styles.countdownNumber}>{remaining > 0 ? remaining : "BOSHLADIK!"}</Text>
+          <Text
+            style={remaining > 0 ? styles.countdownNumber : styles.countdownGo}
+            // The word is one word and must stay one word. Shrinking beats
+            // wrapping "BOSHL / ADIK!" across two lines, which is what a
+            // ninety-six point face did on a phone.
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.5}
+          >
+            {remaining > 0 ? remaining : "BOSHLADIK!"}
+          </Text>
         </View>
       ) : null}
 
@@ -311,7 +321,13 @@ const styles = StyleSheet.create({
   waitTitle: { ...typography.title, color: colors.ink, textAlign: "center" },
   waitText: { ...typography.body, color: colors.inkMuted, textAlign: "center" },
   playerCount: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  countdownNumber: { fontFamily: "Manrope_700Bold", fontSize: 96, color: colors.primary },
+  countdownNumber: { fontFamily: "Manrope_700Bold", fontSize: 96, color: colors.primary, textAlign: "center" },
+  // A digit is one glyph and a word is ten. Sized for the word, then allowed to
+  // shrink further on a narrow phone rather than break in half.
+  countdownGo: {
+    fontFamily: "Manrope_700Bold", fontSize: 52, color: colors.primary,
+    textAlign: "center", letterSpacing: -0.5, paddingHorizontal: spacing.lg,
+  },
   questionMeta: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   questionIndex: { ...typography.caption, color: colors.inkMuted },
   timerPill: {
