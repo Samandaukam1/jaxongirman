@@ -27,6 +27,19 @@ export function TableSkeleton({ rows = 5 }: { rows?: number }) {
   return <div className="table-skeleton">{Array.from({ length: rows }, (_, index) => <span key={index} />)}</div>;
 }
 
+/**
+ * A dialog that is never taller than the screen.
+ *
+ * It used to grow to whatever its contents needed while the backdrop centred
+ * it, so a long one — the JElement import, once it was reporting on thirteen
+ * elements — hung off the top and the bottom of the viewport at once, with no
+ * scroll container anywhere. The heading was unreachable above and the submit
+ * button unreachable below, which is a dialog you can read but not use.
+ *
+ * So the card caps itself at the viewport and the body scrolls inside it. The
+ * title and the close button stay put, because they are how somebody works out
+ * where they are and how they get out.
+ */
 export function Modal({ title, description, children, onClose }: { title: string; description: string; children: ReactNode; onClose: () => void }) {
-  return <div className="modal-backdrop" role="presentation" onMouseDown={onClose}><section className="modal-card" role="dialog" aria-modal="true" aria-label={title} onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" type="button" aria-label="Yopish" onClick={onClose}>×</button><p className="eyebrow">XAVFSIZ AMAL</p><h2>{title}</h2><p className="muted">{description}</p>{children}</section></div>;
+  return <div className="modal-backdrop" role="presentation" onMouseDown={onClose}><section className="modal-card" role="dialog" aria-modal="true" aria-label={title} onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" type="button" aria-label="Yopish" onClick={onClose}>×</button><header className="modal-head"><p className="eyebrow">XAVFSIZ AMAL</p><h2>{title}</h2><p className="muted">{description}</p></header><div className="modal-body">{children}</div></section></div>;
 }

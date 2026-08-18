@@ -146,7 +146,17 @@ td small { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; 
 .table-skeleton { padding: 14px; display: grid; gap: 9px; }
 .table-skeleton span { height: 50px; border-radius: 9px; background: linear-gradient(90deg,var(--surface-muted) 20%,var(--surface) 45%,var(--surface-muted) 70%); background-size: 300% 100%; animation: shimmer 1.3s infinite; }
 .modal-backdrop { position: fixed; inset: 0; z-index: 100; padding: 22px; display: grid; place-items: center; background: rgba(24,14,42,.55); backdrop-filter: blur(5px); }
-.modal-card { position: relative; width: min(500px, 100%); padding: 32px; border-radius: 20px; background: #fff; box-shadow: 0 30px 90px rgba(24,10,48,.3); }
+/* Capped at the viewport so the card can never overflow past both edges at
+ * once, which is what left a long dialog with no reachable top and no
+ * reachable submit button. The body inside it does the scrolling. */
+.modal-card {
+  position: relative; width: min(500px, 100%);
+  max-height: calc(100dvh - 44px);
+  display: flex; flex-direction: column;
+  border-radius: 20px; background: #fff; box-shadow: 0 30px 90px rgba(24,10,48,.3);
+}
+.modal-head { padding: 32px 32px 0; flex: none; }
+.modal-body { padding: 14px 32px 32px; overflow-y: auto; overscroll-behavior: contain; }
 .modal-card h2 { margin: 7px 0 8px; font-size: 27px; }
 .modal-close { position: absolute; top: 15px; right: 15px; width: 34px; height: 34px; color: var(--ink-muted); border: 1px solid var(--border); border-radius: 9px; background: white; font-size: 22px; }
 .modal-card textarea { min-height: 100px; padding: 13px; resize: vertical; }
@@ -211,7 +221,8 @@ td small { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; 
   .search-box, .toolbar > select { width: 100%; }
   .settings-list article { grid-template-columns: 1fr; }
   .settings-list textarea { grid-column: auto; grid-row: auto; min-width: 0; }
-  .modal-card { padding: 26px 20px 22px; }
+  .modal-head { padding: 26px 20px 0; }
+  .modal-body { padding: 12px 20px 22px; }
 }
 
 /* A labelled toggle that sits on the same baseline grid as the text inputs
