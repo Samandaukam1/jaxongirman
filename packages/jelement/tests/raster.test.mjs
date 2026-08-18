@@ -5,7 +5,8 @@ import { buildJelement } from "../../../supabase/tests/helpers/build-jelement.mj
 
 const dir = buildJelement();
 const {
-  crop, dominantHue, gridCells, hexToHsl, hslToRgb, recolour, rgbToHsl, sliceSheet, trim,
+  crop, dominantHue, gridCells, hexToHsl, hslToRgb, isolateObject, recolour, rgbToHsl,
+  sliceSheet, trim,
 } = await import(`${dir}/raster.js`);
 
 /**
@@ -264,4 +265,63 @@ test("a sheet becomes twelve objects, each recolourable on its own", () => {
   for (let index = 0; index < objects.length; index += 1) {
     assert.deepEqual(at(amber[index], 7, 2), at(objects[index], 7, 2));
   }
+});
+
+/* ------------------------------------------------- one object per cell */
+
+test("a neighbour's overhang is not part of this object", () => {
+  /**
+   * The fault a real sheet produced. A fountain pen laid diagonally reached
+   * into the book's square, so the book's crop came back with a sliver of pen
+   * along one edge — and the pen's crop was missing it.
+   *
+   * No prompt fixes this reliably: an image model places by composition, not by
+   * arithmetic. Asking which pixels are joined to which does fix it.
+   */
+  const sheet = blank(40, 20);
+  // The object that belongs to the left cell.
+  fill(sheet, { x: 4, y: 4, width: 10, height: 10 }, GRAPHITE);
+  // A corner of the right cell's object, poking across the boundary at x=20.
+  fill(sheet, { x: 17, y: 15, width: 6, height: 3 }, LIME);
+
+  const bounds = isolateObject(sheet, { x: 0, y: 0, width: 20, height: 20 }, { padding: 0 });
+
+  assert.deepEqual(bounds, { x: 4, y: 4, width: 10, height: 10 },
+    "the crop must be the book, not the book plus a piece of pen");
+});
+
+test("the largest object wins by area, not by how far it sprawls", () => {
+  // A thin diagonal has a big bounding box and few pixels. Ranking by box would
+  // pick the fragment over the object.
+  const sheet = blank(30, 30);
+  fill(sheet, { x: 2, y: 2, width: 12, height: 12 }, GRAPHITE);
+  for (let step = 0; step < 25; step += 1) put(sheet, 2 + step, 28 - step, LIME);
+
+  const bounds = isolateObject(sheet, { x: 0, y: 0, width: 30, height: 30 }, { padding: 0 });
+  assert.deepEqual(bounds, { x: 2, y: 2, width: 12, height: 12 });
+});
+
+test("an object touching its own shadow stays whole", () => {
+  // Connected is connected. A contact shadow joined to the object is part of
+  // it, and cutting it off would leave the render floating.
+  const sheet = blank(20, 20);
+  fill(sheet, { x: 5, y: 4, width: 8, height: 8 }, GRAPHITE);
+  fill(sheet, { x: 4, y: 12, width: 10, height: 2 }, GRAPHITE, 90);
+
+  const bounds = isolateObject(sheet, { x: 0, y: 0, width: 20, height: 20 }, { padding: 0 });
+  assert.deepEqual(bounds, { x: 4, y: 4, width: 10, height: 10 });
+});
+
+test("slicing isolates by default and can be told not to", () => {
+  const sheet = blank(40, 20);
+  fill(sheet, { x: 4, y: 4, width: 10, height: 10 }, GRAPHITE);
+  fill(sheet, { x: 17, y: 15, width: 6, height: 3 }, LIME);
+
+  const isolated = sliceSheet(sheet, 2, 1, { padding: 0 });
+  assert.equal(isolated[0].width, 10, "the default drops the overhang");
+
+  // Some objects genuinely are two pieces — a pair of bookends, a quill beside
+  // its inkwell — and those need everything in the cell.
+  const whole = sliceSheet(sheet, 2, 1, { padding: 0, whole: true });
+  assert.ok(whole[0].width > 10, "whole keeps both");
 });

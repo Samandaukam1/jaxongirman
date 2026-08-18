@@ -9,6 +9,8 @@ export * from "./spec.ts";
 export * from "./document.ts";
 export { compile, type CompileResult } from "./compile.ts";
 export { ANALYZER_PROMPT, expansionPrompt } from "./standard.ts";
+export { SHEET_PROMPT, sheetExpansionPrompt } from "./sheet-prompt.ts";
+export { manifestToFamily, readManifest, type Manifest, type ManifestElement, type ManifestResult } from "./manifest.ts";
 export {
   crop, dominantHue, gridCells, hexToHsl, hslToRgb, recolour, rgbToHsl, sliceSheet, trim,
   type Pixels, type Rect, type RecolourOptions,

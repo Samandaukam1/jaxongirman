@@ -259,6 +259,91 @@ export function crop(pixels: Pixels, region: Rect): Pixels {
   return { width: region.width, height: region.height, data };
 }
 
+
+/**
+ * The object in a cell, and not its neighbour's elbow.
+ *
+ * Trimming to the alpha bounds of a whole cell assumes the cell holds exactly
+ * one object and nothing else. A generated sheet does not honour that: a pen
+ * laid diagonally reaches into the book's square, and the book's crop then
+ * includes a sliver of pen — so every element came out with a piece of the one
+ * beside it.
+ *
+ * No prompt fixes this reliably, because an image model places objects by
+ * composition rather than by arithmetic. What does fix it is asking which
+ * pixels are actually joined to which: the object is the largest connected
+ * region of opacity in the cell, and a stray corner of something else is a
+ * separate region however close it sits.
+ *
+ * Flood filled iteratively, four-connected. Recursion would overflow on a
+ * megapixel object, and eight-connectivity bridges a soft shadow to whatever it
+ * touches, which is the same fault in a subtler form.
+ */
+export function isolateObject(
+  pixels: Pixels,
+  region: Rect,
+  options: { threshold?: number; padding?: number } = {},
+): Rect | null {
+  const threshold = options.threshold ?? 8;
+  const padding = options.padding ?? 2;
+
+  const { x: left, y: top, width, height } = region;
+  const seen = new Uint8Array(width * height);
+  const stack: number[] = [];
+
+  const opaque = (localX: number, localY: number): boolean =>
+    (pixels.data[((top + localY) * pixels.width + left + localX) * 4 + 3] ?? 0) > threshold;
+
+  let best: Rect | null = null;
+  let bestArea = 0;
+
+  for (let startY = 0; startY < height; startY += 1) {
+    for (let startX = 0; startX < width; startX += 1) {
+      const startIndex = startY * width + startX;
+      if (seen[startIndex] || !opaque(startX, startY)) continue;
+
+      seen[startIndex] = 1;
+      stack.push(startIndex);
+
+      let minX = startX, maxX = startX, minY = startY, maxY = startY, area = 0;
+
+      while (stack.length > 0) {
+        const index = stack.pop()!;
+        const x = index % width;
+        const y = (index - x) / width;
+        area += 1;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+
+        if (x > 0 && !seen[index - 1] && opaque(x - 1, y)) { seen[index - 1] = 1; stack.push(index - 1); }
+        if (x + 1 < width && !seen[index + 1] && opaque(x + 1, y)) { seen[index + 1] = 1; stack.push(index + 1); }
+        if (y > 0 && !seen[index - width] && opaque(x, y - 1)) { seen[index - width] = 1; stack.push(index - width); }
+        if (y + 1 < height && !seen[index + width] && opaque(x, y + 1)) { seen[index + width] = 1; stack.push(index + width); }
+      }
+
+      // Area rather than bounding box: a thin diagonal has a large box and few
+      // pixels, and a fragment of it would otherwise outrank the real object.
+      if (area > bestArea) {
+        bestArea = area;
+        best = { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 };
+      }
+    }
+  }
+
+  if (!best) return null;
+
+  const x = Math.max(left, left + best.x - padding);
+  const y = Math.max(top, top + best.y - padding);
+  return {
+    x,
+    y,
+    width: Math.min(left + width, left + best.x + best.width + padding) - x,
+    height: Math.min(top + height, top + best.y + best.height + padding) - y,
+  };
+}
+
 /**
  * A sheet, cut into the objects on it.
  *
@@ -274,10 +359,15 @@ export function sliceSheet(
   pixels: Pixels,
   columns: number,
   rows: number,
-  options: { threshold?: number; padding?: number } = {},
+  options: { threshold?: number; padding?: number; whole?: boolean } = {},
 ): (Pixels | null)[] {
+  // `whole` keeps the old behaviour — everything opaque in the cell — for a
+  // sheet whose objects are genuinely several separate pieces. The default is
+  // the largest connected object, because a neighbour's overhang is the common
+  // case and a two-piece object is the rare one.
+  const bound = options.whole ? trim : isolateObject;
   return gridCells(pixels.width, pixels.height, columns, rows).map((cell) => {
-    const bounds = trim(pixels, cell, options);
+    const bounds = bound(pixels, cell, options);
     return bounds ? crop(pixels, bounds) : null;
   });
 }

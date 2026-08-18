@@ -1,6 +1,5 @@
 import {
-  ANALYZER_PROMPT, compile, elementHealth, expansionPrompt, familyHealth,
-  findDuplicates, findInternalDuplicates, type JElementFamily,
+  manifestToFamily, readManifest, SHEET_PROMPT, sheetExpansionPrompt,
 } from "@jaxongirman/jelement";
 import { Copy, Download, FileCode2, Plus, Search, Shapes, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -115,10 +114,10 @@ export function JElementsPage() {
       action={
         <div className="header-actions">
           <button className="secondary-button" type="button" onClick={() => setStandardOpen(true)}>
-            <FileCode2 size={16} /> JElement standarti
+            <FileCode2 size={16} /> Varaq promti
           </button>
           <button className="secondary-button" type="button" onClick={() => setImportOpen(true)}>
-            <Upload size={16} /> Import
+            <Upload size={16} /> Manifestdan oila
           </button>
         </div>
       }
@@ -208,9 +207,9 @@ export function JElementsPage() {
 
     {standardOpen ? <StandardModal onClose={() => setStandardOpen(false)} /> : null}
     {importOpen ? (
-      <ImportModal
+      <ManifestModal
         onClose={() => setImportOpen(false)}
-        onSaved={(name) => { setMessage(`«${name}» qoralama sifatida saqlandi.`); void load(); }}
+        onSaved={(name) => { setMessage(`«${name}» yaratildi — endi rasm varag‘ini biriktiring.`); void load(); }}
       />
     ) : null}
     {expansionFor ? (
@@ -259,11 +258,101 @@ function CopyBlock({ text, filename }: { text: string; filename: string }) {
 function StandardModal({ onClose }: { onClose: () => void }) {
   return (
     <Modal
-      title="JElement standarti"
-      description="Bu promptni nusxalab, reference rasm bilan birga vision modelga bering. Qaytgan spetsifikatsiya Import orqali joylanadi."
+      title="Varaq promti"
+      description="Buni rasm modeliga bering. Ikkita narsa qaytadi: 4×3 to‘rda joylashgan shaffof PNG varaq va uni nomlaydigan JSON manifest. Ikkalasi ham kerak."
       onClose={onClose}
     >
-      <CopyBlock text={ANALYZER_PROMPT} filename="jelement-analyzer-v1.txt" />
+      <CopyBlock text={SHEET_PROMPT} filename="jelement-sheet-prompt.txt" />
+    </Modal>
+  );
+}
+
+/**
+ * A family, created from the manifest that came back with its sheet.
+ *
+ * This replaced a flow that asked a model to describe each object as boxes and
+ * paths in an indented language of its own. That language nested by leading
+ * spaces, chat flattens leading spaces, and the result was a library of empty
+ * squares — so the description is JSON now, and it describes only what things
+ * are called. The drawing is the render, attached afterwards.
+ */
+function ManifestModal({ onClose, onSaved }: { onClose: () => void; onSaved: (name: string) => void }) {
+  const [source, setSource] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+
+  const result = useMemo(() => (source.trim() ? readManifest(source) : null), [source]);
+
+  async function save() {
+    if (!result?.manifest) return;
+    setSaving(true);
+    setFailure(null);
+    const { error } = await supabase.rpc("admin_save_jelement_family", {
+      p_spec: manifestToFamily(result.manifest) as never,
+      p_source_prompt: source,
+    });
+    setSaving(false);
+    if (error) { setFailure(errorMessage(error)); return; }
+    onSaved(result.manifest.family.name);
+    onClose();
+  }
+
+  return (
+    <Modal
+      title="Manifestdan oila"
+      description="Rasm modeli qaytargan JSON manifestni joylang. Oila va elementlar nomlari bilan yaratiladi; rasmlar keyin oila sahifasida biriktiriladi."
+      onClose={onClose}
+    >
+      <textarea
+        className="import-area"
+        rows={12}
+        value={source}
+        onChange={(event) => setSource(event.target.value)}
+        placeholder={'{\n  "family": { "name": "…", "slug": "…" },\n  "grid": { "columns": 4, "rows": 3 },\n  "elements": [ … ]\n}'}
+      />
+
+      {result && result.errors.length > 0 ? (
+        <section className="diagnostics diagnostics-error">
+          <h3>{result.errors.length} ta xato — saqlab bo‘lmaydi</h3>
+          <ul>{result.errors.slice(0, 12).map((item, index) => <li key={index}>{item}</li>)}</ul>
+        </section>
+      ) : null}
+
+      {result && result.warnings.length > 0 ? (
+        <section className="diagnostics diagnostics-warning">
+          <h3>{result.warnings.length} ta ogohlantirish</h3>
+          <ul>{result.warnings.slice(0, 8).map((item, index) => <li key={index}>{item}</li>)}</ul>
+        </section>
+      ) : null}
+
+      {result?.manifest ? (
+        <section className="import-preview">
+          <h3>{result.manifest.family.name}</h3>
+          <p className="family-meta">
+            {result.manifest.grid.columns}×{result.manifest.grid.rows} to‘r ·{" "}
+            {result.manifest.elements.length} ta element
+          </p>
+          <ol className="element-list">
+            {result.manifest.elements.map((element) => (
+              <li key={element.cell}>
+                <strong>{element.cell}. {element.displayName}</strong>
+                <span className="family-meta">{element.canonicalName}</span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      ) : null}
+
+      {failure ? <ErrorState message={failure} /> : null}
+
+      <button
+        className="primary-button"
+        type="button"
+        disabled={!result?.manifest || saving}
+        onClick={() => void save()}
+      >
+        <Shapes size={16} /> {saving ? "Saqlanmoqda…" : "Oilani yaratish"}
+      </button>
     </Modal>
   );
 }
@@ -287,24 +376,11 @@ function ExpansionModal({ family, onClose }: { family: FamilyRow; onClose: () =>
       if (!active) return;
       if (error) { setFailure(errorMessage(error)); return; }
 
-      const shaped = {
-        format: "JELEMENT" as const,
-        version: "1.0",
-        family: {
-          name: family.name, slug: family.slug, category: family.category,
-          subcategory: "", style: family.style, description: "",
-        },
-        visualDNA: {} as never,
-        colorTokens: family.color_tokens ?? {},
-        search: { keywords: [], industries: [], concepts: [] },
-        elements: (data ?? []).map((row, index) => ({
-          index,
-          canonicalName: row.canonical_name,
-          semantic: { aliases: ((row.semantic as { aliases?: string[] })?.aliases ?? []) },
-        })),
-      } as unknown as JElementFamily;
-
-      setPrompt(expansionPrompt(shaped, 12));
+      setPrompt(sheetExpansionPrompt(
+        { name: family.name, slug: family.slug, category: family.category, style: family.style },
+        (data ?? []).map((row) => row.canonical_name),
+        12,
+      ));
     })();
     return () => { active = false; };
   }, [family]);
@@ -321,196 +397,3 @@ function ExpansionModal({ family, onClose }: { family: FamilyRow; onClose: () =>
   );
 }
 
-/**
- * Paste, read, review, save as a draft.
- *
- * The preview is not decoration. An analyzer's reading of a picture is a guess
- * about geometry, and the admin who has the picture in front of them is the
- * only one who can tell whether it was seen correctly — so every warning is
- * shown, and saving never publishes.
- */
-function ImportModal({ onClose, onSaved }: { onClose: () => void; onSaved: (name: string) => void }) {
-  const [source, setSource] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [failure, setFailure] = useState<string | null>(null);
-  const [existing, setExisting] = useState<{ canonicalName: string; semantic: Record<string, unknown> }[]>([]);
-
-  const result = useMemo(() => (source.trim() ? compile(source) : null), [source]);
-
-  /**
-   * What the family being imported already holds, when it is not new.
-   *
-   * An expansion returns siblings, and an analyzer that does not know an
-   * excavator is taken will return another one under a different name. Checking
-   * before the save is what makes the duplicate cost a click rather than
-   * living in the library forever.
-   */
-  useEffect(() => {
-    const slug = result?.family?.family.slug;
-    if (!slug) { setExisting([]); return; }
-
-    let active = true;
-    void (async () => {
-      const { data } = await supabase
-        .from("jelements")
-        .select("canonical_name, semantic, jelement_families!inner(slug)")
-        .eq("jelement_families.slug", slug)
-        .neq("status", "archived");
-
-      if (!active) return;
-      setExisting((data ?? []).map((row) => ({
-        canonicalName: (row as { canonical_name: string }).canonical_name,
-        semantic: (row as { semantic: Record<string, unknown> }).semantic ?? {},
-      })));
-    })();
-    return () => { active = false; };
-  }, [result?.family?.family.slug]);
-
-  const duplicates = useMemo(() => {
-    if (!result?.family) return [];
-    const shaped = result.family.elements.map((element) => ({
-      canonicalName: element.canonicalName, semantic: element.semantic,
-    }));
-    const shapedExisting = existing.map((row) => ({
-      canonicalName: row.canonicalName,
-      semantic: {
-        aliases: [], uzbekTerms: [], englishTerms: [], russianTerms: [],
-        industries: [], concepts: [], actions: [], contexts: [],
-        ...(row.semantic as object),
-      },
-    })) as never;
-
-    return [
-      ...findInternalDuplicates(shaped as never),
-      ...findDuplicates(shaped as never, shapedExisting),
-    ];
-  }, [result, existing]);
-
-  async function save() {
-    if (!result?.family) return;
-    setSaving(true); setFailure(null);
-    const { error } = await supabase.rpc("admin_save_jelement_family", {
-      p_spec: result.family as never,
-      p_source_prompt: source,
-    });
-    setSaving(false);
-    if (error) { setFailure(errorMessage(error)); return; }
-    onSaved(result.family.family.name);
-    onClose();
-  }
-
-  return (
-    <Modal
-      title="JElement import"
-      description="Vision model qaytargan spetsifikatsiyani joylang. Tekshiruvdan o‘tgach qoralama sifatida saqlanadi — nashr alohida qadam."
-      onClose={onClose}
-    >
-      <textarea
-        className="import-area"
-        rows={12}
-        value={source}
-        onChange={(event) => setSource(event.target.value)}
-        placeholder="JELEMENT-FAMILY 1.0&#10;&#10;[FAMILY]&#10;name: …"
-      />
-
-      {result ? (
-        <div className="import-report">
-          {result.diagnostics.errors.length > 0 ? (
-            <section className="diagnostics diagnostics-error">
-              <h3>{result.diagnostics.errors.length} ta xato — saqlab bo‘lmaydi</h3>
-              <ul>
-                {result.diagnostics.errors.slice(0, 12).map((item, index) => (
-                  <li key={`${item.code}-${index}`}>
-                    <strong>{item.message}</strong>
-                    {item.hint ? <span> {item.hint}</span> : null}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
-          {duplicates.length > 0 ? (
-            <section className="diagnostics diagnostics-warning">
-              <h3>{duplicates.length} ta ehtimoliy takror</h3>
-              <ul>
-                {duplicates.map((match, index) => (
-                  <li key={`${match.candidate}-${index}`}>
-                    <strong>{match.candidate}</strong> ↔ {match.existing}
-                    <span> {match.reason}</span>
-                  </li>
-                ))}
-              </ul>
-              {/* A warning, not a refusal: two similar names are sometimes two
-                  objects, and the admin has the reference sheet in front of
-                  them. Saving is still allowed. */}
-            </section>
-          ) : null}
-
-          {result.diagnostics.warnings.length > 0 ? (
-            <section className="diagnostics diagnostics-warning">
-              <h3>{result.diagnostics.warnings.length} ta ogohlantirish</h3>
-              <ul>
-                {result.diagnostics.warnings.slice(0, 12).map((item, index) => (
-                  <li key={`${item.code}-${index}`}>{item.message}</li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
-          {result.family ? (
-            <section className="import-preview">
-              <h3>{result.family.family.name}</h3>
-              <p className="family-meta">
-                {result.family.family.category} · {result.family.family.style} ·
-                {" "}{result.family.elements.length} ta element ·
-                {" "}<strong>{familyHealth(result.family).score}/100</strong>
-              </p>
-              <div className="token-row">
-                {Object.entries(result.family.colorTokens).map(([role, value]) => (
-                  <span key={role} className="token-swatch" title={`${role} ${value}`} style={{ background: value }} />
-                ))}
-              </div>
-              {/* The score is a way of sorting; the deductions are what an
-                  admin can act on, so those are what is shown. A total on its
-                  own says something is wrong and never says what. */}
-              <ol className="element-list">
-                {result.family.elements.map((element) => {
-                  const health = elementHealth(element, result.family!);
-                  return (
-                    <li key={element.canonicalName}>
-                      <strong>{element.canonicalName}</strong>
-                      <span className={health.score >= 85 ? "health-good" : health.score >= 65 ? "health-fair" : "health-poor"}>
-                        {health.score}/100 · {element.geometry.components.length} komponent
-                      </span>
-                      {health.deductions.length > 0 ? (
-                        <ul className="deduction-list">
-                          {health.deductions.slice(0, 4).map((deduction, index) => (
-                            <li key={`${deduction.dimension}-${index}`}>
-                              −{deduction.points} {deduction.reason}
-                              {deduction.fix ? <em> {deduction.fix}</em> : null}
-                            </li>
-                          ))}
-                        </ul>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ol>
-            </section>
-          ) : null}
-        </div>
-      ) : null}
-
-      {failure ? <ErrorState message={failure} /> : null}
-
-      <button
-        className="primary-button"
-        type="button"
-        disabled={!result?.family || saving}
-        onClick={() => void save()}
-      >
-        <Shapes size={16} /> {saving ? "Saqlanmoqda…" : "Qoralama sifatida saqlash"}
-      </button>
-    </Modal>
-  );
-}
