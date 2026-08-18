@@ -1,11 +1,12 @@
 import {
   manifestToFamily, readManifest, SHEET_PROMPT, sheetExpansionPrompt,
 } from "@jaxongirman/jelement";
-import { Copy, Download, FileCode2, Plus, Search, Shapes, Upload } from "lucide-react";
+import { Copy, Download, FileCode2, Plus, Search, Shapes, Trash2, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ErrorState, Modal, PageHeader, TableSkeleton } from "@/components/AdminUI";
 import { errorMessage, stamp } from "@/lib/format";
+import { deleteFamily } from "@/lib/jelement";
 import { navigate } from "@/lib/router";
 import { supabase } from "@/lib/supabase";
 
@@ -88,6 +89,37 @@ export function JElementsPage() {
     if (publishError) setError(errorMessage(publishError));
     else { setMessage(`«${family.name}» nashr qilindi.`); await load(); }
     setBusy(null);
+  }
+
+  /**
+   * Deletes a family and everything in it.
+   *
+   * Confirmed by name rather than by a bare "are you sure": the two buttons sit
+   * side by side and one of them is recoverable. Naming what is about to go —
+   * and how many elements go with it — is what tells the two apart at the
+   * moment of clicking.
+   *
+   * The refusal, when a deck is still using something here, comes back from the
+   * database naming the elements. It is shown as written.
+   */
+  async function remove(family: FamilyRow) {
+    const confirmed = window.confirm(
+      `«${family.name}» va uning ${family.element_count} ta elementi butunlay o‘chiriladi.\n\n`
+      + "Rasm fayllari ham o‘chadi. Bu amalni qaytarib bo‘lmaydi.\n\n"
+      + "Slaydlarda ishlatilayotgan element bo‘lsa, o‘chirish rad etiladi.",
+    );
+    if (!confirmed) return;
+
+    setBusy(family.id); setError(null); setMessage(null);
+    try {
+      await deleteFamily(family.id);
+      setMessage(`«${family.name}» o‘chirildi.`);
+      await load();
+    } catch (failure) {
+      setError(errorMessage(failure));
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function archive(family: FamilyRow) {
@@ -198,6 +230,9 @@ export function JElementsPage() {
               </button>
               <button className="secondary-button" type="button" disabled={busy === family.id} onClick={() => void archive(family)}>
                 {family.status === "archived" ? "Qaytarish" : "Arxivlash"}
+              </button>
+              <button className="danger-button" type="button" disabled={busy === family.id} onClick={() => void remove(family)}>
+                <Trash2 size={15} /> O‘chirish
               </button>
             </div>
           </article>

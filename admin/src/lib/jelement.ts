@@ -96,3 +96,42 @@ function hueOf(hex: string): number {
   if (max === g) return ((b - r) / span + 2) * 60;
   return ((r - g) / span + 4) * 60;
 }
+
+/**
+ * Removes an element, and the files that were only its.
+ *
+ * The row goes first and the bucket objects after, from the list the database
+ * hands back. That order is deliberate: an object with no row is litter, while a
+ * row pointing at a deleted file is an element that renders as a broken image
+ * on somebody's slide.
+ *
+ * A refusal comes back as a sentence naming what is in the way, because "in
+ * use" is not something an admin can act on and "«Ochiq kitob» is on a slide"
+ * is.
+ */
+export async function deleteElement(elementId: string): Promise<void> {
+  const { data, error } = await supabase.rpc("admin_delete_jelement", { p_element_id: elementId });
+  if (error) throw error;
+  await removeAssets(data as string[] | null);
+}
+
+export async function deleteFamily(familyId: string): Promise<void> {
+  const { data, error } = await supabase.rpc("admin_delete_jelement_family", { p_family_id: familyId });
+  if (error) throw error;
+  await removeAssets(data as string[] | null);
+}
+
+/**
+ * Best-effort, and deliberately so.
+ *
+ * The rows are already gone by the time this runs. A storage failure here
+ * leaves a few unreferenced files in a bucket, which costs pennies and can be
+ * swept later; turning it into an error would tell an admin the deletion failed
+ * when the thing they asked to delete is gone.
+ */
+async function removeAssets(paths: string[] | null): Promise<void> {
+  const list = (paths ?? []).filter(Boolean);
+  if (list.length === 0) return;
+  const { error } = await supabase.storage.from(ASSET_BUCKET).remove(list);
+  if (error) console.warn("jelement assets left behind", error.message);
+}

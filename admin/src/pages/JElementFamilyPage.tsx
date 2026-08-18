@@ -2,11 +2,12 @@ import {
   COLOR_TOKENS, elementHealth, previewMatrix,
   type ColorToken, type JElement, type JElementFamily,
 } from "@jaxongirman/jelement";
-import { ArrowLeft, RotateCcw } from "lucide-react";
+import { ArrowLeft, RotateCcw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { JElementPreview } from "@/components/JElementPreview";
 import { JElementSheet } from "@/components/JElementSheet";
+import { deleteElement } from "@/lib/jelement";
 import { ErrorState, PageHeader, TableSkeleton } from "@/components/AdminUI";
 import { errorMessage } from "@/lib/format";
 import { navigate } from "@/lib/router";
@@ -154,6 +155,29 @@ export function JElementFamilyPage({ familyId }: { familyId: string }) {
     [family, tokens],
   );
 
+  /**
+   * Deletes one element and the files that were only its.
+   *
+   * Refused by the database when a slide still holds it, with a sentence naming
+   * the element — shown as written, because an admin can act on "«Ochiq kitob»
+   * is on a slide" and cannot act on "in use".
+   */
+  async function removeElement(row: ElementRow) {
+    const name = row.display_name || row.canonical_name;
+    if (!window.confirm(`«${name}» butunlay o‘chiriladi. Rasm fayllari ham o‘chadi.`)) return;
+
+    setSaving(true); setError(null); setMessage(null);
+    try {
+      await deleteElement(row.id);
+      setMessage(`«${name}» o‘chirildi.`);
+      await load();
+    } catch (failure) {
+      setError(errorMessage(failure));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function saveColours() {
     if (!family) return;
     setSaving(true); setError(null); setMessage(null);
@@ -244,19 +268,29 @@ export function JElementFamilyPage({ familyId }: { familyId: string }) {
           const element = toElement(row);
           const health = elementHealth(element, asFamily);
           return (
-            <button
-              key={row.id}
-              type="button"
-              className={`element-card ${selected === row.id ? "is-selected" : ""}`}
-              onClick={() => setSelected(selected === row.id ? null : row.id)}
-            >
-              <JElementPreview element={element} family={asFamily} size={128} />
-              <strong>{row.display_name || row.canonical_name}</strong>
-              <span className="family-meta">{row.canonical_name}</span>
-              <span className={health.score >= 85 ? "health-good" : health.score >= 65 ? "health-fair" : "health-poor"}>
-                {health.score}/100
-              </span>
-            </button>
+            <div key={row.id} className={`element-card ${selected === row.id ? "is-selected" : ""}`}>
+              <button
+                type="button"
+                className="element-card-body"
+                onClick={() => setSelected(selected === row.id ? null : row.id)}
+              >
+                <JElementPreview element={element} family={asFamily} size={128} />
+                <strong>{row.display_name || row.canonical_name}</strong>
+                <span className="family-meta">{row.canonical_name}</span>
+                <span className={health.score >= 85 ? "health-good" : health.score >= 65 ? "health-fair" : "health-poor"}>
+                  {health.score}/100
+                </span>
+              </button>
+              <button
+                type="button"
+                className="element-card-delete"
+                aria-label={`${row.display_name || row.canonical_name} — o‘chirish`}
+                disabled={saving}
+                onClick={() => void removeElement(row)}
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
           );
         })}
       </div>

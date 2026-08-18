@@ -4146,6 +4146,14 @@ export type Database = {
       }
       admin_delete_finance_entry: { Args: { p_id: string }; Returns: boolean }
       admin_delete_game_category: { Args: { p_id: string }; Returns: boolean }
+      admin_delete_jelement: {
+        Args: { p_element_id: string }
+        Returns: string[]
+      }
+      admin_delete_jelement_family: {
+        Args: { p_family_id: string }
+        Returns: string[]
+      }
       admin_duplicate_design: {
         Args: { p_design_id: string; p_name: string; p_slug: string }
         Returns: string
@@ -5201,6 +5209,10 @@ export type Database = {
       jelement_reindex_aliases: {
         Args: { p_element_id: string }
         Returns: undefined
+      }
+      jelement_in_use: {
+        Args: { p_element_id: string }
+        Returns: boolean
       }
       jelement_resolve: {
         Args: { p_element_id: string; p_version?: number }
