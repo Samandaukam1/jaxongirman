@@ -16,7 +16,7 @@
 
 /** Recognised by Gemini; anything else is dropped rather than passed through. */
 const ALLOWED = new Set([
-  "type", "format", "description", "nullable", "enum",
+  "type", "format", "description", "nullable", "enum", "anyOf",
   "items", "properties", "required", "minItems", "maxItems", "propertyOrdering",
 ]);
 
@@ -26,6 +26,7 @@ export function toGeminiSchema(schema: unknown): unknown {
 
   const source = schema as Record<string, unknown>;
   const out: Record<string, unknown> = {};
+  let union: Record<string, unknown>[] | null = null;
 
   for (const [key, value] of Object.entries(source)) {
     if (!ALLOWED.has(key)) continue;
@@ -48,7 +49,44 @@ export function toGeminiSchema(schema: unknown): unknown {
       continue;
     }
 
+    if (key === "anyOf" && Array.isArray(value)) {
+      union = value as Record<string, unknown>[];
+      continue;
+    }
+
     out[key] = toGeminiSchema(value);
+  }
+
+  /**
+   * `anyOf: [X, { type: "null" }]` is how OpenAI's strict mode says "an X or
+   * nothing", and it is the only way it can say it — strict mode has no
+   * `nullable`. Gemini has `nullable` and no `type: "null"`, so the same
+   * promise has to be re-stated rather than passed along.
+   *
+   * Dropping it instead, which is what happened before this existed, turned
+   * four properties of the slide schema into `{}`. An empty schema is not a
+   * loose schema, it is an invalid one: Gemini answered the whole request with
+   * an HTTP 400, every deck failed at the writing stage, and because the old
+   * code read a 400 as "try the other vendor" the bill went to OpenAI and the
+   * cause stayed hidden for as long as that account had money in it.
+   */
+  if (union) {
+    const real = union.filter((member) => member?.type !== "null");
+    const nullable = real.length !== union.length;
+
+    if (real.length === 1) {
+      // One member and null: the member, marked nullable. Anything the wrapper
+      // said for itself — a description, usually — outranks the member's copy.
+      const collapsed = toGeminiSchema(real[0]) as Record<string, unknown>;
+      for (const [key, value] of Object.entries(collapsed)) {
+        if (!(key in out)) out[key] = value;
+      }
+    } else if (real.length > 1) {
+      // A genuine union. Gemini understands `anyOf` itself; it was only ever
+      // the null member it could not read.
+      out.anyOf = real.map(toGeminiSchema);
+    }
+    if (nullable) out.nullable = true;
   }
 
   return out;

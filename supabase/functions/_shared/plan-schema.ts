@@ -63,7 +63,7 @@ const nullableString = {
     }
   ]
 };
-export function outlineSchema(slideCount) {
+export function outlineSchema(slideCount: number): Record<string, unknown> {
   return {
     type: "object",
     additionalProperties: false,
@@ -225,7 +225,7 @@ const chartSchema = {
     }
   ]
 };
-export function contentSchema(slideCount) {
+export function contentSchema(slideCount: number): Record<string, unknown> {
   return {
     type: "object",
     additionalProperties: false,
@@ -371,7 +371,7 @@ export const editorOperationsSchema = {
  * Only the fields that did not fit, and only their text. Nothing about type
  * size: shrinking is the renderer's last resort and is not the writer's to
  * offer, which is the whole point of asking for a rewrite instead.
- */ export function rewriteSchema() {
+ */ export function rewriteSchema(): Record<string, unknown> {
   return {
     type: "object",
     additionalProperties: false,
