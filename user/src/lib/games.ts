@@ -175,10 +175,13 @@ export type GenerateGameInput = {
 export async function generateGame(input: GenerateGameInput): Promise<{ gameId: string; status: string }> {
   const { data, error } = await supabase.functions.invoke("generate-game", { body: input });
   if (error) {
-    // The function wraps its refusals in a JSON body worth surfacing verbatim.
-    const context = (error as { context?: Response }).context;
-    if (context) {
-      const body = await context.json().catch(() => null) as { error?: string } | null;
+    // The function wraps its refusals in a JSON body worth surfacing verbatim —
+    // but `context` is only sometimes a `Response`, and calling `.json()` on
+    // whatever else it may be throws a TypeError that reaches the screen as the
+    // error. Checked before it is used, for the same reason as in `orders.ts`.
+    const context = (error as { context?: unknown }).context;
+    if (context && typeof (context as Response).json === "function") {
+      const body = await (context as Response).json().catch(() => null) as { error?: string } | null;
       if (body?.error) throw new Error(body.error);
     }
     throw error;

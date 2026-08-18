@@ -3,7 +3,7 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js";
 import { privacySafeIdentifier, requestContext } from "../_shared/auth.ts";
 import { preflight } from "../_shared/cors.ts";
 import { bodyJson, errorResponse, HttpError, json } from "../_shared/http.ts";
-import { OpenAIClient } from "../_shared/openai.ts";
+import { geminiWriter } from "../_shared/gemini.ts";
 
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void } | undefined;
 
@@ -388,17 +388,35 @@ async function runGeneration(task: GenerationTask): Promise<void> {
     if (mode === "mock") {
       game = mockGame(task.source, task.count, task.types);
     } else {
-      const openai = new OpenAIClient();
-      model = openai.textModel;
-      const result = await openai.structured<RawGame>(
-        [
-          { role: "system", content: systemPrompt() },
-          { role: "user", content: userPrompt(task.source, task.difficulty, task.audience, task.count, task.types, task.onlyFromSource) },
-        ],
-        "oyingoh_game",
-        gameSchema as unknown as Record<string, unknown>,
-        task.safetyIdentifier,
+      /**
+       * The last thing on OpenAI, moved for the reason everything else was.
+       *
+       * Games were left alone when the presentation pipeline changed vendors,
+       * on the grounds that they are a different product and the brief said not
+       * to disturb them. That reasoning ignored the only thing that mattered:
+       * a zero balance is not a property of a pipeline, it is a property of the
+       * account — so "O'yin yaratilmadi" was the same outage wearing a
+       * different message, and it arrived exactly as predicted.
+       */
+      const writer = geminiWriter();
+      if (!writer.configured) {
+        throw new HttpError(503, "AI xizmati sozlanmagan.", "provider_not_configured");
+      }
+      model = writer.writingModel;
+
+      const system = systemPrompt();
+      const prompt = userPrompt(
+        task.source, task.difficulty, task.audience, task.count, task.types, task.onlyFromSource,
       );
+      const result = await writer.structured<RawGame>({
+        prompt: `${system}\n\n${prompt}`,
+        system,
+        schemaName: "oyingoh_game",
+        schema: gameSchema as unknown as Record<string, unknown>,
+        // A dozen questions with options and explanations is a long answer, and
+        // a truncated one is a game with three questions in it.
+        maxOutputTokens: 16_000,
+      });
       game = result.data;
       usage = result.usage;
       requestId = result.requestId;
@@ -446,7 +464,7 @@ async function runGeneration(task: GenerationTask): Promise<void> {
     const pricing = await providerPricing(service, model);
     await service.from("ai_usage").insert({
       owner_id: task.ownerId,
-      provider: mode === "mock" ? "mock" : "openai",
+      provider: mode === "mock" ? "mock" : "google",
       model,
       operation: task.replaceQuestionId ? "game_question_regeneration" : "game_generation",
       input_tokens: usage.input_tokens ?? 0,

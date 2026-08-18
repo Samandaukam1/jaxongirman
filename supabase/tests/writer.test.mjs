@@ -127,6 +127,10 @@ test("the presentation text path names no OpenAI client anywhere", async () => {
     "../functions/_shared/pipeline.ts",
     "../functions/generate-presentation/index.ts",
     "../functions/edit-presentation/index.ts",
+    // The last one to move. Games were left on OpenAI as "a different product",
+    // which ignored the only thing that mattered: a zero balance belongs to the
+    // account, not the pipeline.
+    "../functions/generate-game/index.ts",
   ];
 
   for (const file of files) {

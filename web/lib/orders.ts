@@ -150,9 +150,23 @@ async function callPay(body: Record<string, unknown>): Promise<PayStart | PayDon
     headers: { "X-Client-Platform": CLIENT_PLATFORM },
   });
   if (error) {
-    const context = (error as { context?: Response }).context;
-    if (context) {
-      const payload = await context.json().catch(() => null) as
+    /**
+     * The server's own sentence, when it can be reached.
+     *
+     * `context` is documented as the failed `Response`, and reading it is how a
+     * buyer gets "the code is wrong" instead of "payment failed". But it is not
+     * always one — a network failure, a different SDK build, a body already
+     * consumed — and calling `.json()` on whatever it happens to be threw
+     * `TypeError: undefined is not a function`, which escaped as the error the
+     * buyer was shown. A screen reading "undefined is not a function" over a
+     * card form is worse than no detail at all.
+     *
+     * So the shape is checked before it is used, and the transport's own
+     * message is the fallback rather than a constant.
+     */
+    const context = (error as { context?: unknown }).context;
+    if (context && typeof (context as Response).json === "function") {
+      const payload = await (context as Response).json().catch(() => null) as
         { error?: string; code?: string; recoverable?: boolean; restartRequired?: boolean } | null;
       if (payload?.error) {
         throw new OrderPaymentError(
@@ -163,7 +177,14 @@ async function callPay(body: Record<string, unknown>): Promise<PayStart | PayDon
         );
       }
     }
-    throw new OrderPaymentError("To‘lov amalga oshmadi.", "payment_failed", false);
+    const detail = error instanceof Error && error.message.trim() ? error.message.trim() : "";
+    throw new OrderPaymentError(
+      detail && !/undefined is not a function/i.test(detail)
+        ? `To‘lov amalga oshmadi. ${detail}`
+        : "To‘lov amalga oshmadi. Aloqani tekshirib, qayta urinib ko‘ring.",
+      "payment_failed",
+      false,
+    );
   }
   return data as PayStart | PayDone;
 }
