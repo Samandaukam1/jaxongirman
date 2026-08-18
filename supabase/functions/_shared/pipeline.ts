@@ -886,12 +886,40 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
      * exists, in the server log, where the person who can act on it will look.
      */
     const { code, message } = userFacingFailure(error);
-    console.error(JSON.stringify({
-      event: "generation_failed",
-      job_id: input.jobId,
-      code,
-      detail: (error instanceof Error ? error.message : String(error)).slice(0, 600),
-    }));
+    const detail = (error instanceof Error ? error.message : String(error)).slice(0, 600);
+    console.error(JSON.stringify({ event: "generation_failed", job_id: input.jobId, code, detail }));
+
+    /**
+     * What the provider actually said, kept where it can be read later.
+     *
+     * The author gets one sanitised sentence, which is right — a vendor's
+     * message about our request is not theirs to act on. But it went only to
+     * the Edge log, and a `console.error` on somebody else's infrastructure is
+     * not somewhere you can query. Twice now a deck has failed with a code and
+     * no cause, and both times finding out meant guessing and redeploying.
+     *
+     * A failed call is still a call, so it belongs in the table that records
+     * calls. Zero tokens and zero cost, because nothing was produced; the
+     * metadata carries the reason. Written best-effort: a failure to record a
+     * failure must not replace it.
+     */
+    try {
+      await input.service.from("ai_usage").insert({
+        owner_id: input.ownerId,
+        presentation_id: input.presentationId,
+        job_id: input.jobId,
+        provider: "google",
+        model: writer.writingModel,
+        operation: "generation_failed",
+        input_tokens: 0,
+        output_tokens: 0,
+        provider_cost_usd: 0,
+        metadata: { code, detail },
+      });
+    } catch (recordFailure) {
+      console.error("could not record the failure", String(recordFailure).slice(0, 200));
+    }
+
     await input.service.rpc("fail_generation", {
       p_job_id: input.jobId, p_error_code: code, p_error_message: message,
     });
