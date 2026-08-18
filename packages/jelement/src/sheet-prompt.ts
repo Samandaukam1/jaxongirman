@@ -145,6 +145,7 @@ element in the library is mislabelled.
       "canonicalName": "open book",
       "displayName": "Ochiq kitob",
       "objectClass": "other",
+      "group": "Klassik adabiyot",
       "aliases": ["book", "opened book", "reading book"],
       "uzbekTerms": ["ochiq kitob", "kitob", "mutolaa"],
       "englishTerms": ["open book", "reading"],
@@ -164,6 +165,14 @@ FIELD RULES
   canonicalName  English, lowercase, what the object IS. Never how it looks:
                  "open book", not "black and green book".
   displayName    Uzbek, how an admin will recognise it in a list.
+  group          The section within the subject, in Uzbek. For medicine:
+                 "Kardiologiya", "LOR", "Diagnostika". For literature:
+                 "Klassik adabiyot", "Yozuv", "Teatr". A family grows past a
+                 hundred objects and a flat list of a hundred is a scroll, not
+                 a library — so every element names its section, and somebody
+                 searching for the section finds everything in it. Use few
+                 sections and spell each one identically across the sheet:
+                 "Kardiologiya" and "kardiologiya" are two sections.
   objectClass    One of: ${list(OBJECT_CLASSES)}
   uzbekTerms     REQUIRED. The product is used in Uzbek — an element with no
                  Uzbek name is invisible to the people it exists for. Include
@@ -183,7 +192,9 @@ FIELD RULES
 RULES
 
   1. Exactly 12 elements for a 4x3 sheet. Never pad the list to reach a count,
-     and never return more objects than the grid holds.
+     and never return more objects than the grid holds. If a cell would be
+     empty, make the grid smaller — an empty cell means the sheet and the
+     manifest disagree about which object is which.
   2. Names describe the object, never its colour or finish. The family is
      recoloured; a name containing "green" stops being true the first time
      somebody uses it.

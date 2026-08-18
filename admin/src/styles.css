@@ -677,3 +677,15 @@ td small { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; 
 .element-card-delete:focus-visible { opacity: 1; }
 .element-card-delete:hover { color: #b23b32; border-color: #e0b4b0; }
 .element-card-delete:disabled { opacity: .35; }
+
+/* A family divides the way its subject does, so the grid does too. */
+.element-section { display: grid; gap: 10px; margin-bottom: 22px; }
+.element-section-head {
+  display: flex; align-items: baseline; gap: 9px; margin: 0;
+  font-size: 12px; font-weight: 800; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--ink-soft);
+}
+.element-section-head span {
+  padding: 1px 7px; border-radius: 999px; background: var(--surface-muted);
+  font-size: 11px; letter-spacing: 0; color: var(--ink-muted);
+}

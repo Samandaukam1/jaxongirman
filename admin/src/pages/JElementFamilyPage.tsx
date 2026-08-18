@@ -6,6 +6,7 @@ import { ArrowLeft, RotateCcw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { JElementPreview } from "@/components/JElementPreview";
+import { JElementExpand } from "@/components/JElementExpand";
 import { JElementSheet } from "@/components/JElementSheet";
 import { deleteElement } from "@/lib/jelement";
 import { ErrorState, PageHeader, TableSkeleton } from "@/components/AdminUI";
@@ -50,6 +51,7 @@ type ElementRow = {
   transform_rules: Record<string, unknown>;
   usage_count: number;
   published_version: number;
+  subcategory: string | null;
   asset_path: string | null;
   asset_accent_hue: number | null;
   asset_variants: Record<string, string> | null;
@@ -150,6 +152,27 @@ export function JElementFamilyPage({ familyId }: { familyId: string }) {
     elements: [],
   } : null, [family, tokens]);
 
+  /**
+   * The family, in the sections it declared.
+   *
+   * A subject divides the way it divides — cardiology, ENT, diagnostics — and a
+   * library that grows past a sheet or two is unreadable without that. Elements
+   * that named no section fall into one bucket at the end rather than being
+   * scattered: a gap is easier to fill when it is visible in one place.
+   */
+  const sections = useMemo(() => {
+    const groups = new Map<string, ElementRow[]>();
+    for (const row of elements) {
+      const key = (row.subcategory ?? "").trim();
+      groups.set(key, [...(groups.get(key) ?? []), row]);
+    }
+    return [...groups].sort(([first], [second]) => {
+      if (!first) return 1;
+      if (!second) return -1;
+      return first.localeCompare(second, "uz");
+    });
+  }, [elements]);
+
   const dirty = useMemo(
     () => family ? JSON.stringify(tokens) !== JSON.stringify(family.color_tokens) : false,
     [family, tokens],
@@ -247,12 +270,20 @@ export function JElementFamilyPage({ familyId }: { familyId: string }) {
     </section>
 
     {family ? (
+      <JElementExpand
+        familyId={family.id}
+        onAdded={(count) => { setMessage(`${count} ta element qo‘shildi — endi ularga varaq biriktiring.`); void load(); }}
+      />
+    ) : null}
+
+    {family ? (
       <JElementSheet
         familySlug={family.slug}
         elements={elements.map((row) => ({
           id: row.id,
           canonicalName: row.canonical_name,
           displayName: row.display_name || row.canonical_name,
+          hasAsset: Boolean(row.asset_path),
         }))}
         onDone={(text) => { setMessage(text); void load(); }}
       />
@@ -263,8 +294,16 @@ export function JElementFamilyPage({ familyId }: { familyId: string }) {
         <div><p className="eyebrow">ELEMENTLAR</p><h2>{elements.length} ta</h2></div>
       </div>
 
-      <div className="element-grid">
-        {elements.map((row) => {
+      {sections.map(([section, rows]) => (
+        <div key={section} className="element-section">
+          {sections.length > 1 || section ? (
+            <h3 className="element-section-head">
+              {section || "Bo‘limsiz"}
+              <span>{rows.length}</span>
+            </h3>
+          ) : null}
+          <div className="element-grid">
+            {rows.map((row) => {
           const element = toElement(row);
           const health = elementHealth(element, asFamily);
           return (
@@ -292,8 +331,10 @@ export function JElementFamilyPage({ familyId }: { familyId: string }) {
               </button>
             </div>
           );
-        })}
-      </div>
+            })}
+          </div>
+        </div>
+      ))}
     </section>
 
     {chosen ? <ElementDetail row={chosen} family={asFamily} /> : null}

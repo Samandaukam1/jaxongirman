@@ -17,6 +17,15 @@ import type { Archetype, JslaydDocument } from "./jslayd/index.ts";
  * asked for.
  */
 
+/**
+ * How many objects one slide may carry.
+ *
+ * Three. Past that a slide stops being a slide with pictures on it and becomes
+ * a picture with words on it, and the copy was written to a budget that assumed
+ * otherwise.
+ */
+export const MAX_ELEMENTS_PER_SLIDE = 3;
+
 /** What a slot needs filled, and what the slide is about. */
 type SlotRequest = {
   slideIndex: number;
@@ -30,6 +39,22 @@ type Candidate = {
   canonical_name: string;
   family_slug: string;
   published_version: number;
+};
+
+const ASSET_BUCKET = "jelement-assets";
+
+/** A picture element has no components, so its geometry is the identity box. */
+const EMPTY_GEOMETRY: JElement["geometry"] = {
+  aspectRatio: 1,
+  bounds: { x: 0, y: 0, width: 1, height: 1 },
+  visualBounds: { x: 0, y: 0, width: 1, height: 1 },
+  safeBounds: { x: 0, y: 0, width: 1, height: 1 },
+  visualCenter: { x: 0.5, y: 0.5 },
+  dominantAxis: "balanced",
+  originalRotation: 0,
+  naturalFacing: "neutral",
+  anchors: {},
+  components: [],
 };
 
 /** Drawn shapes per slide, keyed by slot — the shape `buildJslaydSlides` takes. */
@@ -52,7 +77,14 @@ export function elementSlotsFor(
     const archetype = archetypes[slideIndex];
     if (!archetype) return;
 
+    // Three objects is already a busy slide. A design that declares more
+    // element slots than that is asking for a collage, and the extra ones are
+    // left empty rather than filled — an unfilled slot is a composition the
+    // design was built to survive.
+    let onThisSlide = 0;
+
     for (const element of archetype.elements) {
+      if (onThisSlide >= MAX_ELEMENTS_PER_SLIDE) break;
       if (element.type !== "image" && element.type !== "frame") continue;
       if (element.strategy !== "jelement") continue;
 
@@ -63,6 +95,7 @@ export function elementSlotsFor(
       if (!query) continue;
 
       requests.push({ slideIndex, slot: element.slot, query, slideRole: archetype.purpose });
+      onThisSlide += 1;
     }
   });
 
@@ -106,13 +139,27 @@ export async function fillElementSlots(
       const { data } = await service.rpc("jelement_resolve", { p_element_id: best.id });
       const payload = data as { element?: Record<string, unknown>; family?: Record<string, unknown>; version?: number } | null;
 
-      // The stored row keeps its geometry under `render_spec`; the drawing code
-      // reads a `JElement`, so the two are bridged here rather than by making
-      // the renderer know about database column names.
-      const geometry = payload?.element?.render_spec as JElement["geometry"] | undefined;
-      resolved.set(best.id, geometry
+      /**
+       * Two kinds of element, and this used to see only one.
+       *
+       * Geometry lives in `render_spec`; a rendered object has none and carries
+       * `asset_path` instead. The old check was `if (!geometry) skip`, so every
+       * picture in the library was silently passed over and no deck ever showed
+       * one — the whole asset subsystem was invisible from here.
+       */
+      const row = payload?.element as Record<string, unknown> | undefined;
+      const geometry = row?.render_spec as JElement["geometry"] | undefined;
+      const assetPath = typeof row?.asset_path === "string" ? row.asset_path : null;
+
+      resolved.set(best.id, (geometry || assetPath)
         ? {
-            element: { ...(payload!.element as unknown as JElement), geometry },
+            element: {
+              ...(row as unknown as JElement),
+              geometry: geometry ?? EMPTY_GEOMETRY,
+              assetPath,
+              assetAccentHue: typeof row?.asset_accent_hue === "number" ? row.asset_accent_hue : null,
+              assetVariants: (row?.asset_variants ?? {}) as Record<string, string>,
+            },
             family: {
               colorTokens: (payload!.family as { colorTokens?: JElementFamily["colorTokens"] }).colorTokens ?? {},
             } as JElementFamily,
@@ -134,9 +181,16 @@ export async function fillElementSlots(
     );
 
     elements[request.slideIndex]![request.slot] = shapes.map((shape) => ({
+      type: shape.type,
       x: shape.x, y: shape.y, width: shape.width, height: shape.height,
       rotation: shape.rotation, zIndex: shape.zIndex, opacity: shape.opacity,
       style: shape.style,
+      // A picture needs its address. The bucket is public, so the URL is built
+      // once here rather than signed per viewer — three renderers read this and
+      // two of them have no session to sign with.
+      content: shape.type === "image" && typeof shape.content.assetPath === "string"
+        ? { url: service.storage.from(ASSET_BUCKET).getPublicUrl(shape.content.assetPath).data.publicUrl }
+        : {},
     }));
     used += 1;
 

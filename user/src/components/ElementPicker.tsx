@@ -1,10 +1,10 @@
 import { Search, Shapes, X } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
+  ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
 } from "react-native";
 
-import { searchElements, type ElementCandidate } from "@/lib/jelement";
+import { candidateImage, searchElements, type ElementCandidate } from "@/lib/jelement";
 import { colors, icon, radius, spacing, typography } from "@/theme/tokens";
 
 /**
@@ -58,14 +58,23 @@ export function ElementPicker({
     return () => { active = false; clearTimeout(timer); };
   }, [query, slideRole]);
 
+  /**
+   * Grouped by section where there is one, and by family where there is not.
+   *
+   * A family of a hundred medical objects answers "yurak" with eight results
+   * that all say "Tibbiyot", which tells somebody nothing about which is which.
+   * The section — kardiologiya, diagnostika — is the useful heading, and the
+   * family is the fallback for a library that has not been divided yet.
+   */
   const grouped = useMemo(() => {
-    const families = new Map<string, ElementCandidate[]>();
+    const sections = new Map<string, ElementCandidate[]>();
     for (const candidate of results) {
-      const list = families.get(candidate.family_name) ?? [];
-      list.push(candidate);
-      families.set(candidate.family_name, list);
+      const heading = candidate.subcategory?.trim()
+        ? `${candidate.family_name} · ${candidate.subcategory.trim()}`
+        : candidate.family_name;
+      sections.set(heading, [...(sections.get(heading) ?? []), candidate]);
     }
-    return [...families];
+    return [...sections];
   }, [results]);
 
   return (
@@ -120,9 +129,20 @@ export function ElementPicker({
                     onPress={() => onPick(candidate)}
                     style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
                   >
-                    <View style={styles.cardIcon}>
-                      <Shapes color={colors.primary} size={22} strokeWidth={1.9} />
-                    </View>
+                    {candidateImage(candidate) ? (
+                      // The object itself. Contained rather than cropped: these
+                      // are trimmed renders of every proportion, and a square
+                      // crop would behead the tall ones.
+                      <Image
+                        source={{ uri: candidateImage(candidate)! }}
+                        style={styles.cardImage}
+                        resizeMode="contain"
+                      />
+                    ) : (
+                      <View style={styles.cardIcon}>
+                        <Shapes color={colors.primary} size={22} strokeWidth={1.9} />
+                      </View>
+                    )}
                     <Text numberOfLines={2} style={styles.cardName}>
                       {candidate.display_name || candidate.canonical_name}
                     </Text>
@@ -170,6 +190,9 @@ const styles = StyleSheet.create({
   cardIcon: {
     width: 56, height: 56, borderRadius: radius.md, alignItems: "center",
     justifyContent: "center", backgroundColor: colors.primarySoft,
+  },
+  cardImage: {
+    width: 72, height: 72, borderRadius: radius.md, backgroundColor: colors.surfaceMuted,
   },
   cardName: { ...typography.caption, color: colors.ink, textAlign: "center" },
 });

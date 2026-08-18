@@ -135,3 +135,19 @@ async function removeAssets(paths: string[] | null): Promise<void> {
   const { error } = await supabase.storage.from(ASSET_BUCKET).remove(list);
   if (error) console.warn("jelement assets left behind", error.message);
 }
+
+/**
+ * Adds elements to a family without disturbing what is already there.
+ *
+ * A separate call from the full save rather than a flag on it: "replace" and
+ * "append" are opposite answers to what an unmentioned element means, and the
+ * wrong answer archives somebody's twelve objects.
+ */
+export async function appendManifest(familyId: string, spec: Record<string, unknown>): Promise<number> {
+  const { data, error } = await supabase.rpc("admin_append_jelement_family", {
+    p_family_id: familyId,
+    p_spec: spec as never,
+  });
+  if (error) throw error;
+  return Number(data ?? 0);
+}

@@ -593,7 +593,10 @@ function renderPlacedElement(element: ImageElement, box: Box, geometry: Geometry
   return [...shapes]
     .sort((first, second) => first.zIndex - second.zIndex)
     .map((shape, order) => ({
-      ...base("shape", {
+      // An element built from geometry emits shapes; one built from a render
+      // emits a single image. Both arrive here already positioned in the
+      // element's own space, so the projection below is the same either way.
+      ...base(shape.type === "image" ? "image" : "shape", {
         x: box.x + shape.x * box.width,
         y: box.y + shape.y * box.height,
         width: shape.width * box.width,
@@ -604,7 +607,7 @@ function renderPlacedElement(element: ImageElement, box: Box, geometry: Geometry
       // declared, so the design's own layering is preserved around it.
       z_index: baseZ + order,
       style: shape.style,
-      content: { kind: "jelement", slot: element.slot },
+      content: { kind: "jelement", slot: element.slot, ...(shape.content ?? {}) },
     }));
 }
 

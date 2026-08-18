@@ -26,6 +26,8 @@ export type ManifestElement = {
   canonicalName: string;
   displayName: string;
   objectClass: ObjectClass;
+  /** The section within the family — kardiologiya, LOR, diagnostika. */
+  group: string;
   aliases: string[];
   uzbekTerms: string[];
   englishTerms: string[];
@@ -168,6 +170,10 @@ export function readManifest(source: string): ManifestResult {
       canonicalName,
       displayName: text(item.displayName, uzbekTerms[0] ?? canonicalName),
       objectClass,
+      // `subcategory` is what the column has always been called; `group` is what
+      // it is called in the manifest, because that is the word somebody
+      // sectioning a library reaches for. Both are read, so neither is wrong.
+      group: text(item.group, text(item.subcategory)),
       aliases: strings(item.aliases),
       uzbekTerms,
       englishTerms: strings(item.englishTerms),
@@ -261,7 +267,7 @@ export function manifestToFamily(manifest: Manifest): Record<string, unknown> {
       displayName: element.displayName,
       objectClass: element.objectClass,
       category: manifest.family.category,
-      subcategory: manifest.family.subcategory,
+      subcategory: element.group || manifest.family.subcategory,
       rendering: "asset",
       semantic: {
         aliases: element.aliases,

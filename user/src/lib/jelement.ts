@@ -21,7 +21,17 @@ export type ElementCandidate = {
   family_slug: string;
   published_version: number;
   thumbnail_path: string | null;
+  /** The section within its family — kardiologiya, LOR. Empty when unsectioned. */
+  subcategory: string | null;
+  /** The render, so the picker shows the object rather than a glyph. */
+  asset_path: string | null;
 };
+
+/** The picker's thumbnail for a candidate, or null when it has no picture. */
+export function candidateImage(candidate: ElementCandidate): string | null {
+  if (!candidate.asset_path) return null;
+  return supabase.storage.from(ASSET_BUCKET).getPublicUrl(candidate.asset_path).data.publicUrl;
+}
 
 /* ------------------------------------------------------------- fetching */
 

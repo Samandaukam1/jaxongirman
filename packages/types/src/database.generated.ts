@@ -4071,6 +4071,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      admin_append_jelement_family: {
+        Args: { p_family_id: string; p_spec: Json }
+        Returns: number
+      }
       admin_archive_design: {
         Args: { p_design_id: string; p_reason?: string }
         Returns: undefined

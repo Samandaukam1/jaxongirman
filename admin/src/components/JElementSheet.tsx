@@ -64,8 +64,8 @@ export function JElementSheet({
   onDone,
 }: {
   familySlug: string;
-  /** In the order the analyzer returned them, which is the sheet's reading order. */
-  elements: { id: string; canonicalName: string; displayName: string }[];
+  /** In position order, which is the order sheets are cut in. */
+  elements: { id: string; canonicalName: string; displayName: string; hasAsset: boolean }[];
   onDone: (message: string) => void;
 }) {
   const [columns, setColumns] = useState(4);
@@ -75,6 +75,7 @@ export function JElementSheet({
   const [accent, setAccent] = useState<number | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  const [onlyMissing, setOnlyMissing] = useState(true);
   const input = useRef<HTMLInputElement>(null);
 
   const slice = useCallback(async (pixels: Pixels, across: number, down: number) => {
@@ -120,19 +121,41 @@ export function JElementSheet({
   }
 
   /**
-   * What the cuts will be matched against.
+   * Which elements this sheet is for.
    *
-   * The nth object on the sheet becomes the nth element, because that is the
-   * order the analyzer prompt asks for and the order the specification was
-   * written in. Shown rather than assumed: a mismatch here is somebody's whole
-   * library silently mislabelled, and it costs one glance to catch.
+   * A family grows by sheets: twelve arrive, then twelve more. The second sheet
+   * is for the twelve that have no picture yet, not for the first twelve again,
+   * so by default the targets are the ones still missing one. Switching to all
+   * of them is how a bad sheet gets replaced.
    */
-  const pairs = useMemo(
-    () => cuts.map((cut) => ({ cut, element: elements[cut.index] ?? null })),
-    [cuts, elements],
+  const targets = useMemo(
+    () => (onlyMissing ? elements.filter((element) => !element.hasAsset) : elements),
+    [elements, onlyMissing],
   );
 
-  const unmatched = pairs.filter((pair) => !pair.element).length;
+  /**
+   * What the cuts will be matched against.
+   *
+   * The nth object on the sheet becomes the nth target, which is why both
+   * counts have to agree. Shown rather than assumed: a mismatch is somebody's
+   * whole library silently mislabelled, and it costs one glance to catch.
+   */
+  const pairs = useMemo(
+    () => cuts.map((cut, order) => ({ cut, element: targets[order] ?? null })),
+    [cuts, targets],
+  );
+
+  /**
+   * Both directions, because only one was checked and it was the wrong one.
+   *
+   * More cuts than elements was caught. Fewer was not: a sheet whose last five
+   * cells came up empty saved seven pictures, left five elements blank and said
+   * nothing — which is exactly what happened, and the blanks were noticed on
+   * the page rather than here.
+   */
+  const extraCuts = pairs.filter((pair) => !pair.element).length;
+  const missedElements = cuts.length > 0 ? Math.max(0, targets.length - cuts.length) : 0;
+  const mismatch = extraCuts > 0 || missedElements > 0;
 
   async function save() {
     setBusy("Saqlanmoqda…");
@@ -236,6 +259,14 @@ export function JElementSheet({
                 onChange={(event) => void recut(columns, Number(event.target.value) || 1)}
               />
             </label>
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={onlyMissing}
+                onChange={(event) => setOnlyMissing(event.target.checked)}
+              />
+              Faqat rasmsiz elementlarga ({elements.filter((element) => !element.hasAsset).length} ta)
+            </label>
             <span className="sheet-accent">
               {accent === null ? (
                 "Aksent rangi topilmadi — rang almashtirish ishlamaydi."
@@ -249,12 +280,19 @@ export function JElementSheet({
             </span>
           </div>
 
-          {unmatched > 0 ? (
-            // Said before saving, not after: an extra cut means the grid is
-            // wrong, and a wrong grid mislabels the whole family.
+          {extraCuts > 0 ? (
+            // Said before saving, not after: a wrong grid mislabels the family.
             <p className="field-problem">
-              {unmatched} ta kesim ortiqcha — spetsifikatsiyada {elements.length} ta element bor.
+              {extraCuts} ta kesim ortiqcha — {targets.length} ta element kutilgan.
               To‘r o‘lchamini to‘g‘rilang.
+            </p>
+          ) : null}
+
+          {missedElements > 0 ? (
+            <p className="field-problem">
+              {missedElements} ta element rasmsiz qoladi — varaqda {cuts.length} ta obyekt
+              topildi, {targets.length} ta kerak. Bo‘sh kataklar bo‘lsa, to‘rni kichraytiring
+              yoki varaqni to‘ldiring.
             </p>
           ) : null}
 
@@ -273,7 +311,7 @@ export function JElementSheet({
           <button
             className="primary-button"
             type="button"
-            disabled={!!busy || cuts.length === 0 || unmatched > 0}
+            disabled={!!busy || cuts.length === 0 || mismatch}
             onClick={() => void save()}
           >
             <Scissors size={16} /> {busy ?? "Kesib saqlash va ranglarni tayyorlash"}

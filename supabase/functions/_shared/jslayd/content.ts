@@ -63,6 +63,13 @@ export type SlideData = {
  * object never has to know what it was placed into.
  */
 export type PlacedShape = {
+  /**
+   * A library element is either drawn or photographed.
+   *
+   * Defaults to a shape, because everything that existed before this field did
+   * was one, and a stored deck must keep rendering exactly as it did.
+   */
+  type?: "shape" | "image";
   x: number;
   y: number;
   width: number;
@@ -71,6 +78,8 @@ export type PlacedShape = {
   zIndex: number;
   opacity: number;
   style: Record<string, unknown>;
+  /** The picture's address, for an image. */
+  content?: Record<string, unknown>;
 };
 
 export type DeckMeta = {
