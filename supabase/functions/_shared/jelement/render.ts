@@ -10,16 +10,23 @@ import type { ColorToken } from "./spec.ts";
 /**
  * An element, drawn.
  *
- * Deliberately emits the same rows the slide renderers already read — a
- * rectangle with a corner radius, a colour and a rotation. No new element type,
- * no new primitive, nothing for the web view, the phone or the PPTX exporter to
- * learn. A circle is a rectangle whose radius is half its side, which is
- * already how the JSLAYD renderer draws one.
+ * This began as boxes only — a rectangle with a corner radius, a colour and a
+ * rotation — on the reasoning that it would ship without teaching the web view,
+ * the phone and the PPTX exporter a new primitive. The escape hatch for
+ * anything that needed a real outline was "it ships as an asset instead", and
+ * that hatch was never built: there is no asset field on `JElement`.
  *
- * That decision is the whole reason JElement can ship without touching three
- * renderers, and it is also the constraint: an element is built from filled,
- * rounded, rotatable boxes. Anything needing a true path ships as an asset
- * instead, which is what `asset_path` is for.
+ * So a mining truck was a stack of rectangles, a pickaxe was a rectangle, and
+ * an ore fragment was a rectangle. The compiler read `shape: path` and its `d`
+ * string, stored both, and the renderer dropped them on the floor — every
+ * element in the library came out as the same pile of blocks whatever the
+ * analyzer had drawn.
+ *
+ * Paths now survive. A component with `shape: path` carries its outline in
+ * `style.path`, authored in a 0–100 square that maps to that component's own
+ * box, so it scales, flips and rotates exactly like every other component and
+ * `box` still means what it always meant. Boxes remain for the parts that
+ * genuinely are boxes: a panel is not better for being a path.
  */
 
 /** The shape a slide renderer consumes. Ids and slide keys are the caller's. */
@@ -91,6 +98,9 @@ function project(component: Component, target: RenderTarget): { x: number; y: nu
   };
 }
 
+/** The square a path's coordinates are authored in, mapped onto its own box. */
+export const PATH_VIEWBOX = "0 0 100 100";
+
 /** `circle` and `ellipse` are rectangles the renderers already round. */
 function radiusFor(component: Component, width: number, height: number): Record<string, unknown> {
   if (component.shape === "circle" || component.shape === "ellipse") {
@@ -128,7 +138,15 @@ export function renderElement(
         zIndex: component.zIndex,
         opacity: opacity * component.opacity,
         style: {
-          ...(fill ? { backgroundColor: fill } : {}),
+          /**
+           * `fill`, not `backgroundColor`.
+           *
+           * JSLAYD emits `fill` and both slide renderers read it, so an element
+           * emitting `backgroundColor` was drawing itself in the phone's
+           * default grey the moment it left the admin preview. Two vocabularies
+           * for one idea, and the one nobody read was ours.
+           */
+          ...(fill ? { fill } : {}),
           ...(stroke && component.strokeWidth > 0
             ? { borderColor: stroke, borderWidth: component.strokeWidth }
             : {}),
@@ -136,6 +154,19 @@ export function renderElement(
           shape: component.shape === "roundedRect" ? "rect" : component.shape,
           ...(component.shape === "polygon" || component.shape === "triangle"
             ? { sides: component.shape === "triangle" ? 3 : 6 }
+            : {}),
+          /**
+           * The outline itself, when there is one.
+           *
+           * Carried in the component's own box rather than the element's, so a
+           * renderer draws it with `viewBox="0 0 100 100"` at the projected
+           * box and needs to know nothing about the element around it. A
+           * consumer that does not understand `path` still gets a correctly
+           * placed, correctly coloured rectangle, which is what every one of
+           * them drew before this existed.
+           */
+          ...(component.shape === "path" && component.path
+            ? { path: component.path, viewBox: PATH_VIEWBOX }
             : {}),
         },
         content: {},

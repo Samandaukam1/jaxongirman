@@ -156,8 +156,8 @@ test("colours come from the family, and an override reaches what may follow it",
   const trim = rows.find((row) => row.content.component === "trim");
   const wheel = rows.find((row) => row.content.component === "wheel");
 
-  assert.equal(trim.style.backgroundColor, "#5B5BFF", "the accent followed the override");
-  assert.equal(wheel.style.backgroundColor, "#1B2728", "and the glass did not, because it may not");
+  assert.equal(trim.style.fill, "#5B5BFF", "the accent followed the override");
+  assert.equal(wheel.style.fill, "#1B2728", "and the glass did not, because it may not");
 });
 
 test("members stack in the order the element declared", () => {
@@ -178,4 +178,30 @@ test("a first placement leaves the slide room to breathe", () => {
   const bounds = boundsOf(placement);
   assert.ok(bounds.x + bounds.width <= 1000, "it fits horizontally");
   assert.ok(bounds.y + bounds.height <= 562.5, "and vertically");
+});
+
+test("a placed element carries its outline onto the slide", () => {
+  /**
+   * The admin preview and the phone have to draw the same object.
+   *
+   * They did not: the preview was about to learn paths while the row builder
+   * still emitted a box per component, so an element would have looked right
+   * in the console and like a stack of blocks on the slide somebody exported.
+   */
+  const rows = rowsFor(
+    { ...ELEMENT, components: [
+      ...ELEMENT.components,
+      { id: "bucket", shape: "path", box: { x: 0.05, y: 0.4, width: 0.3, height: 0.3 },
+        rotation: 0, zIndex: 9, fill: "primary", opacity: 1, recolorable: true,
+        path: "M 6 8 L 88 2 L 96 44 Z" },
+    ] },
+    PLACEMENT,
+    BASE,
+    {},
+  );
+
+  const bucket = rows.find((row) => row.style.path);
+  assert.ok(bucket, "the outline must reach the row");
+  assert.equal(bucket.style.viewBox, "0 0 100 100");
+  assert.equal(bucket.style.fill, "#101214", "and still take its colour from the token");
 });

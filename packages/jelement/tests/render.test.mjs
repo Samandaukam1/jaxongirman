@@ -93,6 +93,13 @@ geometry:
       fill: {{accent}}
       rotation: 5
       zIndex: 4
+    bucket:
+      label: Bucket
+      shape: path
+      box: 0.04 0.44 0.26 0.3
+      path: M 6 8 L 88 2 L 96 44 Q 92 84 54 96 L 12 92 Z
+      fill: {{primary}}
+      zIndex: 5
 usage:
   slideRoles: hero
 transform:
@@ -106,11 +113,11 @@ const TARGET = { x: 100, y: 50, width: 400, height: 300 };
 
 test("an element renders to the rows the slide engine already draws", () => {
   const shapes = renderElement(element, family, TARGET);
-  assert.equal(shapes.length, 3, "one row per component");
+  assert.equal(shapes.length, element.geometry.components.length, "one row per component");
   for (const shape of shapes) {
     assert.equal(shape.type, "shape", "nothing here is a new element type");
     assert.equal(typeof shape.x, "number");
-    assert.equal(typeof shape.style.backgroundColor, "string");
+    assert.equal(typeof shape.style.fill, "string");
   }
 });
 
@@ -147,16 +154,16 @@ test("components draw back to front", () => {
 
 test("colours come from the family, never from the shape", () => {
   const shapes = renderElement(element, family, TARGET);
-  assert.equal(shapes[0].style.backgroundColor, "#101214", "the body takes the primary role");
+  assert.equal(shapes[0].style.fill, "#101214", "the body takes the primary role");
   const trim = shapes.find((shape) => shape.rotation !== 0);
-  assert.equal(trim.style.backgroundColor, "#A7FF00", "and the trim the accent");
+  assert.equal(trim.style.fill, "#A7FF00", "and the trim the accent");
 });
 
 test("an override recolours every shape bound to that role", () => {
   const shapes = renderElement(element, family, TARGET, { accent: "#5B5BFF" });
   const trim = shapes.find((shape) => shape.rotation !== 0);
-  assert.equal(trim.style.backgroundColor, "#5B5BFF", "the accent followed the override");
-  assert.equal(shapes[0].style.backgroundColor, "#101214", "and nothing else moved");
+  assert.equal(trim.style.fill, "#5B5BFF", "the accent followed the override");
+  assert.equal(shapes[0].style.fill, "#101214", "and nothing else moved");
 });
 
 test("a layer that must not be recoloured ignores the override", () => {
@@ -164,7 +171,7 @@ test("a layer that must not be recoloured ignores the override", () => {
   // panel, which is what `recolorable: false` is for.
   const shapes = renderElement(element, family, TARGET, { glass: "#FF0000" });
   const wheel = shapes.find((shape) => shape.style.shape === "circle");
-  assert.equal(wheel.style.backgroundColor, "#1B2728", "the family value stands");
+  assert.equal(wheel.style.fill, "#1B2728", "the family value stands");
 });
 
 /* ------------------------------------------------------------- transform */
@@ -235,4 +242,49 @@ test("an element that must not be flipped is not flipped", () => {
 test("a front-facing element is never flipped", () => {
   const front = { ...element, geometry: { ...element.geometry, naturalFacing: "front" } };
   assert.equal(shouldFlip(front, "left"), false, "there is no wrong way for it to face");
+});
+
+/* ------------------------------------------------------------- outlines */
+
+test("an outline reaches the renderer instead of becoming a rectangle", () => {
+  /**
+   * The fault that made every element in the library look identical.
+   *
+   * `compile()` read `shape: path` and its `d` string and stored both. The
+   * renderer never mentioned `path`, so a truck, a pickaxe and an ore fragment
+   * all came out as the same stack of boxes — and no amount of improving the
+   * analyzer prompt could have changed that, because the drawing was being
+   * discarded after it arrived.
+   */
+  const shapes = renderElement(element, family, { x: 0, y: 0, width: 200, height: 200 });
+  const bucket = shapes.find((shape) => shape.style.path);
+
+  assert.ok(bucket, "the path component must arrive carrying its outline");
+  assert.match(bucket.style.path, /^M /, "the d string, unaltered");
+  assert.equal(bucket.style.viewBox, "0 0 100 100", "authored in its own box, not the element's");
+  assert.equal(bucket.style.fill, "#101214", "and still coloured by its token");
+});
+
+test("a component that is genuinely a rectangle stays one", () => {
+  // Paths are for silhouettes. A trim strip described as a path would be four
+  // points saying "rectangle", which is slower to draw and harder to read.
+  const shapes = renderElement(element, family, { x: 0, y: 0, width: 200, height: 200 });
+  const boxes = shapes.filter((shape) => !shape.style.path);
+
+  assert.ok(boxes.length >= 3, "the box route is still the common one");
+  for (const box of boxes) assert.equal("viewBox" in box.style, false);
+});
+
+test("an outline scales with its box rather than the element", () => {
+  // The path is authored inside its own component box, so the projection is
+  // the box projection and nothing about the path changes.
+  const small = renderElement(element, family, { x: 0, y: 0, width: 100, height: 100 });
+  const large = renderElement(element, family, { x: 0, y: 0, width: 400, height: 400 });
+
+  const from = small.find((shape) => shape.style.path);
+  const to = large.find((shape) => shape.style.path);
+
+  assert.equal(from.style.path, to.style.path, "the outline itself is resolution-free");
+  assert.equal(to.width, from.width * 4);
+  assert.equal(to.height, from.height * 4);
 });

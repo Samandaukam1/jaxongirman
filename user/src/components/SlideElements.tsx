@@ -24,6 +24,23 @@ export function ShapeElement({ style, width, height }: { style: Style; width: nu
   const box = { ...cornersOf(style), ...borderOf(style), ...shadowOf(style) };
   const gradient = gradientOf(style);
 
+  /**
+   * A library element's outline, when it has one.
+   *
+   * Checked before the gradient and the box because a silhouette is not a
+   * rectangle with a corner radius, and drawing it as one is what made every
+   * JElement in a deck look like a stack of blocks. Stretched to the row rather
+   * than fitted, since the path was authored inside that row's own box.
+   */
+  const outline = str(style.path);
+  if (outline) {
+    return (
+      <Svg width={width} height={height} viewBox={str(style.viewBox, "0 0 100 100")} preserveAspectRatio="none">
+        <Path d={outline} fill={str(style.fill, "#EEEEEE")} />
+      </Svg>
+    );
+  }
+
   if (gradient) {
     return (
       <LinearGradient

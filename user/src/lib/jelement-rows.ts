@@ -54,6 +54,8 @@ export type Component = {
   fill: string | null;
   opacity: number;
   recolorable: boolean;
+  /** The outline, for `shape: "path"`. Authored in a 0-100 square of its box. */
+  path?: string | null;
 };
 
 export type ResolvedElement = {
@@ -120,13 +122,22 @@ export function rowsFor(
         opacity: component.opacity,
         locked: false,
         style: {
-          backgroundColor: fill,
+          // `fill` is what the slide renderers read. This said
+          // `backgroundColor` and so drew every placed element in the phone's
+          // default grey.
+          fill,
           shape: component.shape === "roundedRect" ? "rect" : component.shape,
           ...(component.shape === "circle" || component.shape === "ellipse"
             ? { borderRadius: Math.min(width, height) / 2 }
             : component.shape === "roundedRect"
               ? { borderRadius: Math.min(width, height) * 0.14 }
               : {}),
+          // The silhouette, when the component has one. A renderer that does
+          // not understand it still draws a correctly placed, correctly
+          // coloured box.
+          ...(component.shape === "path" && component.path
+            ? { path: component.path, viewBox: "0 0 100 100" }
+            : {}),
         },
         // Every member carries the placement, so any one of them can rebuild
         // the whole set — including after the app is closed and reopened.

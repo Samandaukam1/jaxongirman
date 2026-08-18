@@ -125,6 +125,7 @@ geometry:
       label: <human name>
       shape: <${list(SHAPE_PRIMITIVES)}>
       box: <x y width height, all 0-1, relative to the element>
+      path: <required when shape is path — see OUTLINES below>
       rotation: <degrees>
       zIndex: <integer, back to front>
       fill: {{<role>}}
@@ -188,6 +189,79 @@ A pickaxe on a diagonal has a large rectangle and a small perceived centre.
 Getting this wrong is what makes an element look off-centre on every slide.
 
 ${"-".repeat(58)}
+OUTLINES — THE PART THAT DECIDES WHETHER THIS LOOKS LIKE ANYTHING
+${"-".repeat(58)}
+
+A rectangle is a rectangle. Everything else is a path.
+
+If you describe a haul truck as five boxes, the library renders five boxes and
+the result is unrecognisable. Reach for shape: rect only when the real part is
+a rectangle — a door panel, a trim strip, a screen bezel. For a bucket, a tyre
+arch, a boom, a helmet dome, a rock, a drill mast, a tunnel mouth: shape: path.
+
+Write the outline in SVG path syntax, in a 0-100 square that maps onto that
+component's own box. Not the element's box — its own. So a component whose box
+is 0.10 0.42 0.55 0.30 gets a path drawn as if that box were a 100 by 100
+canvas, and 0 0 is its top-left corner.
+
+  bucket:
+    label: Excavator bucket
+    shape: path
+    box: 0.04 0.44 0.26 0.30
+    path: M 6 8 L 88 2 L 96 44 Q 92 84 54 96 L 12 92 Z
+    zIndex: 3
+    fill: {{metal}}
+
+Rules for the path itself:
+
+  Use M, L, Q, C, A and Z. Absolute commands only — no lowercase.
+  Coordinates 0-100, at most one decimal place.
+  Close every filled shape with Z.
+  8 to 40 points for a main silhouette. Fewer reads as a blob; more is noise
+  nobody sees at slide size.
+  Curves where the object curves. A tyre is not an octagon.
+  No transforms, no style attributes, no fill inside the d string — the fill is
+  the fill: token above it.
+
+Component counts that actually look like the object:
+
+  a vehicle or machine     14-28 components
+  a hand tool              6-12
+  a device or instrument    8-16
+  a rock, a material        4-8
+  a structure or tunnel     8-18
+
+If you return four components for an excavator, you have described a filing
+cabinet.
+
+${"-".repeat(58)}
+COLOUR — EVERY COMPONENT, DELIBERATELY
+${"-".repeat(58)}
+
+Every component names one fill token. Never a hex value: a hex cannot be
+recoloured, and recolouring is what this library is for.
+
+Read the reference and assign what is actually there:
+
+  {{primary}}      the body, the mass, the darkest structural surface
+  {{secondary}}    panels and sub-assemblies that read a step lighter
+  {{accent}}       the signature colour — trim, stripes, guards, frames
+  {{accentGlow}}   lamps, LEDs and emissive strips only
+  {{metal}}        bare or brushed metal: hydraulics, pins, blades
+  {{metalDark}}    shadowed metal, undercarriage
+  {{rubber}}       tyres, tracks, grips, seals
+  {{glass}}        windows and lenses — recolorable: false
+  {{screen}}       displays with content — recolorable: false
+  {{outline}}      strokes, panel gaps, separations
+
+The accent is a signature, not a coat of paint. On the reference it is the
+trim, the guards and the lights — the body stays dark. An element where the
+accent covers most of the mass is one that will fight every slide it is on.
+
+Mark glass, screens and safety colours recolorable: false so changing a
+family's accent does not turn a cabin window lime.
+
+${"-".repeat(58)}
 SEARCH METADATA
 ${"-".repeat(58)}
 
@@ -223,6 +297,33 @@ ${"-".repeat(58)}
 10. Element backgrounds are transparent. No labels, no watermarks, no captions.
 11. Preserve the recognisable silhouette above decorative detail.
 12. Return machine-readable output only.
+13. Silhouette before shading. This format has no gradients, no soft shadows
+    and no specular highlights; what carries the object is its outline and a
+    flat token colour. Spend the effort there.
+14. Match proportions to the reference, measured rather than remembered. A
+    haul truck's bed is roughly two thirds of its length; a drill mast is
+    taller than the machine carrying it.
+
+${"-".repeat(58)}
+HOW TO DELIVER IT
+${"-".repeat(58)}
+
+Return the whole specification as a downloadable .txt file. Not as chat text,
+not in a code block, not split across several messages — one file.
+
+Two reasons, and both have cost somebody a day already:
+
+  Indentation is the structure. This format nests by leading spaces, and chat
+  interfaces flatten them. A specification pasted flat compiles to elements
+  with no components at all, which the importer now refuses — correctly, but
+  after the round trip.
+
+  It is long. A twelve-object sheet runs past a thousand lines, and a reply
+  that gets truncated loses the last elements silently.
+
+Name the file after the family slug, for example mining-neon-industrial.txt.
+Plain UTF-8. Two-space indentation, exactly as shown above. No BOM, no tabs,
+no trailing commentary before or after the specification.
 `;
 
 /**
