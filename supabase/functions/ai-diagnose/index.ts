@@ -3,6 +3,7 @@ import { preflight } from "../_shared/cors.ts";
 import { errorResponse, HttpError, json } from "../_shared/http.ts";
 import { geminiWriter } from "../_shared/gemini.ts";
 import { ProviderUnavailable } from "../_shared/writer.ts";
+import { contentSchema, outlineSchema } from "../_shared/plan-schema.ts";
 
 /**
  * Whether the text pipeline will work, asked before somebody's deck asks it.
@@ -101,6 +102,36 @@ Deno.serve(async (request) => {
       } catch (failure) {
         report.gemini_research_probe = "failed";
         report.gemini_research_reason = failure instanceof ProviderUnavailable ? failure.reason : "unknown";
+        report.gemini_research_detail = failure instanceof Error ? failure.message.slice(0, 300) : "";
+      }
+
+      /**
+       * The schemas a deck is actually written against.
+       *
+       * A two-word answer against `{ ok: string }` proves the key works and
+       * nothing else — the outline and the slide copy are the requests that
+       * have been failing, and they are refused for what is in them rather
+       * than for reaching the wrong address. Asked with one slide and a low
+       * token cap, so the check costs almost nothing.
+       */
+      for (const [name, schema] of [
+        ["outline", outlineSchema(1)],
+        ["content", contentSchema(1)],
+      ] as const) {
+        try {
+          await writer.structured({
+            prompt: "Bitta namunaviy slayd uchun sxemaga mos JSON qaytaring.",
+            schemaName: `probe_${name}`,
+            schema,
+            maxOutputTokens: 700,
+          });
+          report[`gemini_${name}_schema`] = "ok";
+        } catch (failure) {
+          report[`gemini_${name}_schema`] = "failed";
+          // The whole sentence, field violation included. This is the line that
+          // says which key Gemini refused.
+          report[`gemini_${name}_detail`] = failure instanceof Error ? failure.message.slice(0, 400) : "";
+        }
       }
     }
 

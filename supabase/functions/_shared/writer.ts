@@ -87,8 +87,40 @@ type GeminiCandidate = {
 type GeminiResponse = {
   candidates?: GeminiCandidate[];
   usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
-  error?: { message?: string; status?: string };
+  error?: {
+    message?: string;
+    status?: string;
+    /** Where a rejection actually is. `google.rpc.BadRequest` names the field. */
+    details?: Array<{
+      "@type"?: string;
+      fieldViolations?: Array<{ field?: string; description?: string }>;
+      reason?: string;
+    }>;
+  };
 };
+
+/**
+ * What Gemini actually objected to.
+ *
+ * A 400 arrives as "Request contains an invalid argument." — which is true of
+ * every 400 and tells nobody anything. The field that was refused is in
+ * `details`, and leaving it there cost two rounds of guessing at a schema that
+ * turned out to be fine. Everything useful, in one line, for the log.
+ */
+function describeError(payload: GeminiResponse, status: number): string {
+  const error = payload.error;
+  const parts: string[] = [`http ${status}`];
+  if (error?.status) parts.push(error.status);
+  if (error?.message) parts.push(error.message);
+
+  for (const detail of error?.details ?? []) {
+    if (detail.reason) parts.push(`reason=${detail.reason}`);
+    for (const violation of detail.fieldViolations ?? []) {
+      parts.push(`field=${violation.field ?? "?"}: ${violation.description ?? ""}`.trim());
+    }
+  }
+  return parts.join(" | ").slice(0, 500);
+}
 
 function textOf(payload: GeminiResponse): string {
   const parts = payload.candidates?.[0]?.content?.parts ?? [];
@@ -170,8 +202,9 @@ export class GeminiWriter {
 
     if (!response.ok) {
       const reason = response.status === 429 ? "rate_limited" : `http_${response.status}`;
-      // The provider's message is kept for the server log, never for the user.
-      throw new ProviderUnavailable(reason, payload.error?.message ?? `Gemini request failed (${response.status})`);
+      // The provider's own words, kept for the server log and never for the
+      // user — including the field it named, which is the whole point.
+      throw new ProviderUnavailable(reason, describeError(payload, response.status));
     }
     return payload;
   }
