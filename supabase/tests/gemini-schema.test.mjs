@@ -184,3 +184,55 @@ test("the nullable slide fields keep their shape, not just their name", () => {
     );
   }
 });
+
+/* ------------------------------------------- the real schemas, checked here */
+
+const { geminiSchemaProblems } = await import(`${edge}/gemini-schema.js`);
+
+test("every schema the pipeline sends is one Gemini can read", () => {
+  /**
+   * Against the production schemas, not a sample.
+   *
+   * "Request contains an invalid argument." names nothing — not the field, not
+   * the node, not even which of the two schemas in a request. Every hour spent
+   * bisecting that was an hour this check would have saved, so it runs on the
+   * real documents and fails locally.
+   */
+  for (const [name, schema] of Object.entries({
+    presentation_outline: outlineSchema(10),
+    presentation_content: contentSchema(10),
+    content_rewrite: rewriteSchema(),
+    editor_operations: editorOperationsSchema,
+  })) {
+    const problems = geminiSchemaProblems(toGeminiSchema(schema));
+    assert.deepEqual(problems, [], `${name}: ${problems.map((p) => `${p.path} ${p.problem}`).join("; ")}`);
+  }
+});
+
+test("a keyword Gemini does not know is named, with its path", () => {
+  // The check has to be able to fail, or it is decoration.
+  const problems = geminiSchemaProblems({
+    type: "object",
+    properties: { title: { type: "string", pattern: "^[A-Z]" } },
+    required: ["title"],
+  });
+  assert.equal(problems.length, 1);
+  assert.equal(problems[0].path, "$.properties.title.pattern");
+  assert.match(problems[0].problem, /bilmaydi/);
+});
+
+test("a required name that is not a property is caught", () => {
+  const problems = geminiSchemaProblems({
+    type: "object",
+    properties: { title: { type: "string" } },
+    required: ["title", "subtitle"],
+  });
+  assert.equal(problems.length, 1);
+  assert.match(problems[0].problem, /subtitle/);
+});
+
+test("an array with no items is caught", () => {
+  const problems = geminiSchemaProblems({ type: "array" });
+  assert.equal(problems.length, 1);
+  assert.match(problems[0].problem, /items yo'q/);
+});

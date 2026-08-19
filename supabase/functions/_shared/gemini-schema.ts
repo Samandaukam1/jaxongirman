@@ -91,3 +91,86 @@ export function toGeminiSchema(schema: unknown): unknown {
 
   return out;
 }
+
+/**
+ * Refuses a schema here rather than letting Google refuse it.
+ *
+ * `toGeminiSchema` drops what it does not recognise, which is the right
+ * behaviour and an easy thing to trust too far: a key it forgets to drop
+ * travels to Gemini and comes back as "Request contains an invalid argument",
+ * with no field named and no way to tell which of a hundred nodes was meant.
+ *
+ * So the output is checked before it is sent. A failure here names the path and
+ * the key, costs no network call, and happens in a test rather than in
+ * somebody's deck.
+ */
+const GEMINI_KEYS = new Set([
+  "type", "format", "description", "nullable", "enum", "anyOf",
+  "items", "properties", "required", "minItems", "maxItems", "propertyOrdering",
+]);
+
+const GEMINI_TYPES = new Set(["object", "array", "string", "number", "integer", "boolean"]);
+
+export type SchemaProblem = { path: string; problem: string };
+
+export function geminiSchemaProblems(schema: unknown, path = "$"): SchemaProblem[] {
+  if (Array.isArray(schema)) {
+    return schema.flatMap((entry, index) => geminiSchemaProblems(entry, `${path}[${index}]`));
+  }
+  if (!schema || typeof schema !== "object") return [];
+
+  const node = schema as Record<string, unknown>;
+  const problems: SchemaProblem[] = [];
+
+  for (const [key, value] of Object.entries(node)) {
+    if (!GEMINI_KEYS.has(key)) {
+      problems.push({ path: `${path}.${key}`, problem: `Gemini bu kalitni bilmaydi: \`${key}\`` });
+      continue;
+    }
+
+    if (key === "type") {
+      if (typeof value !== "string" || !GEMINI_TYPES.has(value)) {
+        problems.push({ path: `${path}.type`, problem: `noma'lum tur: ${JSON.stringify(value)}` });
+      }
+      continue;
+    }
+
+    // A properties map is a bag of schemas, not a schema, so its keys are names
+    // rather than keywords.
+    if (key === "properties" && value && typeof value === "object") {
+      for (const [name, child] of Object.entries(value as Record<string, unknown>)) {
+        problems.push(...geminiSchemaProblems(child, `${path}.properties.${name}`));
+      }
+      continue;
+    }
+
+    if (key === "enum") {
+      if (!Array.isArray(value) || value.length === 0) {
+        problems.push({ path: `${path}.enum`, problem: "enum bo'sh yoki massiv emas" });
+      }
+      continue;
+    }
+
+    if (key === "required") {
+      const names = Array.isArray(value) ? value : [];
+      const declared = Object.keys((node.properties ?? {}) as Record<string, unknown>);
+      for (const name of names) {
+        if (!declared.includes(String(name))) {
+          problems.push({ path: `${path}.required`, problem: `"${name}" required, lekin properties'da yo'q` });
+        }
+      }
+      continue;
+    }
+
+    problems.push(...geminiSchemaProblems(value, `${path}.${key}`));
+  }
+
+  if (node.type === "array" && node.items === undefined) {
+    problems.push({ path, problem: "array, lekin items yo'q" });
+  }
+  if (node.type === "object" && node.properties === undefined) {
+    problems.push({ path, problem: "object, lekin properties yo'q" });
+  }
+
+  return problems;
+}

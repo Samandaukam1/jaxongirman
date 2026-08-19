@@ -1,4 +1,4 @@
-import { toGeminiSchema } from "./gemini-schema.ts";
+import { geminiSchemaProblems, toGeminiSchema } from "./gemini-schema.ts";
 
 /**
  * The model that writes every word of a deck.
@@ -202,6 +202,31 @@ export class GeminiWriter {
 
     if (!response.ok) {
       const reason = response.status === 429 ? "rate_limited" : `http_${response.status}`;
+      /**
+       * What was sent, beside what came back.
+       *
+       * "Request contains an invalid argument." names nothing, and the three
+       * things that could have caused it — the schema, the output cap, the size
+       * of the prompt — are all measurable at the moment it fails. Measuring
+       * them here turned a day of bisecting into a line in a log.
+       *
+       * Sizes and field names only. The prompt itself is the author's, and the
+       * key is nobody's.
+       */
+      console.error(JSON.stringify({
+        event: "gemini_request_failed",
+        provider: "google",
+        model,
+        http_status: response.status,
+        error_status: payload.error?.status ?? null,
+        schema_bytes: JSON.stringify(
+          (body.generationConfig as { responseSchema?: unknown } | undefined)?.responseSchema ?? null,
+        ).length,
+        prompt_bytes: JSON.stringify(body.contents ?? null).length,
+        config_fields: Object.keys((body.generationConfig ?? {}) as Record<string, unknown>),
+        top_fields: Object.keys(body),
+      }));
+
       // The provider's own words, kept for the server log and never for the
       // user — including the field it named, which is the whole point.
       throw new ProviderUnavailable(reason, describeError(payload, response.status));
@@ -278,13 +303,29 @@ export class GeminiWriter {
     if (!this.configured) throw new ProviderUnavailable("not_configured", "GEMINI_API_KEY is not set");
     const model = input.model ?? this.writingModel;
 
+    /**
+     * Refused here rather than by Google.
+     *
+     * A schema Gemini cannot read comes back as "Request contains an invalid
+     * argument" with nothing named, which is a day of bisecting. Checked
+     * locally, the same fault names the path and the key and costs no request.
+     */
+    const converted = toGeminiSchema(input.schema);
+    const problems = geminiSchemaProblems(converted);
+    if (problems.length > 0) {
+      throw new ProviderUnavailable(
+        "bad_schema",
+        `${input.schemaName}: ${problems.slice(0, 4).map((p) => `${p.path} — ${p.problem}`).join("; ")}`,
+      );
+    }
+
     const { value, attempts } = await this.withRetries(input.attempts ?? 3, async () => {
       const payload = await this.call(model, {
         contents: [{ role: "user", parts: this.parts(input.prompt, input.attachments ?? []) }],
         ...(input.system ? { systemInstruction: { parts: [{ text: input.system }] } } : {}),
         generationConfig: {
           responseMimeType: "application/json",
-          responseSchema: toGeminiSchema(input.schema),
+          responseSchema: converted,
           maxOutputTokens: input.maxOutputTokens ?? 8_000,
         },
       });

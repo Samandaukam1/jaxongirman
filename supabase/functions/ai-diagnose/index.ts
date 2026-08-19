@@ -93,69 +93,55 @@ Deno.serve(async (request) => {
        * Each is the smallest request that contains the construct and nothing
        * else, so a failure names the construct rather than the schema.
        */
-      const PROBES: { name: string; schema: Record<string, unknown> }[] = [
-        {
-          name: "nullable_object",
-          schema: {
-            type: "object",
-            properties: {
-              quote: {
-                type: "object", nullable: true,
-                properties: { text: { type: "string" }, attribution: { type: "string" } },
-                required: ["text", "attribution"],
-              },
-            },
-            required: ["quote"],
-          },
-        },
-        {
-          name: "array_of_array",
-          schema: {
-            type: "object",
-            properties: {
-              rows: {
-                type: "array", minItems: 1, maxItems: 3,
-                items: { type: "array", items: { type: "string" }, minItems: 2, maxItems: 3 },
-              },
-            },
-            required: ["rows"],
-          },
-        },
-        {
-          name: "nullable_string",
-          schema: {
-            type: "object",
-            properties: { body: { type: "string", nullable: true } },
-            required: ["body"],
-          },
-        },
-        { name: "outline_real", schema: outlineSchema(1) },
-        { name: "content_real", schema: contentSchema(1) },
-        // The trivial one, last in the list and first in usefulness: if even
-        // this is refused the fault is not a shape at all.
-        {
-          name: "trivial",
-          schema: { type: "object", properties: { ok: { type: "string" } }, required: ["ok"] },
-        },
+      /**
+       * Which part of the failing request is the one Gemini refuses.
+       *
+       * The outline call succeeds and the content call does not, and they
+       * differ in three ways at once: the schema, the output cap and the size
+       * of the prompt. Removing the nested array from the schema changed
+       * nothing, which means at least one of the other two matters — so each is
+       * varied on its own rather than reasoned about.
+       *
+       * Read the results as a ladder. The first row that fails names the thing
+       * that broke, because every row above it holds the others constant.
+       */
+      const TRIVIAL = { type: "object", properties: { ok: { type: "string" } }, required: ["ok"] };
+      const SHORT = "Sxemaga mos namunaviy JSON qaytaring.";
+      // Roughly what the real content prompt carries once the outline, the
+      // research notes and every archetype brief are in it.
+      const LONG = `${SHORT}\n\n${"Namunaviy kontekst matni. ".repeat(900)}`;
+
+      const PROBES: {
+        name: string;
+        schema: Record<string, unknown>;
+        maxOutputTokens: number;
+        prompt: string;
+      }[] = [
+        { name: "trivial", schema: TRIVIAL, maxOutputTokens: 400, prompt: SHORT },
+        { name: "outline_6", schema: outlineSchema(6), maxOutputTokens: 400, prompt: SHORT },
+        { name: "content_1", schema: contentSchema(1), maxOutputTokens: 400, prompt: SHORT },
+        { name: "content_6", schema: contentSchema(6), maxOutputTokens: 400, prompt: SHORT },
+        { name: "content_10", schema: contentSchema(10), maxOutputTokens: 400, prompt: SHORT },
+        // Isolates the output cap: same small schema, production's 16k.
+        { name: "trivial_16k", schema: TRIVIAL, maxOutputTokens: 16_000, prompt: SHORT },
+        { name: "content_6_16k", schema: contentSchema(6), maxOutputTokens: 16_000, prompt: SHORT },
+        // Isolates prompt size: production's schema and cap, a long prompt.
+        { name: "content_6_longprompt", schema: contentSchema(6), maxOutputTokens: 400, prompt: LONG },
       ];
 
-      /**
-       * All at once, and never for long.
-       *
-       * Run in sequence these took longer than the function is allowed to live,
-       * so the console sat on "Tekshirilmoqda…" and nobody learned anything.
-       * They do not depend on each other, so the whole check costs the slowest
-       * one rather than the sum — and each is capped, because a probe that
-       * hangs must not take the diagnosis down with it.
-       */
+      report.probe_prompt_bytes_short = SHORT.length;
+      report.probe_prompt_bytes_long = LONG.length;
+      report.schema_bytes_outline = JSON.stringify(outlineSchema(6)).length;
+      report.schema_bytes_content = JSON.stringify(contentSchema(6)).length;
+
       const results = await Promise.all(PROBES.map(async (probe) => {
         try {
           await Promise.race([
             writer.structured({
-              prompt: "Sxemaga mos namunaviy JSON qaytaring.",
+              prompt: probe.prompt,
               schemaName: `probe_${probe.name}`,
               schema: probe.schema,
-              maxOutputTokens: 400,
+              maxOutputTokens: probe.maxOutputTokens,
               // One ask. A diagnostic that retries takes three times as long to
               // report the same refusal.
               attempts: 1,
@@ -165,12 +151,13 @@ Deno.serve(async (request) => {
           ]);
           return { name: probe.name, state: "ok", detail: "" };
         } catch (failure) {
+          const message = failure instanceof Error ? failure.message : "";
           return {
             name: probe.name,
-            state: "FAILED",
-            // The whole sentence, field violation included — the line that
-            // names the key Gemini refused.
-            detail: failure instanceof Error ? failure.message.slice(0, 320) : "",
+            // Truncation is the token cap doing its job, not a refusal — the
+            // request was accepted and the answer ran out of room.
+            state: /unparseable JSON|empty_response|no text/i.test(message) ? "ok (kesildi)" : "FAILED",
+            detail: message.slice(0, 260),
           };
         }
       }));
