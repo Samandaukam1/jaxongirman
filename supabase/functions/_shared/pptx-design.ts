@@ -66,6 +66,15 @@ export type TemplateArtwork = {
 
 export type DesignPage = {
   archetype: Archetype;
+  /**
+   * Where the page sat in the uploaded file.
+   *
+   * Not the same as its position in `pages`: a page with nothing drawable is
+   * dropped, so the fourth usable page can be the fifth slide. Anything that
+   * goes back to the original — reading its words, showing an admin which slide
+   * a warning is about — needs the number the file used.
+   */
+  sourceIndexInFile: number;
   /** The page's heading as the file wrote it — for the admin's list, never drawn. */
   sourceTitle: string | null;
   purpose: ArchetypePurpose;
@@ -596,6 +605,7 @@ function convertSlide(
       selection: selectionFor(purpose, textSlots, images, capacity),
       elements,
     },
+    sourceIndexInFile: position,
     sourceTitle: slide.title,
     purpose,
     textSlots,
