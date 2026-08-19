@@ -39,15 +39,33 @@ const nullableString = {
           minItems: 2,
           maxItems: 6
         },
+        /**
+         * A row is an object holding its cells, not an array of arrays.
+         *
+         * The nested form is the natural way to write a table and the one
+         * Gemini handles worst: asked for nothing but an array whose items are
+         * arrays, it took longer than fifteen seconds to answer a three-cell
+         * example, and the slide-copy request carrying it was refused outright
+         * while the outline request — identical but for this — went through
+         * every time.
+         *
+         * Wrapping each row costs one key and is undone the moment the answer
+         * is parsed, so nothing downstream ever sees this shape.
+         */
         rows: {
           type: "array",
           items: {
-            type: "array",
-            items: {
-              type: "string"
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              cells: {
+                type: "array",
+                items: { type: "string" },
+                minItems: 2,
+                maxItems: 6
+              }
             },
-            minItems: 2,
-            maxItems: 6
+            required: ["cells"]
           },
           minItems: 2,
           maxItems: 8

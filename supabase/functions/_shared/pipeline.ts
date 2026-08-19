@@ -289,6 +289,34 @@ async function readAttachments(
   return attachments;
 }
 
+/**
+ * Puts a table back the way the renderers read it.
+ *
+ * The model is asked for `rows: [{ cells: [...] }]` rather than an array of
+ * arrays — see `plan-schema.ts` for why — and everything downstream expects
+ * `string[][]`. One translation, at the boundary where the answer arrives.
+ *
+ * Both shapes are accepted. A model that ignores the wrapper and returns the
+ * plain nested array has still answered the question, and refusing it would
+ * lose a deck over punctuation.
+ */
+function flattenTableRows<T extends { table?: unknown }>(slide: T): T {
+  const table = slide.table as { columns?: unknown; rows?: unknown } | null | undefined;
+  if (!table || !Array.isArray(table.rows)) return slide;
+
+  const rows = table.rows
+    .map((row) => {
+      if (Array.isArray(row)) return row.map((cell) => String(cell ?? ""));
+      const cells = (row as { cells?: unknown })?.cells;
+      return Array.isArray(cells) ? cells.map((cell) => String(cell ?? "")) : null;
+    })
+    .filter((row): row is string[] => row !== null && row.length > 0);
+
+  // A table with no readable rows is not a table. Dropping it leaves the slide
+  // to its other content rather than rendering an empty grid.
+  return { ...slide, table: rows.length > 0 ? { ...table, rows } : null };
+}
+
 /** A slide with nothing on it but its own headline. */
 function bareSlide(title: string, purpose: string, layout: LayoutName, subtitle: string | null = null, bullets: string[] = []): SemanticSlide {
   return { title, subtitle, purpose, layout, bullets, body: null, quote: null, statistic: null, chart: null, table: null, visualPrompt: null };
@@ -524,7 +552,7 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
     const contentResult = await runStage(input.service, input, "writing_content", async () => {
       if (mode === "mock") return { data: mockContent(outlineResult.data), usage: {}, requestId: null, provider: "google" as const, model: writer.writingModel, attempts: 1 };
       const system = "You are an expert Uzbek Latin academic presentation writer working to a fixed layout. Follow the supplied outline exactly and ground every sentence in the supplied research. Write specific, checkable content: real numbers, dates, names and definitions instead of generalities. Grammar must be flawless Uzbek Latin. Never fabricate a quotation, statistic or date — if the research does not support it, write something the research does support instead. The layout is fixed and is not yours to change: write copy that fits the boxes you are given. Return only the required schema.";
-      const prompt = `Mavzu: ${prepared.presentation.topic}\nReja:\n${JSON.stringify(outlineResult.data.slides)}\n\nAynan ${contentCount} ta slayd uchun matn yozing.\n- subtitle: sarlavhani ochib beruvchi bitta qisqa jumla (bezakli yozuv). Har slaydda bo'lsin.\n- bullets: 3–5 ta band. Har biri to'liq, aniq fikr: raqam, sana, ism yoki aniq ta'rif bo'lsin. "Muhim ahamiyatga ega" kabi quruq iboralarni yozmang.\n- body: bandlarni bog'lovchi 1–2 jumlalik izoh, agar slayd shuni talab qilsa.\n- statistic: faqat tadqiqotda haqiqatan uchragan raqamni yozing.\n- chart: faqat tadqiqotdagi haqiqiy qiymatlar bilan to'ldiring.\n- table: faqat tadqiqotda haqiqatan jadval ko'rinishidagi ma'lumot bo'lsa to'ldiring; 2-6 ustun, 2-8 qator.\nBibliografiya yozmang — uni server alohida qo'shadi.${researchBrief}${layoutInstruction}`;
+      const prompt = `Mavzu: ${prepared.presentation.topic}\nReja:\n${JSON.stringify(outlineResult.data.slides)}\n\nAynan ${contentCount} ta slayd uchun matn yozing.\n- subtitle: sarlavhani ochib beruvchi bitta qisqa jumla (bezakli yozuv). Har slaydda bo'lsin.\n- bullets: 3–5 ta band. Har biri to'liq, aniq fikr: raqam, sana, ism yoki aniq ta'rif bo'lsin. "Muhim ahamiyatga ega" kabi quruq iboralarni yozmang.\n- body: bandlarni bog'lovchi 1–2 jumlalik izoh, agar slayd shuni talab qilsa.\n- statistic: faqat tadqiqotda haqiqatan uchragan raqamni yozing.\n- chart: faqat tadqiqotdagi haqiqiy qiymatlar bilan to'ldiring.\n- table: faqat tadqiqotda haqiqatan jadval ko'rinishidagi ma'lumot bo'lsa to'ldiring; 2-6 ustun, 2-8 qator. Har bir qator {\"cells\": [...]} ko'rinishida bo'lsin.\nBibliografiya yozmang — uni server alohida qo'shadi.${researchBrief}${layoutInstruction}`;
       return writer.structured<Content>({
         prompt: `${system}\n\n${prompt}`,
         system,
@@ -568,7 +596,10 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
      * not belong in that composition, and grinding at it costs a person real
      * money for a result that is not going to improve.
      */
-    const writtenSlides = [...contentResult.data.slides];
+    // Rows come back wrapped, one object per row, because Gemini answers a
+    // nested array badly and refused the request that carried one. Unwrapped
+    // here so nothing past this line knows the difference.
+    const writtenSlides = contentResult.data.slides.map(flattenTableRows);
     let rewriteUsage = { input_tokens: 0, output_tokens: 0 };
     let rewrites = 0;
     let rewriteAttribution: { provider: string; model: string; attempts: number } =

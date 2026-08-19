@@ -381,3 +381,39 @@ test("a failure the author can fix is still told to them plainly", () => {
   assert.equal(shown.code, "pipeline_failed");
   assert.match(shown.message, /dizayn/);
 });
+
+/* ---------------------------------------------- what a schema may contain */
+
+test("no schema the pipeline sends contains an array of arrays", async () => {
+  /**
+   * The construct that broke slide copy.
+   *
+   * Every request carrying it was refused while the outline request — the same
+   * shape but for this — went through every time, and a probe containing
+   * nothing else took longer than fifteen seconds to answer a three-cell
+   * example. A table row is an object holding its cells now, unwrapped the
+   * moment the answer is parsed.
+   *
+   * Guarded rather than remembered: the nested form is the natural way to
+   * write a table, so it will be reached for again.
+   */
+  const { contentSchema, outlineSchema, rewriteSchema, editorOperationsSchema } =
+    await import(`${edge}/plan-schema.js`);
+  const { toGeminiSchema } = await import(`${edge}/gemini-schema.js`);
+
+  const nested = (node, path = "$") => {
+    if (Array.isArray(node)) return node.flatMap((entry, index) => nested(entry, `${path}[${index}]`));
+    if (!node || typeof node !== "object") return [];
+    const found = node.type === "array" && node.items?.type === "array" ? [path] : [];
+    return [...found, ...Object.entries(node).flatMap(([key, value]) => nested(value, `${path}.${key}`))];
+  };
+
+  for (const [name, schema] of Object.entries({
+    presentation_outline: outlineSchema(10),
+    presentation_content: contentSchema(10),
+    content_rewrite: rewriteSchema(),
+    editor_operations: editorOperationsSchema,
+  })) {
+    assert.deepEqual(nested(toGeminiSchema(schema)), [], `${name} nests an array inside an array`);
+  }
+});
