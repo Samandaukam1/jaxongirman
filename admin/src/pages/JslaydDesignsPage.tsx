@@ -1,9 +1,10 @@
 import { decompile, SAMPLE_PROMPT, SLUG_PATTERN, TIERS, TIER_LABELS, toSlug, type Tier } from "@jaxongirman/jslayd";
 import { ScaledSlide } from "@jaxongirman/slide-dom";
-import { Download, Plus, Search, Upload } from "lucide-react";
+import { Download, FileUp, Plus, Search, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { EmptyState, ErrorState, PageHeader, StatusBadge, TableSkeleton } from "@/components/AdminUI";
+import { TemplateImport } from "@/components/TemplateImport";
 import { DiagnosticList, JslaydEditor } from "@/components/JslaydEditor";
 import { JslaydStandardCard } from "@/components/JslaydStandard";
 import { dateTime, errorMessage } from "@/lib/format";
@@ -77,6 +78,7 @@ export function JslaydDesignsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -116,6 +118,18 @@ export function JslaydDesignsPage() {
     );
   }
 
+  // A template is a second way to author the same thing, so it lives behind the
+  // same catalogue rather than in a screen of its own: one list of designs,
+  // however each of them was made.
+  if (importing) {
+    return (
+      <TemplateImport
+        onClose={() => { setImporting(false); void load(); }}
+        onImported={() => { void load(); }}
+      />
+    );
+  }
+
   return (
     <div className="page-stack">
       <PageHeader
@@ -125,6 +139,9 @@ export function JslaydDesignsPage() {
         action={
           <div className="header-actions">
             <ImportButton onImported={(next) => setDraft(next)} />
+            <button className="secondary-button" type="button" onClick={() => setImporting(true)}>
+              <FileUp size={16} strokeWidth={1.9} /> PowerPoint shablon
+            </button>
             <button className="primary-button" type="button" onClick={() => setDraft({ ...BLANK })}>
               <Plus size={16} strokeWidth={2.1} /> Yangi JSLAYD dizayn
             </button>

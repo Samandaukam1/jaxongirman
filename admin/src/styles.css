@@ -697,3 +697,38 @@ td small { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; 
   border: 1px solid var(--border); background: var(--surface-muted); color: var(--ink-soft);
 }
 .import-steps li.is-done { border-color: #b9dfc9; background: #f2fbf5; color: #17683f; }
+
+/* ------------------------------------------- PowerPoint template import ---- */
+
+.upload-drop {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 34px 20px;
+  border: 2px dashed var(--border);
+  border-radius: 14px;
+  background: var(--surface-muted);
+  cursor: pointer;
+  text-align: center;
+}
+.upload-drop:hover { border-color: var(--accent, #7b5cd6); }
+.upload-drop strong { font-size: 15px; }
+.upload-drop span { font-size: 13px; opacity: .7; max-width: 46ch; line-height: 1.5; }
+
+/* A refusal is a list an admin works through, so each rule gets its own line. */
+.problem-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.problem-list li {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-left: 3px solid #d9a441;
+  border-radius: 8px;
+  background: var(--surface-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.problem-list li small { opacity: .6; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+.spin { animation: admin-spin 1s linear infinite; vertical-align: -3px; }
+@keyframes admin-spin { to { transform: rotate(360deg); } }

@@ -291,3 +291,109 @@ export function downloadDocument(document: JslaydDocument) {
   anchor.click();
   URL.revokeObjectURL(url);
 }
+
+/* ------------------------------------------------- PowerPoint templates */
+
+/**
+ * Importing a design somebody built in PowerPoint.
+ *
+ * The file goes to storage first and only its path is sent, for the same
+ * reason a user's deck does: a fifty-megabyte body through a function is a bad
+ * trade when the bucket already accepts one directly and checks who is
+ * uploading while it does.
+ *
+ * Two calls, and the first writes nothing — `inspect` says what would happen so
+ * an admin decides before a catalogue entry exists. The pages that come back
+ * are then sent up again with the import, because a classifier is not obliged
+ * to answer the same way twice and "what you approved is what was stored" has
+ * to be true.
+ */
+export const TEMPLATE_BUCKET = "design-source";
+
+export type TemplatePage = {
+  archetypeId: string;
+  sourceIndex: number;
+  purpose: string;
+  role: string;
+  recommendedStoryPosition: number;
+  textSlots: number;
+  imageSlots: number;
+  artwork: number;
+};
+
+export type TemplateReport = {
+  ok: boolean;
+  code: "inspected" | "imported" | "rejected" | "duplicate";
+  designId?: string;
+  design?: { name: string; slug: string } | null;
+  name?: string;
+  slides?: number;
+  pages?: TemplatePage[];
+  fonts?: string[];
+  keywords?: { slug: string; score: number }[];
+  warnings?: string[];
+  colors?: Record<string, string>;
+  problems?: { code: string; message: string; part?: string }[];
+  message?: string;
+};
+
+/** Where one admin's uploads live, so a listing is never somebody else's. */
+export async function uploadTemplate(file: File): Promise<string> {
+  const { data: auth } = await supabase.auth.getUser();
+  const owner = auth.user?.id ?? "unknown";
+  const stamp = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
+  const path = `templates/${owner}/${stamp}-${file.name.replace(/[^a-zA-Z0-9._-]+/g, "-").slice(-80)}`;
+  const { error } = await supabase.storage.from(TEMPLATE_BUCKET).upload(path, file, {
+    contentType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    upsert: false,
+  });
+  if (error) throw error;
+  return path;
+}
+
+export async function inspectTemplate(input: {
+  storagePath: string;
+  originalName: string;
+  name?: string;
+}): Promise<TemplateReport> {
+  return callTemplate({ ...input, step: "inspect" });
+}
+
+export async function importTemplate(input: {
+  storagePath: string;
+  originalName: string;
+  name: string;
+  slug: string;
+  tier: Tier;
+  premium: boolean;
+  pages: { archetypeId: string; role: string; recommendedStoryPosition: number }[];
+}): Promise<TemplateReport> {
+  return callTemplate({ ...input, step: "import" });
+}
+
+/**
+ * The function's refusals are answers, not failures.
+ *
+ * A package with macros and a file already imported both come back with a
+ * status the client is meant to read and show. Letting `functions.invoke` turn
+ * them into a generic error would lose exactly the part an admin needs: which
+ * rule, and which part of the file.
+ */
+async function callTemplate(body: Record<string, unknown>): Promise<TemplateReport> {
+  const { data, error } = await supabase.functions.invoke("import-design-pptx", { body });
+  if (!error) return data as TemplateReport;
+
+  const context = (error as { context?: unknown }).context;
+  if (context && typeof (context as Response).json === "function") {
+    try {
+      const detail = await (context as Response).json();
+      if (detail && typeof detail === "object" && "code" in detail) return detail as TemplateReport;
+      if (detail && typeof detail === "object" && "error" in detail) {
+        throw new Error(String((detail as { error: unknown }).error));
+      }
+    } catch (readError) {
+      if (readError instanceof Error && readError.message) throw readError;
+    }
+  }
+  throw error;
+}

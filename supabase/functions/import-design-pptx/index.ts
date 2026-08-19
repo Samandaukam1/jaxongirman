@@ -26,7 +26,8 @@ import { contentHash } from "../_shared/jslayd/serialize.ts";
 import { renderPreview } from "../_shared/jslayd/render.ts";
 import {
   DESIGN_CLASSIFIER_NAME, DESIGN_CLASSIFIER_SCHEMA, SLIDE_CLASSIFIER_NAME, SLIDE_CLASSIFIER_SCHEMA,
-  designClassifierPrompt, factsFor, readDesignKeywords, readSlideProfiles, slideClassifierPrompt,
+  STORY_ROLES, designClassifierPrompt, factsFor, readDesignKeywords, readSlideProfiles,
+  slideClassifierPrompt, type StoryRole,
 } from "../_shared/pptx-classify.ts";
 import { toJslaydDocument } from "../_shared/pptx-design.ts";
 import { inspectPackage, packageHash, MAX_TEMPLATE_SLIDES } from "../_shared/pptx-safety.ts";
@@ -45,6 +46,16 @@ type Body = {
   description?: string;
   premium?: boolean;
   step?: "inspect" | "import";
+  /**
+   * The roles the admin actually approved, from the inspect step.
+   *
+   * Without this the two steps classify independently, and a model is not
+   * obliged to answer the same way twice — so the admin would approve one list
+   * and a different one would be stored. Supplying them also means the second
+   * step asks nothing of the model at all, which is both cheaper and the only
+   * way "what you saw is what was saved" can be true.
+   */
+  pages?: { archetypeId?: string; role?: string; recommendedStoryPosition?: number }[];
 };
 
 const TIERS = ["simple", "good", "great", "super_professional"];
@@ -157,7 +168,16 @@ Deno.serve(async (request) => {
     const taxonomy = (topics.data ?? []).map((row) => ({ slug: row.slug as string, label: row.label_uz as string }));
     const allowed = new Set(taxonomy.map((topic) => topic.slug));
 
-    if (writer.configured) {
+    // What the admin already approved, indexed by the page it belongs to.
+    const approved = new Map<string, { role?: string; position?: number }>();
+    for (const entry of body.pages ?? []) {
+      const archetypeId = String(entry?.archetypeId ?? "");
+      if (archetypeId) approved.set(archetypeId, { role: entry?.role, position: entry?.recommendedStoryPosition });
+    }
+    const everyPageApproved = draft.pages.length > 0
+      && draft.pages.every((page) => approved.has(page.archetype.id));
+
+    if (writer.configured && !everyPageApproved) {
       // Both are asked at once: neither depends on the other, and a template of
       // twenty-five pages is already the slowest part of this request.
       const [slides, subjects] = await Promise.allSettled([
@@ -187,13 +207,31 @@ Deno.serve(async (request) => {
       else warnings.push("Sahifa rollari avtomatik aniqlandi — model javob bermadi.");
       if (subjects.status === "fulfilled") topicAnswer = subjects.value.data;
       else warnings.push("Dizayn mavzulari aniqlanmadi — keyinroq qo‘lda qo‘shish mumkin.");
-    } else {
+    } else if (!writer.configured) {
       warnings.push("GEMINI_API_KEY sozlanmagan — rollar tuzilishga qarab aniqlandi.");
     }
 
     // Both readers fall back to the deterministic guess, so these are complete
     // whether or not the two calls above happened at all.
-    const profiles = readSlideProfiles(slideAnswer, draft.pages);
+    const profiles = readSlideProfiles(slideAnswer, draft.pages).map((profile) => {
+      const choice = approved.get(profile.archetypeId);
+      if (!choice) return profile;
+      // Checked against the same closed list the model's answer is: an admin
+      // typing into a request body is still a request body.
+      const role = (STORY_ROLES as readonly string[]).includes(String(choice.role))
+        ? String(choice.role) as StoryRole
+        : profile.role;
+      const position = Number(choice.position);
+      return {
+        ...profile,
+        role,
+        recommendedStoryPosition: profile.isTerminal
+          ? profile.recommendedStoryPosition
+          : Number.isInteger(position) && position >= 1 && position <= 18
+            ? position
+            : profile.recommendedStoryPosition,
+      };
+    });
     const keywords = readDesignKeywords(topicAnswer, allowed);
 
     const summary = {
