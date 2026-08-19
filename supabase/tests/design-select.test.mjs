@@ -246,3 +246,14 @@ test("a family of many pages does not spend a deck on one of them", () => {
   const chosen = selectPages(profiles, plan, needs(10));
   assert.ok(new Set(chosen.map((entry) => entry.archetypeId)).size >= 6);
 });
+
+test("a catalogue that did not count pages does not rank every design last", () => {
+  const wanted = new Map([["moliya", 3]]);
+  const ranked = rankDesigns([
+    { id: "counted", slug: "c", keywords: [{ keyword: "moliya", score: 60 }], pages: 12 },
+    { id: "uncounted", slug: "u", keywords: [{ keyword: "moliya", score: 60 }], pages: 0 },
+  ], wanted);
+  // Within a point of each other: the difference must be the subject, not the
+  // caller's choice of columns.
+  assert.ok(Math.abs(ranked[0].score - ranked[1].score) <= 1);
+});

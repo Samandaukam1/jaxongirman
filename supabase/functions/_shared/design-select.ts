@@ -86,7 +86,14 @@ export type DesignCandidate = {
   slug: string;
   /** `{keyword, score}` as the column stores them. */
   keywords: readonly { keyword: string; score: number }[];
-  /** How many pages the family has. A larger family repeats itself less. */
+  /**
+   * How many pages the family has, or 0 when the caller did not count.
+   *
+   * Zero means unknown rather than empty — a published design always has
+   * archetypes — so it scores the middle of the range instead of last. A
+   * catalogue listing that skipped the expensive column must not thereby rank
+   * every written design below every template.
+   */
   pages: number;
   /** Featured designs win ties, which is what the flag is for. */
   featured?: boolean;
@@ -119,7 +126,7 @@ export function rankDesigns(
       }
       // Range is worth a little on its own: a family of twenty pages can answer
       // a story a family of four has to repeat itself through.
-      score += Math.min(6, candidate.pages / 4);
+      score += candidate.pages > 0 ? Math.min(6, candidate.pages / 4) : 3;
       if (candidate.featured) score += 1;
       return { id: candidate.id, score: Math.round(score * 100) / 100, matched };
     })

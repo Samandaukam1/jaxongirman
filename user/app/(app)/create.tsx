@@ -57,6 +57,17 @@ export default function CreatePresentationScreen() {
   const [paletteCode, setPaletteCode] = useState<string | null>(null);
   const [remoteDesigns, setRemoteDesigns] = useState<RemoteDesign[]>([]);
   const [designSlug, setDesignSlug] = useState<string | null>(null);
+  /**
+   * Whether the design is chosen for you.
+   *
+   * On by default, and the reason is what a person is actually here to do:
+   * they came to make a deck about something, not to compare twenty
+   * compositions before they are allowed to start. The server ranks the
+   * catalogue against the topic and passes its answer in as a slug, so a deck
+   * made this way is laid out by a published design exactly as a hand-picked
+   * one is — the only difference is who did the picking.
+   */
+  const [autoDesign, setAutoDesign] = useState(true);
   const insets = useSafeAreaInsets();
 
   // The header's back button is the only way out of this screen, so Android's
@@ -189,8 +200,10 @@ export default function CreatePresentationScreen() {
           teacherName: teacherName.trim() || null,
           sources: sourceList,
           uploadPaths: uploadedPaths,
-          paletteCode,
-          designSlug,
+          designSlug: autoDesign ? null : designSlug,
+          // The colour family belongs to the design, so with the design not yet
+          // chosen there is nothing to name. The server takes the design's own.
+          paletteCode: autoDesign ? null : paletteCode,
           idempotencyKey: presentationId,
         },
       });
@@ -261,9 +274,29 @@ export default function CreatePresentationScreen() {
         <View style={styles.group}>
           <View style={styles.labelRow}>
             <Text style={styles.label}>Dizayn</Text>
-            {styleDesigns.length ? <Text style={styles.hint}>{styleDesigns.length} ta</Text> : null}
+            {styleDesigns.length && !autoDesign ? <Text style={styles.hint}>{styleDesigns.length} ta</Text> : null}
           </View>
-          {styleDesigns.length ? (
+
+          <Pressable
+            onPress={() => setAutoDesign((current) => !current)}
+            style={[styles.autoDesign, autoDesign && styles.autoDesignOn]}
+          >
+            <View style={styles.autoDesignText}>
+              <Text style={[styles.autoDesignTitle, autoDesign && styles.autoDesignTitleOn]}>
+                Jaxongir AI tanlaydi
+              </Text>
+              <Text style={styles.autoDesignHint}>
+                {autoDesign
+                  ? "Mavzuga eng mos dizayn avtomatik tanlanadi."
+                  : "Dizaynni o‘zingiz tanlaysiz."}
+              </Text>
+            </View>
+            <View style={[styles.autoDesignSwitch, autoDesign && styles.autoDesignSwitchOn]}>
+              <View style={[styles.autoDesignKnob, autoDesign && styles.autoDesignKnobOn]} />
+            </View>
+          </Pressable>
+
+          {autoDesign ? null : styleDesigns.length ? (
             <DesignPicker designs={styleDesigns} selected={designSlug} onSelect={setDesignSlug} />
           ) : (
             // Said plainly rather than papered over with a built-in. A deck is
@@ -385,6 +418,42 @@ const styles = StyleSheet.create({
   label: { ...typography.bodyMedium, color: colors.ink },
   hint: { ...typography.caption, color: colors.inkSoft },
   emptyDesigns: { ...typography.body, color: colors.inkSoft, lineHeight: 22, paddingVertical: spacing.sm },
+
+  // The switch that decides who picks the design. Drawn rather than taken from
+  // `Switch`: the platform control is a different size and colour on each OS,
+  // and this sits inside a card that has to read as one thing.
+  autoDesign: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    marginBottom: spacing.sm,
+  },
+  autoDesignOn: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
+  autoDesignText: { flex: 1, gap: 2 },
+  autoDesignTitle: { ...typography.body, fontWeight: "600", color: colors.ink },
+  autoDesignTitleOn: { color: colors.primary },
+  autoDesignHint: { ...typography.caption, color: colors.inkSoft },
+  autoDesignSwitch: {
+    width: 46,
+    height: 28,
+    borderRadius: 14,
+    padding: 3,
+    backgroundColor: colors.border,
+    justifyContent: "center",
+  },
+  autoDesignSwitchOn: { backgroundColor: colors.primary },
+  autoDesignKnob: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.surface,
+  },
+  autoDesignKnobOn: { alignSelf: "flex-end" },
   upload: { minHeight: 76, borderRadius: radius.md, backgroundColor: colors.primarySoft, borderWidth: 1, borderStyle: "dashed", borderColor: colors.accentSoft, padding: spacing.md, flexDirection: "row", alignItems: "center", gap: spacing.md },
   uploadText: { flex: 1 },
   uploadTitle: { ...typography.bodyMedium, color: colors.ink },

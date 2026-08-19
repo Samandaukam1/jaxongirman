@@ -1,4 +1,5 @@
 import { requestContext } from "../_shared/auth.ts";
+import { chooseDesign } from "../_shared/design-choice.ts";
 import { preflight } from "../_shared/cors.ts";
 import { bodyJson, errorResponse, HttpError, json } from "../_shared/http.ts";
 import { runGenerationPipeline } from "../_shared/pipeline.ts";
@@ -62,6 +63,33 @@ Deno.serve(async (request) => {
       if (!body.style || !styles.has(body.style)) throw new HttpError(400, "Presentation style is invalid", "invalid_style");
       if (!Number.isInteger(body.slideCount) || (body.slideCount ?? 0) < 1 || (body.slideCount ?? 0) > 30) throw new HttpError(400, "Slide count must be 1–30", "invalid_slide_count");
       const sources = Array.isArray(body.sources) ? body.sources.map((source) => String(source).trim()).filter(Boolean).slice(0, 30) : [];
+
+      /**
+       * The design, chosen here when the person did not choose one.
+       *
+       * "Jaxongir AI tanlaydi" is the default on the phone, so most decks
+       * arrive with a topic and no slug. Ranking happens before the RPC and the
+       * result is passed in as a slug, which keeps the rule the RPC exists to
+       * enforce — a deck is laid out by a published design and by nothing else
+       * — exactly as it was. Nothing downstream can tell who chose.
+       */
+      let chosenDesign = designSlug(body.designSlug);
+      if (!chosenDesign) {
+        const automatic = await chooseDesign(context.serviceClient, {
+          tier: body.style,
+          topic: body.topic.trim(),
+        });
+        if (!automatic) {
+          throw new HttpError(422, "Bu uslub uchun nashr qilingan dizayn topilmadi.", "no_design_available");
+        }
+        chosenDesign = automatic.slug;
+        // Which subjects decided it, so a surprising choice can be explained
+        // without re-running the ranking. Never the topic itself.
+        console.log("design chosen automatically", JSON.stringify({
+          tier: body.style, slug: automatic.slug, score: automatic.score, matched: automatic.matched,
+        }));
+      }
+
       const { data, error } = await context.userClient.rpc("start_generation", {
         p_presentation_id: body.presentationId,
         p_topic: body.topic.trim(),
@@ -77,7 +105,7 @@ Deno.serve(async (request) => {
         // A deck is laid out by a published design and by nothing else. An
         // unknown or unpublished slug is refused by the RPC before a credit is
         // reserved; there is no built-in path left for it to fall to.
-        p_design_slug: designSlug(body.designSlug),
+        p_design_slug: chosenDesign,
       });
       if (error) throw new HttpError(error.code === "P0001" ? 402 : 400, error.message, error.code ?? "generation_start_failed");
       job = data?.[0] as typeof job;
