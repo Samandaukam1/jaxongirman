@@ -356,3 +356,107 @@ test("a profile naming a page the document lost does not lose the slide", () => 
   assert.equal(plan.slides.length, 1);
   assert.equal(plan.slides[0].archetypeId, "a");
 });
+
+/* ---------------------------------------- when the copy still will not fit */
+
+const { reseatOverflowing } = await import(`${edge}/layout-brief.js`);
+
+/** An archetype whose title box is a given size, so overflow is controllable. */
+function sized(id, purpose, width, height, fontSize = 40) {
+  const base = archetype(id, purpose);
+  return {
+    ...base,
+    elements: [{
+      ...base.elements[0],
+      geometry: { ...base.elements[0].geometry, width, height },
+      text: { ...base.elements[0].text, fontSize, maxLines: Math.max(1, Math.floor(height / (fontSize * 1.2))) },
+    }],
+  };
+}
+
+const profile = (id, role, overrides = {}) => ({
+  archetypeId: id, role, alternativeRoles: [], recommendedStoryPosition: 6,
+  layoutSignature: id, isTerminal: overrides.isTerminal ?? false,
+  supportsImage: false, supportsChart: false, supportsTable: false,
+  supportsQuote: false, supportsStats: false, minText: 0, maxText: 4000,
+});
+
+const longTitle = "Kardiologiyada zamonaviy diagnostika usullari va ularning amaliy natijalari haqida batafsil";
+
+test("a slide that overflows is moved to a page that holds it", () => {
+  const doc = document([sized("tight", "title_content", 260, 60), sized("roomy", "title_content", 900, 260, 28)]);
+  const plan = planDeckLayout(doc, [{ layout: "title_body", title: longTitle, purpose: "p" }]);
+  plan.slides[0].archetypeId = "tight";
+
+  const written = new Map([[0, { title: longTitle, subtitle: null, body: null, bullets: [], purpose: "p", layout: "title_body" }]]);
+  const moved = reseatOverflowing(doc, plan, written);
+
+  assert.equal(moved.reseats.length, 1);
+  assert.equal(moved.reseats[0].to, "roomy");
+  // The plan itself is what the renderer is handed, so the move must land there.
+  assert.equal(plan.slides[0].archetypeId, "roomy");
+});
+
+test("a slide that already fits is left where it is", () => {
+  const doc = document([sized("roomy", "title_content", 900, 260, 28), sized("other", "title_content", 900, 300, 28)]);
+  const plan = planDeckLayout(doc, [{ layout: "title_body", title: "Qisqa", purpose: "p" }]);
+  const before = plan.slides[0].archetypeId;
+  const written = new Map([[0, { title: "Qisqa", subtitle: null, body: null, bullets: [], purpose: "p", layout: "title_body" }]]);
+
+  assert.deepEqual(reseatOverflowing(doc, plan, written).reseats, []);
+  assert.equal(plan.slides[0].archetypeId, before);
+});
+
+test("nothing moves when every other page is worse", () => {
+  const doc = document([sized("tight", "title_content", 260, 60), sized("tighter", "title_content", 160, 40)]);
+  const plan = planDeckLayout(doc, [{ layout: "title_body", title: longTitle, purpose: "p" }]);
+  plan.slides[0].archetypeId = "tight";
+  const written = new Map([[0, { title: longTitle, subtitle: null, body: null, bullets: [], purpose: "p", layout: "title_body" }]]);
+
+  assert.deepEqual(reseatOverflowing(doc, plan, written).reseats, []);
+  assert.equal(plan.slides[0].archetypeId, "tight");
+});
+
+test("a page doing the same job wins over a merely roomier one", () => {
+  const doc = document([
+    sized("tight", "title_content", 260, 60),
+    sized("same_job", "title_content", 880, 240, 28),
+    sized("huge", "title_content", 960, 400, 22),
+  ]);
+  const plan = planDeckLayout(doc, [{ layout: "title_body", title: longTitle, purpose: "p" }]);
+  plan.slides[0].archetypeId = "tight";
+  plan.slides[0].role = "analysis";
+  const written = new Map([[0, { title: longTitle, subtitle: null, body: null, bullets: [], purpose: "p", layout: "title_body" }]]);
+
+  const moved = reseatOverflowing(doc, plan, written, {
+    profiles: [profile("tight", "analysis"), profile("same_job", "analysis"), profile("huge", "thanks")],
+  });
+  assert.equal(moved.reseats[0].to, "same_job");
+});
+
+test("the page that closes a deck is not taken for a slide in the middle", () => {
+  const doc = document([sized("tight", "title_content", 260, 60), sized("closing", "thank_you", 940, 380, 24)]);
+  const plan = planDeckLayout(doc, [
+    { layout: "title_body", title: longTitle, purpose: "p" },
+    { layout: "title_body", title: "Qisqa", purpose: "q" },
+  ]);
+  plan.slides[0].archetypeId = "tight";
+  plan.slides[1].archetypeId = "tight";
+  const written = new Map([
+    [0, { title: longTitle, subtitle: null, body: null, bullets: [], purpose: "p", layout: "title_body" }],
+    [1, { title: "Qisqa", subtitle: null, body: null, bullets: [], purpose: "q", layout: "title_body" }],
+  ]);
+
+  const moved = reseatOverflowing(doc, plan, written, { profiles: [profile("closing", "thanks", { isTerminal: true })] });
+  assert.ok(!moved.reseats.some((entry) => entry.index === 0 && entry.to === "closing"));
+});
+
+test("a brief comes back for every page the plan now uses", () => {
+  const doc = document([sized("tight", "title_content", 260, 60), sized("roomy", "title_content", 900, 260, 28)]);
+  const plan = planDeckLayout(doc, [{ layout: "title_body", title: longTitle, purpose: "p" }]);
+  plan.slides[0].archetypeId = "tight";
+  const written = new Map([[0, { title: longTitle, subtitle: null, body: null, bullets: [], purpose: "p", layout: "title_body" }]]);
+
+  const moved = reseatOverflowing(doc, plan, written);
+  assert.ok(moved.briefs.some((brief) => brief.archetypeId === plan.slides[0].archetypeId));
+});

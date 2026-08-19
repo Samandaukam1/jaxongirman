@@ -2,7 +2,7 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js";
 import { elementSlotsFor, fillElementSlots, slidesWithElements } from "./jelement-visuals.ts";
 import { familyOf } from "./jslayd/index.ts";
 import {
-  applyRewrite, briefForPrompt, findSlotProblems, planDeckLayout,
+  applyRewrite, briefForPrompt, findSlotProblems, planDeckLayout, reseatOverflowing,
   type SlotProblem,
 } from "./layout-brief.ts";
 import { buildJslaydSlides, readDesign, type ResolvedDesign } from "./jslayd-layout.ts";
@@ -921,6 +921,43 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
           }
           writtenSlides[entry.slide] = next;
         }
+      }
+
+      /**
+       * Still too long after two rewrites: move the slide, not the type.
+       *
+       * Asking a third time either returns the same sentence or starts deleting
+       * the fact the slide existed to state. The alternative used to be the
+       * renderer shrinking the type, which is how one slide ends up set four
+       * points smaller than its neighbours for a reason no reader can see. A
+       * family has other pages and some of them are bigger.
+       */
+      const stillWritten = new Map<number, SemanticSlide>();
+      layoutPlan.slides.forEach((planned) => {
+        const written = writtenSlides[planned.index];
+        const outlineSlide = outlineResult.data.slides[planned.index];
+        if (!written) return;
+        stillWritten.set(planned.index, {
+          ...written,
+          title: outlineSlide?.title ?? "",
+          purpose: outlineSlide?.purpose ?? "",
+          layout: planned.layout,
+        } as never);
+      });
+
+      const moved = reseatOverflowing(jslayd.document, layoutPlan, stillWritten, {
+        ...(jslayd.profiles ? { profiles: jslayd.profiles } : {}),
+      });
+      if (moved.reseats.length > 0) {
+        // `layoutPlan.slides` is what the renderer is handed, so the move takes
+        // effect by having happened; the briefs are refreshed because a later
+        // reader of this map would otherwise measure the old composition.
+        for (const brief of moved.briefs) briefById.set(brief.archetypeId, brief);
+        console.log(JSON.stringify({
+          event: "slide_reseated",
+          job_id: input.jobId,
+          moves: moved.reseats,
+        }));
       }
     }
 

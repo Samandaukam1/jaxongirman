@@ -257,3 +257,94 @@ export function applyRewrite(slide: SemanticSlide, binding: string, text: string
     default: return slide;
   }
 }
+
+/* ------------------------------------------------- when it still will not fit */
+
+export type Reseat = {
+  index: number;
+  from: string;
+  to: string;
+  /** Characters still over after the move. Zero is the point of doing it. */
+  remaining: number;
+};
+
+/** Total characters over, across every slot of one composition. */
+function overflowOf(brief: ArchetypeWritingBrief, slide: SemanticSlide): number {
+  return findSlotProblems(brief, slide).reduce((sum, problem) => sum + problem.overBy, 0);
+}
+
+/**
+ * Moving a slide that will not fit into a page that will.
+ *
+ * The rewriter is asked twice to shorten copy that overflows, and twice is
+ * where asking stops being useful: a third request either returns the same
+ * sentence or starts deleting the fact the slide existed to state. The old
+ * answer past that point was to shrink the type until it stopped overflowing,
+ * which is how a deck ends up with one slide set four points smaller than its
+ * neighbours for reasons no reader can see.
+ *
+ * A family has other pages. Some of them are simply bigger. So rather than
+ * making the words smaller, the slide is moved to a composition that holds
+ * them — preferring one that does the same job in the talk, because a page
+ * that fits and means the wrong thing is not an improvement.
+ *
+ * Nothing is moved unless it is strictly better, and a page that closes a deck
+ * is never taken for a slide in the middle.
+ */
+export function reseatOverflowing(
+  document: JslaydDocument,
+  plan: DeckLayoutPlan,
+  written: ReadonlyMap<number, SemanticSlide>,
+  options: { profiles?: readonly PageProfile[]; language?: string } = {},
+): { reseats: Reseat[]; briefs: ArchetypeWritingBrief[] } {
+  const briefs = new Map(plan.briefs.map((brief) => [brief.archetypeId, brief]));
+  const briefOf = (archetypeId: string): ArchetypeWritingBrief | null => {
+    const known = briefs.get(archetypeId);
+    if (known) return known;
+    const archetype = document.archetypes.find((entry) => entry.id === archetypeId);
+    if (!archetype) return null;
+    const built = buildWritingBrief(document, archetype, options);
+    briefs.set(archetypeId, built);
+    return built;
+  };
+
+  const roleOf = new Map((options.profiles ?? []).map((profile) => [profile.archetypeId, profile.role]));
+  const terminal = new Set((options.profiles ?? []).filter((profile) => profile.isTerminal).map((profile) => profile.archetypeId));
+  const reseats: Reseat[] = [];
+
+  for (const planned of plan.slides) {
+    const slide = written.get(planned.index);
+    const current = briefOf(planned.archetypeId);
+    if (!slide || !current) continue;
+
+    const before = overflowOf(current, slide);
+    if (before === 0) continue;
+
+    const last = planned.index === plan.slides.length - 1;
+    const wanted = planned.role;
+
+    let best: { id: string; overflow: number; sameRole: boolean } | null = null;
+    for (const archetype of document.archetypes) {
+      if (archetype.id === planned.archetypeId) continue;
+      if (terminal.has(archetype.id) && !last) continue;
+      const candidate = briefOf(archetype.id);
+      if (!candidate) continue;
+
+      const overflow = overflowOf(candidate, slide);
+      const sameRole = wanted !== undefined && roleOf.get(archetype.id) === wanted;
+      if (overflow >= before) continue;
+      // A page that does the same job wins over a merely roomier one, and
+      // roominess only decides between pages that agree about the job.
+      const better = !best
+        || (sameRole && !best.sameRole)
+        || (sameRole === best.sameRole && overflow < best.overflow);
+      if (better) best = { id: archetype.id, overflow, sameRole };
+    }
+
+    if (!best) continue;
+    reseats.push({ index: planned.index, from: planned.archetypeId, to: best.id, remaining: best.overflow });
+    planned.archetypeId = best.id;
+  }
+
+  return { reseats, briefs: [...briefs.values()] };
+}
