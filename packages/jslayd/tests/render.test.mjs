@@ -206,6 +206,36 @@ test("an optional image slot with nothing resolved is dropped", () => {
   assert.equal(elementsOf(slide, "image").length, 0);
 });
 
+test("a resolved picture carries exactly the fields it always did", () => {
+  const slide = renderArchetype(DESIGN, archetypeBy("cover_01"), fullSlide("cover"));
+  const image = elementsOf(slide, "image")[0];
+  // The hint is for the hole. A filled slot gaining fields would be a change to
+  // every stored deck's rows for the benefit of nobody.
+  assert.equal(image.content.empty, undefined);
+  assert.equal(image.content.hint, undefined);
+});
+
+test("a required slot with no picture says what belongs in it", () => {
+  const required = {
+    ...DESIGN,
+    archetypes: DESIGN.archetypes.map((archetype) => ({
+      ...archetype,
+      elements: archetype.elements.map((element) =>
+        element.type === "image" ? { ...element, required: true } : element),
+    })),
+  };
+  const slide = renderArchetype(required, required.archetypes.find((entry) => entry.id === "cover_01"),
+    fullSlide("cover", { images: {} }));
+  const image = elementsOf(slide, "image")[0];
+
+  assert.ok(image, "a required slot must still draw its hole");
+  assert.equal(image.content.empty, true);
+  assert.equal(image.content.required, true);
+  // Somebody looking at a grey rectangle should not have to guess its shape.
+  assert.ok(image.content.orientation);
+  assert.ok(image.content.hint.length > 0, image.content.hint);
+});
+
 /* --------------------------------------------------------------- previews */
 
 test("the preview is the real engine on deterministic sample content", () => {

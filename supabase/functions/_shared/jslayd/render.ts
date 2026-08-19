@@ -662,6 +662,10 @@ function renderImage(element: ImageElement, box: Box, geometry: Geometry, contex
       kind: element.type === "frame" ? "frame" : "image",
       slot: element.slot,
       strategy: element.strategy,
+      // Only where the hole is: an editor showing an empty box needs to know
+      // what belongs in it, and a filled one does not. Added conditionally so a
+      // picture that resolved carries exactly the fields it always did.
+      ...(picture ? {} : imageHint(element)),
     },
   }];
 
@@ -673,6 +677,33 @@ function renderImage(element: ImageElement, box: Box, geometry: Geometry, contex
     });
   }
   return rows;
+}
+
+/**
+ * What kind of picture belongs in an empty slot.
+ *
+ * A composition with a hole in it is honest, and it is also a question: the
+ * person filling it is looking at a grey rectangle and guessing whether it
+ * wants a portrait, a diagram or a photograph of a building. The design already
+ * knows — it declared an orientation, a source and sometimes a style — so the
+ * answer travels with the hole rather than staying in a document nobody
+ * editing a deck will ever open.
+ */
+function imageHint(element: ImageElement): Record<string, unknown> {
+  const kind = element.strategy === "user_upload"
+    ? "o‘z rasmingiz"
+    : element.strategy === "jelement" ? "chizma element" : "mavzuga oid surat";
+  const shape = element.orientation === "portrait"
+    ? "tik"
+    : element.orientation === "square" ? "kvadrat" : element.orientation === "landscape" ? "yotiq" : "";
+
+  return {
+    empty: true,
+    orientation: element.orientation,
+    required: element.required,
+    ...(element.stylePreference ? { stylePreference: element.stylePreference } : {}),
+    hint: [shape, kind].filter(Boolean).join(" "),
+  };
 }
 
 function imageContent(picture: ImageRef | null): Record<string, unknown> {
