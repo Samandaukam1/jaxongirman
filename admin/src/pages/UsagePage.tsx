@@ -52,7 +52,7 @@ function ProviderCheck() {
       const { data, error } = await Promise.race([
         supabase.functions.invoke("ai-diagnose", { body: {} }),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("Tekshiruv 45 soniyada javob bermadi.")), 45_000)),
+          setTimeout(() => reject(new Error("Tekshiruv 60 soniyada javob bermadi.")), 60_000)),
       ]);
       if (error) throw error;
       setResult(data as Diagnosis);
@@ -96,7 +96,7 @@ function ProviderCheck() {
           <dl>
             <div><dt>Tadqiqot modeli</dt><dd><code>{result.gemini_research_model}</code></dd></div>
             <div><dt>Yozuv modeli</dt><dd><code>{result.gemini_writing_model}</code></dd></div>
-            <div><dt>Yozuv sinovi</dt><dd>{result.gemini_writing_probe ?? "—"}</dd></div>
+
           </dl>
 
           {/* One row per shape. A refusal here names the construct rather than

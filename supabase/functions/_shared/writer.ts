@@ -267,11 +267,18 @@ export class GeminiWriter {
     maxOutputTokens?: number;
     attachments?: readonly Attachment[];
     model?: string;
+    /**
+     * How many times to ask. Three for a deck, one for a diagnostic.
+     *
+     * A check that retries is a check that takes three times as long to tell
+     * you the same thing, and it outlived the function it ran in.
+     */
+    attempts?: number;
   }): Promise<StructuredAnswer<T>> {
     if (!this.configured) throw new ProviderUnavailable("not_configured", "GEMINI_API_KEY is not set");
     const model = input.model ?? this.writingModel;
 
-    const { value, attempts } = await this.withRetries(3, async () => {
+    const { value, attempts } = await this.withRetries(input.attempts ?? 3, async () => {
       const payload = await this.call(model, {
         contents: [{ role: "user", parts: this.parts(input.prompt, input.attachments ?? []) }],
         ...(input.system ? { systemInstruction: { parts: [{ text: input.system }] } } : {}),

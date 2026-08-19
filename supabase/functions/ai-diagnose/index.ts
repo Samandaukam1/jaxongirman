@@ -81,20 +81,6 @@ Deno.serve(async (request) => {
      * structured-output contract and the response shape.
      */
     if (writer.configured) {
-      try {
-        const probe = await writer.structured<{ ok: string }>({
-          prompt: "Reply with the word ok.",
-          schemaName: "diagnose",
-          schema: { type: "object", properties: { ok: { type: "string" } }, required: ["ok"] },
-          maxOutputTokens: 32,
-        });
-        report.gemini_writing_probe = "ok";
-        report.gemini_writing_attempts = probe.attempts;
-      } catch (failure) {
-        report.gemini_writing_probe = "failed";
-        report.gemini_writing_reason = failure instanceof ProviderUnavailable ? failure.reason : "unknown";
-      }
-
       /**
        * Which construct Gemini refuses, asked one at a time.
        *
@@ -145,6 +131,12 @@ Deno.serve(async (request) => {
         },
         { name: "outline_real", schema: outlineSchema(1) },
         { name: "content_real", schema: contentSchema(1) },
+        // The trivial one, last in the list and first in usefulness: if even
+        // this is refused the fault is not a shape at all.
+        {
+          name: "trivial",
+          schema: { type: "object", properties: { ok: { type: "string" } }, required: ["ok"] },
+        },
       ];
 
       /**
@@ -164,9 +156,12 @@ Deno.serve(async (request) => {
               schemaName: `probe_${probe.name}`,
               schema: probe.schema,
               maxOutputTokens: 400,
+              // One ask. A diagnostic that retries takes three times as long to
+              // report the same refusal.
+              attempts: 1,
             }),
             new Promise((_, reject) =>
-              setTimeout(() => reject(new Error("probe timed out after 20s")), 20_000)),
+              setTimeout(() => reject(new Error("javob 15 soniyada kelmadi")), 15_000)),
           ]);
           return { name: probe.name, state: "ok", detail: "" };
         } catch (failure) {
@@ -186,7 +181,7 @@ Deno.serve(async (request) => {
       }
     }
 
-    const healthy = writer.configured && report.gemini_writing_probe === "ok";
+    const healthy = writer.configured && report.probe_trivial === "ok";
     report.verdict = healthy
       ? "Matn bosqichlari Gemini orqali ishlaydi."
       : writer.configured
