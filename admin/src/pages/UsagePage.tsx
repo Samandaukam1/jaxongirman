@@ -14,10 +14,21 @@ type Diagnosis = {
   gemini_writing_model: string;
   gemini_writing_probe?: string;
   gemini_writing_reason?: string;
-  gemini_research_probe?: string;
-  gemini_grounded_search?: boolean;
   verdict: string;
+  /** `probe_<name>` and `probe_<name>_detail`, one pair per construct tried. */
+  [key: string]: unknown;
 };
+
+/** What Gemini said about each shape, in the order they were asked. */
+function probesOf(result: Diagnosis): { name: string; state: string; detail: string }[] {
+  return Object.keys(result)
+    .filter((key) => key.startsWith("probe_") && !key.endsWith("_detail"))
+    .map((key) => ({
+      name: key.replace("probe_", ""),
+      state: String(result[key] ?? ""),
+      detail: String(result[`${key}_detail`] ?? ""),
+    }));
+}
 
 /**
  * Whether the text pipeline will work, asked before a customer's deck asks it.
@@ -36,7 +47,13 @@ function ProviderCheck() {
   async function run() {
     setBusy(true); setProblem(null); setResult(null);
     try {
-      const { data, error } = await supabase.functions.invoke("ai-diagnose", { body: {} });
+      // A check that never answers is worse than one that fails: the button
+      // sat on "Tekshirilmoqda…" for as long as somebody was willing to watch.
+      const { data, error } = await Promise.race([
+        supabase.functions.invoke("ai-diagnose", { body: {} }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Tekshiruv 45 soniyada javob bermadi.")), 45_000)),
+      ]);
       if (error) throw error;
       setResult(data as Diagnosis);
     } catch (invokeError) {
@@ -80,11 +97,21 @@ function ProviderCheck() {
             <div><dt>Tadqiqot modeli</dt><dd><code>{result.gemini_research_model}</code></dd></div>
             <div><dt>Yozuv modeli</dt><dd><code>{result.gemini_writing_model}</code></dd></div>
             <div><dt>Yozuv sinovi</dt><dd>{result.gemini_writing_probe ?? "—"}</dd></div>
-            <div>
-              <dt>Internet qidiruvi</dt>
-              <dd>{result.gemini_research_probe === "ok" ? (result.gemini_grounded_search ? "ishlaydi" : "yo‘q — model bilimidan") : "—"}</dd>
-            </div>
           </dl>
+
+          {/* One row per shape. A refusal here names the construct rather than
+              the document, which is the whole reason they are asked apart. */}
+          {probesOf(result).length > 0 ? (
+            <ul>
+              {probesOf(result).map((probe) => (
+                <li key={probe.name} className={probe.state === "ok" ? "is-ok" : "is-bad"}>
+                  <strong>{probe.name}</strong>
+                  <span>{probe.state === "ok" ? "o‘tdi" : "RAD ETILDI"}</span>
+                  {probe.detail ? <em>{probe.detail}</em> : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       ) : null}
     </section>

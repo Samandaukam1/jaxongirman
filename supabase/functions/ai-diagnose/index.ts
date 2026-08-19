@@ -95,16 +95,6 @@ Deno.serve(async (request) => {
         report.gemini_writing_reason = failure instanceof ProviderUnavailable ? failure.reason : "unknown";
       }
 
-      try {
-        const probe = await writer.research({ prompt: "Reply with the word ok.", maxOutputTokens: 32 });
-        report.gemini_research_probe = "ok";
-        report.gemini_grounded_search = probe.groundedSearch;
-      } catch (failure) {
-        report.gemini_research_probe = "failed";
-        report.gemini_research_reason = failure instanceof ProviderUnavailable ? failure.reason : "unknown";
-        report.gemini_research_detail = failure instanceof Error ? failure.message.slice(0, 300) : "";
-      }
-
       /**
        * Which construct Gemini refuses, asked one at a time.
        *
@@ -157,21 +147,42 @@ Deno.serve(async (request) => {
         { name: "content_real", schema: contentSchema(1) },
       ];
 
-      for (const probe of PROBES) {
+      /**
+       * All at once, and never for long.
+       *
+       * Run in sequence these took longer than the function is allowed to live,
+       * so the console sat on "Tekshirilmoqda…" and nobody learned anything.
+       * They do not depend on each other, so the whole check costs the slowest
+       * one rather than the sum — and each is capped, because a probe that
+       * hangs must not take the diagnosis down with it.
+       */
+      const results = await Promise.all(PROBES.map(async (probe) => {
         try {
-          await writer.structured({
-            prompt: "Sxemaga mos namunaviy JSON qaytaring.",
-            schemaName: `probe_${probe.name}`,
-            schema: probe.schema,
-            maxOutputTokens: 600,
-          });
-          report[`probe_${probe.name}`] = "ok";
+          await Promise.race([
+            writer.structured({
+              prompt: "Sxemaga mos namunaviy JSON qaytaring.",
+              schemaName: `probe_${probe.name}`,
+              schema: probe.schema,
+              maxOutputTokens: 400,
+            }),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error("probe timed out after 20s")), 20_000)),
+          ]);
+          return { name: probe.name, state: "ok", detail: "" };
         } catch (failure) {
-          report[`probe_${probe.name}`] = "FAILED";
-          // The whole sentence, field violation included — the line that names
-          // the key Gemini refused.
-          report[`probe_${probe.name}_detail`] = failure instanceof Error ? failure.message.slice(0, 320) : "";
+          return {
+            name: probe.name,
+            state: "FAILED",
+            // The whole sentence, field violation included — the line that
+            // names the key Gemini refused.
+            detail: failure instanceof Error ? failure.message.slice(0, 320) : "",
+          };
         }
+      }));
+
+      for (const result of results) {
+        report[`probe_${result.name}`] = result.state;
+        if (result.detail) report[`probe_${result.name}_detail`] = result.detail;
       }
     }
 
