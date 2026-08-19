@@ -41,6 +41,7 @@ export function buildEdgeModules() {
       path.join(shared, "gemini-schema.ts"),
       path.join(shared, "writer.ts"),
       path.join(shared, "plan-schema.ts"),
+      path.join(shared, "pptx-safety.ts"),
       path.join(shared, "photo-query.ts"),
       path.join(shared, "export-model.ts"),
       path.join(shared, "fonts.ts"),
