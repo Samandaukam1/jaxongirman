@@ -257,3 +257,102 @@ test("a catalogue that did not count pages does not rank every design last", () 
   // caller's choice of columns.
   assert.ok(Math.abs(ranked[0].score - ranked[1].score) <= 1);
 });
+
+/* ---------------------------------------------- the plan the writer is given */
+
+const { planDeckLayout } = await import(`${edge}/layout-brief.js`);
+
+/** The smallest document that can be planned against. */
+function document(archetypes) {
+  return {
+    format: "JSLAYD", version: "1.0", kind: "design",
+    design: { name: "T", slug: "t", tier: "great", description: "", premium: false, canvas: { width: 1000, height: 562.5 } },
+    colors: {
+      background: "#fff", surface: "#eee", surfaceAlt: "#ddd", contrast: "#111", primary: "#123456",
+      secondary: "#345678", accent: "#ff0000", text: "#111", textSecondary: "#555",
+      textOnPrimary: "#fff", textOnAccent: "#fff", textOnContrast: "#fff", muted: "#888", border: "#ccc",
+    },
+    colorFamilies: [], chartPalette: ["#123456"],
+    fonts: [{ id: "font_1", name: "Inter", roles: ["display", "heading", "subheading", "body", "caption", "number", "quote"], family: "t-font_1", fallback: "Inter", faces: [] }],
+    visualDNA: {
+      rotationRange: { min: 0, max: 0 }, cornerRadiusFamily: [0], shadowFamily: [],
+      spacingScale: [8], titleScale: { min: 30, max: 48 }, bodyScale: { min: 14, max: 20 },
+      imageTreatment: "abstract", decorationDensity: "low",
+    },
+    archetypes,
+  };
+}
+
+const archetype = (id, purpose) => ({
+  id,
+  purpose,
+  background: { role: "background" },
+  selection: { minText: 0, maxText: 4000, supportsImage: false, supportsChart: false, supportsTable: false, supportsStats: false, supportsQuote: false, priority: 50 },
+  elements: [{
+    type: "text", id: `${id}_title`, geometry: { x: 60, y: 60, width: 800, height: 120, rotation: 0, zIndex: 0, anchor: "top-left" },
+    when: "always", opacity: 1, grow: false, source: { bind: "title" },
+    text: {
+      font: "font_1", fontSize: 40, fontWeight: 700, fontStyle: "normal", letterSpacing: 0, lineHeight: 1.2,
+      align: "left", verticalAlign: "top", transform: "none", color: { role: "text" }, maxLines: 2,
+      overflow: "shrink", minFontSize: 24, effect: "none", shadows: [], strokeWidth: 0,
+      strokeColor: null, highlight: null, gradient: null, blur: 0,
+    },
+    background: null, corners: null, border: null, padding: 0,
+  }],
+});
+
+test("without profiles the planner chooses by shape, as it always has", () => {
+  const plan = planDeckLayout(document([archetype("a", "cover"), archetype("b", "title_content")]), [
+    { layout: "cover", title: "T", purpose: "x" },
+    { layout: "title_body", title: "U", purpose: "y" },
+  ]);
+  assert.equal(plan.slides.length, 2);
+  assert.equal(plan.slides[0].role, undefined);
+});
+
+test("with profiles the writer is told what each slide is doing", () => {
+  const doc = document([archetype("a", "cover"), archetype("b", "title_content"), archetype("z", "thank_you")]);
+  const profiles = [
+    { archetypeId: "a", role: "welcome", alternativeRoles: [], recommendedStoryPosition: 1, layoutSignature: "cover", isTerminal: false, supportsImage: false, supportsChart: false, supportsTable: false, supportsQuote: false, supportsStats: false, minText: 0, maxText: 4000 },
+    { archetypeId: "b", role: "key_concepts", alternativeRoles: ["analysis"], recommendedStoryPosition: 6, layoutSignature: "body", isTerminal: false, supportsImage: false, supportsChart: false, supportsTable: false, supportsQuote: false, supportsStats: false, minText: 0, maxText: 4000 },
+    { archetypeId: "z", role: "thanks", alternativeRoles: [], recommendedStoryPosition: 999, layoutSignature: "end", isTerminal: true, supportsImage: false, supportsChart: false, supportsTable: false, supportsQuote: false, supportsStats: false, minText: 0, maxText: 4000 },
+  ];
+  const plan = planDeckLayout(doc, [
+    { layout: "cover", title: "T", purpose: "x" },
+    { layout: "title_body", title: "U", purpose: "y" },
+    { layout: "thanks", title: "V", purpose: "z" },
+  ], { profiles });
+
+  assert.equal(plan.slides[0].role, "welcome");
+  assert.equal(plan.slides[2].role, "thanks");
+  // And the sign-off page is only used for the sign-off.
+  assert.equal(plan.slides[2].archetypeId, "z");
+  assert.notEqual(plan.slides[1].archetypeId, "z");
+});
+
+test("a brief is built for every archetype the plan actually uses", () => {
+  const doc = document([archetype("a", "cover"), archetype("b", "title_content")]);
+  const profiles = [
+    { archetypeId: "a", role: "welcome", alternativeRoles: [], recommendedStoryPosition: 1, layoutSignature: "cover", isTerminal: false, supportsImage: false, supportsChart: false, supportsTable: false, supportsQuote: false, supportsStats: false, minText: 0, maxText: 4000 },
+    { archetypeId: "b", role: "key_concepts", alternativeRoles: [], recommendedStoryPosition: 6, layoutSignature: "body", isTerminal: false, supportsImage: false, supportsChart: false, supportsTable: false, supportsQuote: false, supportsStats: false, minText: 0, maxText: 4000 },
+  ];
+  const plan = planDeckLayout(doc, [
+    { layout: "cover", title: "T", purpose: "x" },
+    { layout: "title_body", title: "U", purpose: "y" },
+  ], { profiles });
+
+  const used = new Set(plan.slides.map((slide) => slide.archetypeId));
+  for (const id of used) {
+    assert.ok(plan.briefs.some((brief) => brief.archetypeId === id), `no brief for ${id}`);
+  }
+});
+
+test("a profile naming a page the document lost does not lose the slide", () => {
+  const doc = document([archetype("a", "cover")]);
+  const profiles = [
+    { archetypeId: "gone", role: "key_concepts", alternativeRoles: [], recommendedStoryPosition: 6, layoutSignature: "x", isTerminal: false, supportsImage: false, supportsChart: false, supportsTable: false, supportsQuote: false, supportsStats: false, minText: 0, maxText: 4000 },
+  ];
+  const plan = planDeckLayout(doc, [{ layout: "title_body", title: "U", purpose: "y" }], { profiles });
+  assert.equal(plan.slides.length, 1);
+  assert.equal(plan.slides[0].archetypeId, "a");
+});

@@ -413,6 +413,42 @@ type SlideWrite = {
  * research. Not the other archetypes, not the other briefs, not the rest of the
  * deck's copy.
  */
+/**
+ * What each story role asks the writer for.
+ *
+ * Said as an instruction rather than as a label: `challenges` tells a model
+ * nothing, and "name the real obstacles" tells it what sentence to write. The
+ * roles a design cannot influence — a cover, a sign-off — are absent, because
+ * the server writes those slides itself.
+ */
+const ROLE_INSTRUCTION: Record<string, string> = {
+  welcome: "ochilish — mavzuni bir jumlada qo'ying",
+  introduction: "kirish — mavzu nima ekanini va nega bu haqda gapirilayotganini ayting",
+  overview: "umumiy ko'rinish — keyin nima kelishini qisqa sanang",
+  key_concepts: "asosiy tushunchalar — atamalarni aniq ta'riflang",
+  importance: "ahamiyati — nima uchun muhimligini dalil bilan ko'rsating",
+  types: "turlari — ajratib sanang va farqini ayting",
+  structure: "tuzilishi — qismlarini va ular qanday bog'lanishini ayting",
+  process: "jarayon — bosqichlarni tartib bilan bering",
+  methods: "usullar — qanday qilinishini aniq ayting",
+  analysis: "tahlil — ma'lumotdan xulosa chiqaring, faqat sanab o'tmang",
+  challenges: "muammolar — haqiqiy to'siqlarni nomlang",
+  solutions: "yechimlar — yuqoridagi muammolarga aniq javob bering",
+  applications: "qo'llanilishi — amalda qayerda ishlatilishini ayting",
+  examples: "misollar — aniq, tekshirib bo'ladigan misol keltiring",
+  results: "natijalar — raqam va o'lchov bilan",
+  recommendations: "tavsiyalar — bajariladigan qadamlar",
+  conclusion: "xulosa — aytilganlardan chiqadigan asosiy fikr",
+  agenda: "reja — mavzular ro'yxati",
+  timeline: "vaqt chizig'i — sanalar bo'yicha",
+  comparison: "taqqoslash — ikki tomonni yonma-yon qo'ying",
+  big_number: "bitta katta raqam va uni tushuntiruvchi qisqa izoh",
+  quote: "iqtibos — tadqiqotda haqiqatan uchragan gap",
+  case_study: "amaliy misol — bitta holatni boshidan oxirigacha",
+  data: "ma'lumot — raqamlar va ularning manbasi",
+  image_story: "rasm asosiy o'rinda — matn qisqa bo'lsin",
+};
+
 async function writeOneSlide(input: {
   writer: ReturnType<typeof geminiWriter>;
   topic: string;
@@ -421,6 +457,8 @@ async function writeOneSlide(input: {
   previous: string | null;
   next: string | null;
   brief: unknown;
+  /** What this page is for in the talk, where the design says. */
+  role?: string;
   researchBrief: string;
   attachments: readonly Attachment[];
 }): Promise<SlideWrite> {
@@ -430,6 +468,10 @@ async function writeOneSlide(input: {
     `Mavzu: ${input.topic}`,
     `Slayd ${input.index + 1}: ${input.outline.title}`,
     `Maqsad: ${input.outline.purpose}`,
+    // A page composed to state a problem and a page composed to answer one hold
+    // the same number of characters and want entirely different sentences. The
+    // budget cannot say that; the role can.
+    input.role ? `Bu sahifaning vazifasi: ${ROLE_INSTRUCTION[input.role] ?? input.role}` : null,
     input.previous ? `Oldingi slayd: ${input.previous}` : null,
     input.next ? `Keyingi slayd: ${input.next}` : null,
     "",
@@ -681,6 +723,9 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
       outlineResult.data.slides.map((slide) => ({
         layout: slide.layout, title: slide.title, purpose: slide.purpose,
       })),
+      // Where the design knows what its pages are for, the deck is planned as a
+      // story and the writer is told which part of it each slide carries.
+      jslayd.profiles ? { profiles: jslayd.profiles } : {},
     );
 
     const layoutInstruction = `\n\nDIZAYN O'LCHOVLARI — matn shu qutilarga yozilishi kerak.\n`
@@ -728,6 +773,7 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
             previous: outlineResult.data.slides[index - 1]?.title ?? null,
             next: outlineResult.data.slides[index + 1]?.purpose ?? null,
             brief: brief ? briefForPrompt(brief) : null,
+            ...(planned?.role ? { role: planned.role } : {}),
             researchBrief,
             attachments: context.attachments,
           });
@@ -749,6 +795,7 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
             previous: null,
             next: null,
             brief: brief ? briefForPrompt(brief) : null,
+            ...(planned?.role ? { role: planned.role } : {}),
             researchBrief,
             attachments: [],
           });

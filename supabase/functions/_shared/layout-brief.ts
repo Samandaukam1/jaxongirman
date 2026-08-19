@@ -2,6 +2,8 @@ import {
   buildWritingBrief, checkFit, planArchetypes, purposeForLayout,
   type ArchetypeWritingBrief, type JslaydDocument, type SlotFit, type TextSlotBudget,
 } from "./jslayd/index.ts";
+import { planStory, selectPages, type PageProfile } from "./design-select.ts";
+import type { StoryRole } from "./pptx-classify.ts";
 import type { LayoutName, SemanticSlide } from "./presentation-types.ts";
 
 /**
@@ -24,6 +26,14 @@ export type PlannedSlide = {
   title: string;
   purpose: string;
   archetypeId: string;
+  /**
+   * What this slide is doing in the talk, where the design knows such a thing.
+   *
+   * Carried to the writer, not only to the renderer: a page composed to state
+   * a problem and a page composed to answer one hold the same number of
+   * characters and want completely different sentences in them.
+   */
+  role?: StoryRole;
 };
 
 export type DeckLayoutPlan = {
@@ -43,8 +53,12 @@ export type DeckLayoutPlan = {
 export function planDeckLayout(
   document: JslaydDocument,
   slides: readonly { layout: LayoutName; title: string; purpose: string }[],
-  options: { language?: string } = {},
+  options: { language?: string; profiles?: readonly PageProfile[] } = {},
 ): DeckLayoutPlan {
+  if (options.profiles && options.profiles.length > 0) {
+    return planByStory(document, slides, options.profiles, options);
+  }
+
   const selections = planArchetypes(
     document,
     slides.map((slide) => {
@@ -71,6 +85,55 @@ export function planDeckLayout(
       title: slide.title,
       purpose: slide.purpose,
       archetypeId: selection.archetype.id,
+    };
+  });
+
+  return { slides: planned, briefs: [...briefs.values()] };
+}
+
+/** Purposes whose composition is built around a picture. */
+const PICTORIAL = new Set(["text_image", "image_text", "full_image", "cover"]);
+
+/**
+ * The same plan, for a design that knows what its pages are for.
+ *
+ * The estimate of how much will be written is deliberately crude — nothing has
+ * been written yet, which is the entire point of choosing first. It only has to
+ * be good enough not to pick a page that cannot hold an ordinary amount of
+ * copy; the budgets it produces are then what keeps the copy to that size.
+ */
+function planByStory(
+  document: JslaydDocument,
+  slides: readonly { layout: LayoutName; title: string; purpose: string }[],
+  profiles: readonly PageProfile[],
+  options: { language?: string },
+): DeckLayoutPlan {
+  const purposes = slides.map((slide) => purposeForLayout(slide.layout));
+  const plan = planStory(purposes);
+  const choices = selectPages(
+    profiles,
+    plan,
+    purposes.map((purpose) => ({
+      purpose,
+      textVolume: purpose === "cover" || purpose === "section" || purpose === "thank_you" ? 60 : 320,
+      hasImage: PICTORIAL.has(purpose),
+    })),
+  );
+
+  const byId = new Map(document.archetypes.map((archetype) => [archetype.id, archetype]));
+  const briefs = new Map<string, ArchetypeWritingBrief>();
+  const planned = slides.map((slide, index): PlannedSlide => {
+    const archetype = byId.get(choices[index]?.archetypeId ?? "") ?? document.archetypes[0]!;
+    if (!briefs.has(archetype.id)) {
+      briefs.set(archetype.id, buildWritingBrief(document, archetype, options));
+    }
+    return {
+      index,
+      layout: slide.layout,
+      title: slide.title,
+      purpose: slide.purpose,
+      archetypeId: archetype.id,
+      role: plan[index],
     };
   });
 
