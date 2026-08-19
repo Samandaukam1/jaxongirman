@@ -29,7 +29,13 @@ const MAX_ENTRIES = 2048;
 const MAX_TOTAL_BYTES = 200 * 1024 * 1024;
 
 async function inflateRaw(bytes: Uint8Array): Promise<Uint8Array> {
-  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+  // The cast is a disagreement between two type libraries, not a doubt about the
+  // value: `BlobPart` is declared over `ArrayBuffer` while a `Uint8Array` is
+  // declared over `ArrayBufferLike`, which also admits `SharedArrayBuffer`. Deno
+  // accepts it as written and the DOM lib does not, and this file has to compile
+  // under both for its callers to be testable off Deno.
+  const stream = new Blob([bytes as unknown as BlobPart]).stream()
+    .pipeThrough(new DecompressionStream("deflate-raw"));
   return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 

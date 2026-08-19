@@ -47,7 +47,7 @@
     "test:gemini": "node --test supabase/tests/gemini-schema.test.mjs supabase/tests/writer.test.mjs supabase/tests/layout-brief.test.mjs supabase/tests/layout-scenarios.test.mjs supabase/tests/photo-search.test.mjs",
     "test:jelement": "node --test packages/jelement/tests/compile.test.mjs packages/jelement/tests/raster.test.mjs packages/jelement/tests/manifest.test.mjs packages/jelement/tests/render.test.mjs packages/jelement/tests/health.test.mjs packages/jelement/tests/duplicates.test.mjs",
     "test:jelement:smoke": "node supabase/tests/jelement-smoke.mjs",
-    "test:design": "node --test supabase/tests/pptx-safety.test.mjs"
+    "test:design": "node --test supabase/tests/pptx-safety.test.mjs supabase/tests/pptx-design.test.mjs"
   },
   "engines": {
     "node": ">=20"

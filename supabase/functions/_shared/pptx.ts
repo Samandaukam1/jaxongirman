@@ -7,10 +7,15 @@
  * font sizes, and the handful of style facts worth carrying over — plus the
  * bookkeeping to walk an OOXML package to the shapes in the first place.
  *
+ * A placeholder that states no position of its own is looked up in the layout
+ * it came from, and then in that layout's master. This was once left undone on
+ * the grounds that a box in the wrong place is worse than a missing one — true,
+ * but it was never a guess: the layout holds the exact rectangle, and not
+ * reading it dropped the title of every deck built the way designers build
+ * them. The same lookup supplies a run's size, weight and face when the slide
+ * states none, which is why titles used to arrive at eighteen points.
+ *
  * What is deliberately partial:
- *   * Placeholders that inherit their position from a layout are dropped rather
- *     than guessed at. A box in the wrong place is worse than a missing one,
- *     because the user cannot see what it was supposed to be.
  *   * Charts and tables come in as their frame and a label. Rebuilding them as
  *     editable charts is a second feature, and silently losing them is worse
  *     than saying where they were.
@@ -33,6 +38,48 @@ export const MAX_SLIDES = 30;
 
 export type ImportedMedia = { part: string; bytes: Uint8Array; mime: string };
 
+/**
+ * A text box's real typography.
+ *
+ * Kept apart from `style` because the two answer different questions. `style`
+ * is what this app can draw — it ships Manrope and nothing else, so a user's
+ * imported deck is restyled to it on the way in, deliberately. `typography` is
+ * what the file actually asked for, which is meaningless for a user's deck and
+ * the entire point of a design template: a template imported in Manrope is not
+ * the template.
+ */
+export type Typography = {
+  /** Spelled as the package spells it — matching a font library needs the original. */
+  fontFamily: string;
+  /** Canvas units, on the same scale as every other measurement here. */
+  fontSize: number;
+  fontWeight: number;
+  italic: boolean;
+  align: "left" | "center" | "right" | "justify";
+  verticalAlign: "top" | "middle" | "bottom";
+  /** Multiple of the font size; PowerPoint's own default is 1.2. */
+  lineHeightRatio: number;
+  letterSpacing: number;
+  transform: "none" | "uppercase" | "lowercase";
+  color: string;
+  /**
+   * Whether the box sets more than one face, size or weight across its runs.
+   *
+   * A single style is read from the first run, which is right almost always and
+   * silently wrong for the one box a designer emphasised a word in. Saying so
+   * lets an importer decide rather than discover.
+   */
+  mixed: boolean;
+};
+
+/** What a shape stands in for, when it stands in for something. */
+export type PlaceholderRef = {
+  /** `title`, `ctrTitle`, `subTitle`, `body`, `sldNum`, `ftr`, `dt`, `pic`, … */
+  kind: string;
+  /** Distinguishes the several body placeholders of one layout. */
+  index: number | null;
+};
+
 export type ImportedElement = {
   type: "text" | "image" | "shape";
   x: number;
@@ -46,6 +93,10 @@ export type ImportedElement = {
   content: Record<string, unknown>;
   /** Set on images: the part that still has to be uploaded. */
   media?: ImportedMedia;
+  /** Set on text: what the file asked for, as opposed to what this app draws. */
+  typography?: Typography;
+  /** Set where the shape was a placeholder, which is what names its purpose. */
+  placeholder?: PlaceholderRef;
 };
 
 export type ImportedSlide = {
@@ -117,6 +168,26 @@ function themeColours(entries: ZipEntries): Map<string, string> {
     if (value && /^[0-9a-fA-F]{6}$/.test(value)) colours.set(entry.name, `#${value.toLowerCase()}`);
   }
   return colours;
+}
+
+/* -------------------------------------------------------------------- fonts */
+
+export type ThemeFonts = { major: string; minor: string };
+
+/**
+ * The two faces a theme names: one for headings, one for everything else.
+ *
+ * Every other typeface in a package is written literally, but these two are
+ * referenced as `+mj-lt` and `+mn-lt`, so a template that sets its heading face
+ * once in the theme names it nowhere a run can see. Resolving them here is what
+ * makes `<a:latin typeface="+mj-lt"/>` mean something.
+ */
+export function themeFonts(entries: ZipEntries): ThemeFonts {
+  const themeName = [...entries.keys()].find((name) => /^ppt\/theme\/theme\d+\.xml$/.test(name));
+  const scheme = themeName ? path(part(entries, themeName), "themeElements", "fontScheme") : null;
+  const face = (which: "majorFont" | "minorFont"): string =>
+    attribute(path(scheme, which, "latin"), "typeface")?.trim() ?? "";
+  return { major: face("majorFont") || "Arial", minor: face("minorFont") || "Arial" };
 }
 
 /** The `#rrggbb` of a fill-like node, following a scheme reference if needed. */
@@ -238,32 +309,221 @@ function paragraphsOf(txBody: XmlNode): Paragraph[] {
   return output;
 }
 
-/** The first run's look, which is what the editor's single-style box can hold. */
-function textStyle(txBody: XmlNode, scale: Scale, theme: Map<string, string>): Record<string, unknown> {
-  const firstParagraph = child(txBody, "p");
-  const firstRun = child(firstParagraph, "r");
-  const runProperties = child(firstRun, "rPr");
-  const paragraphProperties = child(firstParagraph, "pPr");
+/* ----------------------------------------------------------- inheritance */
 
-  // `sz` is in hundredths of a point. 18pt is PowerPoint's own body default.
-  const points = (integerAttribute(runProperties, "sz") ?? 1800) / 100;
+/** What a shape stands in for, read from its non-visual properties. */
+function placeholderOf(shape: XmlNode): PlaceholderRef | null {
+  // The wrapper is named after what it wraps — `nvSpPr` for a shape, `nvPicPr`
+  // for a picture — and the picture one matters most here: a template's photo
+  // slot is exactly the thing a deck has to fill.
+  const node = path(shape, "nvSpPr", "nvPr", "ph")
+    ?? path(shape, "nvPicPr", "nvPr", "ph")
+    ?? path(shape, "nvGraphicFramePr", "nvPr", "ph");
+  if (!node) return null;
+  const index = attribute(node, "idx");
+  // A `<p:ph/>` with no type is a body placeholder; PowerPoint writes it that
+  // way for the ordinary content box, which is the most common one of all.
+  return { kind: attribute(node, "type") ?? "body", index: index === null ? null : Number(index) };
+}
+
+/** Position, and the run properties a slide left unsaid. */
+type Inherited = { xfrm: XmlNode | null; run: XmlNode | null; paragraph: XmlNode | null };
+
+const INHERITS_NOTHING: Inherited = { xfrm: null, run: null, paragraph: null };
+
+/**
+ * Whether a slide's placeholder and a layout's are the same slot.
+ *
+ * `idx` is the real identity and matches exactly when both carry one. Titles
+ * are the exception PowerPoint itself makes: a layout's title has no index, and
+ * `title` and `ctrTitle` are the same slot drawn two ways.
+ */
+function sameSlot(wanted: PlaceholderRef, candidate: PlaceholderRef): boolean {
+  const isTitle = (kind: string) => kind === "title" || kind === "ctrTitle";
+  if (isTitle(wanted.kind) && isTitle(candidate.kind)) return true;
+  if (wanted.index !== null && candidate.index !== null) return wanted.index === candidate.index;
+  return wanted.kind === candidate.kind;
+}
+
+/** A placeholder's own default run: its list style first, then its first run. */
+function slotRun(shape: XmlNode): XmlNode | null {
+  const listDefault = path(shape, "txBody", "lstStyle", "lvl1pPr", "defRPr");
+  if (listDefault) return listDefault;
+  return path(shape, "txBody", "p", "r", "rPr");
+}
+
+/** The master's blanket style for a kind of placeholder. */
+function masterRun(master: XmlNode | null, kind: string): XmlNode | null {
+  const style = kind === "title" || kind === "ctrTitle"
+    ? "titleStyle"
+    : kind === "body" || kind === "subTitle" || kind === "obj" ? "bodyStyle" : "otherStyle";
+  return path(master, "txStyles", style, "lvl1pPr", "defRPr");
+}
+
+/**
+ * Resolves what a slide's placeholders inherit, for one slide.
+ *
+ * The chain is the one PowerPoint uses — slide, then the layout it was made
+ * from, then that layout's master — and it is walked only where the slide is
+ * silent. A designer's template says almost everything once, in the layout, and
+ * repeats none of it on the slides; reading only the slides therefore sees a
+ * deck of unpositioned boxes at the default size.
+ */
+function inheritanceFor(entries: ZipEntries, slidePart: string): (placeholder: PlaceholderRef | null) => Inherited {
+  const layoutPart = [...relationships(entries, slidePart).values()].find((name) => name.includes("slideLayout"));
+  const layout = layoutPart ? part(entries, layoutPart) : null;
+  const masterPart = layoutPart
+    ? [...relationships(entries, layoutPart).values()].find((name) => name.includes("slideMaster"))
+    : undefined;
+  const master = masterPart ? part(entries, masterPart) : null;
+
+  const shapesOf = (root: XmlNode | null): XmlNode[] => descendants(path(root, "cSld", "spTree"), "sp");
+  const layoutShapes = shapesOf(layout);
+  const masterShapes = shapesOf(master);
+
+  return (placeholder) => {
+    if (!placeholder) return INHERITS_NOTHING;
+    const find = (shapes: XmlNode[]) =>
+      shapes.find((shape) => {
+        const candidate = placeholderOf(shape);
+        return candidate !== null && sameSlot(placeholder, candidate);
+      }) ?? null;
+
+    const fromLayout = find(layoutShapes);
+    const fromMaster = find(masterShapes);
+
+    return {
+      xfrm: path(fromLayout, "spPr", "xfrm") ?? path(fromMaster, "spPr", "xfrm"),
+      run: (fromLayout ? slotRun(fromLayout) : null)
+        ?? (fromMaster ? slotRun(fromMaster) : null)
+        ?? masterRun(master, placeholder.kind),
+      paragraph: path(fromLayout, "txBody", "p", "pPr") ?? path(fromMaster, "txBody", "p", "pPr"),
+    };
+  };
+}
+
+/* --------------------------------------------------------------- text look */
+
+/** The first value any level of the chain states, or nothing. */
+function inheritedAttribute(name: string, ...nodes: readonly (XmlNode | null)[]): string | null {
+  for (const node of nodes) {
+    const value = attribute(node, name);
+    if (value !== null) return value;
+  }
+  return null;
+}
+
+/** Whether the box sets one look throughout, or several. */
+function runsDiffer(txBody: XmlNode): boolean {
+  const looks = new Set<string>();
+  for (const paragraph of childrenNamed(txBody, "p")) {
+    for (const run of childrenNamed(paragraph, "r")) {
+      // A run with no text carries no look anybody sees.
+      if (!textOf(child(run, "t")).trim()) continue;
+      const properties = child(run, "rPr");
+      looks.add([
+        attribute(properties, "sz") ?? "",
+        attribute(properties, "b") ?? "",
+        attribute(properties, "i") ?? "",
+        attribute(path(properties, "latin"), "typeface") ?? "",
+      ].join("|"));
+      if (looks.size > 1) return true;
+    }
+  }
+  return false;
+}
+
+/** `+mj-lt` and `+mn-lt` are the theme's own two faces, not names. */
+function resolveTypeface(name: string | null, fonts: ThemeFonts): string {
+  if (!name) return fonts.minor;
+  const trimmed = name.trim();
+  if (trimmed.startsWith("+mj")) return fonts.major;
+  if (trimmed.startsWith("+mn")) return fonts.minor;
+  return trimmed || fonts.minor;
+}
+
+type TextLook = { style: Record<string, unknown>; typography: Typography };
+
+/**
+ * How a text box looks, said twice.
+ *
+ * `style` is deliberately Manrope whatever the file says: this app bundles one
+ * family, and a user's imported deck rendering in a face nobody has is a deck
+ * of fallback glyphs. `typography` keeps what was actually asked for, because a
+ * design template is that request and nothing else.
+ */
+function readTextLook(
+  txBody: XmlNode,
+  inherited: Inherited,
+  scale: Scale,
+  theme: Map<string, string>,
+  fonts: ThemeFonts,
+): TextLook {
+  const firstParagraph = child(txBody, "p");
+  const runProperties = child(child(firstParagraph, "r"), "rPr");
+  const paragraphProperties = child(firstParagraph, "pPr");
+  const bodyProperties = child(txBody, "bodyPr");
+
+  // `sz` is in hundredths of a point. 18pt is PowerPoint's own body default,
+  // and is reached only when neither the slide, its layout nor the master says.
+  const rawSize = inheritedAttribute("sz", runProperties, inherited.run);
+  const points = (rawSize === null ? 1800 : Number(rawSize)) / 100;
   const fontSize = Math.max(6, Math.round(points * scale.unitsPerPoint * 10) / 10);
-  const bold = attribute(runProperties, "b") === "1";
-  const colour = colourOf(child(runProperties, "solidFill"), theme) ?? "#151a18";
-  const alignment = attribute(paragraphProperties, "algn");
+
+  const bold = inheritedAttribute("b", runProperties, inherited.run) === "1";
+  const italic = inheritedAttribute("i", runProperties, inherited.run) === "1";
+  const colour = colourOf(child(runProperties, "solidFill"), theme)
+    ?? colourOf(child(inherited.run, "solidFill"), theme)
+    ?? "#151a18";
+  const alignment = inheritedAttribute("algn", paragraphProperties, inherited.paragraph);
+  const align = alignment === "ctr" ? "center" : alignment === "r" ? "right" : alignment === "just" ? "justify" : "left";
+  const underlined = (inheritedAttribute("u", runProperties, inherited.run) ?? "none") !== "none";
+
+  // `spcPct` is thousandths of a percent; `spcPts` is hundredths of a point and
+  // has to be divided by the size to become the ratio everything else uses.
+  const spacing = child(paragraphProperties, "lnSpc") ?? child(inherited.paragraph, "lnSpc");
+  const percent = integerAttribute(child(spacing, "spcPct"), "val");
+  const exact = integerAttribute(child(spacing, "spcPts"), "val");
+  const lineHeightRatio = percent
+    ? Math.round((percent / 100000) * 100) / 100
+    : exact && points > 0 ? Math.round((exact / 100 / points) * 100) / 100 : 1.2;
+
+  const letterSpacingPoints = (integerAttribute(runProperties, "spc") ?? integerAttribute(inherited.run, "spc") ?? 0) / 100;
+  const capitals = inheritedAttribute("cap", runProperties, inherited.run);
+  const anchor = attribute(bodyProperties, "anchor");
 
   return {
-    color: colour,
-    fontSize,
-    lineHeight: Math.round(fontSize * 1.28),
-    fontWeight: bold ? "700" : "400",
-    fontFamily: bold ? "Manrope_700Bold" : "Manrope_400Regular",
-    textAlign: alignment === "ctr" ? "center" : alignment === "r" ? "right" : "left",
-    letterSpacing: 0,
-    ...(attribute(runProperties, "i") === "1" ? { fontStyle: "italic" } : {}),
-    // `u` names an underline style; `none` is how a run turns off one it would
-    // otherwise inherit, so its presence is not the same as being underlined.
-    ...(((attribute(runProperties, "u") ?? "none") !== "none") ? { textDecoration: "underline" } : {}),
+    style: {
+      color: colour,
+      fontSize,
+      lineHeight: Math.round(fontSize * 1.28),
+      fontWeight: bold ? "700" : "400",
+      fontFamily: bold ? "Manrope_700Bold" : "Manrope_400Regular",
+      textAlign: align === "justify" ? "left" : align,
+      letterSpacing: 0,
+      ...(italic ? { fontStyle: "italic" } : {}),
+      // `u` names an underline style; `none` is how a run turns off one it would
+      // otherwise inherit, so its presence is not the same as being underlined.
+      ...(underlined ? { textDecoration: "underline" } : {}),
+    },
+    typography: {
+      fontFamily: resolveTypeface(
+        attribute(path(runProperties, "latin"), "typeface") ?? attribute(path(inherited.run, "latin"), "typeface"),
+        fonts,
+      ),
+      fontSize,
+      fontWeight: bold ? 700 : 400,
+      italic,
+      align,
+      verticalAlign: anchor === "ctr" ? "middle" : anchor === "b" ? "bottom" : "top",
+      lineHeightRatio,
+      letterSpacing: Math.round(letterSpacingPoints * scale.unitsPerPoint * 100) / 100,
+      // `small` is small capitals, which nothing downstream can draw; upper case
+      // is the closer of the two lies.
+      transform: capitals === "all" || capitals === "small" ? "uppercase" : "none",
+      color: colour,
+      mixed: runsDiffer(txBody),
+    },
   };
 }
 
@@ -289,11 +549,17 @@ type ShapeContext = {
   rels: Map<string, string>;
   scale: Scale;
   theme: Map<string, string>;
+  fonts: ThemeFonts;
+  inherit: (placeholder: PlaceholderRef | null) => Inherited;
   warnings: string[];
 };
 
 function convertShape(shape: XmlNode, transform: GroupTransform, zIndex: number, context: ShapeContext): ImportedElement | null {
-  const raw = rawFrame(path(shape, "spPr", "xfrm"));
+  const placeholder = placeholderOf(shape);
+  const inherited = context.inherit(placeholder);
+  // A placeholder that states no rectangle is not undecided about where it goes
+  // — it is pointing at the layout, which has one.
+  const raw = rawFrame(path(shape, "spPr", "xfrm")) ?? rawFrame(inherited.xfrm);
   if (!raw) return null;
   const frame = toCanvas(transform(raw), raw.rotation, context.scale);
   if (!frame) return null;
@@ -306,13 +572,16 @@ function convertShape(shape: XmlNode, transform: GroupTransform, zIndex: number,
     .trim();
 
   if (txBody && written) {
+    const look = readTextLook(txBody, inherited, context.scale, context.theme, context.fonts);
     return {
       type: "text",
       ...frame,
       zIndex,
       opacity: 1,
-      style: textStyle(txBody, context.scale, context.theme),
+      style: look.style,
       content: { text: written, maxLines: Math.max(1, written.split("\n").length) },
+      typography: look.typography,
+      ...(placeholder ? { placeholder } : {}),
     };
   }
 
@@ -332,11 +601,13 @@ function convertShape(shape: XmlNode, transform: GroupTransform, zIndex: number,
       ...(outline ? { stroke: outline, strokeWidth: 1 } : {}),
     },
     content: {},
+    ...(placeholder ? { placeholder } : {}),
   };
 }
 
 function convertPicture(picture: XmlNode, transform: GroupTransform, zIndex: number, context: ShapeContext): ImportedElement | null {
-  const raw = rawFrame(path(picture, "spPr", "xfrm"));
+  const placeholder = placeholderOf(picture);
+  const raw = rawFrame(path(picture, "spPr", "xfrm")) ?? rawFrame(context.inherit(placeholder).xfrm);
   if (!raw) return null;
   const frame = toCanvas(transform(raw), raw.rotation, context.scale);
   if (!frame) return null;
@@ -359,6 +630,7 @@ function convertPicture(picture: XmlNode, transform: GroupTransform, zIndex: num
     // The storage path is filled in by the importer once the bytes are up.
     content: {},
     media,
+    ...(placeholder ? { placeholder } : {}),
   };
 }
 
@@ -458,6 +730,7 @@ export function readPptx(entries: ZipEntries): ImportedDeck {
 
   const scale = scaleFor(slideWidth, slideHeight);
   const theme = themeColours(entries);
+  const fonts = themeFonts(entries);
   const deckRels = relationships(entries, "ppt/presentation.xml");
   const warnings: string[] = [];
 
@@ -480,7 +753,11 @@ export function readPptx(entries: ZipEntries): ImportedDeck {
     if (!tree) continue;
 
     const rels = relationships(entries, slidePart);
-    const context: ShapeContext = { entries, rels, scale, theme, warnings };
+    // Rebuilt per slide: two slides of one deck can be made from two layouts.
+    const context: ShapeContext = {
+      entries, rels, scale, theme, fonts, warnings,
+      inherit: inheritanceFor(entries, slidePart),
+    };
     const elements: ImportedElement[] = [];
     collect(tree, IDENTITY, context, elements);
 
