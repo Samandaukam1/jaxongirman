@@ -4,8 +4,8 @@ import { useState } from "react";
 import { PageHeader } from "@/components/AdminUI";
 import { errorMessage } from "@/lib/format";
 import {
-  importTemplate, inspectTemplate, uploadTemplate,
-  type TemplatePage, type TemplateReport,
+  importTemplate, inspectTemplate, resolveDesignFonts, uploadTemplate,
+  type FontResolution, type TemplatePage, type TemplateReport,
 } from "@/lib/jslayd";
 import { TIER_LABELS, TIERS, type Tier } from "@jaxongirman/jslayd";
 
@@ -72,6 +72,8 @@ export function TemplateImport({ onClose, onImported }: { onClose: () => void; o
   const [storagePath, setStoragePath] = useState("");
   const [originalName, setOriginalName] = useState("");
   const [pages, setPages] = useState<TemplatePage[]>([]);
+  const [fonts, setFonts] = useState<FontResolution[] | null>(null);
+  const [fontsBusy, setFontsBusy] = useState(false);
 
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
@@ -315,8 +317,50 @@ export function TemplateImport({ onClose, onImported }: { onClose: () => void; o
         <section className="panel">
           <p className="panel-hint">
             <strong>{report.name}</strong> qoralama sifatida yaratildi. Chop etishdan oldin
-            sahifalarni ko‘rib chiqing va shrift fayllarini yuklang.
+            sahifalarni ko‘rib chiqing.
           </p>
+
+          {/* The typefaces, which is most of what a template is. Offered here
+              rather than left for later: a design published without them is
+              published in the wrong font. */}
+          {(report.fonts ?? []).length > 0 ? (
+            <>
+              <p className="panel-hint">
+                Shablon so‘ragan shriftlar: {(report.fonts ?? []).join(", ")}.
+              </p>
+              <button
+                className="secondary-button compact"
+                type="button"
+                disabled={fontsBusy}
+                onClick={() => {
+                  if (!report.designId) return;
+                  setFontsBusy(true);
+                  resolveDesignFonts(report.designId)
+                    .then(setFonts)
+                    .catch((fontError) => setProblem(errorMessage(fontError)))
+                    .finally(() => setFontsBusy(false));
+                }}
+              >
+                {fontsBusy ? "Shriftlar olinmoqda…" : "Shriftlarni topib olish"}
+              </button>
+            </>
+          ) : null}
+
+          {fonts ? (
+            <ul className="problem-list">
+              {fonts.map((entry) => (
+                <li key={entry.font}>
+                  <strong>
+                    {entry.name}: {entry.faces > 0
+                      ? `${entry.faces} ta fayl (${entry.source === "library" ? "kutubxonadan" : "yuklab olindi"})`
+                      : "topilmadi — faylni qo‘lda yuklang"}
+                  </strong>
+                  {entry.note ? <small>{entry.note}</small> : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
           <button className="secondary-button" type="button" onClick={onClose}>Ro‘yxatga qaytish</button>
         </section>
       ) : null}

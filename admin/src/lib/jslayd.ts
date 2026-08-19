@@ -397,3 +397,19 @@ async function callTemplate(body: Record<string, unknown>): Promise<TemplateRepo
   }
   throw error;
 }
+
+export type FontResolution = { font: string; name: string; faces: number; source: string; note?: string };
+
+/**
+ * Fetches the typefaces a design named but does not ship.
+ *
+ * Server-side because it reaches an outside host and writes to a shared shelf:
+ * a family downloaded for one design is there for the next, and deciding that
+ * in a browser would mean every admin's tab racing the others for the same
+ * file.
+ */
+export async function resolveDesignFonts(designId: string): Promise<FontResolution[]> {
+  const { data, error } = await supabase.functions.invoke("resolve-design-fonts", { body: { designId } });
+  if (error) throw error;
+  return ((data as { fonts?: FontResolution[] })?.fonts ?? []);
+}

@@ -103,6 +103,7 @@ export function renderArchetype(
   const context: RenderContext = {
     colors: family.colors,
     fonts: new Map(document.fonts.map((font) => [font.id, font])),
+    slug: document.design.slug,
     chartPalette: family.chartPalette,
     slide,
   };
@@ -119,6 +120,8 @@ type RenderContext = {
   fonts: Map<string, FontDeclaration>;
   chartPalette: readonly string[];
   slide: SlideData;
+  /** Every font file of a design is stored under it; see `assetKey`. */
+  slug: string;
 };
 
 function emit(
@@ -359,6 +362,23 @@ export function bundledFace(fallback: string, weight: number): string {
   return best.family;
 }
 
+/**
+ * The object key a face is actually stored under.
+ *
+ * A design declares its files by name — `apelsen-display-700.ttf` — because
+ * that is what an author types and what the design owns. They are uploaded to
+ * the design's own folder in the bucket, so the name alone addresses nothing:
+ * an exporter asking for it gets a 404 and silently falls back to a bundled
+ * face, which is a deck set in the wrong typeface with nothing to show for it.
+ *
+ * A name already carrying a folder is left alone, so a document that stores the
+ * full key — every design generated from a PowerPoint template does — is not
+ * given the prefix twice.
+ */
+function assetKey(asset: string, slug: string): string {
+  return asset.includes("/") ? asset : `${slug}/${asset}`;
+}
+
 function typeface(style: TextStyle, context: RenderContext): Record<string, unknown> {
   const font = context.fonts.get(style.font);
   const fallbackFace = bundledFace(font?.fallback ?? "Manrope", style.fontWeight);
@@ -373,7 +393,7 @@ function typeface(style: TextStyle, context: RenderContext): Record<string, unkn
     fontFallback: fallbackFace,
     // The object key of the custom face, so an exporter that can embed a font
     // embeds the design's own rather than approximating it.
-    ...(face ? { fontAsset: face.asset, fontDisplayName: font!.name } : {}),
+    ...(face ? { fontAsset: assetKey(face.asset, context.slug), fontDisplayName: font!.name } : {}),
     fontWeight: String(style.fontWeight),
     fontStyle: style.fontStyle,
   };
