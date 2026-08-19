@@ -106,31 +106,71 @@ Deno.serve(async (request) => {
       }
 
       /**
-       * The schemas a deck is actually written against.
+       * Which construct Gemini refuses, asked one at a time.
        *
-       * A two-word answer against `{ ok: string }` proves the key works and
-       * nothing else — the outline and the slide copy are the requests that
-       * have been failing, and they are refused for what is in them rather
-       * than for reaching the wrong address. Asked with one slide and a low
-       * token cap, so the check costs almost nothing.
+       * The outline schema is accepted and the content schema is not, every
+       * time — so the fault is a shape that only the second one contains, and
+       * there are exactly two candidates: an object marked nullable, and an
+       * array whose items are arrays. Probing the whole schema again would only
+       * repeat what is already known.
+       *
+       * Each is the smallest request that contains the construct and nothing
+       * else, so a failure names the construct rather than the schema.
        */
-      for (const [name, schema] of [
-        ["outline", outlineSchema(1)],
-        ["content", contentSchema(1)],
-      ] as const) {
+      const PROBES: { name: string; schema: Record<string, unknown> }[] = [
+        {
+          name: "nullable_object",
+          schema: {
+            type: "object",
+            properties: {
+              quote: {
+                type: "object", nullable: true,
+                properties: { text: { type: "string" }, attribution: { type: "string" } },
+                required: ["text", "attribution"],
+              },
+            },
+            required: ["quote"],
+          },
+        },
+        {
+          name: "array_of_array",
+          schema: {
+            type: "object",
+            properties: {
+              rows: {
+                type: "array", minItems: 1, maxItems: 3,
+                items: { type: "array", items: { type: "string" }, minItems: 2, maxItems: 3 },
+              },
+            },
+            required: ["rows"],
+          },
+        },
+        {
+          name: "nullable_string",
+          schema: {
+            type: "object",
+            properties: { body: { type: "string", nullable: true } },
+            required: ["body"],
+          },
+        },
+        { name: "outline_real", schema: outlineSchema(1) },
+        { name: "content_real", schema: contentSchema(1) },
+      ];
+
+      for (const probe of PROBES) {
         try {
           await writer.structured({
-            prompt: "Bitta namunaviy slayd uchun sxemaga mos JSON qaytaring.",
-            schemaName: `probe_${name}`,
-            schema,
-            maxOutputTokens: 700,
+            prompt: "Sxemaga mos namunaviy JSON qaytaring.",
+            schemaName: `probe_${probe.name}`,
+            schema: probe.schema,
+            maxOutputTokens: 600,
           });
-          report[`gemini_${name}_schema`] = "ok";
+          report[`probe_${probe.name}`] = "ok";
         } catch (failure) {
-          report[`gemini_${name}_schema`] = "failed";
-          // The whole sentence, field violation included. This is the line that
-          // says which key Gemini refused.
-          report[`gemini_${name}_detail`] = failure instanceof Error ? failure.message.slice(0, 400) : "";
+          report[`probe_${probe.name}`] = "FAILED";
+          // The whole sentence, field violation included — the line that names
+          // the key Gemini refused.
+          report[`probe_${probe.name}_detail`] = failure instanceof Error ? failure.message.slice(0, 320) : "";
         }
       }
     }
