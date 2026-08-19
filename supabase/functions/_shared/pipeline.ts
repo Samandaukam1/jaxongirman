@@ -10,7 +10,7 @@ import { geminiWriter } from "./gemini.ts";
 import {
   attributionMetadata, ProviderUnavailable, userFacingFailure, type Attachment,
 } from "./writer.ts";
-import { contentSchema, outlineSchema, rewriteSchema } from "./plan-schema.ts";
+import { outlineSchema, rewriteSchema, slideSchema } from "./plan-schema.ts";
 import type { GeneratedImage, LayoutName, PresentationPlan, ResearchSource, SemanticSlide, VisualDna } from "./presentation-types.ts";
 import { findPhoto } from "./providers/photo.ts";
 
@@ -317,6 +317,101 @@ function flattenTableRows<T extends { table?: unknown }>(slide: T): T {
   return { ...slide, table: rows.length > 0 ? { ...table, rows } : null };
 }
 
+
+/**
+ * Runs a list of jobs a few at a time, keeping the order of the answers.
+ *
+ * Fired all at once, ten slide requests earn a rate limit; run one after
+ * another they take ten times as long as they need to. Three is enough to hide
+ * the latency and few enough that Gemini never objects.
+ */
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  limit: number,
+  worker: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (true) {
+      const index = next;
+      next += 1;
+      if (index >= items.length) return;
+      results[index] = await worker(items[index]!, index);
+    }
+  });
+
+  await Promise.all(runners);
+  return results;
+}
+
+/** One slide's copy, and what it cost. */
+type SlideWrite = {
+  index: number;
+  slide: Content["slides"][number];
+  usage: { input_tokens?: number; output_tokens?: number };
+  attempts: number;
+};
+
+/**
+ * Writes one slide.
+ *
+ * The deck used to be one request whose schema grew with the slide count, and
+ * Gemini refused it: one slide was accepted, six were not, and the refusal
+ * scaled with the count rather than with anything in the vocabulary. So the
+ * count now changes how many requests are made and never how large one is.
+ *
+ * What travels is only what this slide needs — its own purpose, the archetype
+ * it will be laid into, the slide before and after it for continuity, and the
+ * research. Not the other archetypes, not the other briefs, not the rest of the
+ * deck's copy.
+ */
+async function writeOneSlide(input: {
+  writer: ReturnType<typeof geminiWriter>;
+  topic: string;
+  index: number;
+  outline: Outline["slides"][number];
+  previous: string | null;
+  next: string | null;
+  brief: unknown;
+  researchBrief: string;
+  attachments: readonly Attachment[];
+}): Promise<SlideWrite> {
+  const system = "You are an expert Uzbek Latin academic presentation writer working to a fixed layout. Ground every sentence in the supplied research. Write specific, checkable content: real numbers, dates, names and definitions instead of generalities. Grammar must be flawless Uzbek Latin. Never fabricate a quotation, statistic or date — if the research does not support it, write something the research does support instead. The layout is fixed and is not yours to change: write copy that fits the boxes you are given. Return only the required schema.";
+
+  const prompt = [
+    `Mavzu: ${input.topic}`,
+    `Slayd ${input.index + 1}: ${input.outline.title}`,
+    `Maqsad: ${input.outline.purpose}`,
+    input.previous ? `Oldingi slayd: ${input.previous}` : null,
+    input.next ? `Keyingi slayd: ${input.next}` : null,
+    "",
+    "Faqat SHU slayd uchun matn yozing.",
+    "- subtitle: sarlavhani ochib beruvchi bitta qisqa jumla.",
+    "- bullets: 3–5 ta band. Har biri aniq fikr: raqam, sana, ism yoki ta'rif. \"Muhim ahamiyatga ega\" kabi quruq iboralarni yozmang.",
+    "- body: bandlarni bog'lovchi 1–2 jumla, agar slayd shuni talab qilsa.",
+    "- statistic: faqat tadqiqotda haqiqatan uchragan raqam.",
+    "- chart: faqat tadqiqotdagi haqiqiy qiymatlar.",
+    "- table: faqat haqiqatan jadval ko'rinishidagi ma'lumot bo'lsa; har qator {\"cells\": [...]}.",
+    "Kerak bo'lmagan maydonni null qoldiring.",
+    input.brief ? `\nDIZAYN O'LCHOVLARI (\"aim\" — mo'ljal, \"limit\" — qat'iy chegara):\n${JSON.stringify(input.brief)}` : "",
+    input.researchBrief,
+  ].filter(Boolean).join("\n");
+
+  const answer = await input.writer.structured<Content["slides"][number]>({
+    prompt: `${system}\n\n${prompt}`,
+    system,
+    schemaName: "presentation_slide",
+    schema: slideSchema(),
+    attachments: input.attachments,
+    // One slide's worth. The old sixteen thousand was for ten of them at once.
+    maxOutputTokens: 2_400,
+  });
+
+  return { index: input.index, slide: answer.data, usage: answer.usage, attempts: answer.attempts };
+}
+
 /** A slide with nothing on it but its own headline. */
 function bareSlide(title: string, purpose: string, layout: LayoutName, subtitle: string | null = null, bullets: string[] = []): SemanticSlide {
   return { title, subtitle, purpose, layout, bullets, body: null, quote: null, statistic: null, chart: null, table: null, visualPrompt: null };
@@ -549,19 +644,86 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
       + `Arxetiplar:\n${JSON.stringify(layoutPlan.briefs.map(briefForPrompt))}\n`
       + `Slaydlar: ${JSON.stringify(layoutPlan.slides.map((slide) => ({ i: slide.index, archetype: slide.archetypeId })))}`;
 
+    /**
+     * The copy, one slide at a time.
+     *
+     * This was a single request carrying every slide, and Gemini refused it:
+     * one slide was accepted and six were not, with INVALID_ARGUMENT naming
+     * nothing, and the refusal followed the count rather than any keyword. So
+     * the deck's length changes how many requests are made and never how large
+     * one of them is.
+     *
+     * Everything downstream already worked a slide at a time — a slot budget, a
+     * fit check, a rewrite — so this is the unit the rest of the pipeline was
+     * built in.
+     */
+    const briefById = new Map(layoutPlan.briefs.map((brief) => [brief.archetypeId, brief]));
+
     const contentResult = await runStage(input.service, input, "writing_content", async () => {
-      if (mode === "mock") return { data: mockContent(outlineResult.data), usage: {}, requestId: null, provider: "google" as const, model: writer.writingModel, attempts: 1 };
-      const system = "You are an expert Uzbek Latin academic presentation writer working to a fixed layout. Follow the supplied outline exactly and ground every sentence in the supplied research. Write specific, checkable content: real numbers, dates, names and definitions instead of generalities. Grammar must be flawless Uzbek Latin. Never fabricate a quotation, statistic or date — if the research does not support it, write something the research does support instead. The layout is fixed and is not yours to change: write copy that fits the boxes you are given. Return only the required schema.";
-      const prompt = `Mavzu: ${prepared.presentation.topic}\nReja:\n${JSON.stringify(outlineResult.data.slides)}\n\nAynan ${contentCount} ta slayd uchun matn yozing.\n- subtitle: sarlavhani ochib beruvchi bitta qisqa jumla (bezakli yozuv). Har slaydda bo'lsin.\n- bullets: 3–5 ta band. Har biri to'liq, aniq fikr: raqam, sana, ism yoki aniq ta'rif bo'lsin. "Muhim ahamiyatga ega" kabi quruq iboralarni yozmang.\n- body: bandlarni bog'lovchi 1–2 jumlalik izoh, agar slayd shuni talab qilsa.\n- statistic: faqat tadqiqotda haqiqatan uchragan raqamni yozing.\n- chart: faqat tadqiqotdagi haqiqiy qiymatlar bilan to'ldiring.\n- table: faqat tadqiqotda haqiqatan jadval ko'rinishidagi ma'lumot bo'lsa to'ldiring; 2-6 ustun, 2-8 qator. Har bir qator {\"cells\": [...]} ko'rinishida bo'lsin.\nBibliografiya yozmang — uni server alohida qo'shadi.${researchBrief}${layoutInstruction}`;
-      return writer.structured<Content>({
-        prompt: `${system}\n\n${prompt}`,
-        system,
-        schemaName: "presentation_content",
-        schema: contentSchema(contentCount),
-        attachments: context.attachments,
-        maxOutputTokens: 16_000,
+      if (mode === "mock") {
+        return {
+          slides: mockContent(outlineResult.data).slides,
+          usage: {} as { input_tokens?: number; output_tokens?: number },
+          calls: 0,
+          attempts: 1,
+        };
+      }
+
+      const written = await mapWithConcurrency(outlineResult.data.slides, 3, async (slide, index) => {
+        const planned = layoutPlan.slides.find((entry) => entry.index === index);
+        const brief = planned ? briefById.get(planned.archetypeId) : undefined;
+
+        try {
+          return await writeOneSlide({
+            writer,
+            topic: prepared.presentation.topic,
+            index,
+            outline: slide,
+            previous: outlineResult.data.slides[index - 1]?.title ?? null,
+            next: outlineResult.data.slides[index + 1]?.purpose ?? null,
+            brief: brief ? briefForPrompt(brief) : null,
+            researchBrief,
+            attachments: context.attachments,
+          });
+        } catch (failure) {
+          // One more ask for this slide alone. The writer has already retried
+          // what is worth retrying; this covers the answer that came back
+          // unusable rather than the request that never landed.
+          console.error(JSON.stringify({
+            event: "slide_write_retry",
+            job_id: input.jobId,
+            slide: index,
+            reason: failure instanceof ProviderUnavailable ? failure.reason : "unknown",
+          }));
+          return await writeOneSlide({
+            writer,
+            topic: prepared.presentation.topic,
+            index,
+            outline: slide,
+            previous: null,
+            next: null,
+            brief: brief ? briefForPrompt(brief) : null,
+            researchBrief,
+            attachments: [],
+          });
+        }
       });
-    }, () => "Slayd matnlari yozildi va manbalarga bog‘landi");
+
+      return {
+        // `mapWithConcurrency` keeps the order, so the nth answer is the nth
+        // slide however the requests finished.
+        slides: written.map((entry) => entry.slide),
+        // Kept per slide as well as summed: a deck that cost twice what it
+        // should did so on one slide, and an aggregate cannot say which.
+        entries: written,
+        usage: written.reduce((total, entry) => ({
+          input_tokens: (total.input_tokens ?? 0) + (entry.usage.input_tokens ?? 0),
+          output_tokens: (total.output_tokens ?? 0) + (entry.usage.output_tokens ?? 0),
+        }), {} as { input_tokens?: number; output_tokens?: number }),
+        calls: written.length,
+        attempts: written.reduce((total, entry) => total + entry.attempts, 0),
+      };
+    }, (value) => `${value.slides.length} ta slayd alohida yozildi`);
 
 
     // User-entered labels come first — they are what the author explicitly cited —
@@ -599,15 +761,13 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
     // Rows come back wrapped, one object per row, because Gemini answers a
     // nested array badly and refused the request that carried one. Unwrapped
     // here so nothing past this line knows the difference.
-    const writtenSlides = contentResult.data.slides.map(flattenTableRows);
+    const writtenSlides = contentResult.slides.map(flattenTableRows);
     let rewriteUsage = { input_tokens: 0, output_tokens: 0 };
     let rewrites = 0;
     let rewriteAttribution: { provider: string; model: string; attempts: number } =
       { provider: "google", model: writer.writingModel, attempts: 0 };
 
     if (mode !== "mock") {
-      const briefById = new Map(layoutPlan.briefs.map((brief) => [brief.archetypeId, brief]));
-
       for (let attempt = 0; attempt < 2; attempt += 1) {
         const failing: { index: number; problems: SlotProblem[] }[] = [];
 
@@ -703,7 +863,7 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
     const stages: { operation: string; answer: { usage: { input_tokens?: number; output_tokens?: number }; requestId: string | null; provider: string; model: string; attempts: number; groundedSearch?: boolean } }[] = [
       { operation: "topic_research", answer: research },
       { operation: "presentation_outline", answer: outlineResult },
-      { operation: "presentation_content", answer: contentResult },
+
     ];
     if (rewrites > 0) {
       stages.push({ operation: "content_rewrite", answer: { ...rewriteAttribution, usage: rewriteUsage, requestId: null } });
@@ -721,7 +881,32 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
         metadata: attributionMetadata(stage.answer as never),
       };
     });
-    if (mode === "real") await input.service.from("ai_usage").insert(rows);
+    /**
+     * A row per slide, because a slide is what was asked for.
+     *
+     * The deck-level row says what the writing stage cost in total; these say
+     * where it went. A deck that cost twice what it should did so on one slide,
+     * and a sum cannot name it.
+     */
+    const slideRows = (contentResult.entries ?? []).map((entry) => {
+      const planned = layoutPlan.slides.find((slide) => slide.index === entry.index);
+      const cost = usageCost(entry.usage, pricing.for(writer.writingModel));
+      totalCost += cost;
+      return {
+        owner_id: input.ownerId, presentation_id: input.presentationId, job_id: input.jobId,
+        provider: "google", model: writer.writingModel, operation: "presentation_slide_write",
+        input_tokens: entry.usage.input_tokens ?? 0,
+        output_tokens: entry.usage.output_tokens ?? 0,
+        provider_cost_usd: cost, request_id: null,
+        metadata: {
+          slide_index: entry.index,
+          archetype_id: planned?.archetypeId ?? null,
+          attempts: entry.attempts,
+        },
+      };
+    });
+
+    if (mode === "real") await input.service.from("ai_usage").insert([...rows, ...slideRows]);
 
     await runStage(input.service, input, "building_layouts", async () => plan.slides, (value) => `${value.length} ta layout tanlandi`);
 

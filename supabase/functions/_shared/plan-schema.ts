@@ -243,6 +243,45 @@ const chartSchema = {
     }
   ]
 };
+/**
+ * One slide, and never more than one.
+ *
+ * The deck used to be written in a single request whose schema grew with it:
+ * six slides meant six copies of this object nested inside an array, ten meant
+ * ten. Gemini accepted one and refused six with INVALID_ARGUMENT, naming
+ * nothing — and the refusal scaled with the count rather than with any keyword
+ * in it, which is the shape of a size limit rather than a vocabulary problem.
+ *
+ * So the number of slides changes the number of requests, and this stays the
+ * same size forever. It is also the unit everything else already works in:
+ * a slot budget is per slide, a fit check is per slide, and a rewrite was
+ * always about one slide that did not fit.
+ */
+export function slideSchema(): Record<string, unknown> {
+  return {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      title: { type: "string" },
+      subtitle: nullableString,
+      bullets: { type: "array", items: { type: "string" }, maxItems: 6 },
+      body: nullableString,
+      quote: quoteSchema,
+      statistic: statisticSchema,
+      chart: chartSchema,
+      table: tableSchema,
+    },
+    required: ["title", "subtitle", "bullets", "body", "quote", "statistic", "chart", "table"],
+  };
+}
+
+/**
+ * Every slide at once.
+ *
+ * Kept because the mock path and the tests read it, and because it documents
+ * the shape a deck assembles into. Nothing on the generation path sends it any
+ * more — see `slideSchema`.
+ */
 export function contentSchema(slideCount: number): Record<string, unknown> {
   return {
     type: "object",

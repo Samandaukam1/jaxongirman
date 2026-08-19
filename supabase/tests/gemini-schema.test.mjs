@@ -188,6 +188,7 @@ test("the nullable slide fields keep their shape, not just their name", () => {
 /* ------------------------------------------- the real schemas, checked here */
 
 const { geminiSchemaProblems } = await import(`${edge}/gemini-schema.js`);
+const { slideSchema } = await import(`${edge}/plan-schema.js`);
 
 test("every schema the pipeline sends is one Gemini can read", () => {
   /**
@@ -235,4 +236,39 @@ test("an array with no items is caught", () => {
   const problems = geminiSchemaProblems({ type: "array" });
   assert.equal(problems.length, 1);
   assert.match(problems[0].problem, /items yo'q/);
+});
+
+test("a slide is written on its own, so no schema counts them", async () => {
+  /**
+   * The production failure, measured rather than assumed.
+   *
+   * `contentSchema(1)` was accepted and `contentSchema(6)` was refused with
+   * INVALID_ARGUMENT naming nothing — and the two serialise to the same 1361
+   * bytes, differing in exactly two characters: `minItems`/`maxItems` of one
+   * against six. So it was never size or depth or a keyword; it was asking one
+   * request for an exact count of composite items.
+   *
+   * The fix removes the question. A slide schema describes a slide, the deck's
+   * length decides how many requests are made, and no array of slides is sent
+   * to Gemini at all.
+   */
+  const converted = toGeminiSchema(slideSchema());
+  const serialised = JSON.stringify(converted);
+
+  assert.equal(slideSchema.length, 0, "it takes no arguments, so it cannot be counted");
+  assert.equal(serialised, JSON.stringify(toGeminiSchema(slideSchema())), "and is the same every time");
+  // Not a claim about `minItems` in general: `table.rows` carries one and was
+  // accepted every time inside `contentSchema(1)`. What is asserted is the
+  // thing that differed — there is no array of slides here to be counted.
+  assert.equal("slides" in converted.properties, false);
+  assert.deepEqual(geminiSchemaProblems(converted), []);
+
+  // The shape that failed, kept only for the mock path and the tests. If it
+  // ever reaches Gemini again, this is the difference to look at.
+  const { contentSchema } = await import(`${edge}/plan-schema.js`);
+  assert.equal(
+    JSON.stringify(toGeminiSchema(contentSchema(1))).length,
+    JSON.stringify(toGeminiSchema(contentSchema(6))).length,
+    "the refused schema was the same size as the accepted one",
+  );
 });
