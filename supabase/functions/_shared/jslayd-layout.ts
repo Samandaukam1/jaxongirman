@@ -4,10 +4,12 @@ import {
   readDocument,
   renderArchetype,
   selectArchetypes,
+  textVolume,
   type JslaydDocument,
   type PlacedShape,
   type SlideData,
 } from "./jslayd/index.ts";
+import { planStory, selectPages, type PageProfile } from "./design-select.ts";
 import { validateAndRepair } from "./layout.ts";
 import type { ElementRow, GeneratedImage, SemanticSlide, SlideRow } from "./presentation-types.ts";
 
@@ -30,6 +32,14 @@ export type ResolvedDesign = {
   version: number;
   slug: string;
   document: JslaydDocument;
+  /**
+   * What each page of the family is for, where the design came from a template.
+   *
+   * Absent for a written design, and absent is not a degraded state: six
+   * archetypes chosen by shape is exactly right for six archetypes. It is
+   * twenty-five composed as a sequence that needs the sequence to be visible.
+   */
+  profiles?: readonly PageProfile[];
 };
 
 export type DesignRow = {
@@ -139,6 +149,41 @@ function toSlideData(
   };
 }
 
+/**
+ * The archetype each slide is laid into.
+ *
+ * A template family knows what its pages are for, so the deck is planned as a
+ * story and the pages are chosen against that plan. A written design does not
+ * and does not need to: its archetypes are chosen by what each slide is, which
+ * is what they were authored for. Both end at the same list, so nothing further
+ * down learns which kind of design it is drawing.
+ */
+function baseSelection(
+  design: ResolvedDesign,
+  data: readonly SlideData[],
+  pictures: readonly (unknown | null)[],
+): { archetype: JslaydDocument["archetypes"][number]; substituted: boolean }[] {
+  const profiles = design.profiles ?? [];
+  if (profiles.length === 0) return selectArchetypes(design.document, data as SlideData[]);
+
+  const plan = planStory(data.map((slide) => slide.purpose));
+  const needs = data.map((slide, index) => ({
+    purpose: slide.purpose,
+    textVolume: textVolume(slide),
+    hasImage: Boolean(pictures[index]),
+  }));
+
+  const byId = new Map(design.document.archetypes.map((archetype) => [archetype.id, archetype]));
+  return selectPages(profiles, plan, needs).map((choice, index) => {
+    const archetype = byId.get(choice.archetypeId);
+    // A profile naming a page the document does not have means the two were
+    // stored at different versions. The shape-based chooser still answers, so
+    // the deck is laid out rather than abandoned.
+    if (archetype) return { archetype, substituted: choice.substituted };
+    return selectArchetypes(design.document, [data[index]!])[0]!;
+  });
+}
+
 export function buildJslaydSlides(input: BuildInput): { slides: SlideRow[]; elements: ElementRow[] } {
   const generated = new Map(input.generatedImages.map((item) => [item.slideIndex, item]));
   let uploadedIndex = 0;
@@ -163,7 +208,7 @@ export function buildJslaydSlides(input: BuildInput): { slides: SlideRow[]; elem
   // avoiding repetition is a property of the sequence and a chooser seeing one
   // slide cannot know it already used a composition.
   const preselected = input.archetypeIds ?? [];
-  const chosen = selectArchetypes(input.design.document, data).map((selection, index) => {
+  const chosen = baseSelection(input.design, data, pictures).map((selection, index) => {
     const wanted = preselected[index];
     if (!wanted) return selection;
     const archetype = input.design.document.archetypes.find((entry) => entry.id === wanted);

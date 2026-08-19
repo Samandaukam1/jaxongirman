@@ -142,8 +142,54 @@ async function loadJslaydDesign(
   const { design, reason } = readDesign(row);
   if (!design) {
     console.error("jslayd design unusable, falling back to the built-in blueprint", designId, reason);
+    return design;
   }
-  return design;
+
+  /**
+   * What each page of the family is for, where there is such a thing.
+   *
+   * Only a design imported from a template has these, and only for the version
+   * they were classified against — a design republished with different pages
+   * must not be laid out by the old plan. No rows is the ordinary case and not
+   * an error: a written design is chosen by shape, which is what it was
+   * authored for.
+   */
+  const profiles = await service
+    .from("design_slide_profiles")
+    .select("archetype_id, role, alternative_roles, recommended_story_position, layout_signature, is_terminal, supports_image, supports_chart, supports_table, supports_quote, supports_stats")
+    .eq("design_id", designId)
+    .eq("design_version", row.version);
+  if (profiles.error) {
+    console.error("jslayd slide profiles unavailable", designId, profiles.error.message);
+    return design;
+  }
+  if ((profiles.data ?? []).length === 0) return design;
+
+  const byId = new Map(design.document.archetypes.map((archetype) => [archetype.id, archetype]));
+  return {
+    ...design,
+    profiles: (profiles.data ?? []).flatMap((profile) => {
+      const archetype = byId.get(profile.archetype_id as string);
+      if (!archetype) return [];
+      // The text budget belongs to the archetype, not to the profile row: it is
+      // derived from the composition and would be a second copy to keep in step.
+      return [{
+        archetypeId: profile.archetype_id as string,
+        role: profile.role as never,
+        alternativeRoles: (profile.alternative_roles ?? []) as never,
+        recommendedStoryPosition: profile.recommended_story_position as number,
+        layoutSignature: (profile.layout_signature ?? "") as string,
+        isTerminal: Boolean(profile.is_terminal),
+        supportsImage: Boolean(profile.supports_image),
+        supportsChart: Boolean(profile.supports_chart),
+        supportsTable: Boolean(profile.supports_table),
+        supportsQuote: Boolean(profile.supports_quote),
+        supportsStats: Boolean(profile.supports_stats),
+        minText: archetype.selection.minText,
+        maxText: archetype.selection.maxText,
+      }];
+    }),
+  };
 }
 
 /** Cover, agenda, bibliography and closing — assembled here, never by the model. */
