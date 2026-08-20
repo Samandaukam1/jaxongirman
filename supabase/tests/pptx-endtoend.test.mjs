@@ -353,3 +353,95 @@ test("the writing brief asks for a measured number of characters, not a guess", 
   assert.ok(slot.budget.preferredCharacters > 0);
   assert.ok(slot.budget.maximumCharacters >= slot.budget.preferredCharacters);
 });
+
+/* ------------------------------- generation to export, without a database */
+
+const { buildJslaydSlides } = await import(`${edge}/jslayd-layout.js`);
+const { exportByCloning } = await import(`${edge}/pptx-clone-export.js`);
+const { asksFor, readTemplateAnswer } = await import(`${edge}/pptx-writer.js`);
+
+/**
+ * The seam between the two halves, joined.
+ *
+ * Everything above proves the import; `pptx-clone.test.mjs` proves the export.
+ * Between them sits the part neither covers: the generator writes rows, and
+ * weeks later the exporter reads those rows and has to work out which source
+ * slide each one is and what goes in each of its boxes. Both halves being
+ * right is not the same as them agreeing, and they only meet in production —
+ * after a person has been charged for the deck.
+ *
+ * So the rows are built here by the real renderer, from a real import, and fed
+ * straight to the real exporter. Nothing is stubbed but the model's answer and
+ * the four slides the server assembles, which are filled deliberately from
+ * nothing to prove the path they take.
+ */
+test("rows the generator writes are rows the exporter can clone", async () => {
+  const pageProfiles = draft.pages.map((page) => ({
+    archetype_id: page.archetype.id,
+    source_slide_part: page.sourcePart,
+    text_map: page.textMap,
+  }));
+
+  const carried = draft.pages.map((page, index) => ({
+    archetypeId: page.archetype.id,
+    role: profiles[index].role,
+    alternativeRoles: [],
+    recommendedStoryPosition: index + 1,
+    layoutSignature: "",
+    isTerminal: false,
+    supportsImage: true, supportsChart: false, supportsTable: false,
+    supportsQuote: false, supportsStats: false,
+    minText: 0, maxText: 4000,
+    sourcePart: page.sourcePart,
+    sourceIndex: page.sourceIndexInFile,
+    slots: page.textMap,
+  }));
+
+  // What the writer would have returned, for every page but the first — which
+  // stands in for a slide the server assembles and the model never sees.
+  const written = draft.pages.map((page, index) => index === 0 ? null : Object.fromEntries(
+    readTemplateAnswer(
+      { boxes: asksFor(page.textMap).map((ask) => ({ id: ask.id, text: `Yozilgan matn ${ask.id}` })) },
+      page.textMap,
+      { title: "Sarlavha" },
+    ).texts,
+  ));
+
+  const rows = buildJslaydSlides({
+    presentationId: "11111111-1111-4111-8111-111111111111",
+    ownerId: "22222222-2222-4222-8222-222222222222",
+    design: { id: "d", version: 1, slug: "studio-zenith", document: draft.document, profiles: carried },
+    slides: draft.pages.map((_, index) => ({
+      title: `Sahifa ${index + 1}`,
+      subtitle: "Qisqa izoh",
+      purpose: "content",
+      layout: "title_content",
+      bullets: ["Birinchi fikr", "Ikkinchi fikr"],
+      body: "Tanadagi matn",
+      quote: null, statistic: null, chart: null, table: null, visualPrompt: null,
+    })),
+    sources: [],
+    generatedImages: [],
+    uploadedImages: [],
+    authorName: null,
+    teacherName: null,
+    archetypeIds: draft.pages.map((page) => page.archetype.id),
+    templateText: written,
+  });
+
+  // §22: the record says which engine has to produce the file, on every slide.
+  assert.ok(rows.slides.every((slide) => slide.quality_report.engine === "pptx_clone"));
+  assert.ok(rows.slides.every((slide) => slide.quality_report.text_objects_found > 0));
+
+  const exported = await exportByCloning(
+    template(),
+    rows.slides.map((slide, index) => ({ id: slide.id, position: index, quality_report: slide.quality_report })),
+    rows.elements.map((element) => ({ slide_id: element.slide_id, type: element.type, content: element.content })),
+    pageProfiles,
+  );
+
+  assert.ok(exported.ok, exported.ok ? "" : exported.reason);
+  assert.equal(exported.report.leftoverText.length, 0);
+  assert.equal(exported.report.structuralFidelityPassed, true);
+  assert.equal(exported.report.slides.length, draft.pages.length);
+});
