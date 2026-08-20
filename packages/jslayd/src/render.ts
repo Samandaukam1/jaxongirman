@@ -497,6 +497,15 @@ function plate(
 function renderText(element: TextElement, box: Box, geometry: Geometry, context: RenderContext): RenderedElement[] {
   const text = sourceText(element.source, context);
   if (!text) return [];
+  /**
+   * Which element of the design this row came from.
+   *
+   * Carried so something downstream can find its way back. A design imported
+   * from PowerPoint is exported by editing the original slide, and the only
+   * thing joining a finished row of copy to the shape it belongs in is this id
+   * — without it the words would have to be matched by guessing at position.
+   */
+  const origin = { elementId: element.id };
 
   const inset = scale(element.padding);
   const inner: Box = {
@@ -512,7 +521,7 @@ function renderText(element: TextElement, box: Box, geometry: Geometry, context:
   rows.push({
     ...base("text", inner, geometry, element.opacity),
     style: textStyleOf(element.text, shaped.fontSize, context),
-    content: { text, maxLines: shaped.maxLines },
+    content: { text, maxLines: shaped.maxLines, ...origin },
   });
   return rows;
 }

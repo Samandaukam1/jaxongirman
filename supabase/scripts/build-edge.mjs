@@ -47,6 +47,7 @@ export function buildEdgeModules() {
       path.join(shared, "zip.ts"),
       path.join(shared, "pptx-text.ts"),
       path.join(shared, "pptx-clone.ts"),
+      path.join(shared, "pptx-clone-export.ts"),
       path.join(shared, "pptx.ts"),
       path.join(shared, "pptx-design.ts"),
       path.join(shared, "pptx-classify.ts"),

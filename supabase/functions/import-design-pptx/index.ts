@@ -341,13 +341,15 @@ Deno.serve(async (request) => {
       // spelling.
       .update({
         design_source: "pptx",
+        // Where the package these pages are cloned from lives.
+        source_asset_path: storagePath,
         keywords,
       })
       .eq("id", id);
     if (marked.error) throw marked.error;
 
     const stored = await service.from("design_slide_profiles").upsert(
-      profiles.map((profile) => ({
+      profiles.map((profile, index) => ({
         design_id: id,
         design_version: 1,
         archetype_id: profile.archetypeId,
@@ -365,6 +367,10 @@ Deno.serve(async (request) => {
         supports_quote: profile.supportsQuote,
         supports_stats: profile.supportsStats,
         is_terminal: profile.isTerminal,
+        // The way back to the slide this page is: the exporter clones that part
+        // and edits these shapes rather than drawing the page again.
+        source_slide_part: draft.pages[index]?.sourcePart ?? "",
+        text_map: draft.pages[index]?.textMap ?? [],
       })),
       { onConflict: "design_id,design_version,archetype_id" },
     );

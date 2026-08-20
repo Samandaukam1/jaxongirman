@@ -74,8 +74,29 @@ export type TemplateArtwork = {
   height: number;
 };
 
+/**
+ * Which shape in the original slide a binding fills.
+ *
+ * The generator resolves bindings and the cloner edits shapes; this is the only
+ * thing that joins them. Without it a finished deck would have to be re-read
+ * out of the uploaded file to find out where its words go.
+ */
+export type TextSlotMap = {
+  binding: string;
+  /** `<p:cNvPr id="…">` within the source part. */
+  shapeId: string;
+  /** The archetype element, so a renderer and a cloner agree on which box. */
+  elementId: string;
+  /** How many paragraphs the original box held — the shape to write back into. */
+  paragraphs: number;
+};
+
 export type DesignPage = {
   archetype: Archetype;
+  /** `ppt/slides/slide4.xml`, the part cloned when this page is chosen. */
+  sourcePart: string;
+  /** One entry per bound text box, in the order they were bound. */
+  textMap: TextSlotMap[];
   /**
    * Where the page sat in the uploaded file.
    *
@@ -588,6 +609,7 @@ function convertSlide(
   const bindings = assignBindings(slide);
   const elements: JslaydElement[] = [];
   const artwork: TemplateArtwork[] = [];
+  const textMap: TextSlotMap[] = [];
   const id = `page_${String(position + 1).padStart(2, "0")}`;
   let images = 0;
   let dropped = 0;
@@ -602,6 +624,15 @@ function convertSlide(
       const typography = element.typography ?? FALLBACK_TYPOGRAPHY;
       const style = textStyleOf(typography, geometry.height, fonts, family);
       capacity += (style.maxLines ?? 1) * Math.max(1, geometry.width / Math.max(1, style.fontSize * 0.53));
+      if (element.sourceShapeId) {
+        textMap.push({
+          binding,
+          shapeId: element.sourceShapeId,
+          elementId: `${id}_${binding}`,
+          // A box of three lines wants three replacements, not one long one.
+          paragraphs: Math.max(1, String(element.content.text ?? "").split("\n").length),
+        });
+      }
       elements.push({
         type: "text",
         id: `${id}_${binding}`,
@@ -765,6 +796,8 @@ function convertSlide(
       selection: selectionFor(purpose, textSlots, images, capacity),
       elements,
     },
+    sourcePart: slide.part,
+    textMap,
     sourceIndexInFile: position,
     sourceTitle: slide.title,
     purpose,

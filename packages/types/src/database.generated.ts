@@ -423,12 +423,14 @@ export type Database = {
           recommended_story_position: number
           role: Database["public"]["Enums"]["slide_story_role"]
           source_index: number
+          source_slide_part: string
           supports_chart: boolean
           supports_image: boolean
           supports_quote: boolean
           supports_stats: boolean
           supports_table: boolean
           text_capacity: string
+          text_map: Json
           visual_weight: string
         }
         Insert: {
@@ -444,12 +446,14 @@ export type Database = {
           recommended_story_position?: number
           role: Database["public"]["Enums"]["slide_story_role"]
           source_index?: number
+          source_slide_part?: string
           supports_chart?: boolean
           supports_image?: boolean
           supports_quote?: boolean
           supports_stats?: boolean
           supports_table?: boolean
           text_capacity?: string
+          text_map?: Json
           visual_weight?: string
         }
         Update: {
@@ -465,12 +469,14 @@ export type Database = {
           recommended_story_position?: number
           role?: Database["public"]["Enums"]["slide_story_role"]
           source_index?: number
+          source_slide_part?: string
           supports_chart?: boolean
           supports_image?: boolean
           supports_quote?: boolean
           supports_stats?: boolean
           supports_table?: boolean
           text_capacity?: string
+          text_map?: Json
           visual_weight?: string
         }
         Relationships: [
@@ -2833,6 +2839,7 @@ export type Database = {
           published_version: number
           slug: string
           sort_order: number
+          source_asset_path: string | null
           source_prompt: string
           status: Database["public"]["Enums"]["jslayd_design_status"]
           thumbnail_path: string | null
@@ -2858,6 +2865,7 @@ export type Database = {
           published_version?: number
           slug: string
           sort_order?: number
+          source_asset_path?: string | null
           source_prompt?: string
           status?: Database["public"]["Enums"]["jslayd_design_status"]
           thumbnail_path?: string | null
@@ -2883,6 +2891,7 @@ export type Database = {
           published_version?: number
           slug?: string
           sort_order?: number
+          source_asset_path?: string | null
           source_prompt?: string
           status?: Database["public"]["Enums"]["jslayd_design_status"]
           thumbnail_path?: string | null

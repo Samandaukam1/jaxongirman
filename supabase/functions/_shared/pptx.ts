@@ -125,11 +125,21 @@ export type ImportedElement = {
   typography?: Typography;
   /** Set on shapes: how the file drew it, as opposed to how this app draws it. */
   shape?: ShapeDetail;
+  /**
+   * `<p:cNvPr id="…">` — the shape's own id within its part.
+   *
+   * The way back to the object this element came from. A design imported from
+   * PowerPoint is exported by editing the original slide rather than drawing a
+   * new one, and this is what says which box a piece of copy belongs in.
+   */
+  sourceShapeId?: string;
   /** Set where the shape was a placeholder, which is what names its purpose. */
   placeholder?: PlaceholderRef;
 };
 
 export type ImportedSlide = {
+  /** The package part this slide is, so a cloner can find it again. */
+  part: string;
   title: string | null;
   speakerNotes: string | null;
   background: Record<string, unknown>;
@@ -697,6 +707,7 @@ function convertShape(shape: XmlNode, transform: GroupTransform, zIndex: number,
 
   if (txBody && written) {
     const look = readTextLook(txBody, inherited, context.scale, context.theme, context.fonts);
+    const shapeId = attribute(path(shape, "nvSpPr", "cNvPr"), "id");
     return {
       type: "text",
       ...frame,
@@ -705,6 +716,7 @@ function convertShape(shape: XmlNode, transform: GroupTransform, zIndex: number,
       style: look.style,
       content: { text: written, maxLines: Math.max(1, written.split("\n").length) },
       typography: look.typography,
+      ...(shapeId ? { sourceShapeId: shapeId } : {}),
       ...(placeholder ? { placeholder } : {}),
     };
   }
@@ -1049,6 +1061,7 @@ export function readPptx(entries: ZipEntries): ImportedDeck {
     if (painted.picture) elements.unshift(painted.picture);
 
     slides.push({
+      part: slidePart,
       title: titleOf(tree),
       speakerNotes: notes ? notes.slice(0, 4000) : null,
       background: painted.color ? { color: painted.color } : {},

@@ -249,3 +249,102 @@ test("a page that is not in the package is reported rather than guessed at", () 
   ]);
   assert.ok(report.problems.some((problem) => problem.code === "missing_slide"));
 });
+
+/* ------------------------------------------------- joining a deck to its source */
+
+const { exportByCloning, planClone } = await import(`${edge}/pptx-clone-export.js`);
+
+const profiles = [
+  {
+    archetype_id: "page_01",
+    source_slide_part: "ppt/slides/slide1.xml",
+    text_map: [
+      { binding: "title", shapeId: "2", elementId: "page_01_title", paragraphs: 1 },
+      { binding: "body", shapeId: "3", elementId: "page_01_body", paragraphs: 1 },
+    ],
+  },
+  {
+    archetype_id: "page_03",
+    source_slide_part: "ppt/slides/slide3.xml",
+    // Every text box on the page, because one left unmapped is one whose
+    // sample sentence ships — which the guard catches, and which a real import
+    // never produces since the adapter maps them all.
+    text_map: [
+      { binding: "title", shapeId: "2", elementId: "page_03_title", paragraphs: 1 },
+      { binding: "body", shapeId: "3", elementId: "page_03_body", paragraphs: 1 },
+    ],
+  },
+];
+
+const deckSlides = [
+  { id: "s1", position: 0, quality_report: { engine: "pptx_clone", archetype: "page_01" } },
+  { id: "s2", position: 1, quality_report: { engine: "pptx_clone", archetype: "page_03" } },
+];
+
+const deckElements = [
+  { slide_id: "s1", type: "text", content: { elementId: "page_01_title", text: "JURNALISTIKA ASOSLARI" } },
+  { slide_id: "s1", type: "text", content: { elementId: "page_01_body", text: "Talabalar tahririyati" } },
+  { slide_id: "s1", type: "image", content: { slot: "art_1" } },
+  { slide_id: "s2", type: "text", content: { elementId: "page_03_title", text: "RAHMAT" } },
+  { slide_id: "s2", type: "text", content: { elementId: "page_03_body", text: "Ko‘rishguncha" } },
+];
+
+test("the plan follows the deck's own order and its own words", () => {
+  const planned = planClone(deckSlides, deckElements, profiles);
+  assert.equal(planned.ok, true);
+  assert.deepEqual(planned.plan.map((entry) => entry.sourcePart),
+    ["ppt/slides/slide1.xml", "ppt/slides/slide3.xml"]);
+  assert.deepEqual(planned.plan[0].edits[0], { shapeId: "2", paragraphs: ["JURNALISTIKA ASOSLARI"] });
+});
+
+test("a slide bound to no template page is refused rather than approximated", () => {
+  const orphan = [{ id: "s9", position: 0, quality_report: { archetype: "cover_01" } }];
+  const planned = planClone(orphan, [], profiles);
+  assert.equal(planned.ok, false);
+  assert.match(planned.reason, /bog'lanmagan/);
+});
+
+test("copy the user edited is what gets exported", () => {
+  const edited = deckElements.map((element) =>
+    element.content.elementId === "page_01_title"
+      ? { ...element, content: { ...element.content, text: "QO‘LDA TAHRIRLANGAN" } }
+      : element);
+  const planned = planClone(deckSlides, edited, profiles);
+  assert.equal(planned.plan[0].edits[0].paragraphs[0], "QO‘LDA TAHRIRLANGAN");
+});
+
+test("a multi-line box is written back as the number of paragraphs it had", () => {
+  const threeLine = [{
+    archetype_id: "page_01",
+    source_slide_part: "ppt/slides/slide1.xml",
+    text_map: [{ binding: "bullets", shapeId: "3", elementId: "page_01_bullets", paragraphs: 3 }],
+  }];
+  const rows = [{ slide_id: "s1", type: "text", content: { elementId: "page_01_bullets", text: "Bir\nIkki\nUch\nTo‘rt" } }];
+  const planned = planClone([deckSlides[0]], rows, threeLine);
+  // Three paragraphs, the surplus folded into the last rather than dropped.
+  assert.equal(planned.plan[0].edits[0].paragraphs.length, 3);
+  assert.equal(planned.plan[0].edits[0].paragraphs[2], "Uch To‘rt");
+});
+
+test("an export is the template's package with the deck's words in it", async () => {
+  const bytes = await zip([...deck()].map(([name, value]) => ({ name, bytes: value })));
+  const result = await exportByCloning(bytes, deckSlides, deckElements, profiles);
+  assert.equal(result.ok, true, result.ok ? "" : result.reason);
+
+  const entries = await unzip(result.bytes);
+  const slide = decoder.decode(entries.get("ppt/slides/slide1.xml"));
+  assert.equal(readTextObjects(slide)[0].text, "JURNALISTIKA ASOSLARI");
+  assert.ok(slide.includes('<a:blip r:embed="rId2"/>'), "the photograph's relationship was lost");
+  assert.ok(entries.has("ppt/media/photographer.png"), "the photograph itself was lost");
+  assert.ok(entries.has("ppt/media/newsprint.png"), "the master's texture was lost");
+  assert.equal(result.report.slides[0].nonTextObjectsPreserved, 2);
+});
+
+test("template copy that survived fails the export rather than shipping", async () => {
+  const bytes = await zip([...deck()].map(([name, value]) => ({ name, bytes: value })));
+  // The body is left unmentioned, so its sample sentence would still be there.
+  const thin = [{ ...profiles[0], text_map: [profiles[0].text_map[0]] }];
+  const result = await exportByCloning(bytes, [deckSlides[0]], deckElements, thin);
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /almashtirilmagan/);
+});

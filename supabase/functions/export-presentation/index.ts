@@ -13,6 +13,7 @@ import {
 } from "../_shared/export-model.ts";
 import { bodyJson, errorResponse, HttpError, json } from "../_shared/http.ts";
 import { renderPdf } from "../_shared/pdf-export.ts";
+import { exportByCloning } from "../_shared/pptx-clone-export.ts";
 import { renderPptx } from "../_shared/pptx-export.ts";
 
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void } | undefined;
@@ -75,9 +76,28 @@ async function generateExport(
     await updateJob(service, jobId, ownerId, { progress: 20 });
 
     const assets = new ExportAssetLoader(service, ownerId, presentationId);
-    const bytes = format === "pdf"
-      ? await renderPdf(deck, assets)
-      : await renderPptx(deck, assets);
+
+    /**
+     * A deck made from a PowerPoint template is not drawn — it is that
+     * template with the chosen pages kept and their words replaced.
+     *
+     * Only for `.pptx`: a PDF has to be drawn whatever the design came from,
+     * because nothing here can print an OOXML package. That is the split the
+     * rule allows — preview and PDF do their best, and the PowerPoint file the
+     * customer opens is the original one.
+     */
+    const cloned = format === "pptx" ? await cloneIfTemplate(service, presentationId) : null;
+    if (cloned && !cloned.ok) {
+      // Refused rather than redrawn. An approximation that looks like the
+      // design was recreated is the one outcome this mode exists to prevent.
+      throw new Error(cloned.reason);
+    }
+
+    const bytes = cloned?.ok
+      ? cloned.bytes
+      : format === "pdf"
+        ? await renderPdf(deck, assets)
+        : await renderPptx(deck, assets);
     if (!bytes.byteLength || bytes.byteLength > MAX_EXPORT_BYTES) throw new Error("Generated export has an invalid size");
     await updateJob(service, jobId, ownerId, { progress: 85 });
 
@@ -119,6 +139,64 @@ async function generateExport(
       console.error("export failure status could not be saved", updateError);
     }
   }
+}
+
+/**
+ * The clone path, when this deck's design came from an uploaded file.
+ *
+ * Returns null where it does not apply, so the ordinary exporter runs
+ * untouched for every design that was written rather than imported.
+ */
+async function cloneIfTemplate(service: SupabaseClient, presentationId: string) {
+  const presentation = await service
+    .from("presentations")
+    .select("design_id, design_version")
+    .eq("id", presentationId)
+    .maybeSingle();
+  if (presentation.error || !presentation.data?.design_id) return null;
+
+  const design = await service
+    .from("presentation_designs")
+    .select("design_source, source_asset_path, published_version")
+    .eq("id", presentation.data.design_id)
+    .maybeSingle();
+  if (design.error || design.data?.design_source !== "pptx") return null;
+
+  const path = design.data.source_asset_path;
+  if (!path) {
+    return { ok: false as const, reason: "Shablon fayli topilmadi — dizaynni qayta import qiling." };
+  }
+
+  const version = presentation.data.design_version ?? design.data.published_version ?? 1;
+  const [slides, profiles, file] = await Promise.all([
+    service.from("slides").select("id, position, quality_report").eq("presentation_id", presentationId),
+    service.from("design_slide_profiles")
+      .select("archetype_id, source_slide_part, text_map")
+      .eq("design_id", presentation.data.design_id)
+      .eq("design_version", version),
+    service.storage.from("design-source").download(path),
+  ]);
+
+  if (slides.error || profiles.error) return null;
+  if (file.error || !file.data) {
+    return { ok: false as const, reason: "Shablon fayli o‘qilmadi." };
+  }
+  if ((profiles.data ?? []).length === 0) {
+    return { ok: false as const, reason: "Dizayn sahifalari shablonga bog‘lanmagan — qayta import qiling." };
+  }
+
+  const elements = await service
+    .from("slide_elements")
+    .select("slide_id, type, content")
+    .in("slide_id", (slides.data ?? []).map((slide) => slide.id));
+  if (elements.error) return null;
+
+  return exportByCloning(
+    new Uint8Array(await file.data.arrayBuffer()),
+    (slides.data ?? []) as never,
+    (elements.data ?? []) as never,
+    (profiles.data ?? []) as never,
+  );
 }
 
 Deno.serve(async (request) => {

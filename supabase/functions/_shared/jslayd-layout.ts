@@ -270,7 +270,14 @@ export function buildJslaydSlides(input: BuildInput): { slides: SlideRow[]; elem
       quality_score: checked.score,
       quality_report: {
         ...checked.report,
-        engine: "jslayd",
+        /**
+         * Which engine will produce the exported file.
+         *
+         * A design imported from PowerPoint is not exported by drawing it —
+         * the original package is cloned and its words replaced — and the
+         * exporter has to be able to tell without re-reading the design.
+         */
+        engine: input.design.profiles?.length ? "pptx_clone" : "jslayd",
         design: input.design.slug,
         design_version: input.design.version,
         archetype: selection.archetype.id,
