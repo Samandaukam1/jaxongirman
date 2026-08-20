@@ -808,8 +808,15 @@ function convertFrame(graphicFrame: XmlNode, transform: GroupTransform, zIndex: 
 }
 
 /** Walks a shape tree, flattening groups as it goes. */
-function collect(tree: XmlNode, transform: GroupTransform, context: ShapeContext, elements: ImportedElement[]): void {
+function collect(
+  tree: XmlNode,
+  transform: GroupTransform,
+  context: ShapeContext,
+  elements: ImportedElement[],
+  keep: (shape: XmlNode) => boolean = () => true,
+): void {
   for (const node of tree.children) {
+    if (!keep(node)) continue;
     if (node.name === "sp") {
       const element = convertShape(node, transform, elements.length, context);
       if (element) elements.push(element);
@@ -820,9 +827,118 @@ function collect(tree: XmlNode, transform: GroupTransform, context: ShapeContext
       const element = convertFrame(node, transform, elements.length, context);
       if (element) elements.push(element);
     } else if (node.name === "grpSp") {
-      collect(node, groupTransform(path(node, "grpSpPr", "xfrm"), transform), context, elements);
+      collect(node, groupTransform(path(node, "grpSpPr", "xfrm"), transform), context, elements, keep);
     }
   }
+}
+
+/* ------------------------------------------------------------- the layers */
+
+type Layer = { kind: "master" | "layout"; part: string; node: XmlNode | null };
+
+/**
+ * The parts a slide is drawn on top of, bottom first.
+ *
+ * A template's design lives here — the field, the texture, the photographs, the
+ * rules — and the slide itself often holds nothing but a title. Following the
+ * chain is the difference between importing a design and importing a rectangle.
+ */
+function layoutChain(entries: ZipEntries, slidePart: string): Layer[] {
+  const layoutPart = [...relationships(entries, slidePart).values()].find((name) => name.includes("slideLayout"));
+  if (!layoutPart) return [];
+  const masterPart = [...relationships(entries, layoutPart).values()].find((name) => name.includes("slideMaster"));
+
+  const layers: Layer[] = [];
+  if (masterPart) layers.push({ kind: "master", part: masterPart, node: part(entries, masterPart) });
+  layers.push({ kind: "layout", part: layoutPart, node: part(entries, layoutPart) });
+  return layers;
+}
+
+/** The placeholder slots the slide fills itself, which its layers must not repeat. */
+function filledSlots(tree: XmlNode): Set<string> {
+  const filled = new Set<string>();
+  for (const node of [...descendants(tree, "sp"), ...descendants(tree, "pic")]) {
+    const placeholder = placeholderOf(node);
+    if (!placeholder) continue;
+    filled.add(`${placeholder.kind}:${placeholder.index ?? ""}`);
+    if (placeholder.kind === "title" || placeholder.kind === "ctrTitle") filled.add("title:*");
+  }
+  return filled;
+}
+
+/** Chrome the deck supplies for itself, wherever a template drew it. */
+const LAYER_CHROME = new Set(["sldNum", "ftr", "dt"]);
+
+/**
+ * Whether a shape from a layer belongs on the finished slide.
+ *
+ * A placeholder is a hole: the slide's own version of it wins, and the layer's
+ * copy would draw the prompt text underneath. Everything that is not a
+ * placeholder is design — a panel, a rule, a photograph — and is kept.
+ */
+function keepFromLayer(shape: XmlNode, filled: ReadonlySet<string>): boolean {
+  const placeholder = placeholderOf(shape);
+  if (!placeholder) return true;
+  if (LAYER_CHROME.has(placeholder.kind)) return false;
+  if (placeholder.kind === "title" || placeholder.kind === "ctrTitle") return !filled.has("title:*");
+  // An unfilled placeholder holds only its own prompt text, which is dropped
+  // downstream anyway; keeping it here costs nothing and losing a filled one
+  // would draw the same words twice.
+  return !filled.has(`${placeholder.kind}:${placeholder.index ?? ""}`);
+}
+
+/**
+ * What the slide is painted on, followed down the chain.
+ *
+ * A background is as often a picture as a colour — a texture, a photograph, a
+ * printed field — and reading only `solidFill` on the slide itself found
+ * neither of them on a real template.
+ */
+function backgroundOf(
+  entries: ZipEntries,
+  slidePart: string,
+  document: XmlNode | null,
+  chain: readonly Layer[],
+  theme: Map<string, string>,
+  warnings: string[],
+): { color: string | null; picture: ImportedElement | null } {
+  // Nearest first: the slide's own background beats its layout's, which beats
+  // the master's.
+  const sources: { node: XmlNode | null; part: string }[] = [
+    { node: document, part: slidePart },
+    ...[...chain].reverse().map((layer) => ({ node: layer.node, part: layer.part })),
+  ];
+
+  for (const source of sources) {
+    const bg = path(source.node, "cSld", "bg", "bgPr");
+    if (!bg) continue;
+
+    const colour = colourOf(child(bg, "solidFill"), theme);
+    if (colour) return { color: colour, picture: null };
+
+    const embed = attribute(path(bg, "blipFill", "blip"), "embed");
+    if (!embed) continue;
+    // A background picture needs the relationships of the part that declared it.
+    const target = relationships(entries, source.part).get(embed) ?? null;
+    const media = target ? mediaFor(entries, target) : null;
+    if (!media) {
+      warnings.push("Orqa fon rasmi o‘qilmadi.");
+      continue;
+    }
+    return {
+      color: null,
+      picture: {
+        type: "image",
+        x: 0, y: 0, width: CANVAS_WIDTH, height: CANVAS_HEIGHT,
+        rotation: 0, zIndex: -1, opacity: 1,
+        style: { objectFit: "cover", borderRadius: 0 },
+        content: {},
+        media,
+      },
+    };
+  }
+
+  return { color: null, picture: null };
 }
 
 /** The shape marked as the slide's title, which becomes the slide's name. */
@@ -881,12 +997,39 @@ export function readPptx(entries: ZipEntries): ImportedDeck {
     if (!tree) continue;
 
     const rels = relationships(entries, slidePart);
-    // Rebuilt per slide: two slides of one deck can be made from two layouts.
-    const context: ShapeContext = {
-      entries, rels, scale, theme, fonts, warnings,
-      inherit: inheritanceFor(entries, slidePart),
-    };
+    const inherit = inheritanceFor(entries, slidePart);
+    const chain = layoutChain(entries, slidePart);
+
+    /**
+     * A slide is its own shapes drawn on top of its layout's, drawn on top of
+     * its master's.
+     *
+     * Reading only the slide is what made an imported template arrive as a
+     * coloured rectangle with a few bars on it: a designer puts the field, the
+     * texture, the photographs, the rules and the page furniture on the layout
+     * and the master, and leaves the slide holding almost nothing. Everything
+     * that made the design recognisable lived in the two parts nobody read.
+     *
+     * Drawn bottom-up, which is the order PowerPoint composites them in.
+     */
     const elements: ImportedElement[] = [];
+    const filled = filledSlots(tree);
+
+    for (const layer of chain) {
+      if (layer.kind === "master" && attribute(document, "showMasterSp") === "0") continue;
+      const layerTree = path(layer.node, "cSld", "spTree");
+      if (!layerTree) continue;
+      const layerContext: ShapeContext = {
+        entries,
+        // A picture on the layout resolves through the layout's relationships;
+        // the slide's would find nothing, or the wrong thing.
+        rels: relationships(entries, layer.part),
+        scale, theme, fonts, warnings, inherit,
+      };
+      collect(layerTree, IDENTITY, layerContext, elements, (shape) => keepFromLayer(shape, filled));
+    }
+
+    const context: ShapeContext = { entries, rels, scale, theme, fonts, warnings, inherit };
     collect(tree, IDENTITY, context, elements);
 
     const notesPart = [...rels.values()].find((name) => name.includes("notesSlide"));
@@ -895,12 +1038,20 @@ export function readPptx(entries: ZipEntries): ImportedDeck {
       ? descendants(notesBody, "txBody").map((body) => paragraphsOf(body).map((paragraph) => paragraph.text).join("\n")).join("\n").trim()
       : "";
 
-    const background = colourOf(path(document, "cSld", "bg", "bgPr", "solidFill"), theme);
+    /**
+     * The background, followed down the same chain.
+     *
+     * A slide that states none is not a slide with no background — it is a
+     * slide showing its layout's, or its master's. And a background is as
+     * often a picture as a colour, which is where the newspaper texture went.
+     */
+    const painted = backgroundOf(entries, slidePart, document, chain, theme, warnings);
+    if (painted.picture) elements.unshift(painted.picture);
 
     slides.push({
       title: titleOf(tree),
       speakerNotes: notes ? notes.slice(0, 4000) : null,
-      background: background ? { color: background } : {},
+      background: painted.color ? { color: painted.color } : {},
       elements,
     });
   }

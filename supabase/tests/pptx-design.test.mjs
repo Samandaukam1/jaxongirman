@@ -705,3 +705,113 @@ test("a page of every shape feature still reads back as a stored design", () => 
 test("a shape that paints nothing is still not carried", () => {
   assert.equal(drawn('<a:prstGeom prst="rect"/><a:noFill/>'), undefined);
 });
+
+/* ------------------------------------------- what the slide is drawn on top of */
+
+/**
+ * A designer puts the design on the layout and the master.
+ *
+ * The slide itself often holds nothing but a title. Reading only the slide is
+ * what made an imported template arrive as a coloured rectangle with a few bars
+ * on it: the field, the texture, the photographs and the rules all live in the
+ * two parts nobody was reading.
+ */
+test("the layout's own shapes are part of the slide", () => {
+  const deck = readPptx(template({
+    slides: [slide(textShape({ placeholder: '<p:ph type="title"/>', runs: run("Sarlavha", 'sz="4000"') }))],
+    layout: `<p:sldLayout><p:cSld><p:spTree>
+      <p:sp><p:nvSpPr><p:nvPr/></p:nvSpPr><p:spPr>${frame(0, 0, 12, 2)}
+        <a:prstGeom prst="rect"/><a:solidFill><a:srgbClr val="FFE500"/></a:solidFill></p:spPr></p:sp>
+    </p:spTree></p:cSld></p:sldLayout>`,
+  }));
+  const painted = deck.slides[0].elements.filter((element) => element.type === "shape");
+  assert.equal(painted.length, 1, "the layout's panel was dropped");
+  assert.equal(painted[0].style.fill, "#ffe500");
+});
+
+test("the master's shapes are underneath the layout's, and both under the slide's", () => {
+  const deck = readPptx(template({
+    slides: [slide(`<p:sp><p:nvSpPr><p:nvPr/></p:nvSpPr><p:spPr>${frame(1, 1, 2, 2)}
+      <a:prstGeom prst="rect"/><a:solidFill><a:srgbClr val="000000"/></a:solidFill></p:spPr></p:sp>`)],
+    layout: `<p:sldLayout><p:cSld><p:spTree>
+      <p:sp><p:nvSpPr><p:nvPr/></p:nvSpPr><p:spPr>${frame(0, 0, 12, 4)}
+        <a:prstGeom prst="rect"/><a:solidFill><a:srgbClr val="FFE500"/></a:solidFill></p:spPr></p:sp>
+    </p:spTree></p:cSld></p:sldLayout>`,
+    master: `<p:sldMaster><p:cSld><p:spTree>
+      <p:sp><p:nvSpPr><p:nvPr/></p:nvSpPr><p:spPr>${frame(0, 0, 12, 12)}
+        <a:prstGeom prst="rect"/><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></p:spPr></p:sp>
+    </p:spTree></p:cSld></p:sldMaster>`,
+  }));
+  const fills = deck.slides[0].elements.map((element) => element.style.fill);
+  assert.deepEqual(fills, ["#ffffff", "#ffe500", "#000000"], "the compositing order is wrong");
+});
+
+test("a placeholder the slide fills is not drawn twice", () => {
+  const deck = readPptx(template({
+    slides: [slide(textShape({ placeholder: '<p:ph type="title"/>', runs: run("Haqiqiy sarlavha", 'sz="4000"') }))],
+    layout: `<p:sldLayout><p:cSld><p:spTree>
+      <p:sp><p:nvSpPr><p:nvPr><p:ph type="title"/></p:nvPr></p:nvSpPr><p:spPr>${frame(1, 1, 10, 2)}</p:spPr>
+        <p:txBody><a:p><a:r><a:rPr sz="4000"/><a:t>Sarlavhani kiriting</a:t></a:r></a:p></p:txBody></p:sp>
+    </p:spTree></p:cSld></p:sldLayout>`,
+  }));
+  const texts = deck.slides[0].elements.filter((element) => element.type === "text");
+  assert.equal(texts.length, 1);
+  assert.equal(texts[0].content.text, "Haqiqiy sarlavha");
+});
+
+test("page furniture from the master is left behind", () => {
+  const deck = readPptx(template({
+    slides: [slide(textShape({ placeholder: '<p:ph type="title"/>', runs: run("Sarlavha", 'sz="4000"') }))],
+    master: `<p:sldMaster><p:cSld><p:spTree>
+      <p:sp><p:nvSpPr><p:nvPr><p:ph type="sldNum"/></p:nvPr></p:nvSpPr><p:spPr>${frame(11, 11, 1, 1)}</p:spPr>
+        <p:txBody><a:p><a:r><a:rPr sz="1200"/><a:t>12</a:t></a:r></a:p></p:txBody></p:sp>
+      <p:sp><p:nvSpPr><p:nvPr><p:ph type="ftr"/></p:nvPr></p:nvSpPr><p:spPr>${frame(0, 11, 6, 1)}</p:spPr>
+        <p:txBody><a:p><a:r><a:rPr sz="1200"/><a:t>Studio 2019</a:t></a:r></a:p></p:txBody></p:sp>
+    </p:spTree></p:cSld></p:sldMaster>`,
+  }));
+  const written = JSON.stringify(deck.slides[0].elements);
+  assert.ok(!written.includes("Studio 2019"), "the studio's footer came through");
+  assert.ok(!written.includes(">12<"), "the page number came through");
+});
+
+test("a slide that opts out of the master gets none of it", () => {
+  const entries = template({
+    slides: ['<p:sld showMasterSp="0"><p:cSld><p:spTree>'
+      + `<p:sp><p:nvSpPr><p:nvPr/></p:nvSpPr><p:spPr>${frame(1, 1, 2, 2)}`
+      + '<a:prstGeom prst="rect"/><a:solidFill><a:srgbClr val="000000"/></a:solidFill></p:spPr></p:sp>'
+      + "</p:spTree></p:cSld></p:sld>"],
+    master: `<p:sldMaster><p:cSld><p:spTree>
+      <p:sp><p:nvSpPr><p:nvPr/></p:nvSpPr><p:spPr>${frame(0, 0, 12, 12)}
+        <a:prstGeom prst="rect"/><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></p:spPr></p:sp>
+    </p:spTree></p:cSld></p:sldMaster>`,
+  });
+  const deck = readPptx(entries);
+  assert.equal(deck.slides[0].elements.length, 1);
+});
+
+test("a background picture on the layout becomes the slide's ground", () => {
+  const entries = template({
+    slides: [slide(textShape({ placeholder: '<p:ph type="title"/>', runs: run("Sarlavha", 'sz="4000"') }))],
+    layout: '<p:sldLayout><p:cSld><p:bg><p:bgPr><a:blipFill><a:blip r:embed="rId7"/></a:blipFill></p:bgPr></p:bg>'
+      + "<p:spTree/></p:cSld></p:sldLayout>",
+  });
+  entries.set("ppt/media/paper.png", bytes("PNG"));
+  entries.set("ppt/slideLayouts/_rels/slideLayout1.xml.rels", bytes(
+    '<Relationships><Relationship Id="rId1" Target="../slideMasters/slideMaster1.xml"/>'
+    + '<Relationship Id="rId7" Target="../media/paper.png"/></Relationships>'));
+
+  const deck = readPptx(entries);
+  const ground = deck.slides[0].elements[0];
+  assert.equal(ground.type, "image", "the texture was not carried");
+  assert.equal(ground.media.part, "ppt/media/paper.png");
+  assert.equal(ground.width, 1000);
+});
+
+test("a colour on the master is used when nothing nearer states one", () => {
+  const deck = readPptx(template({
+    slides: [slide(textShape({ placeholder: '<p:ph type="title"/>', runs: run("S", 'sz="4000"') }))],
+    master: '<p:sldMaster><p:cSld><p:bg><p:bgPr><a:solidFill><a:srgbClr val="FFE500"/></a:solidFill></p:bgPr></p:bg>'
+      + "<p:spTree/></p:cSld></p:sldMaster>",
+  }));
+  assert.equal(deck.slides[0].background.color, "#ffe500");
+});
