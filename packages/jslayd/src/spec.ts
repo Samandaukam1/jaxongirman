@@ -306,6 +306,19 @@ export const BINDINGS = [
   "title", "subtitle", "body", "bullets", "purpose", "section_label",
   "author", "teacher", "date", "brand", "page_number", "slide_count",
   "quote_text", "quote_attribution",
+  /**
+   * One bullet each, for a page drawn as parallel columns.
+   *
+   * A design imported from a template routinely lays three or four peer text
+   * boxes across one band — three ways of saying the same kind of thing. There
+   * was no way to address them: one `bullets` binding draws one list, and
+   * binding all four to it would repeat the same list four times. So the
+   * surplus boxes were dropped, and a four-column page arrived as a one-column
+   * page with three holes.
+   *
+   * Six is past what any composition uses and short of a list nobody reads.
+   */
+  "bullet_1", "bullet_2", "bullet_3", "bullet_4", "bullet_5", "bullet_6",
   "stat_value", "stat_label", "stat_1", "stat_2", "stat_3",
   "chart_data", "chart_title",
   "table_data", "table_title",

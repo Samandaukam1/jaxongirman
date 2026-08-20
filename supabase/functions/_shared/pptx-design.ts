@@ -47,6 +47,7 @@ import {
   type Binding,
   type ColorRole,
   type Condition,
+  type ShapeKind,
   type FontRole,
   type Tier,
 } from "./jslayd/spec.ts";
@@ -359,30 +360,84 @@ export function assignBindings(slide: ImportedSlide): Map<ImportedElement, Bindi
     if (kind && kind in BY_PLACEHOLDER) {
       const binding = BY_PLACEHOLDER[kind]!;
       if (binding === null) continue;
-      if (!taken.has(binding) || binding === "body") {
-        if (!taken.has(binding)) { assigned.set(box, binding); taken.add(binding); continue; }
-      }
+      if (!taken.has(binding)) { assigned.set(box, binding); taken.add(binding); continue; }
     }
     unplaced.push(box);
   }
 
-  for (const box of unplaced) {
-    if (!taken.has("title")) { assigned.set(box, "title"); taken.add("title"); continue; }
-    if (!taken.has("bullets") && looksBulleted(box)) { assigned.set(box, "bullets"); taken.add("bullets"); continue; }
-    if (!taken.has("subtitle")) { assigned.set(box, "subtitle"); taken.add("subtitle"); continue; }
-    if (!taken.has("body")) { assigned.set(box, "body"); taken.add("body"); continue; }
-    if (!taken.has("bullets")) { assigned.set(box, "bullets"); taken.add("bullets"); continue; }
-    // Out of slots. The box is dropped by the caller, which counts it.
+  const sizeOf = (box: ImportedElement) => box.typography?.fontSize ?? 0;
+  const rest = [...unplaced];
+
+  /**
+   * A title is a box that stands out.
+   *
+   * Taking the largest unconditionally is what made columns disappear: on a
+   * page of four peer boxes the first became the title and the second the
+   * subtitle, leaving two of the four drawn. If everything is the same size,
+   * nothing is the title — the page is a band of columns and its heading is a
+   * placeholder somewhere above.
+   */
+  if (!taken.has("title") && rest.length > 0) {
+    const largest = rest[0]!;
+    const next = rest[1];
+    if (!next || sizeOf(largest) >= sizeOf(next) * 1.25) {
+      assigned.set(largest, "title");
+      taken.add("title");
+      rest.shift();
+    }
+  }
+
+  if (rest.length === 1) {
+    const only = rest[0]!;
+    /**
+     * One line under a heading is a subtitle; a block under one is the body.
+     *
+     * Told apart by the box rather than by the page: a designer gives a
+     * subtitle a single line's worth of height and a body several, and that is
+     * the difference, on a cover and on a content page alike. Counting boxes
+     * instead made every ordinary "heading plus text" page a cover.
+     */
+    const written = typeof only.content.text === "string" ? only.content.text : "";
+    const oneLine = only.height <= CANVAS_HEIGHT * 0.14 && written.length < 90;
+    const binding: Binding = oneLine && !taken.has("subtitle")
+      ? "subtitle"
+      : looksBulleted(only) && !taken.has("bullets") ? "bullets" : "body";
+    if (!taken.has(binding)) { assigned.set(only, binding); taken.add(binding); }
+  } else if (rest.length > 1) {
+    /**
+     * Several peer boxes are parallel points, one each.
+     *
+     * Ordered as a reader takes them — down, then across — rather than by size,
+     * because the first point belongs in the first column and size says nothing
+     * about which that is.
+     */
+    const reading = [...rest].sort((first, second) =>
+      Math.round(first.y / 40) - Math.round(second.y / 40) || first.x - second.x);
+    reading.forEach((box, index) => {
+      // Past six the page is something drawn by hand rather than composed; the
+      // caller counts what is left over and says so.
+      if (index < COLUMN_BINDINGS.length) assigned.set(box, COLUMN_BINDINGS[index]!);
+    });
   }
 
   return assigned;
 }
+
+/** One binding per column, in the order a reader takes them. */
+const COLUMN_BINDINGS: readonly Binding[] = [
+  "bullet_1", "bullet_2", "bullet_3", "bullet_4", "bullet_5", "bullet_6",
+];
 
 /** A binding's guard, so a page drops the boxes this deck has nothing for. */
 const GUARD: Partial<Record<Binding, Condition>> = {
   subtitle: "hasSubtitle",
   body: "hasBody",
   bullets: "hasBullets",
+  // A column whose point was never written resolves to nothing and is not
+  // drawn, so the guard only has to keep the whole band off a slide with no
+  // points at all.
+  bullet_1: "hasBullets", bullet_2: "hasBullets", bullet_3: "hasBullets",
+  bullet_4: "hasBullets", bullet_5: "hasBullets", bullet_6: "hasBullets",
   quote_text: "hasQuote",
   quote_attribution: "hasQuote",
   sources: "hasSources",
@@ -438,6 +493,28 @@ const FALLBACK_TYPOGRAPHY: Typography = {
   align: "left", verticalAlign: "top", lineHeightRatio: 1.2, letterSpacing: 0,
   transform: "none", color: "#151a18", mixed: false,
 };
+
+/**
+ * Which of JSLAYD's shapes is closest to the one the file named.
+ *
+ * OOXML has near two hundred presets and JSLAYD draws seven, so most of them
+ * land on a rectangle. That is the honest answer rather than a lossy one: a
+ * renderer that cannot draw a chevron draws its box, which is where the chevron
+ * was, in the colour it was, and the composition still reads.
+ */
+function shapeKindOf(preset: string | undefined, cornerRadius: number): ShapeKind {
+  switch (preset) {
+    case "ellipse": return "ellipse";
+    case "roundRect": case "round1Rect": case "round2SameRect": case "round2DiagRect":
+      return "roundedRectangle";
+    case "triangle": case "rtTriangle": return "triangle";
+    case "line": case "straightConnector1": return "line";
+    case "pentagon": case "hexagon": case "heptagon": case "octagon":
+    case "decagon": case "dodecagon": case "diamond":
+      return "polygon";
+    default: return cornerRadius > 0 ? "roundedRectangle" : "rectangle";
+  }
+}
 
 /* --------------------------------------------------------------- purposes */
 
@@ -611,25 +688,63 @@ function convertSlide(
       continue;
     }
 
-    const fill = typeof element.style.fill === "string" && element.style.fill !== "transparent"
-      ? element.style.fill
-      : null;
-    const stroke = typeof element.style.stroke === "string" ? element.style.stroke : null;
-    if (!fill && !stroke) continue;
+    /**
+     * A drawn shape, as it was drawn.
+     *
+     * It used to become a rectangle with a flat fill and a hairline border,
+     * which is a redrawing rather than an import: a template's rounded panel,
+     * its soft shadow, its gradient and its half-transparent overlay are the
+     * design, and every one of them was thrown away.
+     */
+    const detail = element.shape;
+    const fill = detail?.fill
+      ?? (typeof element.style.fill === "string" && element.style.fill !== "transparent" ? element.style.fill : null);
+    const stroke = detail?.stroke ?? (typeof element.style.stroke === "string" ? element.style.stroke : null);
+    const gradient = detail?.gradient ?? null;
+    if (!fill && !stroke && !gradient) continue;
+
+    const radius = detail?.cornerRadius ?? 0;
     elements.push({
       type: "decorative",
       id: `${id}_shape_${elements.length}`,
       geometry,
       when: "always",
-      opacity: element.opacity,
+      // A half-transparent fill is drawn as a half-transparent element. The two
+      // differ where a shape has both a translucent fill and a solid stroke,
+      // which no template here does and which JSLAYD has no way to say.
+      opacity: Math.round(element.opacity * (detail?.fillOpacity ?? 1) * 100) / 100,
       grow: false,
-      shape: "rectangle",
-      fill: fill ? colourValue(fill, family) : null,
-      corners: null,
-      border: stroke ? { width: 1, color: colourValue(stroke, family), style: "solid", opacity: 1 } : null,
-      shadows: [],
-      sides: null,
-      thickness: 0,
+      shape: shapeKindOf(detail?.preset, radius),
+      fill: gradient
+        ? {
+          type: "linear",
+          angle: gradient.angle,
+          stops: gradient.stops.map((stop) => ({ offset: stop.offset, color: colourValue(stop.color, family) })),
+        }
+        : fill ? colourValue(fill, family) : null,
+      corners: radius > 0
+        ? { topLeft: radius, topRight: radius, bottomRight: radius, bottomLeft: radius }
+        : null,
+      border: stroke
+        ? {
+          width: Math.max(0.5, detail?.strokeWidth || 1),
+          color: colourValue(stroke, family),
+          style: "solid",
+          opacity: 1,
+        }
+        : null,
+      shadows: detail?.shadow
+        ? [{
+          offsetX: detail.shadow.offsetX,
+          offsetY: detail.shadow.offsetY,
+          blur: detail.shadow.blur,
+          spread: 0,
+          opacity: detail.shadow.opacity,
+          color: colourValue(detail.shadow.color, family),
+        }]
+        : [],
+      sides: detail?.sides && detail.sides > 4 ? detail.sides : null,
+      thickness: detail?.preset === "line" ? Math.max(1, detail.strokeWidth) : 0,
     });
   }
 

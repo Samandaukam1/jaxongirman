@@ -72,6 +72,34 @@ export type Typography = {
   mixed: boolean;
 };
 
+/**
+ * A drawn shape, as the file drew it.
+ *
+ * Kept apart from `style` for the same reason `typography` is: the editor draws
+ * a rectangle with a fill and this app has always shown it one, which is right
+ * for a deck somebody imported to keep working on. A design template is the
+ * other case — the rounded corner, the gradient, the soft shadow and the
+ * exact stroke width are the design, and flattening them to a rectangle is
+ * redrawing the template rather than importing it.
+ */
+export type ShapeDetail = {
+  /** `rect`, `roundRect`, `ellipse`, `triangle`, `line`, … as OOXML names it. */
+  preset: string;
+  /** Corner radius in canvas units, already resolved from the adjust value. */
+  cornerRadius: number;
+  /** `#rrggbb`, a gradient, or nothing where the shape is unpainted. */
+  fill: string | null;
+  gradient: { angle: number; stops: { offset: number; color: string }[] } | null;
+  /** 0–1. A fill's own transparency, which OOXML states on the colour. */
+  fillOpacity: number;
+  stroke: string | null;
+  /** Canvas units, from the line width the file gives in EMU. */
+  strokeWidth: number;
+  shadow: { offsetX: number; offsetY: number; blur: number; opacity: number; color: string } | null;
+  /** Regular polygons only; how many sides the preset has. */
+  sides: number | null;
+};
+
 /** What a shape stands in for, when it stands in for something. */
 export type PlaceholderRef = {
   /** `title`, `ctrTitle`, `subTitle`, `body`, `sldNum`, `ftr`, `dt`, `pic`, … */
@@ -95,6 +123,8 @@ export type ImportedElement = {
   media?: ImportedMedia;
   /** Set on text: what the file asked for, as opposed to what this app draws. */
   typography?: Typography;
+  /** Set on shapes: how the file drew it, as opposed to how this app draws it. */
+  shape?: ShapeDetail;
   /** Set where the shape was a placeholder, which is what names its purpose. */
   placeholder?: PlaceholderRef;
 };
@@ -527,6 +557,100 @@ function readTextLook(
   };
 }
 
+/* -------------------------------------------------------------- shape look */
+
+/** How many sides the regular polygons OOXML names have. */
+const POLYGON_SIDES: Record<string, number> = {
+  triangle: 3, rtTriangle: 3, diamond: 4, pentagon: 5, hexagon: 6,
+  heptagon: 7, octagon: 8, decagon: 10, dodecagon: 12,
+};
+
+/** A colour's own transparency, which OOXML states on the colour rather than beside it. */
+function alphaOf(holder: XmlNode | null): number {
+  // `<a:solidFill><a:srgbClr val="2F6FED"><a:alpha val="50000"/></a:srgbClr></a:solidFill>`
+  // — the transparency hangs off the colour, in thousandths of a percent.
+  const colour = child(holder, "srgbClr") ?? child(holder, "schemeClr");
+  const alpha = integerAttribute(child(colour, "alpha"), "val");
+  return alpha === null ? 1 : Math.max(0, Math.min(1, alpha / 100000));
+}
+
+/**
+ * A gradient, as the two ends of a line.
+ *
+ * OOXML states the angle in sixtythousandths of a degree and measures it
+ * clockwise from east; every renderer here measures the same way, so the number
+ * only has to be divided.
+ */
+function gradientOf(node: XmlNode | null, theme: Map<string, string>): ShapeDetail["gradient"] {
+  const list = child(node, "gsLst");
+  if (!list) return null;
+  const stops: { offset: number; color: string }[] = [];
+  for (const stop of childrenNamed(list, "gs")) {
+    const colour = colourOf(stop, theme);
+    if (!colour) continue;
+    stops.push({ offset: Math.max(0, Math.min(1, (integerAttribute(stop, "pos") ?? 0) / 100000)), color: colour });
+  }
+  if (stops.length < 2) return null;
+  const angle = (integerAttribute(child(node, "lin"), "ang") ?? 0) / 60000;
+  return { angle: Math.round(angle) % 360, stops };
+}
+
+/**
+ * The drop shadow, if the shape has one.
+ *
+ * `dist` and `dir` are a distance and a bearing, which every renderer wants as
+ * two offsets, so the conversion happens here rather than three times later.
+ */
+function shadowOf(properties: XmlNode | null, scale: Scale, theme: Map<string, string>): ShapeDetail["shadow"] {
+  const node = path(properties, "effectLst", "outerShdw");
+  if (!node) return null;
+  const distance = (integerAttribute(node, "dist") ?? 0) / EMU_PER_INCH * POINTS_PER_INCH * scale.unitsPerPoint;
+  const bearing = ((integerAttribute(node, "dir") ?? 0) / 60000) * (Math.PI / 180);
+  const blur = (integerAttribute(node, "blurRad") ?? 0) / EMU_PER_INCH * POINTS_PER_INCH * scale.unitsPerPoint;
+  return {
+    offsetX: Math.round(Math.cos(bearing) * distance * 10) / 10,
+    offsetY: Math.round(Math.sin(bearing) * distance * 10) / 10,
+    blur: Math.round(blur * 10) / 10,
+    opacity: alphaOf(node),
+    color: colourOf(node, theme) ?? "#000000",
+  };
+}
+
+/** Everything about how a shape is painted, read once. */
+function shapeDetail(shape: XmlNode, frame: Frame, scale: Scale, theme: Map<string, string>): ShapeDetail {
+  const properties = child(shape, "spPr");
+  const preset = attribute(path(properties, "prstGeom"), "prst") ?? "rect";
+
+  // The adjust value is written as a little formula — `fmla="val 16667"` — in
+  // thousandths of a percent of the shorter side. Sixteen and two thirds per
+  // cent is what PowerPoint uses when the file says nothing.
+  const formula = attribute(path(properties, "prstGeom", "avLst", "gd"), "fmla") ?? "";
+  const adjust = Number(/val\s+(-?\d+)/.exec(formula)?.[1] ?? NaN);
+  const ratio = Number.isFinite(adjust) ? adjust / 100000 : 0.1667;
+  const cornerRadius = preset === "roundRect"
+    ? Math.round(Math.min(frame.width, frame.height) * ratio * 10) / 10
+    : 0;
+
+  const solid = child(properties, "solidFill");
+  const line = child(properties, "ln");
+
+  return {
+    preset,
+    cornerRadius,
+    fill: colourOf(solid, theme),
+    gradient: gradientOf(child(properties, "gradFill"), theme),
+    fillOpacity: solid ? alphaOf(solid) : 1,
+    stroke: colourOf(child(line, "solidFill"), theme),
+    // `w` is in EMU; a line the file did not size is the one point PowerPoint
+    // draws by default.
+    strokeWidth: line
+      ? Math.round(((integerAttribute(line, "w") ?? 12700) / EMU_PER_INCH * POINTS_PER_INCH * scale.unitsPerPoint) * 10) / 10
+      : 0,
+    shadow: shadowOf(properties, scale, theme),
+    sides: POLYGON_SIDES[preset] ?? null,
+  };
+}
+
 /* ------------------------------------------------------------------- shapes */
 
 const MIME_BY_EXTENSION: Record<string, string> = {
@@ -587,9 +711,12 @@ function convertShape(shape: XmlNode, transform: GroupTransform, zIndex: number,
 
   // No words: keep it only if it is actually painted, so the invisible boxes a
   // deck is full of do not become invisible boxes the user has to select past.
-  const fill = colourOf(path(shape, "spPr", "solidFill"), context.theme);
-  const outline = colourOf(path(shape, "spPr", "ln", "solidFill"), context.theme);
-  if (!fill && !outline) return null;
+  const detail = shapeDetail(shape, frame, context.scale, context.theme);
+  const fill = detail.fill;
+  const outline = detail.stroke;
+  // Nothing painted and nothing drawn: one of the invisible boxes every deck is
+  // full of, which would become an invisible box the user has to select past.
+  if (!fill && !outline && !detail.gradient) return null;
   return {
     type: "shape",
     ...frame,
@@ -601,6 +728,7 @@ function convertShape(shape: XmlNode, transform: GroupTransform, zIndex: number,
       ...(outline ? { stroke: outline, strokeWidth: 1 } : {}),
     },
     content: {},
+    shape: detail,
     ...(placeholder ? { placeholder } : {}),
   };
 }

@@ -115,6 +115,20 @@ export function resolveBinding(binding: Binding, slide: SlideData): string | nul
     case "subtitle": return clean(slide.subtitle) || null;
     case "body": return clean(slide.body) || null;
     case "bullets": return slide.bullets.length ? slide.bullets.map(clean).filter(Boolean).join("\n") : null;
+    /**
+     * One bullet each, in order, for a page built as parallel columns.
+     *
+     * A slide with two points on a three-column page fills two columns and the
+     * third drops out — an element whose binding resolves to nothing is not
+     * drawn — which is the right answer: a column repeating one of the others
+     * is worse than a page that used two of its three.
+     */
+    case "bullet_1": case "bullet_2": case "bullet_3":
+    case "bullet_4": case "bullet_5": case "bullet_6": {
+      const at = Number(binding.slice("bullet_".length)) - 1;
+      const items = slide.bullets.map(clean).filter(Boolean);
+      return items[at] ?? null;
+    }
     case "purpose": return slide.purpose;
     case "section_label": return clean(slide.meta.sectionLabel) || null;
     case "author": return clean(slide.meta.author) || null;

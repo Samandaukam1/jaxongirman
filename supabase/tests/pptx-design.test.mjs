@@ -7,6 +7,7 @@ const edge = buildEdgeModules();
 const { readPptx, themeFonts, CANVAS_WIDTH } = await import(`${edge}/pptx.js`);
 const { assignBindings, colourValue, inferPurpose, readFonts, readPalette, toJslaydDocument } =
   await import(`${edge}/pptx-design.js`);
+const { readDocument } = await import(`${edge}/jslayd/serialize.js`);
 
 /**
  * Reading a designer's template as a design.
@@ -469,14 +470,58 @@ test("the template's own artwork stays in the design, as its own picture", () =>
   assert.equal(draft.pages[0].artwork[0].name, owned[0].source.asset);
 });
 
-test("surplus text boxes are dropped and said out loud, never left as template copy", () => {
-  const boxes = ["Bir", "Ikki", "Uch", "To‘rt", "Besh", "Olti"]
-    .map((word, index) => textShape({ geometry: frame(1, index, 3, 1), runs: run(word, `sz="${1800 - index}"`) }))
+test("parallel columns each get their own point, in reading order", () => {
+  // This once asserted that surplus boxes were dropped. They were, because one
+  // `bullets` binding draws one list and binding four boxes to it would repeat
+  // the same list four times — so a four-column page arrived as a one-column
+  // page with three holes.
+  const columns = [0, 1, 2, 3]
+    .map((index) => textShape({ geometry: frame(index * 3, 5, 2, 3), runs: run(`Ustun ${index + 1}`, 'sz="1600"') }))
     .join("");
-  const draft = toJslaydDocument(readPptx(template({ slides: [slide(boxes)] })), options);
-  assert.ok(draft.warnings.some((warning) => warning.includes("1-sahifa")), draft.warnings.join(" | "));
-  assert.equal(draft.pages[0].textSlots, 4);
-  assert.ok(!JSON.stringify(draft.document).includes("Besh"));
+  const page = slide(
+    textShape({ placeholder: '<p:ph type="title"/>', geometry: frame(1, 1, 10, 2), runs: run("Sarlavha", 'sz="4000"') })
+    + columns,
+  );
+
+  const draft = toJslaydDocument(readPptx(template({ slides: [page] })), options);
+  const bound = draft.document.archetypes[0].elements
+    .filter((element) => element.type === "text")
+    .map((element) => element.source.bind);
+
+  assert.ok(bound.includes("title"));
+  for (const binding of ["bullet_1", "bullet_2", "bullet_3", "bullet_4"]) {
+    assert.ok(bound.includes(binding), `${binding} missing from ${bound.join(", ")}`);
+  }
+  assert.equal(draft.pages[0].textSlots, 5);
+  assert.ok(!JSON.stringify(draft.document).includes("Ustun"));
+});
+
+test("the leftmost column carries the first point", () => {
+  const page = slide(
+    textShape({ geometry: frame(8, 5, 3, 3), runs: run("Ong", 'sz="1600"') })
+    + textShape({ geometry: frame(1, 5, 3, 3), runs: run("Chap", 'sz="1600"') }),
+  );
+  const deck = readPptx(template({ slides: [page] }));
+  const assigned = assignBindings(deck.slides[0]);
+  const first = [...assigned.entries()].find(([, binding]) => binding === "bullet_1");
+  assert.equal(first[0].content.text, "Chap");
+});
+
+test("a single body box is still a body, not a one-item column", () => {
+  const page = slide(
+    textShape({ placeholder: '<p:ph type="title"/>', geometry: frame(1, 1, 10, 2), runs: run("Sarlavha", 'sz="4000"') })
+    + textShape({ geometry: frame(1, 5, 10, 3), runs: run("Matn", 'sz="1600"') }),
+  );
+  const deck = readPptx(template({ slides: [page] }));
+  assert.ok([...assignBindings(deck.slides[0]).values()].includes("body"));
+});
+
+test("past six columns the surplus is counted rather than bound", () => {
+  const many = Array.from({ length: 8 }, (_, index) =>
+    textShape({ geometry: frame(index, 5, 1, 2), runs: run(`C${index}`, 'sz="1400"') })).join("");
+  const deck = readPptx(template({ slides: [slide(many)] }));
+  const assigned = assignBindings(deck.slides[0]);
+  assert.ok(assigned.size <= 7, `${assigned.size} boxes bound`);
 });
 
 test("shape colours arrive as roles, which is what lets a design be recoloured", () => {
@@ -551,4 +596,112 @@ test("every declared font owns at least one duty", () => {
     assert.equal(new Set(owned).size, owned.length, "a duty was claimed twice");
     assert.equal(owned.length, 7, `${count} fonts: ${owned.length} duties assigned`);
   }
+});
+
+/* ---------------------------------------------------------- how a shape looks */
+
+/** A shape with whatever properties the test needs, at a known size. */
+const shapeXml = (properties) => `<p:sp>
+  <p:nvSpPr><p:nvPr/></p:nvSpPr>
+  <p:spPr>${frame(1, 1, 6, 3)}${properties}</p:spPr>
+</p:sp>`;
+
+const drawn = (properties) => {
+  const draft = toJslaydDocument(readPptx(template({ slides: [slide(shapeXml(properties))] })), options);
+  return draft.document.archetypes[0]?.elements.find((element) => element.type === "decorative");
+};
+
+test("a rounded panel keeps its corners rather than becoming a rectangle", () => {
+  const element = drawn(
+    '<a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 20000"/></a:avLst></a:prstGeom>'
+    + '<a:solidFill><a:srgbClr val="2F6FED"/></a:solidFill>',
+  );
+  assert.equal(element.shape, "roundedRectangle");
+  assert.ok(element.corners.topLeft > 0, "the corner radius was lost");
+  // Twenty per cent of the shorter side, which is how PowerPoint keeps a corner
+  // looking the same at any size.
+  assert.ok(Math.abs(element.corners.topLeft - element.geometry.height * 0.2) < 1);
+});
+
+test("an ellipse is an ellipse", () => {
+  const element = drawn('<a:prstGeom prst="ellipse"/><a:solidFill><a:srgbClr val="2F6FED"/></a:solidFill>');
+  assert.equal(element.shape, "ellipse");
+});
+
+test("a hexagon keeps its sides", () => {
+  const element = drawn('<a:prstGeom prst="hexagon"/><a:solidFill><a:srgbClr val="2F6FED"/></a:solidFill>');
+  assert.equal(element.shape, "polygon");
+  assert.equal(element.sides, 6);
+});
+
+test("a preset nothing can draw becomes its box rather than nothing", () => {
+  const element = drawn('<a:prstGeom prst="chevron"/><a:solidFill><a:srgbClr val="2F6FED"/></a:solidFill>');
+  assert.equal(element.shape, "rectangle");
+  assert.ok(element.fill, "the shape lost its paint as well as its outline");
+});
+
+test("a half-transparent fill stays half-transparent", () => {
+  const element = drawn(
+    '<a:prstGeom prst="rect"/><a:solidFill><a:srgbClr val="2F6FED"><a:alpha val="40000"/></a:srgbClr></a:solidFill>',
+  );
+  assert.ok(Math.abs(element.opacity - 0.4) < 0.01, `opacity was ${element.opacity}`);
+});
+
+test("a gradient arrives as a gradient, not as one of its two colours", () => {
+  const element = drawn(
+    '<a:prstGeom prst="rect"/><a:gradFill><a:gsLst>'
+    + '<a:gs pos="0"><a:srgbClr val="2F6FED"/></a:gs>'
+    + '<a:gs pos="100000"><a:srgbClr val="E8452C"/></a:gs>'
+    + '</a:gsLst><a:lin ang="5400000"/></a:gradFill>',
+  );
+  assert.equal(element.fill.type, "linear");
+  assert.equal(element.fill.stops.length, 2);
+  // 5400000 sixtythousandths of a degree is ninety.
+  assert.equal(element.fill.angle, 90);
+});
+
+test("a stroke keeps the width the file gave it", () => {
+  const element = drawn(
+    '<a:prstGeom prst="rect"/><a:ln w="38100"><a:solidFill><a:srgbClr val="14161A"/></a:solidFill></a:ln>',
+  );
+  // 38100 EMU is three points; a hairline would have been one.
+  assert.ok(element.border.width > 2, `stroke came through at ${element.border.width}`);
+});
+
+test("a drop shadow becomes a shadow, at the offset it was cast", () => {
+  const element = drawn(
+    '<a:prstGeom prst="rect"/><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill>'
+    + '<a:effectLst><a:outerShdw blurRad="76200" dist="38100" dir="5400000">'
+    + '<a:srgbClr val="000000"><a:alpha val="25000"/></a:srgbClr></a:outerShdw></a:effectLst>',
+  );
+  assert.equal(element.shadows.length, 1);
+  const [shadow] = element.shadows;
+  // Cast straight down: all of the distance in y, none in x.
+  assert.ok(Math.abs(shadow.offsetX) < 0.2, `x offset ${shadow.offsetX}`);
+  assert.ok(shadow.offsetY > 1, `y offset ${shadow.offsetY}`);
+  assert.ok(shadow.blur > shadow.offsetY, "the blur is larger than the throw");
+  assert.ok(Math.abs(shadow.opacity - 0.25) < 0.01);
+});
+
+test("a page of every shape feature still reads back as a stored design", () => {
+  // Gradients, polygons, shadows and translucent fills are all new shapes in
+  // the document. A document nothing can read back is a design the generator
+  // refuses to load, which is a fault that surfaces as something else entirely.
+  const page = slide(
+    shapeXml('<a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 20000"/></a:avLst></a:prstGeom>'
+      + '<a:gradFill><a:gsLst><a:gs pos="0"><a:srgbClr val="2F6FED"/></a:gs>'
+      + '<a:gs pos="100000"><a:srgbClr val="E8452C"/></a:gs></a:gsLst><a:lin ang="2700000"/></a:gradFill>'
+      + '<a:ln w="25400"><a:solidFill><a:srgbClr val="14161A"/></a:solidFill></a:ln>'
+      + '<a:effectLst><a:outerShdw blurRad="50800" dist="25400" dir="5400000">'
+      + '<a:srgbClr val="000000"><a:alpha val="30000"/></a:srgbClr></a:outerShdw></a:effectLst>')
+    + shapeXml('<a:prstGeom prst="hexagon"/><a:solidFill><a:srgbClr val="0E6A49"><a:alpha val="60000"/></a:srgbClr></a:solidFill>')
+    + textShape({ placeholder: '<p:ph type="title"/>', geometry: frame(1, 8, 10, 2), runs: run("Sarlavha", 'sz="4000"') }),
+  );
+  const draft = toJslaydDocument(readPptx(template({ slides: [page] })), options);
+  const read = readDocument(draft.document);
+  assert.ok(read.document, read.diagnostics.errors.map((entry) => `${entry.code}: ${entry.message}`).join("; "));
+});
+
+test("a shape that paints nothing is still not carried", () => {
+  assert.equal(drawn('<a:prstGeom prst="rect"/><a:noFill/>'), undefined);
 });

@@ -99,6 +99,10 @@ const ROLE_BY_BINDING: Partial<Record<Binding, SlotRole>> = {
   subtitle: "subtitle",
   body: "body",
   bullets: "bullets",
+  // One column each. The writer is told the budget of every column, so the
+  // points it writes are sized for the box they will actually land in.
+  bullet_1: "bullets", bullet_2: "bullets", bullet_3: "bullets",
+  bullet_4: "bullets", bullet_5: "bullets", bullet_6: "bullets",
   quote_text: "quote",
   quote_attribution: "attribution",
   stat_value: "statistic_value",
