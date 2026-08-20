@@ -1,9 +1,9 @@
 import { Check, Sparkles } from "lucide-react-native";
 import { useEffect, useMemo } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { SlideCanvas } from "@/components/SlideCanvas";
-import { familiesOf, loadDesignFonts, previewToCanvas, type RemoteDesign } from "@/lib/jslayd-designs";
+import { assetUrl, familiesOf, loadDesignFonts, previewToCanvas, type RemoteDesign } from "@/lib/jslayd-designs";
 import { colors, icon, radius, shadow, spacing, typography } from "@/theme/tokens";
 
 const MODEL_WIDTH = 1000;
@@ -29,6 +29,32 @@ function DesignThumbnail({ design }: { design: RemoteDesign }) {
   const scale = CARD_WIDTH / MODEL_WIDTH;
 
   useEffect(() => { void loadDesignFonts(design); }, [design]);
+
+  /**
+   * An imported PowerPoint template shows its own cover.
+   *
+   * The paragraph above is right about a written design and wrong about this
+   * one. A written design's card cannot drift from the design because the card
+   * *is* the design, drawn. A template is not drawn at all — the exported deck
+   * is the original package with its words replaced — so drawing it produces a
+   * picture of something that will never exist, and the closer the renderer
+   * gets the more misleading the difference becomes.
+   *
+   * The package carries the real thing: `docProps/thumbnail.jpeg`, the first
+   * slide as PowerPoint itself rasterised it, copied out at import. This cannot
+   * drift either, for the opposite reason — it and the exported file come from
+   * the same package.
+   */
+  const cover = design.row.design_source === "pptx"
+    ? assetUrl("design-assets", design.row.thumbnail_path)
+    : null;
+  if (cover) {
+    return (
+      <View pointerEvents="none" style={[styles.thumb, { width: CARD_WIDTH, height: MODEL_HEIGHT * scale }]}>
+        <Image source={{ uri: cover }} style={styles.cover} resizeMode="cover" />
+      </View>
+    );
+  }
 
   return (
     <View pointerEvents="none" style={[styles.thumb, { width: CARD_WIDTH, height: MODEL_HEIGHT * scale }]}>
@@ -91,6 +117,7 @@ const styles = StyleSheet.create({
   row: { gap: spacing.md, paddingVertical: spacing.xs, paddingRight: spacing.xl },
   card: { width: CARD_WIDTH + 2, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, overflow: "hidden", ...shadow },
   cardActive: { borderColor: colors.primary, borderWidth: 2 },
+  cover: { width: "100%", height: "100%" },
   thumb: { overflow: "hidden", backgroundColor: colors.surfaceMuted },
   meta: { padding: spacing.md, gap: 2 },
   name: { ...typography.bodyMedium, color: colors.ink },

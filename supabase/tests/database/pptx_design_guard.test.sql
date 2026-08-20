@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(9);
+select plan(12);
 
 /**
  * A template's own words must not reach a customer's deck.
@@ -57,14 +57,59 @@ select is(
 
 -- --------------------------------------------------------------- the guard --
 
+/**
+ * A template also has to have had its text boxes measured.
+ *
+ * A page's `text_map` is what a writer is given and what the exporter replaces.
+ * Before the boxes were read from the source slide it held a shape id and a
+ * binding and nothing about the box, and a deck made from such a design costs a
+ * person their credits and then cannot produce the file it was made for. So an
+ * unmeasured template is refused here, where it cannot be chosen, rather than
+ * in the generator, which runs after the charge.
+ */
 insert into public.presentation_designs (slug, name, tier, design_source, compiled_config, content_hash, status)
 values ('guard-clean', 'Clean', 'great', 'pptx',
         '{"format":"JSLAYD","archetypes":[{"elements":[{"type":"text","source":{"bind":"title"}}]}]}'::jsonb,
         'hash-clean', 'draft');
 
+insert into public.design_slide_profiles (design_id, design_version, archetype_id, role, source_slide_part, text_map)
+select id, 1, 'page_01', 'introduction', 'ppt/slides/slide1.xml',
+       '[{"shapeId":"2","role":"title","characterCapacity":120,"paragraphs":1}]'::jsonb
+from public.presentation_designs where slug = 'guard-clean';
+
 select lives_ok(
   $$update public.presentation_designs set status = 'published' where slug = 'guard-clean'$$,
-  'an imported design that binds everything publishes'
+  'an imported design that binds everything and knows its boxes publishes'
+);
+
+insert into public.presentation_designs (slug, name, tier, design_source, compiled_config, content_hash, status)
+values ('guard-pageless', 'Pageless', 'great', 'pptx',
+        '{"format":"JSLAYD","archetypes":[{"elements":[{"type":"text","source":{"bind":"title"}}]}]}'::jsonb,
+        'hash-pageless', 'draft');
+
+select throws_ok(
+  $$update public.presentation_designs set status = 'published' where slug = 'guard-pageless'$$,
+  '22023',
+  null,
+  'a template whose pages were never linked to source slides is refused'
+);
+
+insert into public.presentation_designs (slug, name, tier, design_source, compiled_config, content_hash, status)
+values ('guard-unmeasured', 'Unmeasured', 'great', 'pptx',
+        '{"format":"JSLAYD","archetypes":[{"elements":[{"type":"text","source":{"bind":"title"}}]}]}'::jsonb,
+        'hash-unmeasured', 'draft');
+
+-- What the column held before the boxes were measured: a shape and a binding.
+insert into public.design_slide_profiles (design_id, design_version, archetype_id, role, source_slide_part, text_map)
+select id, 1, 'page_01', 'introduction', 'ppt/slides/slide1.xml',
+       '[{"shapeId":"2","binding":"title","elementId":"page_01_title","paragraphs":1}]'::jsonb
+from public.presentation_designs where slug = 'guard-unmeasured';
+
+select throws_ok(
+  $$update public.presentation_designs set status = 'published' where slug = 'guard-unmeasured'$$,
+  '22023',
+  null,
+  'a template imported before its boxes were measured is refused'
 );
 
 insert into public.presentation_designs (slug, name, tier, design_source, compiled_config, content_hash, status)
@@ -92,6 +137,12 @@ values ('guard-written', 'Written', 'great', 'code',
 select lives_ok(
   $$update public.presentation_designs set status = 'published' where slug = 'guard-written'$$,
   'a written design may place its own copy, as it always could'
+);
+
+-- A written design has no source slides and is not asked for any.
+select lives_ok(
+  $$update public.presentation_designs set is_featured = true where slug = 'guard-written'$$,
+  'a written design is never asked for page profiles it does not have'
 );
 
 select * from finish();

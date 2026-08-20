@@ -46,6 +46,17 @@ export type TextObject = {
   paragraphs: TextParagraph[];
   /** Everything the box says, paragraphs joined by newlines. */
   text: string;
+  /**
+   * The whole `<p:txBody>` element, as a span of the markup it was read from.
+   *
+   * Nothing here uses it — replacement works on runs. It is carried because
+   * measuring a box means reading properties that sit beside the words rather
+   * than inside them: whether its paragraphs are bulleted, whether it is set to
+   * autofit. Handing back the span costs nothing and saves every caller
+   * re-finding the same element by a second, differently-wrong regex.
+   */
+  bodyStart: number;
+  bodyEnd: number;
 };
 
 const BODY = /<(p:txBody|a:txBody)\b[^>]*>([\s\S]*?)<\/\1>/g;
@@ -126,6 +137,8 @@ export function readTextObjects(markup: string): TextObject[] {
         placeholder: owner.placeholder,
         paragraphs,
         text: paragraphs.map((paragraph) => paragraph.text).join("\n"),
+        bodyStart: body.index,
+        bodyEnd: body.index + body[0].length,
       });
     }
   }

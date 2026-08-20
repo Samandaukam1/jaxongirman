@@ -113,8 +113,16 @@ const unit = { x: 12192000 / 12, y: 6858000 / 12 };
 const box = (x, y, width, height) =>
   `<a:xfrm><a:off x="${x * unit.x}" y="${y * unit.y}"/><a:ext cx="${width * unit.x}" cy="${height * unit.y}"/></a:xfrm>`;
 
+/**
+ * Shape ids, because a box without one is a box no exporter can address.
+ *
+ * The cloner joins a written sentence to the shape it belongs in by
+ * `<p:cNvPr id>`, which PowerPoint writes on every shape it has ever created.
+ * A fixture omitting it was describing a slide that could not exist.
+ */
+let boxId = 1;
 const textBox = (placeholder, geometry, text, size) => `<p:sp>
-  <p:nvSpPr><p:nvPr>${placeholder}</p:nvPr></p:nvSpPr>
+  <p:nvSpPr><p:cNvPr id="${boxId += 1}" name="TextBox ${boxId}"/><p:nvPr>${placeholder}</p:nvPr></p:nvSpPr>
   <p:spPr>${geometry}</p:spPr>
   <p:txBody><a:bodyPr/><a:p><a:r><a:rPr sz="${size}"><a:latin typeface="+mj-lt"/></a:rPr><a:t>${text}</a:t></a:r></a:p></p:txBody>
 </p:sp>`;

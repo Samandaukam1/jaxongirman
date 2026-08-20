@@ -1,21 +1,18 @@
 import { decompile, SAMPLE_PROMPT, SLUG_PATTERN, TIERS, TIER_LABELS, toSlug, type Tier } from "@jaxongirman/jslayd";
 import { ScaledSlide } from "@jaxongirman/slide-dom";
-import { Download, FileUp, Plus, Rocket, Search, Trash2, Upload } from "lucide-react";
+import { Download, Plus, Rocket, Search, Trash2, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { EmptyState, ErrorState, PageHeader, StatusBadge, TableSkeleton } from "@/components/AdminUI";
-import { TemplateImport } from "@/components/TemplateImport";
 import { DiagnosticList, JslaydEditor } from "@/components/JslaydEditor";
 import { JslaydStandardCard } from "@/components/JslaydStandard";
+import { archive, duplicate, publish, remove, restore } from "@/lib/design-actions";
 import { dateTime, errorMessage } from "@/lib/format";
 import { useDismissable } from "@/lib/router";
 import {
   allPreviewsOf,
-  archiveDesign,
-  deleteDesign,
   compilePrompt,
   downloadDocument,
-  duplicateDesign,
   editableSource,
   importDocument,
   listDesignFonts,
@@ -24,7 +21,6 @@ import {
   loadDesign,
   previewOf,
   publishDesign,
-  restoreDesign,
   saveDesign,
   toCanvas,
   uploadFont,
@@ -80,7 +76,6 @@ export function JslaydDesignsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [importing, setImporting] = useState(false);
 
 
   const load = useCallback(async () => {
@@ -91,6 +86,10 @@ export function JslaydDesignsPage() {
         status: status === "all" ? null : status,
         tier: tier === "all" ? null : tier,
         query,
+        // Written designs only. An imported PowerPoint template is never
+        // compiled, never drawn and never edited here — it has its own section,
+        // because almost every control on this screen is about authoring.
+        source: "code",
       }));
     } catch (requestError) {
       setError(errorMessage(requestError));
@@ -110,8 +109,6 @@ export function JslaydDesignsPage() {
    */
   const closeDraft = useCallback(() => { setDraft(null); void load(); }, [load]);
   const dismissDraft = useDismissable(draft !== null, closeDraft);
-  const closeImport = useCallback(() => { setImporting(false); void load(); }, [load]);
-  const dismissImport = useDismissable(importing, closeImport);
 
   // Sorting is client-side: the listing RPC caps at 200 rows, so the whole set
   // is already here and a round trip would only add latency.
@@ -128,13 +125,6 @@ export function JslaydDesignsPage() {
     return <Workbench draft={draft} onClose={dismissDraft} />;
   }
 
-  // A template is a second way to author the same thing, so it lives behind the
-  // same catalogue rather than in a screen of its own: one list of designs,
-  // however each of them was made.
-  if (importing) {
-    return <TemplateImport onClose={dismissImport} onImported={() => { void load(); }} />;
-  }
-
   return (
     <div className="page-stack">
       <PageHeader
@@ -144,9 +134,6 @@ export function JslaydDesignsPage() {
         action={
           <div className="header-actions">
             <ImportButton onImported={(next) => setDraft(next)} />
-            <button className="secondary-button" type="button" onClick={() => setImporting(true)}>
-              <FileUp size={16} strokeWidth={1.9} /> PowerPoint shablon
-            </button>
             <button className="primary-button" type="button" onClick={() => setDraft({ ...BLANK })}>
               <Plus size={16} strokeWidth={2.1} /> Yangi JSLAYD dizayn
             </button>
@@ -237,7 +224,7 @@ export function JslaydDesignsPage() {
                         </button>
                       )}
                       {item.status === "archived" ? (
-                        <button className="secondary-button compact" type="button" onClick={() => void guard(() => restoreDesign(item.id), load, setError)}>
+                        <button className="secondary-button compact" type="button" onClick={() => void restore(item, load, setError)}>
                           Tiklash
                         </button>
                       ) : (
@@ -265,79 +252,6 @@ export function JslaydDesignsPage() {
       </section>
     </div>
   );
-}
-
-async function guard(action: () => Promise<unknown>, reload: () => Promise<void>, onError: (message: string) => void) {
-  try {
-    await action();
-    await reload();
-  } catch (error) {
-    onError(errorMessage(error));
-  }
-}
-
-async function archive(item: DesignRow, reload: () => Promise<void>, onError: (message: string) => void) {
-  // Archiving is reversible and decks keep rendering from their pinned version,
-  // but a design in use is still worth pausing over.
-  const warning = item.used_by > 0
-    ? `«${item.name}» ${item.used_by} ta taqdimotda ishlatilgan. Arxivlash uni tanlash ro‘yxatidan olib tashlaydi, mavjud taqdimotlar ochilaveradi. Davom etamizmi?`
-    : `«${item.name}» arxivlansinmi?`;
-  if (!window.confirm(warning)) return;
-  await guard(() => archiveDesign(item.id, null), reload, onError);
-}
-
-/**
- * Deleting, which is not archiving.
- *
- * This used to hide the button for any design a deck had been made with, on
- * the grounds that `presentations.design_id` is the only record of what drew
- * that deck. The record is real; the prohibition was the wrong shape for it.
- * A test deck made to check an import permanently pinned the design it was
- * testing, and hiding the control left no way to find out why.
- *
- * The foreign key is `set null` because this is survivable: those decks keep
- * opening, exporting and printing, since their slides are already rows. What
- * they lose is the ability to be re-generated in that design. So the button is
- * always offered and the confirmation says exactly what it costs, with the
- * number in it.
- */
-async function remove(item: DesignRow, reload: () => Promise<void>, onError: (message: string) => void) {
-  const consequence = item.used_by > 0
-    ? `${item.used_by} ta taqdimot shu dizayn bilan yaratilgan. Ular ochilaveradi va eksport qilinaveradi, `
-      + "lekin qaysi dizayn bilan yaratilgani yozuvi yo‘qoladi va ular shu dizaynda qayta yaratilmaydi.\n\n"
-    : "";
-  const warning = `«${item.name}» butunlay o‘chirilsinmi?\n\n${consequence}`
-    + "Sahifalari, shriftlari va yuklangan shablon fayli ham o‘chadi. Bu amalni qaytarib bo‘lmaydi.";
-  if (!window.confirm(warning)) return;
-  await guard(() => deleteDesign(item.id, item.used_by > 0), reload, onError);
-}
-
-/**
- * Publishing from the list.
- *
- * It was only ever reachable through the editor, which meant opening a design,
- * waiting for it to compile, and finding the button — for an action whose
- * whole content is "this one is ready". The row already shows everything the
- * decision needs: the version, the health, how many decks use it.
- *
- * The server still decides. `admin_publish_design` refuses a design with no
- * compiled document, and a design imported from a template is refused if the
- * template's own copy is still in it. A refusal arrives as a sentence rather
- * than a disabled button, because "why not" is the part worth showing.
- */
-async function publish(item: DesignRow, reload: () => Promise<void>, onError: (message: string) => void) {
-  const already = item.published_version > 0;
-  const warning = already
-    ? `«${item.name}» yangi versiyada chop etilsinmi? Telefonlar keyingi ochilishda shuni oladi.`
-    : `«${item.name}» chop etilsinmi? Shundan keyin u foydalanuvchilarga ko‘rinadi.`;
-  if (!window.confirm(warning)) return;
-  await guard(() => publishDesign(item.id), reload, onError);
-}
-
-async function duplicate(item: DesignRow, reload: () => Promise<void>, onError: (message: string) => void) {
-  const slug = window.prompt("Yangi slug", `${item.slug}-copy`);
-  if (!slug) return;
-  await guard(() => duplicateDesign(item.id, slug, `${item.name} Copy`), reload, onError);
 }
 
 async function openDesign(id: string, setDraft: (draft: Draft) => void, onError: (message: string) => void) {

@@ -32,7 +32,7 @@ import {
 } from "../_shared/pptx-classify.ts";
 import { toJslaydDocument } from "../_shared/pptx-design.ts";
 import { inspectPackage, packageHash, MAX_TEMPLATE_SLIDES } from "../_shared/pptx-safety.ts";
-import { PptxError, readPptx } from "../_shared/pptx.ts";
+import { PptxError, readCoverImage, readPptx } from "../_shared/pptx.ts";
 import { unzip, ZipError } from "../_shared/unzip.ts";
 import { ProviderUnavailable } from "../_shared/writer.ts";
 
@@ -285,6 +285,16 @@ Deno.serve(async (request) => {
         role: profiles[index]!.role,
         recommendedStoryPosition: profiles[index]!.recommendedStoryPosition,
         textSlots: page.textSlots,
+        /**
+         * Every editable box of the source slide.
+         *
+         * Not the same as `textSlots`, and the difference is the thing worth
+         * seeing: `textSlots` counts the fields the preview draws, `boxes`
+         * counts what the exported file will have its words replaced in. A page
+         * showing 5 and 11 is normal — six boxes have no preview field — and a
+         * page showing 0 boxes is a page that cannot be exported.
+         */
+        boxes: page.textMap.length,
         imageSlots: page.imageSlots,
         artwork: page.artwork.length,
       })),
@@ -335,6 +345,33 @@ Deno.serve(async (request) => {
 
     // The notation and the subjects, neither of which the shared save RPC knows
     // about — it predates a design having more than one possible source.
+    /**
+     * The template's own cover, as PowerPoint drew it.
+     *
+     * Every `.pptx` PowerPoint saves carries `docProps/thumbnail.jpeg`: a real
+     * raster of the first slide, made by the application that made the design.
+     * Nothing in this stack can rasterise OOXML, so a catalogue card for an
+     * imported template used to be the reconstruction — the right shapes in the
+     * right places and unmistakably not the template. This is the actual thing,
+     * for the price of copying a file that is already in the package.
+     *
+     * It is a preview and only a preview. The exported file is still the
+     * original package cloned; nothing is ever drawn from this.
+     */
+    let thumbnailPath: string | null = null;
+    const cover = readCoverImage(entries);
+    if (cover) {
+      const at = `${slug}/thumbnail.jpeg`;
+      const put = await service.storage.from(ASSET_BUCKET)
+        .upload(at, cover, { contentType: "image/jpeg", upsert: true });
+      if (put.error) warnings.push("Shablon muqovasi yuklanmadi — ro‘yxatda oddiy ko‘rinish chiziladi.");
+      else thumbnailPath = at;
+    } else {
+      // Canva and Google Slides write the entry and leave it white; a blank
+      // card would be worse than the reconstruction it replaces.
+      warnings.push("Bu faylda haqiqiy muqova rasmi yo‘q — katalogda dizayn qayta chizilgan holda ko‘rinadi.");
+    }
+
     const marked = await service.from("presentation_designs")
       // Stored as the column documents them: `{keyword, score}`, the keyword
       // being a `design_topics` slug so a selector joins rather than matches
@@ -344,6 +381,7 @@ Deno.serve(async (request) => {
         // Where the package these pages are cloned from lives.
         source_asset_path: storagePath,
         keywords,
+        ...(thumbnailPath ? { thumbnail_path: thumbnailPath } : {}),
       })
       .eq("id", id);
     if (marked.error) throw marked.error;

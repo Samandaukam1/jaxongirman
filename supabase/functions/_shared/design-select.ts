@@ -23,6 +23,7 @@
  */
 
 import type { StoryRole } from "./pptx-classify.ts";
+import type { WritableSlot } from "./pptx-writer.ts";
 
 /* ------------------------------------------------------------ normalising */
 
@@ -216,6 +217,18 @@ export type PageProfile = {
   supportsStats: boolean;
   minText: number;
   maxText: number;
+  /**
+   * The source slide this page is, where the design came from a file.
+   *
+   * Nothing in this module reads them — selection is about what a page can
+   * hold, not where it came from. They travel with the profile because the
+   * generator needs the same rows to know which slide to clone and which boxes
+   * to write into, and carrying them here saves a second query for the same
+   * table on the same request.
+   */
+  sourcePart?: string;
+  sourceIndex?: number;
+  slots?: readonly WritableSlot[];
 };
 
 /** What the slide needs a page to be able to hold. */

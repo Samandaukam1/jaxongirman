@@ -348,3 +348,75 @@ test("template copy that survived fails the export rather than shipping", async 
   assert.equal(result.ok, false);
   assert.match(result.reason, /almashtirilmagan/);
 });
+
+/* ------------------------------------------- every box, or nothing ships */
+
+/**
+ * The rule the whole mode rests on.
+ *
+ * A source slide has more text boxes than a design has fields for — a cover
+ * with eleven, a vocabulary with eight — and the boxes with no field are
+ * exactly the ones that used to keep the template's own English. So the plan
+ * covers every box in the map, drawing from what the generator wrote for the
+ * ones the preview never drew, and a gap is a refusal rather than a slide
+ * somebody finds later.
+ */
+
+const slotRow = (shapeId, over = {}) => ({ shapeId, paragraphs: 1, binding: null, elementId: null, ...over });
+
+test("a box with no preview field is written from what the generator stored", () => {
+  const profiles = [{
+    archetype_id: "page_01",
+    source_slide_part: "ppt/slides/slide1.xml",
+    text_map: [slotRow("2", { binding: "title", elementId: "page_01_title" }), slotRow("9")],
+  }];
+  const slides = [{
+    id: "s1",
+    position: 0,
+    quality_report: { archetype: "page_01", slots: { 2: "Tahrirlangan", 9: "Ko‘rinmagan quti" } },
+  }];
+  const elements = [{ slide_id: "s1", type: "text", content: { elementId: "page_01_title", text: "Tahrirlangan" } }];
+
+  const planned = planClone(slides, elements, profiles);
+  assert.ok(planned.ok);
+  assert.equal(planned.plan[0].edits.length, 2);
+  assert.deepEqual(planned.plan[0].edits.find((edit) => edit.shapeId === "9").paragraphs, ["Ko‘rinmagan quti"]);
+});
+
+test("an edited element still beats what the generator wrote for the same box", () => {
+  const profiles = [{
+    archetype_id: "page_01",
+    source_slide_part: "ppt/slides/slide1.xml",
+    text_map: [slotRow("2", { binding: "title", elementId: "page_01_title" })],
+  }];
+  const slides = [{ id: "s1", position: 0, quality_report: { archetype: "page_01", slots: { 2: "Yozilgan" } } }];
+  const elements = [{ slide_id: "s1", type: "text", content: { elementId: "page_01_title", text: "Foydalanuvchi yozgani" } }];
+
+  const planned = planClone(slides, elements, profiles);
+  assert.ok(planned.ok);
+  assert.deepEqual(planned.plan[0].edits[0].paragraphs, ["Foydalanuvchi yozgani"]);
+});
+
+test("a box nothing wrote to is refused rather than left saying the template", () => {
+  const profiles = [{
+    archetype_id: "page_01",
+    source_slide_part: "ppt/slides/slide1.xml",
+    text_map: [slotRow("2", { binding: "title", elementId: "page_01_title" }), slotRow("9", { shapeName: "TextBox 9" })],
+  }];
+  const slides = [{ id: "s1", position: 0, quality_report: { archetype: "page_01", slots: { 2: "Sarlavha" } } }];
+  const elements = [];
+
+  const planned = planClone(slides, elements, profiles);
+  assert.equal(planned.ok, false);
+  assert.match(planned.reason, /TextBox 9/);
+});
+
+test("the report says what came through, per page and for the deck", () => {
+  const entries = deck();
+  const { report } = clonePresentation(entries, [
+    { sourcePart: "ppt/slides/slide1.xml", edits: [{ shapeId: "2", paragraphs: ["Yangi"] }] },
+  ]);
+  assert.equal(report.slides[0].textObjectsFound, 2);
+  assert.equal(report.slides[0].structuralFidelityPassed, true);
+  assert.equal(report.structuralFidelityPassed, true);
+});

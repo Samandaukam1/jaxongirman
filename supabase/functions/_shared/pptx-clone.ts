@@ -44,9 +44,22 @@ export type CloneReport = {
   slides: {
     sourcePart: string;
     outputPart: string;
+    textObjectsFound: number;
     textObjectsReplaced: number;
     nonTextObjectsPreserved: number;
+    /**
+     * Whether this page came through with everything it had.
+     *
+     * Drawn objects, relationships and the parts those point at, counted before
+     * and after. Editing only what sits between `<a:t>` tags cannot change any
+     * of them, which is the point: the check is cheap precisely because it
+     * should never fail, and the day it does is the day something started
+     * rewriting markup it was supposed to be copying.
+     */
+    structuralFidelityPassed: boolean;
   }[];
+  /** True when every page came through whole. What §23 asks for, in one word. */
+  structuralFidelityPassed: boolean;
   /** Every part carried over, so a structural check can count them. */
   parts: string[];
   mediaParts: string[];
@@ -227,6 +240,7 @@ export function clonePresentation(entries: ZipEntries, plan: readonly SlidePlan[
   const problems: CloneProblem[] = [];
   const report: CloneReport = {
     slides: [], parts: [], mediaParts: [], leftoverText: [], problems,
+    structuralFidelityPassed: true,
   };
   if (plan.length === 0) {
     problems.push({ code: "no_slides", message: "Klonlash uchun sahifa tanlanmadi." });
@@ -308,9 +322,17 @@ export function clonePresentation(entries: ZipEntries, plan: readonly SlidePlan[
     report.slides.push({
       sourcePart: entry.source,
       outputPart: entry.output,
+      textObjectsFound: original.length,
       textObjectsReplaced: entry.edits.length,
-      nonTextObjectsPreserved: countVisualObjects(source),
-    });
+      // Counted on the rewritten markup rather than the source: what shipped is
+      // what matters, and the two agreeing is the check, not the assumption.
+      nonTextObjectsPreserved: countVisualObjects(rewritten),
+      structuralFidelityPassed: countVisualObjects(source) === countVisualObjects(rewritten)
+        && original.length === readTextObjects(rewritten).length,
+      // Filled once every part is written — a slide's pictures are checked
+      // against the finished package, not against the intention.
+      relationshipsResolved: rels ? readRelationships(decoder.decode(rels)) : [],
+    } as never);
   }
 
   /* --------------------------------------------------- everything they need */
@@ -325,6 +347,34 @@ export function clonePresentation(entries: ZipEntries, plan: readonly SlidePlan[
 
   report.parts = files.map((file) => file.name).sort();
   report.mediaParts.sort();
+
+  /**
+   * Every picture, layout and theme a chosen slide points at, present in what
+   * shipped.
+   *
+   * §23's check, done the only way that means anything: not by counting what
+   * was intended but by resolving each slide's own relationships against the
+   * finished file. A slide whose photograph did not come along opens as a grey
+   * rectangle, and the deck is refused instead.
+   */
+  for (const slide of report.slides) {
+    const carried = slide as unknown as { relationshipsResolved?: Relationship[]; structuralFidelityPassed: boolean };
+    const targets = carried.relationshipsResolved ?? [];
+    delete carried.relationshipsResolved;
+    for (const relationship of targets) {
+      if (relationship.external) continue;
+      const resolved = resolveTarget(slide.sourcePart, relationship.target);
+      if (written.has(resolved) || !entries.has(resolved)) continue;
+      carried.structuralFidelityPassed = false;
+      problems.push({
+        code: "resource_lost",
+        message: "Sahifaning rasmi yoki bog‘lanishi nusxaga o‘tmadi.",
+        part: resolved,
+      });
+    }
+  }
+
+  report.structuralFidelityPassed = report.slides.every((slide) => slide.structuralFidelityPassed);
   report.leftoverText = remainingTemplateText(before, after);
   if (report.leftoverText.length > 0) {
     problems.push({

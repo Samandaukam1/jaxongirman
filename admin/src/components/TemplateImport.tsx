@@ -159,9 +159,17 @@ export function TemplateImport({ onClose, onImported }: { onClose: () => void; o
           role: page.role,
           recommendedStoryPosition: page.recommendedStoryPosition,
         })),
-        ...(reading && reading.keywords.length > 0
-          ? { keywords: reading.keywords.map((entry) => ({ keyword: entry.keyword, score: entry.score })) }
-          : {}),
+        /**
+         * The subjects, sent back rather than worked out again.
+         *
+         * The analyst's code wins where there is one. Where there is not, what
+         * the inspection already established is returned unchanged — otherwise
+         * the import asks the classifier a second time for the same file, which
+         * costs a second call and can answer differently, so the admin approves
+         * one list and a different one is stored.
+         */
+        keywords: (reading && reading.keywords.length > 0 ? reading.keywords : (report?.keywords ?? []))
+          .map((entry) => ({ keyword: entry.keyword, score: entry.score })),
       });
       setReport(answer);
       setStage(answer.code === "imported" ? "done" : "review");
@@ -177,7 +185,7 @@ export function TemplateImport({ onClose, onImported }: { onClose: () => void; o
       <PageHeader
         eyebrow="DIZAYN MANBASI"
         title="PowerPoint shablonini import qilish"
-        description="Tayyor .pptx shabloni JSLAYD dizayniga aylantiriladi. Shablonning o‘z matni hech qachon saqlanmaydi — sahifalar faqat joy sifatida olinadi."
+        description="Original PowerPoint shablonini yuklang. Jaxongir AI kerakli sahifalarni tanlaydi va faqat matnlarni mavzuga mos ravishda almashtiradi. Dizayn, rasmlar va elementlar original holatda saqlanadi."
         action={
           <button className="secondary-button" type="button" onClick={onClose}>
             <ArrowLeft size={16} /> Ro‘yxatga qaytish
@@ -382,7 +390,7 @@ export function TemplateImport({ onClose, onImported }: { onClose: () => void; o
                 <thead>
                   <tr>
                     <th>#</th><th>Tuzilma</th><th>Vazifasi</th><th>O‘rni</th>
-                    <th>Matn</th><th>Rasm</th><th>Bezak</th>
+                    <th>Matn</th><th>Qutilar</th><th>Rasm</th><th>Bezak</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -408,6 +416,10 @@ export function TemplateImport({ onClose, onImported }: { onClose: () => void; o
                       </td>
                       <td>{page.recommendedStoryPosition >= 999 ? "oxirida" : page.recommendedStoryPosition}</td>
                       <td>{page.textSlots}</td>
+                      {/* Every editable box of the source slide. Larger than
+                          the field count on almost every real page, and it is
+                          the number that decides whether the export can run. */}
+                      <td>{page.boxes ?? "—"}</td>
                       <td>{page.imageSlots}</td>
                       <td>{page.artwork || "—"}</td>
                     </tr>

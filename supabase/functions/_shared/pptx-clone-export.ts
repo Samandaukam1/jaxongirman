@@ -34,10 +34,20 @@ export type ElementRow = {
   content: Record<string, unknown> | null;
 };
 
+/** One editable box of a source slide, as `design_slide_profiles` stores it. */
+export type SlotRow = {
+  shapeId?: string;
+  paragraphs?: number;
+  binding?: string | null;
+  elementId?: string | null;
+  originalText?: string;
+  shapeName?: string;
+};
+
 export type PageProfileRow = {
   archetype_id: string;
   source_slide_part: string;
-  text_map: { binding?: string; shapeId?: string; elementId?: string; paragraphs?: number }[];
+  text_map: SlotRow[];
 };
 
 export type ClonePlanResult =
@@ -47,8 +57,17 @@ export type ClonePlanResult =
 /**
  * Which source slide each finished slide is, and what goes in its boxes.
  *
- * The copy is read from the stored rows rather than from anything computed at
- * generation time, so a deck somebody edited exports what it now says.
+ * Copy comes from two places and the order matters. A box the design drew in
+ * the preview exists as an editable element, so what that element now says wins
+ * — a deck somebody corrected exports the correction. Every other box, and
+ * there are always more of them than the preview has fields for, is read from
+ * what the generator wrote for it.
+ *
+ * The rule this enforces is the one the whole mode rests on: **every** editable
+ * box of the source slide gets an edit. A box left out keeps the template's own
+ * words, and the file ships with somebody else's sample sentence in it. So a
+ * gap is a refusal, named by shape, rather than a slide that looks fine until
+ * somebody scrolls to it.
  */
 export function planClone(
   slides: readonly SlideRow[],
@@ -80,11 +99,23 @@ export function planClone(
       return { ok: false, reason: `«${archetype || "nomsiz"}» sahifasi shablon sahifasiga bog'lanmagan.` };
     }
 
-    const written = textBySlide.get(slide.id) ?? new Map<string, string>();
+    const drawn = textBySlide.get(slide.id) ?? new Map<string, string>();
+    const stored = slide.quality_report?.slots;
+    const written: Record<string, unknown> = stored && typeof stored === "object" ? stored as Record<string, unknown> : {};
+
     const edits: TextEdit[] = [];
+    const missing: string[] = [];
+
     for (const slot of profile.text_map ?? []) {
-      if (!slot.shapeId || !slot.elementId) continue;
-      const text = written.get(slot.elementId) ?? "";
+      if (!slot.shapeId) continue;
+      const edited = slot.elementId ? drawn.get(slot.elementId) : undefined;
+      const generated = written[slot.shapeId];
+      const text = edited ?? (typeof generated === "string" ? generated : undefined);
+      if (text === undefined) {
+        missing.push(slot.shapeName || slot.shapeId);
+        continue;
+      }
+
       // Split back into the paragraph count the original box held: a box of
       // three lines wants three replacements, not one long one.
       const lines = text.split("\n");
@@ -93,6 +124,14 @@ export function planClone(
         ? lines.slice(0, wanted - 1).concat(lines.slice(wanted - 1).join(" "))
         : lines.concat(Array<string>(wanted - lines.length).fill(""));
       edits.push({ shapeId: slot.shapeId, paragraphs });
+    }
+
+    if (missing.length > 0) {
+      return {
+        ok: false,
+        reason: `${slide.position + 1}-slaydda ${missing.length} ta matn qutisiga matn yozilmagan `
+          + `(${missing.slice(0, 3).join(", ")}). Taqdimotni qayta yarating.`,
+      };
     }
 
     plan.push({ sourcePart: profile.source_slide_part, edits });

@@ -75,9 +75,19 @@ function frame(x, y, width, height) {
   return `<a:xfrm><a:off x="${x * unitX}" y="${y * unitY}"/><a:ext cx="${width * unitX}" cy="${height * unitY}"/></a:xfrm>`;
 }
 
-function textShape({ placeholder = "", geometry = frame(1, 1, 10, 2), runs = "", body = "" } = {}) {
+/**
+ * Shape ids, which PowerPoint always writes and these fixtures used not to.
+ *
+ * Every editable box is addressed by `<p:cNvPr id>`: it is what joins a written
+ * sentence to the shape it goes in when the file is cloned. A fixture without
+ * one describes a slide no exporter could ever edit, so the tests were quietly
+ * asking for behaviour no real template has.
+ */
+let shapeId = 1;
+function textShape({ placeholder = "", geometry = frame(1, 1, 10, 2), runs = "", body = "", id = 0 } = {}) {
+  const own = id || (shapeId += 1);
   return `<p:sp>
-    <p:nvSpPr><p:nvPr>${placeholder}</p:nvPr></p:nvSpPr>
+    <p:nvSpPr><p:cNvPr id="${own}" name="TextBox ${own}"/><p:nvPr>${placeholder}</p:nvPr></p:nvSpPr>
     <p:spPr>${geometry}</p:spPr>
     <p:txBody>${body}<a:p>${runs}</a:p></p:txBody>
   </p:sp>`;

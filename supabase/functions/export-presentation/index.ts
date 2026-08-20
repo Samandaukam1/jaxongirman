@@ -51,6 +51,17 @@ async function loadDeck(service: SupabaseClient, presentationId: string, ownerId
   };
 }
 
+/**
+ * A template export that could not run, with the reason worth showing.
+ *
+ * Ordinary export failures are told to the person as one sentence, because the
+ * causes are transient and the detail is ours. A template refusal is the
+ * opposite: it names something somebody has to fix — a design imported in an
+ * old format, a package that is no longer in storage — and hiding that behind
+ * "try again" produces a person trying again forever.
+ */
+class TemplateExportError extends Error {}
+
 function clientFailure(format: ExportFormat): string {
   return format === "pdf"
     ? "PDF yaratilmadi. Qayta urinib ko‘ring."
@@ -90,7 +101,11 @@ async function generateExport(
     if (cloned && !cloned.ok) {
       // Refused rather than redrawn. An approximation that looks like the
       // design was recreated is the one outcome this mode exists to prevent.
-      throw new Error(cloned.reason);
+      //
+      // Marked so the failure handler shows this sentence rather than the
+      // generic one: "the template's pages are not linked, re-import it" is
+      // something an admin can act on, and "try again" is not.
+      throw new TemplateExportError(cloned.reason);
     }
 
     const bytes = cloned?.ok
@@ -132,7 +147,7 @@ async function generateExport(
     try {
       await updateJob(service, jobId, ownerId, {
         status: "failed",
-        error_message: clientFailure(format),
+        error_message: error instanceof TemplateExportError ? error.message : clientFailure(format),
         completed_at: new Date().toISOString(),
       });
     } catch (updateError) {
@@ -142,25 +157,55 @@ async function generateExport(
 }
 
 /**
- * The clone path, when this deck's design came from an uploaded file.
+ * The clone path, when this deck was laid out on a PowerPoint template.
  *
- * Returns null where it does not apply, so the ordinary exporter runs
- * untouched for every design that was written rather than imported.
+ * Returns null only where the question does not apply — a deck of a written
+ * design — and the ordinary exporter runs untouched. Everything else is a
+ * refusal with a reason.
+ *
+ * Which deck this is comes from the slides rather than from the design row.
+ * The slides record the engine that must produce them at the moment they were
+ * generated, and they are the thing being exported; the design can be archived,
+ * republished or deleted afterwards, and none of that changes what these slides
+ * are. Reading the design first is how a deck whose template was deleted would
+ * quietly come back as a drawing of it.
  */
 async function cloneIfTemplate(service: SupabaseClient, presentationId: string) {
+  const slides = await service
+    .from("slides").select("id, position, quality_report").eq("presentation_id", presentationId);
+  if (slides.error) {
+    return { ok: false as const, reason: "Taqdimot sahifalari o‘qilmadi. Qayta urinib ko‘ring." };
+  }
+
+  const cloned = (slides.data ?? []).some((slide) =>
+    (slide.quality_report as { engine?: unknown } | null)?.engine === "pptx_clone");
+  if (!cloned) return null;
+
   const presentation = await service
     .from("presentations")
     .select("design_id, design_version")
     .eq("id", presentationId)
     .maybeSingle();
-  if (presentation.error || !presentation.data?.design_id) return null;
+  if (presentation.error) {
+    return { ok: false as const, reason: "Taqdimot ma’lumoti o‘qilmadi. Qayta urinib ko‘ring." };
+  }
+  if (!presentation.data?.design_id) {
+    return {
+      ok: false as const,
+      reason: "Bu taqdimot yaratilgan PowerPoint shabloni o‘chirilgan, shuning uchun .pptx fayl tayyorlab bo‘lmaydi. PDF sifatida yuklab olishingiz mumkin.",
+    };
+  }
 
   const design = await service
     .from("presentation_designs")
     .select("design_source, source_asset_path, published_version")
     .eq("id", presentation.data.design_id)
     .maybeSingle();
-  if (design.error || design.data?.design_source !== "pptx") return null;
+  if (design.error || !design.data) {
+    // Which kind of design this is decides which engine runs, so not knowing
+    // is not a reason to pick one.
+    return { ok: false as const, reason: "Dizayn ma’lumoti o‘qilmadi. Qayta urinib ko‘ring." };
+  }
 
   const path = design.data.source_asset_path;
   if (!path) {
@@ -168,8 +213,7 @@ async function cloneIfTemplate(service: SupabaseClient, presentationId: string) 
   }
 
   const version = presentation.data.design_version ?? design.data.published_version ?? 1;
-  const [slides, profiles, file] = await Promise.all([
-    service.from("slides").select("id, position, quality_report").eq("presentation_id", presentationId),
+  const [profiles, file] = await Promise.all([
     service.from("design_slide_profiles")
       .select("archetype_id, source_slide_part, text_map")
       .eq("design_id", presentation.data.design_id)
@@ -177,7 +221,17 @@ async function cloneIfTemplate(service: SupabaseClient, presentationId: string) 
     service.storage.from("design-source").download(path),
   ]);
 
-  if (slides.error || profiles.error) return null;
+  /**
+   * Every failure from here is a refusal, never a fallback.
+   *
+   * Drawing this deck instead would ship a file that looks like somebody
+   * recreated the design by hand, which is the one outcome this mode exists to
+   * prevent. A database error, a missing package and an unlinked page all stop
+   * the export with a sentence.
+   */
+  if (profiles.error) {
+    return { ok: false as const, reason: "Dizayn sahifalari o‘qilmadi. Qayta urinib ko‘ring." };
+  }
   if (file.error || !file.data) {
     return { ok: false as const, reason: "Shablon fayli o‘qilmadi." };
   }
@@ -189,14 +243,49 @@ async function cloneIfTemplate(service: SupabaseClient, presentationId: string) 
     .from("slide_elements")
     .select("slide_id, type, content")
     .in("slide_id", (slides.data ?? []).map((slide) => slide.id));
-  if (elements.error) return null;
+  if (elements.error) {
+    return { ok: false as const, reason: "Slayd elementlari o‘qilmadi. Qayta urinib ko‘ring." };
+  }
 
-  return exportByCloning(
+  const ordered = [...(slides.data ?? [])].sort((first, second) => first.position - second.position);
+  const cloned = await exportByCloning(
     new Uint8Array(await file.data.arrayBuffer()),
-    (slides.data ?? []) as never,
+    ordered as never,
     (elements.data ?? []) as never,
     (profiles.data ?? []) as never,
   );
+
+  /**
+   * What the clone actually did, recorded on the slides it made.
+   *
+   * The generator writes what it intends — which source slide, how many boxes —
+   * and only the export can say what happened: how many boxes were replaced,
+   * whether any template copy survived, whether the page came through with its
+   * shapes and its pictures. Both halves in one place is what makes the record
+   * answerable later, when somebody asks why one deck looks wrong.
+   *
+   * A failure here is not a failure of the export. The file is already correct
+   * or already refused; this is the note about it.
+   */
+  if (cloned.ok) {
+    await Promise.all(cloned.report.slides.map((page, index) => {
+      const slide = ordered[index];
+      if (!slide) return Promise.resolve();
+      return service.from("slides").update({
+        quality_report: {
+          ...(slide.quality_report as Record<string, unknown> ?? {}),
+          engine: "pptx_clone",
+          text_objects_found: page.textObjectsFound,
+          text_objects_replaced: page.textObjectsReplaced,
+          template_text_remaining: cloned.report.leftoverText.length,
+          non_text_objects_preserved: page.nonTextObjectsPreserved,
+          structural_fidelity_passed: page.structuralFidelityPassed,
+        },
+      }).eq("id", slide.id);
+    })).catch((error) => console.error("clone report not saved", error));
+  }
+
+  return cloned;
 }
 
 Deno.serve(async (request) => {

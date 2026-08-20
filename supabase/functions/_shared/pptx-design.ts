@@ -51,6 +51,7 @@ import {
   type FontRole,
   type Tier,
 } from "./jslayd/spec.ts";
+import { readTemplateSlots, type SlotGeometry, type TemplateSlot } from "./pptx-slots.ts";
 import { CANVAS_HEIGHT, CANVAS_WIDTH, type ImportedDeck, type ImportedElement, type ImportedSlide, type Typography } from "./pptx.ts";
 
 /* ------------------------------------------------------------------ output */
@@ -81,14 +82,19 @@ export type TemplateArtwork = {
  * thing that joins them. Without it a finished deck would have to be re-read
  * out of the uploaded file to find out where its words go.
  */
-export type TextSlotMap = {
-  binding: string;
-  /** `<p:cNvPr id="…">` within the source part. */
-  shapeId: string;
+export type TextSlotMap = TemplateSlot & {
+  /**
+   * The JSLAYD field that draws this box in the preview, where one does.
+   *
+   * Null for most of them, and that is the point of the change that introduced
+   * it. The binding vocabulary is closed and a real slide routinely has more
+   * text boxes than there are names for; binding used to decide which boxes
+   * existed at all, so the surplus kept the template's English forever. Now
+   * every box is a slot and a binding is only a note about the preview.
+   */
+  binding: string | null;
   /** The archetype element, so a renderer and a cloner agree on which box. */
-  elementId: string;
-  /** How many paragraphs the original box held — the shape to write back into. */
-  paragraphs: number;
+  elementId: string | null;
 };
 
 export type DesignPage = {
@@ -370,10 +376,23 @@ function looksBulleted(element: ImportedElement): boolean {
  * or keeping the template's own. Both are worse than the page carrying fewer
  * slots than it was drawn with, so the surplus boxes are dropped and counted.
  */
-export function assignBindings(slide: ImportedSlide): Map<ImportedElement, Binding> {
+export function assignBindings(
+  slide: ImportedSlide,
+  editable?: ReadonlySet<string>,
+): Map<ImportedElement, Binding> {
   const assigned = new Map<ImportedElement, Binding>();
   const taken = new Set<Binding>();
-  const boxes = textBoxes(slide);
+  /**
+   * Only boxes the slide part itself can edit.
+   *
+   * A slide is composited with its layout and its master, so the parsed
+   * elements include furniture that belongs to another part — most visibly a
+   * master's "Click to edit Master title style", which is drawn on every page.
+   * Bound as a title it took the name of every page's real headline, and the
+   * headline, having no binding left, kept its English through the export.
+   */
+  const boxes = textBoxes(slide)
+    .filter((box) => !editable || (box.sourceShapeId ? editable.has(box.sourceShapeId) : false));
   const unplaced: ImportedElement[] = [];
 
   for (const box of boxes) {
@@ -606,11 +625,47 @@ function convertSlide(
   family: ColorFamily,
   warnings: string[],
 ): DesignPage {
-  const bindings = assignBindings(slide);
+  const id = `page_${String(position + 1).padStart(2, "0")}`;
+
+  /**
+   * The boxes this slide can actually edit, measured.
+   *
+   * Read from the slide part rather than from the composited elements, and
+   * before anything else happens, because it decides two separate things: which
+   * elements may be bound into the preview, and — the part that matters — the
+   * complete list of text objects a cloned copy of this slide will contain. A
+   * box missing from here is a box that keeps the template's own words in every
+   * deck ever exported from this design.
+   */
+  const measured = new Map<string, SlotGeometry>();
+  for (const element of slide.elements) {
+    if (element.type !== "text" || !element.sourceShapeId) continue;
+    measured.set(element.sourceShapeId, {
+      x: element.x, y: element.y,
+      width: Math.max(1, element.width), height: Math.max(1, element.height),
+      fontSize: element.typography?.fontSize ?? FALLBACK_TYPOGRAPHY.fontSize,
+    });
+  }
+  const slots = readTemplateSlots(slide.markup, measured, {
+    canvasWidth: CANVAS_WIDTH, canvasHeight: CANVAS_HEIGHT,
+  });
+  const editable = new Set(slots.map((slot) => slot.shapeId));
+  /**
+   * The boxes worth giving a preview field to.
+   *
+   * A letter of a spaced-out display word and a page number are text objects
+   * like any other — they are written and replaced — but binding them made a
+   * cover whose six "bullets" were `C`, `A`, `M`, `P`, `U`, `S`, and pushed the
+   * lines that were actually subtitles off the end of the vocabulary.
+   */
+  const bindable = new Set(
+    slots.filter((slot) => slot.role !== "letter" && slot.role !== "number").map((slot) => slot.shapeId),
+  );
+
+  const bindings = assignBindings(slide, bindable);
   const elements: JslaydElement[] = [];
   const artwork: TemplateArtwork[] = [];
-  const textMap: TextSlotMap[] = [];
-  const id = `page_${String(position + 1).padStart(2, "0")}`;
+  const boundTo = new Map<string, { binding: string; elementId: string }>();
   let images = 0;
   let dropped = 0;
   let capacity = 0;
@@ -620,18 +675,15 @@ function convertSlide(
 
     if (element.type === "text") {
       const binding = bindings.get(element);
-      if (!binding) { dropped += 1; continue; }
+      // Not an error and no longer a loss: an unbound box is simply one the
+      // preview has no field for. It is still a slot, still written to, and
+      // still replaced in the exported file.
+      if (!binding) { if (element.sourceShapeId && editable.has(element.sourceShapeId)) dropped += 1; continue; }
       const typography = element.typography ?? FALLBACK_TYPOGRAPHY;
       const style = textStyleOf(typography, geometry.height, fonts, family);
       capacity += (style.maxLines ?? 1) * Math.max(1, geometry.width / Math.max(1, style.fontSize * 0.53));
       if (element.sourceShapeId) {
-        textMap.push({
-          binding,
-          shapeId: element.sourceShapeId,
-          elementId: `${id}_${binding}`,
-          // A box of three lines wants three replacements, not one long one.
-          paragraphs: Math.max(1, String(element.content.text ?? "").split("\n").length),
-        });
+        boundTo.set(element.sourceShapeId, { binding, elementId: `${id}_${binding}` });
       }
       elements.push({
         type: "text",
@@ -780,8 +832,23 @@ function convertSlide(
   }
 
   if (dropped > 0) {
-    warnings.push(`${position + 1}-sahifa: ${dropped} ta matn qutisi uchun o‘rin qolmadi va olib tashlandi.`);
+    // Worth saying, and no longer worth worrying about: these boxes are still
+    // written and still replaced, they simply have no field in the preview.
+    warnings.push(`${position + 1}-sahifa: ${dropped} ta matn qutisi ko‘rinishda chizilmaydi (asl faylda saqlanadi).`);
   }
+
+  /**
+   * Every editable box of the source slide, in the order a reader takes them.
+   *
+   * The bindings are attached rather than driving: a box the preview draws
+   * carries the field that draws it, and a box it does not carries null. Both
+   * are written to and both are replaced, which is the whole difference between
+   * this and what it replaced.
+   */
+  const textMap: TextSlotMap[] = slots.map((slot) => {
+    const bound = boundTo.get(slot.shapeId);
+    return { ...slot, binding: bound?.binding ?? null, elementId: bound?.elementId ?? null };
+  });
 
   const purpose = inferPurpose(slide, position, total);
   const textSlots = elements.filter((element) => element.type === "text").length;

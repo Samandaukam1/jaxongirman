@@ -140,6 +140,16 @@ export type ImportedElement = {
 export type ImportedSlide = {
   /** The package part this slide is, so a cloner can find it again. */
   part: string;
+  /**
+   * The part's own markup.
+   *
+   * Carried because the parsed elements are not the same set as the editable
+   * ones: a slide is composited with its layout and its master, so several of
+   * the boxes here belong to parts a cloner must never write to. Anything
+   * deciding what may be edited has to read the slide part itself, and it is
+   * already decoded.
+   */
+  markup: string;
   title: string | null;
   speakerNotes: string | null;
   background: Record<string, unknown>;
@@ -1023,6 +1033,47 @@ function titleOf(tree: XmlNode): string | null {
  * are only incidentally in order — a deck that has had slides reordered and
  * re-saved keeps `slide3.xml` in the middle.
  */
+/**
+ * The template's own cover picture, when the file carries a real one.
+ *
+ * A `.pptx` may hold `docProps/thumbnail.jpeg`: the first slide as the
+ * application that saved it rasterised. That is the one pixel-true image of a
+ * template available anywhere in this stack — nothing here can render OOXML —
+ * so it is worth taking when it is real.
+ *
+ * The catch, and the reason for the check below: several tools write the entry
+ * and leave it blank. Canva and Google Slides both export a 256×192 white
+ * rectangle, and a catalogue full of white rectangles is worse than a catalogue
+ * of approximations. So the entropy-coded scan is looked at: a uniform image
+ * compresses to a handful of distinct byte values (nine and twenty-three in the
+ * two families of blank thumbnail seen here), while any real photograph or
+ * illustration spreads across most of the range. Sixty-four is far above every
+ * blank and far below anything with a picture in it.
+ */
+export function readCoverImage(entries: ZipEntries): Uint8Array | null {
+  const bytes = entries.get("docProps/thumbnail.jpeg") ?? entries.get("docProps/thumbnail.jpg");
+  if (!bytes || bytes.length < 512) return null;
+  if (bytes[0] !== 0xFF || bytes[1] !== 0xD8) return null;
+
+  // Walk the marker segments to the start of scan; everything after it is the
+  // compressed picture.
+  let at = 2;
+  let scan = -1;
+  while (at < bytes.length - 3) {
+    if (bytes[at] !== 0xFF) return null;
+    const marker = bytes[at + 1]!;
+    const length = (bytes[at + 2]! << 8) | bytes[at + 3]!;
+    if (marker === 0xDA) { scan = at + 2 + length; break; }
+    if (length < 2) return null;
+    at += 2 + length;
+  }
+  if (scan < 0 || scan >= bytes.length) return null;
+
+  const seen = new Set<number>();
+  for (let index = scan; index < bytes.length; index += 1) seen.add(bytes[index]!);
+  return seen.size >= 64 ? bytes : null;
+}
+
 export function readPptx(entries: ZipEntries): ImportedDeck {
   const presentation = part(entries, "ppt/presentation.xml");
   if (!presentation) throw new PptxError("Bu fayl PowerPoint taqdimoti emas.");
@@ -1110,6 +1161,7 @@ export function readPptx(entries: ZipEntries): ImportedDeck {
 
     slides.push({
       part: slidePart,
+      markup: new TextDecoder().decode(entries.get(slidePart) ?? new Uint8Array()),
       title: titleOf(tree),
       speakerNotes: notes ? notes.slice(0, 4000) : null,
       background: painted.color ? { color: painted.color } : {},

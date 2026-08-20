@@ -76,10 +76,33 @@ export function allPreviewsOf(document: JslaydDocument, family?: string | null) 
   return renderAllPreviews(document, family);
 }
 
+export type DesignSource = Database["public"]["Enums"]["design_source"];
+
+/**
+ * A PowerPoint template's own cover picture.
+ *
+ * `docProps/thumbnail.jpeg` out of the uploaded package — the first slide as
+ * PowerPoint rasterised it — copied into the public asset bucket at import.
+ * Null for a written design, which draws its own preview instead.
+ */
+export function templateCoverUrl(path: string | null): string | null {
+  if (!path) return null;
+  return supabase.storage.from("design-assets").getPublicUrl(path).data.publicUrl;
+}
+
 export async function listDesigns(filters: {
   status?: DesignStatus | null;
   tier?: Tier | null;
   query?: string;
+  /**
+   * Which kind of design to list.
+   *
+   * The two are one table and two different things: a written design compiles
+   * and is drawn, an imported one is a PowerPoint package that gets cloned.
+   * They have separate screens because almost nothing an admin does to one
+   * makes sense for the other.
+   */
+  source?: DesignSource | null;
 }): Promise<DesignRow[]> {
   const { data, error } = await supabase.rpc("admin_list_designs", {
     p_status: filters.status ?? undefined,
@@ -87,6 +110,7 @@ export async function listDesigns(filters: {
     p_query: filters.query?.trim() || undefined,
     p_limit: 200,
     p_offset: 0,
+    p_source: filters.source ?? undefined,
   });
   if (error) throw error;
   return data ?? [];
@@ -344,6 +368,14 @@ export type TemplatePage = {
   role: string;
   recommendedStoryPosition: number;
   textSlots: number;
+  /**
+   * Every editable text box of the source slide.
+   *
+   * Distinct from `textSlots`, which counts the fields the preview draws. This
+   * is what the exported file has replaced, and a page with none is a page no
+   * export can produce.
+   */
+  boxes?: number;
   imageSlots: number;
   artwork: number;
 };

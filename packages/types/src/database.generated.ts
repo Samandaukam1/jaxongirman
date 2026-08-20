@@ -4520,6 +4520,7 @@ export type Database = {
           p_limit?: number
           p_offset?: number
           p_query?: string
+          p_source?: Database["public"]["Enums"]["design_source"]
           p_status?: Database["public"]["Enums"]["jslayd_design_status"]
           p_tier?: Database["public"]["Enums"]["presentation_style"]
         }
@@ -4527,16 +4528,20 @@ export type Database = {
           archetype_count: number
           created_at: string
           description: string
+          design_source: Database["public"]["Enums"]["design_source"]
           font_count: number
           health_score: number
           id: string
           is_featured: boolean
           is_premium: boolean
+          keywords: Json
           name: string
+          page_count: number
           published_at: string
           published_version: number
           slug: string
           sort_order: number
+          source_asset_path: string
           status: Database["public"]["Enums"]["jslayd_design_status"]
           thumbnail_path: string
           tier: Database["public"]["Enums"]["presentation_style"]

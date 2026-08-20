@@ -13,6 +13,10 @@ import {
 import { outlineSchema, rewriteSchema, slideSchema } from "./plan-schema.ts";
 import type { GeneratedImage, LayoutName, PresentationPlan, ResearchSource, SemanticSlide, VisualDna } from "./presentation-types.ts";
 import { findPhoto } from "./providers/photo.ts";
+import {
+  asksFor, bindingsFromSlots, readTemplateAnswer, templatePrompt, templateSchema, usableSlots,
+  TEMPLATE_SCHEMA_NAME, type WritableSlot,
+} from "./pptx-writer.ts";
 
 type PipelineInput = { jobId: string; presentationId: string; ownerId: string; service: SupabaseClient };
 /** The model supplies narrative direction only — never colours or typography. */
@@ -156,7 +160,7 @@ async function loadJslaydDesign(
    */
   const profiles = await service
     .from("design_slide_profiles")
-    .select("archetype_id, role, alternative_roles, recommended_story_position, layout_signature, is_terminal, supports_image, supports_chart, supports_table, supports_quote, supports_stats")
+    .select("archetype_id, role, alternative_roles, recommended_story_position, layout_signature, is_terminal, supports_image, supports_chart, supports_table, supports_quote, supports_stats, source_index, source_slide_part, text_map")
     .eq("design_id", designId)
     .eq("design_version", row.version);
   if (profiles.error) {
@@ -187,6 +191,13 @@ async function loadJslaydDesign(
         supportsStats: Boolean(profile.supports_stats),
         minText: archetype.selection.minText,
         maxText: archetype.selection.maxText,
+        sourcePart: (profile.source_slide_part ?? "") as string,
+        sourceIndex: (profile.source_index ?? 0) as number,
+        // Every editable box of the source slide, measured at import. This is
+        // what makes a template deck a template deck: the copy is written to
+        // these and the exported file is the original slide with these
+        // replaced.
+        slots: (Array.isArray(profile.text_map) ? profile.text_map : []) as never,
       }];
     }),
   };
@@ -500,6 +511,69 @@ async function writeOneSlide(input: {
   return { index: input.index, slide: answer.data, usage: answer.usage, attempts: answer.attempts };
 }
 
+/**
+ * One slide of a deck whose design is an imported PowerPoint template.
+ *
+ * The same cost as an ordinary slide — one request — and a different question.
+ * An ordinary slide asks for fields and lets the renderer place them; this asks
+ * for the boxes the template actually has, at the lengths the designer used,
+ * and the finished file is the original slide with exactly those replaced.
+ *
+ * What comes back is turned into the ordinary shape as well, so the preview,
+ * the PDF and the phone's editor carry on unchanged.
+ */
+async function writeTemplateSlide(input: {
+  writer: ReturnType<typeof geminiWriter>;
+  topic: string;
+  index: number;
+  outline: Outline["slides"][number];
+  previous: string | null;
+  role?: string;
+  slots: readonly WritableSlot[];
+  researchBrief: string;
+  attachments: readonly Attachment[];
+}): Promise<SlideWrite & { texts: Map<string, string>; filled: string[]; trimmed: string[] }> {
+  const system = "You are an expert Uzbek Latin presentation writer filling the text boxes of a fixed, professionally designed slide. The design cannot change: every box has a size, a type size and a length the designer chose, and your copy has to fit it. Ground every sentence in the supplied research, never fabricate a number or a name, and never reuse or translate the template's own sample words. Grammar must be flawless Uzbek Latin. Return only the required schema.";
+  const prompt = templatePrompt({
+    topic: input.topic,
+    index: input.index,
+    title: input.outline.title,
+    purpose: input.outline.purpose,
+    ...(input.role ? { roleNote: ROLE_INSTRUCTION[input.role] ?? input.role } : {}),
+    previous: input.previous,
+    researchBrief: input.researchBrief,
+    asks: asksFor(input.slots),
+  });
+
+  const answer = await input.writer.structured<unknown>({
+    prompt: `${system}\n\n${prompt}`,
+    system,
+    schemaName: TEMPLATE_SCHEMA_NAME,
+    schema: templateSchema(),
+    attachments: input.attachments,
+    maxOutputTokens: 2_400,
+  });
+
+  const fill = readTemplateAnswer(answer.data, input.slots, { title: input.outline.title });
+  const bound = bindingsFromSlots(input.slots, fill.texts);
+
+  return {
+    index: input.index,
+    slide: {
+      subtitle: bound.subtitle,
+      body: bound.body,
+      bullets: bound.bullets,
+      quote: null, statistic: null, chart: null, table: null,
+      visualPrompt: null,
+    } as never,
+    usage: answer.usage,
+    attempts: answer.attempts,
+    texts: fill.texts,
+    filled: fill.filled,
+    trimmed: fill.trimmed,
+  };
+}
+
 /** A slide with nothing on it but its own headline. */
 function bareSlide(title: string, purpose: string, layout: LayoutName, subtitle: string | null = null, bullets: string[] = []): SemanticSlide {
   return { title, subtitle, purpose, layout, bullets, body: null, quote: null, statistic: null, chart: null, table: null, visualPrompt: null };
@@ -750,6 +824,41 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
      */
     const briefById = new Map(layoutPlan.briefs.map((brief) => [brief.archetypeId, brief]));
 
+    /**
+     * The boxes of each source slide, where this design is an imported file.
+     *
+     * Present means the deck is written box by box and exported by cloning the
+     * original package; absent means the ordinary path, unchanged. Nothing
+     * decides this twice — one map, read by the writer and by the renderer.
+     */
+    const slotsByArchetype = new Map<string, readonly WritableSlot[]>();
+    const staleTemplatePages: string[] = [];
+    for (const profile of jslayd.profiles ?? []) {
+      if (!profile.sourcePart) continue;
+      const usable = usableSlots(profile.slots ?? []);
+      if (usable.length > 0) slotsByArchetype.set(profile.archetypeId, usable);
+      else staleTemplatePages.push(profile.archetypeId);
+    }
+    const isTemplate = slotsByArchetype.size > 0;
+
+    /**
+     * A template imported before its boxes were measured cannot be written to.
+     *
+     * Refused here rather than discovered at export: the alternative is a deck
+     * that costs a person their credits, takes several minutes, and then will
+     * not produce the PowerPoint file it was made for. Falling back to drawing
+     * it is not available — a PPTX design is never drawn — so the honest answer
+     * is to stop and say which one to re-import.
+     */
+    if (staleTemplatePages.length > 0 && staleTemplatePages.length === (jslayd.profiles ?? []).length) {
+      throw new Error(
+        `«${jslayd.document.design.name}» shabloni eski formatda import qilingan. `
+        + "Admin panelda uni qayta import qiling.",
+      );
+    }
+    /** What each deck slide's boxes will say, by shape id. */
+    const templateText = new Map<number, Record<string, string>>();
+
     const contentResult = await runStage(input.service, input, "writing_content", async () => {
       if (mode === "mock") {
         return {
@@ -763,6 +872,34 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
       const written = await mapWithConcurrency(outlineResult.data.slides, 3, async (slide, index) => {
         const planned = layoutPlan.slides.find((entry) => entry.index === index);
         const brief = planned ? briefById.get(planned.archetypeId) : undefined;
+        const slots = planned ? slotsByArchetype.get(planned.archetypeId) : undefined;
+
+        // A template page is written into its own boxes rather than into the
+        // design's fields: same one request, different question.
+        if (slots && slots.length > 0) {
+          const answer = await writeTemplateSlide({
+            writer,
+            topic: prepared.presentation.topic,
+            index,
+            outline: slide,
+            previous: outlineResult.data.slides[index - 1]?.title ?? null,
+            ...(planned?.role ? { role: planned.role } : {}),
+            slots,
+            researchBrief,
+            attachments: context.attachments,
+          });
+          templateText.set(index, Object.fromEntries(answer.texts));
+          if (answer.filled.length > 0 || answer.trimmed.length > 0) {
+            console.log(JSON.stringify({
+              event: "template_slide_repaired",
+              job_id: input.jobId,
+              slide: index,
+              filled: answer.filled.length,
+              trimmed: answer.trimmed.length,
+            }));
+          }
+          return answer;
+        }
 
         try {
           return await writeOneSlide({
@@ -860,7 +997,16 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
     let rewriteAttribution: { provider: string; model: string; attempts: number } =
       { provider: "google", model: writer.writingModel, attempts: 0 };
 
-    if (mode !== "mock") {
+    /**
+     * Copy for a template page is fitted where it is written, not afterwards.
+     *
+     * The rewrite loop below measures against the archetype's own budgets, and
+     * for an imported page those are a second, worse statement of a box this
+     * pipeline already has the real measurements for. Running it would ask a
+     * model to shorten copy that fits, and reseating would move a slide onto a
+     * different source page after its words were written for this one's shapes.
+     */
+    if (mode !== "mock" && !isTemplate) {
       for (let attempt = 0; attempt < 2; attempt += 1) {
         const failing: { index: number; problems: SlotProblem[] }[] = [];
 
@@ -1094,6 +1240,15 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
     const generatedImages = await runStage(input.service, input, "generating_images", async () => {
       if (prepared.presentation.style !== "super_professional" || mode === "mock") return [] as GeneratedImage[];
       /**
+       * A template deck brings its own photographs.
+       *
+       * The exported file is the original slide cloned, so a picture fetched
+       * here could never appear in it — it would be found, stored, credited and
+       * charged for, and then dropped on the way out. Nothing to put it in is
+       * the reason, not a preference.
+       */
+      if (isTemplate) return [] as GeneratedImage[];
+      /**
        * How much photography a design wants, read from the design.
        *
        * An archetype that supports an image is a slide with somewhere to put
@@ -1172,6 +1327,19 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
         ...shared,
         design: jslayd,
         slideElements: assets.elements,
+        /**
+         * What each template box will say, for the slides the model wrote.
+         *
+         * Offset the same way the archetypes are: `assembleDeck` puts the cover
+         * and the agenda in front of the written body, so planned slide `i` is
+         * deck slide `i + 2`.
+         */
+        ...(isTemplate
+          ? {
+            templateText: plan.slides.map((_, position) =>
+              templateText.get(position - DECK_PREFIX) ?? null),
+          }
+          : {}),
         // The compositions the copy was written for. Without this the renderer
         // would choose again from the finished text and could land somewhere
         // else, throwing away the one thing choosing early bought.

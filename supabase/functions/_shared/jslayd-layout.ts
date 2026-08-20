@@ -10,6 +10,7 @@ import {
   type SlideData,
 } from "./jslayd/index.ts";
 import { planStory, selectPages, type PageProfile } from "./design-select.ts";
+import { fillFromSlide, usableSlots } from "./pptx-writer.ts";
 import { validateAndRepair } from "./layout.ts";
 import type { ElementRow, GeneratedImage, SemanticSlide, SlideRow } from "./presentation-types.ts";
 
@@ -106,6 +107,14 @@ type BuildInput = {
    */
   archetypeIds?: readonly (string | null)[];
   /**
+   * What each template box will say, one entry per deck slide.
+   *
+   * `null` for a slide with no template page behind it — the four the server
+   * assembles itself — and for every deck of a written design. Positional, to
+   * match `archetypeIds`, because those two describe the same slide.
+   */
+  templateText?: readonly (Record<string, string> | null)[];
+  /**
    * The colour family the user picked. A migrated design carries all eight, so
    * this is what keeps a JSLAYD deck as recolourable as the blueprint it came
    * from (§29). Unknown or absent resolves to the design's default.
@@ -184,7 +193,51 @@ function baseSelection(
   });
 }
 
+/**
+ * What a finished slide records about where it came from.
+ *
+ * For a written design: the engine, and nothing else to say. For an imported
+ * one: which source slide it is, how many boxes that slide has, and what each
+ * of them will say — because the exporter clones that part and replaces exactly
+ * those, and a deck somebody generated last week has to still export next month
+ * without the design being re-read.
+ *
+ * `engine` is checked by the exporter before it does anything else, so
+ * `"jslayd"` appearing on a template slide is a bug rather than a fallback.
+ */
+function templateReport(
+  profile: PageProfile | undefined,
+  written: Record<string, string> | null,
+  slide: SlideData,
+): Record<string, unknown> {
+  if (!profile?.sourcePart) return { engine: "jslayd" };
+  const slots = usableSlots(profile.slots ?? []);
+  return {
+    engine: "pptx_clone",
+    source_slide_index: profile.sourceIndex ?? 0,
+    source_slide_part: profile.sourcePart,
+    text_objects_found: slots.length,
+    /**
+     * One entry per box, so the export needs the design only for the package
+     * itself. A box the user later edits is read from its element instead.
+     *
+     * Four slides of every deck are assembled here rather than written — the
+     * cover, the agenda, the bibliography and the closing line — so they arrive
+     * with nothing from the writer and their boxes are filled from what they do
+     * say. Without that the export refuses the whole deck, because a box with
+     * no copy keeps the template's own words.
+     */
+    slots: written ?? Object.fromEntries(fillFromSlide(slots, {
+      title: slide.title,
+      subtitle: slide.subtitle,
+      body: slide.body,
+      bullets: slide.bullets,
+    })),
+  };
+}
+
 export function buildJslaydSlides(input: BuildInput): { slides: SlideRow[]; elements: ElementRow[] } {
+  const profileByArchetype = new Map((input.design.profiles ?? []).map((profile) => [profile.archetypeId, profile]));
   const generated = new Map(input.generatedImages.map((item) => [item.slideIndex, item]));
   let uploadedIndex = 0;
 
@@ -276,8 +329,12 @@ export function buildJslaydSlides(input: BuildInput): { slides: SlideRow[]; elem
          * A design imported from PowerPoint is not exported by drawing it —
          * the original package is cloned and its words replaced — and the
          * exporter has to be able to tell without re-reading the design.
+         *
+         * Read from the page, not from the design: a template's pages all carry
+         * a source slide, and a design with none is drawn. Asking whether the
+         * chosen page has one is the same question the exporter asks.
          */
-        engine: input.design.profiles?.length ? "pptx_clone" : "jslayd",
+        ...templateReport(profileByArchetype.get(selection.archetype.id), input.templateText?.[index] ?? null, slide),
         design: input.design.slug,
         design_version: input.design.version,
         archetype: selection.archetype.id,
