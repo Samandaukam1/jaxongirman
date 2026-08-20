@@ -56,6 +56,16 @@ type Body = {
    * way "what you saw is what was saved" can be true.
    */
   pages?: { archetypeId?: string; role?: string; recommendedStoryPosition?: number }[];
+  /**
+   * The subjects, from an analysis done outside this system.
+   *
+   * A template is judged by looking at it, and the person doing that does it
+   * where the file is open — a chat window, usually — then brings the answer
+   * back as a code the admin screen reads. Supplied here, it replaces the
+   * model's own guess entirely rather than being merged with it: two opinions
+   * averaged is neither, and the analyst saw the deck.
+   */
+  keywords?: { keyword?: string; score?: number }[];
 };
 
 const TIERS = ["simple", "good", "great", "super_professional"];
@@ -177,18 +187,32 @@ Deno.serve(async (request) => {
     const everyPageApproved = draft.pages.length > 0
       && draft.pages.every((page) => approved.has(page.archetype.id));
 
-    if (writer.configured && !everyPageApproved) {
+    // Checked against the same taxonomy the model's answer is: an analyst
+    // typing into a request body is still a request body.
+    const supplied: { keyword: string; score: number }[] = [];
+    const seenTopic = new Set<string>();
+    for (const entry of body.keywords ?? []) {
+      const keyword = String(entry?.keyword ?? "").trim().toLowerCase();
+      if (!keyword || seenTopic.has(keyword)) continue;
+      seenTopic.add(keyword);
+      const score = Number(entry?.score);
+      supplied.push({ keyword, score: Number.isFinite(score) ? Math.max(0, Math.min(100, Math.round(score))) : 50 });
+    }
+
+    const needsTopics = supplied.length === 0;
+
+    if (writer.configured && (!everyPageApproved || needsTopics)) {
       // Both are asked at once: neither depends on the other, and a template of
       // twenty-five pages is already the slowest part of this request.
       const [slides, subjects] = await Promise.allSettled([
-        writer.structured<unknown>({
+        everyPageApproved ? Promise.resolve(null) : writer.structured<unknown>({
           prompt: slideClassifierPrompt(facts),
           schemaName: SLIDE_CLASSIFIER_NAME,
           schema: SLIDE_CLASSIFIER_SCHEMA,
           maxOutputTokens: 4000,
           attempts: 2,
         }),
-        writer.structured<unknown>({
+        !needsTopics ? Promise.resolve(null) : writer.structured<unknown>({
           prompt: designClassifierPrompt({
             name,
             pages: facts,
@@ -203,9 +227,9 @@ Deno.serve(async (request) => {
         }),
       ]);
 
-      if (slides.status === "fulfilled") slideAnswer = slides.value.data;
+      if (slides.status === "fulfilled") slideAnswer = slides.value?.data ?? null;
       else warnings.push("Sahifa rollari avtomatik aniqlandi — model javob bermadi.");
-      if (subjects.status === "fulfilled") topicAnswer = subjects.value.data;
+      if (subjects.status === "fulfilled") topicAnswer = subjects.value?.data ?? null;
       else warnings.push("Dizayn mavzulari aniqlanmadi — keyinroq qo‘lda qo‘shish mumkin.");
     } else if (!writer.configured) {
       warnings.push("GEMINI_API_KEY sozlanmagan — rollar tuzilishga qarab aniqlandi.");
@@ -232,7 +256,16 @@ Deno.serve(async (request) => {
             : profile.recommendedStoryPosition,
       };
     });
-    const keywords = readDesignKeywords(topicAnswer, allowed);
+    // The analyst's list wins where there is one, still checked against the
+    // taxonomy — a slug nobody recognises is a design that never matches.
+    // One shape from here down: `{keyword, score}`, which is what the column
+    // documents and what a selector joins on.
+    const keywords: { keyword: string; score: number }[] = supplied.length > 0
+      ? supplied.filter((entry) => allowed.has(entry.keyword)).slice(0, 10)
+      : readDesignKeywords(topicAnswer, allowed).map((topic) => ({ keyword: topic.slug, score: topic.score }));
+    if (supplied.length > 0 && keywords.length < supplied.length) {
+      warnings.push(`${supplied.length - keywords.length} ta mavzu ro‘yxatda yo‘q va hisobga olinmadi.`);
+    }
 
     const summary = {
       name,
@@ -287,7 +320,7 @@ Deno.serve(async (request) => {
       // spelling.
       .update({
         design_source: "pptx",
-        keywords: keywords.map((topic) => ({ keyword: topic.slug, score: topic.score })),
+        keywords,
       })
       .eq("id", id);
     if (marked.error) throw marked.error;

@@ -1,10 +1,11 @@
-import { AlertTriangle, ArrowLeft, FileUp, Loader2, ShieldAlert } from "lucide-react";
-import { useState } from "react";
+import { AlertTriangle, ArrowLeft, Check, ClipboardCopy, FileUp, Loader2, ScanLine, ShieldAlert } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
 import { PageHeader } from "@/components/AdminUI";
 import { errorMessage } from "@/lib/format";
+import { buildPrompt, readDesignCode, type CodeReading, type Topic } from "@/lib/design-code";
 import {
-  importTemplate, inspectTemplate, resolveDesignFonts, uploadTemplate,
+  importTemplate, inspectTemplate, listTopics, resolveDesignFonts, uploadTemplate,
   type FontResolution, type TemplatePage, type TemplateReport,
 } from "@/lib/jslayd";
 import { TIER_LABELS, TIERS, type Tier } from "@jaxongirman/jslayd";
@@ -80,6 +81,42 @@ export function TemplateImport({ onClose, onImported }: { onClose: () => void; o
   const [tier, setTier] = useState<Tier>("great");
   const [premium, setPremium] = useState(false);
 
+  // The analysis is done elsewhere — in a chat window with the file open — so
+  // this screen's job is to hand over a prompt and take back a code.
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [code, setCode] = useState("");
+  const [reading, setReading] = useState<CodeReading | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    listTopics().then(setTopics).catch(() => setTopics([]));
+  }, []);
+
+  const prompt = useMemo(
+    () => buildPrompt({ designName: name, pageCount: pages.length || null, topics }),
+    [name, pages.length, topics],
+  );
+
+  /**
+   * The pasted analysis, applied to the pages the file actually has.
+   *
+   * Matched by the page's position in the file rather than by its position in
+   * this list: a page with nothing drawable is dropped on import, so the fourth
+   * usable page can be the fifth slide, and an analyst counting slides in
+   * PowerPoint counted the fifth.
+   */
+  function recognise() {
+    const result = readDesignCode(code, { topics, pageCount: Math.max(pages.length, report?.slides ?? 0) });
+    setReading(result);
+    if (result.pages.length === 0) return;
+
+    const byPage = new Map(result.pages.map((entry) => [entry.page - 1, entry.role]));
+    setPages((current) => current.map((page) => {
+      const role = byPage.get(page.sourceIndex);
+      return role ? { ...page, role } : page;
+    }));
+  }
+
   async function choose(file: File) {
     setProblem(null);
     setReport(null);
@@ -122,6 +159,9 @@ export function TemplateImport({ onClose, onImported }: { onClose: () => void; o
           role: page.role,
           recommendedStoryPosition: page.recommendedStoryPosition,
         })),
+        ...(reading && reading.keywords.length > 0
+          ? { keywords: reading.keywords.map((entry) => ({ keyword: entry.keyword, score: entry.score })) }
+          : {}),
       });
       setReport(answer);
       setStage(answer.code === "imported" ? "done" : "review");
@@ -240,8 +280,80 @@ export function TemplateImport({ onClose, onImported }: { onClose: () => void; o
             ) : null}
             {(report.keywords ?? []).length > 0 ? (
               <p className="panel-hint">
-                Mavzular: {(report.keywords ?? []).map((topic) => `${topic.slug} (${topic.score})`).join(", ")}
+                Mavzular: {(report.keywords ?? []).map((topic) => `${topic.keyword} — ${topic.score}%`).join(", ")}
               </p>
+            ) : null}
+          </section>
+
+          <section className="panel">
+            <div className="panel-heading">
+              <div>
+                <h2>Tahlil kodi</h2>
+                <p className="panel-hint">
+                  Promptni nusxalang, uni <code>.pptx</code> fayl bilan birga tahlilchiga (ChatGPT) bering,
+                  qaytgan kodni shu yerga qo‘ying. Sahifa vazifalari va mavzu foizlari shundan olinadi.
+                </p>
+              </div>
+              <button
+                className="secondary-button compact"
+                type="button"
+                onClick={() => {
+                  void navigator.clipboard.writeText(prompt);
+                  setCopied(true);
+                  window.setTimeout(() => setCopied(false), 2000);
+                }}
+              >
+                {copied ? <><Check size={16} /> Nusxalandi</> : <><ClipboardCopy size={16} /> Promptni nusxalash</>}
+              </button>
+            </div>
+
+            <textarea
+              className="code-input"
+              rows={6}
+              value={code}
+              onChange={(event) => setCode(event.target.value)}
+              placeholder={'Tahlilchi qaytargan kodni shu yerga qo\u2018ying. Masalan:\n{ "keywords": [ { "keyword": "jurnalistika", "score": 100 } ], "pages": [ { "page": 1, "role": "welcome" } ] }'}
+              spellCheck={false}
+            />
+
+            <button className="primary-button compact" type="button" onClick={recognise} disabled={!code.trim()}>
+              <ScanLine size={16} /> Kodni tanib olish
+            </button>
+
+            {reading?.problem ? <p className="field-problem">{reading.problem}</p> : null}
+
+            {reading && !reading.problem ? (
+              <div className="code-result">
+                {/* The percentages, which is what the phone compares. Strongest
+                    first, because that is the one it will take. */}
+                {reading.keywords.length > 0 ? (
+                  <div className="match-list">
+                    {reading.keywords.map((entry) => (
+                      <div key={entry.keyword} className="match">
+                        <span className="match-name">{entry.label}</span>
+                        <span className="match-bar"><i style={{ width: `${entry.score}%` }} /></span>
+                        <span className="match-score">{entry.score}%</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                <p className="panel-hint">
+                  {reading.pages.length} ta sahifa vazifasi qo‘llanildi
+                  {reading.keywords.length > 0 ? `, ${reading.keywords.length} ta mavzu tanildi` : ""}.
+                </p>
+
+                {reading.unknownTopics.length > 0 ? (
+                  <p className="field-problem">
+                    Ro‘yxatda yo‘q mavzular tashlab yuborildi: {reading.unknownTopics.join(", ")}.
+                  </p>
+                ) : null}
+                {reading.unknownRoles.length > 0 ? (
+                  <p className="field-problem">
+                    Noma’lum vazifalar: {reading.unknownRoles.join(", ")}.
+                  </p>
+                ) : null}
+              </div>
             ) : null}
           </section>
 

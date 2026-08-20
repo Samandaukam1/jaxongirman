@@ -7,6 +7,11 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.15"
+  }
   public: {
     Tables: {
       admin_audit_logs: {
@@ -368,6 +373,225 @@ export type Database = {
         }
         Relationships: []
       }
+      design_font_usage: {
+        Row: {
+          design_id: string
+          family_id: string
+          requested_name: string
+          resolved: boolean
+        }
+        Insert: {
+          design_id: string
+          family_id: string
+          requested_name?: string
+          resolved?: boolean
+        }
+        Update: {
+          design_id?: string
+          family_id?: string
+          requested_name?: string
+          resolved?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "design_font_usage_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "presentation_designs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "design_font_usage_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "font_families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      design_slide_profiles: {
+        Row: {
+          alternative_roles: Database["public"]["Enums"]["slide_story_role"][]
+          archetype_id: string
+          created_at: string
+          density: string
+          design_id: string
+          design_version: number
+          id: string
+          is_terminal: boolean
+          layout_signature: string
+          recommended_story_position: number
+          role: Database["public"]["Enums"]["slide_story_role"]
+          source_index: number
+          supports_chart: boolean
+          supports_image: boolean
+          supports_quote: boolean
+          supports_stats: boolean
+          supports_table: boolean
+          text_capacity: string
+          visual_weight: string
+        }
+        Insert: {
+          alternative_roles?: Database["public"]["Enums"]["slide_story_role"][]
+          archetype_id: string
+          created_at?: string
+          density?: string
+          design_id: string
+          design_version?: number
+          id?: string
+          is_terminal?: boolean
+          layout_signature?: string
+          recommended_story_position?: number
+          role: Database["public"]["Enums"]["slide_story_role"]
+          source_index?: number
+          supports_chart?: boolean
+          supports_image?: boolean
+          supports_quote?: boolean
+          supports_stats?: boolean
+          supports_table?: boolean
+          text_capacity?: string
+          visual_weight?: string
+        }
+        Update: {
+          alternative_roles?: Database["public"]["Enums"]["slide_story_role"][]
+          archetype_id?: string
+          created_at?: string
+          density?: string
+          design_id?: string
+          design_version?: number
+          id?: string
+          is_terminal?: boolean
+          layout_signature?: string
+          recommended_story_position?: number
+          role?: Database["public"]["Enums"]["slide_story_role"]
+          source_index?: number
+          supports_chart?: boolean
+          supports_image?: boolean
+          supports_quote?: boolean
+          supports_stats?: boolean
+          supports_table?: boolean
+          text_capacity?: string
+          visual_weight?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "design_slide_profiles_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "presentation_designs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      design_source_assets: {
+        Row: {
+          byte_size: number
+          content_hash: string
+          created_at: string
+          design_id: string
+          id: string
+          image_count: number
+          original_filename: string
+          slide_count: number
+          source: Database["public"]["Enums"]["design_source"]
+          storage_path: string
+          text_node_count: number
+          uploaded_by: string | null
+        }
+        Insert: {
+          byte_size?: number
+          content_hash: string
+          created_at?: string
+          design_id: string
+          id?: string
+          image_count?: number
+          original_filename?: string
+          slide_count?: number
+          source: Database["public"]["Enums"]["design_source"]
+          storage_path: string
+          text_node_count?: number
+          uploaded_by?: string | null
+        }
+        Update: {
+          byte_size?: number
+          content_hash?: string
+          created_at?: string
+          design_id?: string
+          id?: string
+          image_count?: number
+          original_filename?: string
+          slide_count?: number
+          source?: Database["public"]["Enums"]["design_source"]
+          storage_path?: string
+          text_node_count?: number
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "design_source_assets_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "presentation_designs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      design_topic_synonyms: {
+        Row: {
+          id: string
+          normalized: string
+          term: string
+          topic_id: string
+        }
+        Insert: {
+          id?: string
+          normalized: string
+          term: string
+          topic_id: string
+        }
+        Update: {
+          id?: string
+          normalized?: string
+          term?: string
+          topic_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "design_topic_synonyms_topic_id_fkey"
+            columns: ["topic_id"]
+            isOneToOne: false
+            referencedRelation: "design_topics"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      design_topics: {
+        Row: {
+          created_at: string
+          family: string
+          id: string
+          label_uz: string
+          slug: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          family?: string
+          id?: string
+          label_uz: string
+          slug: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          family?: string
+          id?: string
+          label_uz?: string
+          slug?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
       export_jobs: {
         Row: {
           completed_at: string | null
@@ -466,6 +690,77 @@ export type Database = {
           occurred_on?: string
           period?: Database["public"]["Enums"]["finance_period"]
           source?: Database["public"]["Enums"]["finance_source"]
+        }
+        Relationships: []
+      }
+      font_faces: {
+        Row: {
+          byte_size: number
+          content_hash: string
+          created_at: string
+          family_id: string
+          format: string
+          id: string
+          italic: boolean
+          storage_path: string
+          weight: number
+        }
+        Insert: {
+          byte_size?: number
+          content_hash: string
+          created_at?: string
+          family_id: string
+          format?: string
+          id?: string
+          italic?: boolean
+          storage_path: string
+          weight?: number
+        }
+        Update: {
+          byte_size?: number
+          content_hash?: string
+          created_at?: string
+          family_id?: string
+          format?: string
+          id?: string
+          italic?: boolean
+          storage_path?: string
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "font_faces_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "font_families"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      font_families: {
+        Row: {
+          canonical_name: string
+          created_at: string
+          id: string
+          license_metadata: Json
+          normalized_name: string
+          source: string
+        }
+        Insert: {
+          canonical_name: string
+          created_at?: string
+          id?: string
+          license_metadata?: Json
+          normalized_name: string
+          source?: string
+        }
+        Update: {
+          canonical_name?: string
+          created_at?: string
+          id?: string
+          license_metadata?: Json
+          normalized_name?: string
+          source?: string
         }
         Relationships: []
       }
@@ -1238,6 +1533,7 @@ export type Database = {
           appearance: Json
           asset_accent_hue: number | null
           asset_path: string | null
+          asset_recolorable: boolean
           asset_variants: Json
           canonical_name: string
           category: string
@@ -1264,6 +1560,7 @@ export type Database = {
           appearance?: Json
           asset_accent_hue?: number | null
           asset_path?: string | null
+          asset_recolorable?: boolean
           asset_variants?: Json
           canonical_name: string
           category?: string
@@ -1290,6 +1587,7 @@ export type Database = {
           appearance?: Json
           asset_accent_hue?: number | null
           asset_path?: string | null
+          asset_recolorable?: boolean
           asset_variants?: Json
           canonical_name?: string
           category?: string
@@ -2522,11 +2820,13 @@ export type Database = {
           created_at: string
           created_by: string | null
           description: string
+          design_source: Database["public"]["Enums"]["design_source"]
           format_version: string
           health_score: number | null
           id: string
           is_featured: boolean
           is_premium: boolean
+          keywords: Json
           name: string
           preview: Json
           published_at: string | null
@@ -2545,11 +2845,13 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string
+          design_source?: Database["public"]["Enums"]["design_source"]
           format_version?: string
           health_score?: number | null
           id?: string
           is_featured?: boolean
           is_premium?: boolean
+          keywords?: Json
           name: string
           preview?: Json
           published_at?: string | null
@@ -2568,11 +2870,13 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string
+          design_source?: Database["public"]["Enums"]["design_source"]
           format_version?: string
           health_score?: number | null
           id?: string
           is_featured?: boolean
           is_premium?: boolean
+          keywords?: Json
           name?: string
           preview?: Json
           published_at?: string | null
@@ -2881,13 +3185,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "presentation_designs"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "presentations_palette_code_fkey"
-            columns: ["palette_code"]
-            isOneToOne: false
-            referencedRelation: "palette_families"
-            referencedColumns: ["code"]
           },
           {
             foreignKeyName: "presentations_template_code_fkey"
@@ -4780,6 +5077,17 @@ export type Database = {
         Args: { p_copy?: Json; p_reason?: string; p_review_mode: boolean }
         Returns: Json
       }
+      admin_set_jelement_asset: {
+        Args: {
+          p_accent_hue?: number
+          p_aspect_ratio?: number
+          p_asset_path: string
+          p_element_id: string
+          p_recolorable?: boolean
+          p_variants?: Json
+        }
+        Returns: undefined
+      }
       admin_set_payment_test_mode: {
         Args: {
           p_emails?: string[]
@@ -4788,16 +5096,6 @@ export type Database = {
           p_reason?: string
         }
         Returns: Json
-      }
-      admin_set_jelement_asset: {
-        Args: {
-          p_accent_hue?: number
-          p_aspect_ratio?: number
-          p_asset_path: string
-          p_element_id: string
-          p_variants?: Json
-        }
-        Returns: undefined
       }
       admin_set_subscription_plans: {
         Args: { p_currency?: string; p_plans: Json; p_reason?: string }
@@ -5199,6 +5497,7 @@ export type Database = {
         Args: { p_idempotency_key: string; p_user_id?: string }
         Returns: Json
       }
+      jelement_in_use: { Args: { p_element_id: string }; Returns: boolean }
       jelement_normalize: { Args: { p_term: string }; Returns: string }
       jelement_record_usage: {
         Args: {
@@ -5213,10 +5512,6 @@ export type Database = {
       jelement_reindex_aliases: {
         Args: { p_element_id: string }
         Returns: undefined
-      }
-      jelement_in_use: {
-        Args: { p_element_id: string }
-        Returns: boolean
       }
       jelement_resolve: {
         Args: { p_element_id: string; p_version?: number }
@@ -5566,6 +5861,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      payment_card_attempt_active: {
+        Args: { p_subject_id: string; p_subject_kind: string }
+        Returns: Json
+      }
       payment_card_attempt_clear: {
         Args: {
           p_attempt_id: string
@@ -5665,6 +5964,7 @@ export type Database = {
         Args: { p_source_name: string; p_title: string }
         Returns: string
       }
+      pptx_literal_text: { Args: { p_document: Json }; Returns: string }
       presentation_apply_command: {
         Args: { p_command: string; p_session_id: string; p_value?: number }
         Returns: {
@@ -6050,6 +6350,7 @@ export type Database = {
         | "game_reward"
         | "game_reward_refund"
         | "coin_purchase"
+      design_source: "code" | "pptx" | "svg"
       element_type:
         | "text"
         | "image"
@@ -6174,6 +6475,36 @@ export type Database = {
       qr_video_surface: "taqdimot" | "oyingoh"
       seller_ledger_status: "pending" | "approved" | "paid" | "reversed"
       settlement_status: "draft" | "pending" | "paid" | "cancelled"
+      slide_story_role:
+        | "welcome"
+        | "introduction"
+        | "overview"
+        | "key_concepts"
+        | "importance"
+        | "types"
+        | "structure"
+        | "process"
+        | "methods"
+        | "analysis"
+        | "challenges"
+        | "solutions"
+        | "applications"
+        | "examples"
+        | "results"
+        | "recommendations"
+        | "conclusion"
+        | "thanks"
+        | "agenda"
+        | "timeline"
+        | "comparison"
+        | "big_number"
+        | "quote"
+        | "case_study"
+        | "data"
+        | "chart"
+        | "table"
+        | "image_story"
+        | "references"
       step_status: "queued" | "running" | "succeeded" | "failed" | "skipped"
       subscription_status:
         | "inactive"
@@ -6339,6 +6670,7 @@ export const Constants = {
         "game_reward_refund",
         "coin_purchase",
       ],
+      design_source: ["code", "pptx", "svg"],
       element_type: [
         "text",
         "image",
@@ -6474,6 +6806,37 @@ export const Constants = {
       qr_video_surface: ["taqdimot", "oyingoh"],
       seller_ledger_status: ["pending", "approved", "paid", "reversed"],
       settlement_status: ["draft", "pending", "paid", "cancelled"],
+      slide_story_role: [
+        "welcome",
+        "introduction",
+        "overview",
+        "key_concepts",
+        "importance",
+        "types",
+        "structure",
+        "process",
+        "methods",
+        "analysis",
+        "challenges",
+        "solutions",
+        "applications",
+        "examples",
+        "results",
+        "recommendations",
+        "conclusion",
+        "thanks",
+        "agenda",
+        "timeline",
+        "comparison",
+        "big_number",
+        "quote",
+        "case_study",
+        "data",
+        "chart",
+        "table",
+        "image_story",
+        "references",
+      ],
       step_status: ["queued", "running", "succeeded", "failed", "skipped"],
       subscription_status: [
         "inactive",
@@ -6498,4 +6861,3 @@ export const Constants = {
     },
   },
 } as const
-

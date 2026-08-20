@@ -732,3 +732,31 @@ td small { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; 
 
 .spin { animation: admin-spin 1s linear infinite; vertical-align: -3px; }
 @keyframes admin-spin { to { transform: rotate(360deg); } }
+
+/* ------------------------------------------------ the pasted analysis ----- */
+
+.code-input {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-muted);
+  color: inherit;
+  resize: vertical;
+  margin-bottom: 10px;
+}
+.code-input:focus { outline: 2px solid var(--accent, #7b5cd6); outline-offset: -1px; }
+
+.code-result { margin-top: 14px; display: grid; gap: 10px; }
+
+/* One row per subject: the name, how strongly it matches, and the number the
+   phone actually compares. The bar is there so a glance ranks them. */
+.match-list { display: grid; gap: 6px; }
+.match { display: grid; grid-template-columns: minmax(7rem, 12rem) 1fr 3rem; align-items: center; gap: 10px; font-size: 13px; }
+.match-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.match-bar { height: 6px; border-radius: 3px; background: var(--border-soft); overflow: hidden; }
+.match-bar i { display: block; height: 100%; background: var(--accent, #7b5cd6); border-radius: 3px; }
+.match-score { font-variant-numeric: tabular-nums; text-align: right; opacity: .75; }

@@ -330,7 +330,7 @@ export type TemplateReport = {
   slides?: number;
   pages?: TemplatePage[];
   fonts?: string[];
-  keywords?: { slug: string; score: number }[];
+  keywords?: { keyword: string; score: number }[];
   warnings?: string[];
   colors?: Record<string, string>;
   problems?: { code: string; message: string; part?: string }[];
@@ -367,8 +367,20 @@ export async function importTemplate(input: {
   tier: Tier;
   premium: boolean;
   pages: { archetypeId: string; role: string; recommendedStoryPosition: number }[];
+  /** From the pasted analysis, when there is one. Replaces the model's guess. */
+  keywords?: { keyword: string; score: number }[];
 }): Promise<TemplateReport> {
   return callTemplate({ ...input, step: "import" });
+}
+
+/** The closed list both the analyst and the selector choose subjects from. */
+export async function listTopics(): Promise<{ slug: string; label: string }[]> {
+  const { data, error } = await supabase
+    .from("design_topics")
+    .select("slug, label_uz")
+    .order("sort_order");
+  if (error) throw error;
+  return (data ?? []).map((row) => ({ slug: row.slug as string, label: row.label_uz as string }));
 }
 
 /**
