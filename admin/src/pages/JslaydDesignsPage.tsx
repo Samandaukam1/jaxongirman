@@ -1,6 +1,6 @@
 import { decompile, SAMPLE_PROMPT, SLUG_PATTERN, TIERS, TIER_LABELS, toSlug, type Tier } from "@jaxongirman/jslayd";
 import { ScaledSlide } from "@jaxongirman/slide-dom";
-import { Download, FileUp, Plus, Search, Trash2, Upload } from "lucide-react";
+import { Download, FileUp, Plus, Rocket, Search, Trash2, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { EmptyState, ErrorState, PageHeader, StatusBadge, TableSkeleton } from "@/components/AdminUI";
@@ -8,6 +8,7 @@ import { TemplateImport } from "@/components/TemplateImport";
 import { DiagnosticList, JslaydEditor } from "@/components/JslaydEditor";
 import { JslaydStandardCard } from "@/components/JslaydStandard";
 import { dateTime, errorMessage } from "@/lib/format";
+import { useDismissable } from "@/lib/router";
 import {
   allPreviewsOf,
   archiveDesign,
@@ -81,6 +82,7 @@ export function JslaydDesignsPage() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [importing, setImporting] = useState(false);
 
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -99,6 +101,18 @@ export function JslaydDesignsPage() {
 
   useEffect(() => { void load(); }, [load]);
 
+  /**
+   * Back closes the screen you are on, rather than leaving the section.
+   *
+   * The editor and the importer are React state inside this page, so the
+   * browser never knew they opened — Back went wherever the person had been
+   * before `/jslayd`, which was the dashboard, from every single one of them.
+   */
+  const closeDraft = useCallback(() => { setDraft(null); void load(); }, [load]);
+  const dismissDraft = useDismissable(draft !== null, closeDraft);
+  const closeImport = useCallback(() => { setImporting(false); void load(); }, [load]);
+  const dismissImport = useDismissable(importing, closeImport);
+
   // Sorting is client-side: the listing RPC caps at 200 rows, so the whole set
   // is already here and a round trip would only add latency.
   const sorted = useMemo(() => {
@@ -111,24 +125,14 @@ export function JslaydDesignsPage() {
   }, [items, sort]);
 
   if (draft) {
-    return (
-      <Workbench
-        draft={draft}
-        onClose={() => { setDraft(null); void load(); }}
-      />
-    );
+    return <Workbench draft={draft} onClose={dismissDraft} />;
   }
 
   // A template is a second way to author the same thing, so it lives behind the
   // same catalogue rather than in a screen of its own: one list of designs,
   // however each of them was made.
   if (importing) {
-    return (
-      <TemplateImport
-        onClose={() => { setImporting(false); void load(); }}
-        onImported={() => { void load(); }}
-      />
-    );
+    return <TemplateImport onClose={dismissImport} onImported={() => { void load(); }} />;
   }
 
   return (
@@ -220,6 +224,18 @@ export function JslaydDesignsPage() {
                       >
                         Nusxa
                       </button>
+                      {/* An archived design is withdrawn on purpose; publishing
+                          it from here would undo that decision by accident. */}
+                      {item.status === "archived" ? null : (
+                        <button
+                          className="primary-button compact"
+                          type="button"
+                          onClick={() => void publish(item, load, setError)}
+                        >
+                          <Rocket size={15} strokeWidth={1.9} />
+                          {item.published_version > 0 ? "Qayta chop etish" : "Chop etish"}
+                        </button>
+                      )}
                       {item.status === "archived" ? (
                         <button className="secondary-button compact" type="button" onClick={() => void guard(() => restoreDesign(item.id), load, setError)}>
                           Tiklash
@@ -291,6 +307,28 @@ async function remove(item: DesignRow, reload: () => Promise<void>, onError: (me
     + "Sahifalari, shriftlari va yuklangan shablon fayli ham o‘chadi. Bu amalni qaytarib bo‘lmaydi.";
   if (!window.confirm(warning)) return;
   await guard(() => deleteDesign(item.id), reload, onError);
+}
+
+/**
+ * Publishing from the list.
+ *
+ * It was only ever reachable through the editor, which meant opening a design,
+ * waiting for it to compile, and finding the button — for an action whose
+ * whole content is "this one is ready". The row already shows everything the
+ * decision needs: the version, the health, how many decks use it.
+ *
+ * The server still decides. `admin_publish_design` refuses a design with no
+ * compiled document, and a design imported from a template is refused if the
+ * template's own copy is still in it. A refusal arrives as a sentence rather
+ * than a disabled button, because "why not" is the part worth showing.
+ */
+async function publish(item: DesignRow, reload: () => Promise<void>, onError: (message: string) => void) {
+  const already = item.published_version > 0;
+  const warning = already
+    ? `«${item.name}» yangi versiyada chop etilsinmi? Telefonlar keyingi ochilishda shuni oladi.`
+    : `«${item.name}» chop etilsinmi? Shundan keyin u foydalanuvchilarga ko‘rinadi.`;
+  if (!window.confirm(warning)) return;
+  await guard(() => publishDesign(item.id), reload, onError);
 }
 
 async function duplicate(item: DesignRow, reload: () => Promise<void>, onError: (message: string) => void) {
