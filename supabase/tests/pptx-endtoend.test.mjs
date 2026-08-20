@@ -11,6 +11,7 @@ const { readPptx } = await import(`${edge}/pptx.js`);
 const { toJslaydDocument } = await import(`${edge}/pptx-design.js`);
 const { factsFor, readSlideProfiles } = await import(`${edge}/pptx-classify.js`);
 const { planDeckLayout } = await import(`${edge}/layout-brief.js`);
+const { readDocument } = await import(`${edge}/jslayd/serialize.js`);
 
 /**
  * One real file, all the way through.
@@ -185,6 +186,30 @@ test("the typefaces the file names are discovered", () => {
 test("the same drawing hashes the same however often it is packed", async () => {
   const first = await packageHash(entries);
   assert.equal(await packageHash(await unzip(template())), first);
+});
+
+/**
+ * The boundary, checked from the outside.
+ *
+ * This walk built a document and then used it — with the functions that built
+ * it. Everything that later reads a stored design reads it through
+ * `readDocument` instead, and that is a different, stricter question.
+ *
+ * It has to be asked here because it was not, once. The adapter declared
+ * `colorFamilies: []`, which is refused where an absent field would have been
+ * filled in — so every imported design was stored in a shape the generator
+ * could not load and the fonts endpoint answered 422 on. Two unrelated-looking
+ * faults, one missing assertion.
+ */
+test("the document survives being read back the way a stored design is", () => {
+  const read = readDocument(draft.document);
+  assert.ok(read.document, read.diagnostics.errors.map((entry) => `${entry.code}: ${entry.message}`).join("; "));
+});
+
+test("the design carries a named palette, so the phone has a family to offer", () => {
+  assert.equal(draft.document.colorFamilies.length, 1);
+  assert.match(draft.document.colorFamilies[0].code, /^[a-z][a-z0-9_]*$/);
+  assert.ok(draft.document.colorFamilies[0].chartPalette.length > 0);
 });
 
 test("every page of the file becomes a page of the design", () => {

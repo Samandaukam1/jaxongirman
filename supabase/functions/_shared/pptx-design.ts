@@ -676,6 +676,8 @@ export function toJslaydDocument(deck: ImportedDeck, options: DesignOptions): De
     warnings.push(`${pages.length - usable.length} ta sahifada chiziladigan element topilmadi.`);
   }
 
+  const chartPalette = [family.primary, family.accent, family.secondary, family.muted];
+
   const document: JslaydDocument = {
     format: "JSLAYD",
     version: JSLAYD_VERSION,
@@ -689,8 +691,23 @@ export function toJslaydDocument(deck: ImportedDeck, options: DesignOptions): De
       canvas: { width: CANVAS_WIDTH, height: CANVAS_HEIGHT },
     },
     colors: family,
-    colorFamilies: [],
-    chartPalette: [family.primary, family.accent, family.secondary, family.muted],
+    /**
+     * The design's own palette, named.
+     *
+     * An empty array is not the same as an absent one: a document that omits
+     * `colorFamilies` has the default filled in for it, and a document that
+     * declares none is refused. This declared none — so every imported design
+     * was stored in a shape `readDocument` rejects, which meant the generator
+     * refused to load it and the fonts endpoint answered 422. Both looked like
+     * unrelated faults.
+     */
+    colorFamilies: [{
+      code: "asosiy",
+      name: "Asosiy",
+      colors: family,
+      chartPalette,
+    }],
+    chartPalette,
     fonts,
     visualDNA: visualDnaOf(deck.slides),
     archetypes: usable.map((page) => page.archetype),
