@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(7);
+select plan(9);
 
 /**
  * Deleting a design, as opposed to withdrawing one.
@@ -58,13 +58,33 @@ select throws_ok(
   $$select public.admin_delete_design('d1000000-0000-0000-0000-000000000002')$$,
   '22023',
   null,
-  'a design a presentation was made with is refused, not deleted'
+  'a design a presentation was made with is not deleted by accident'
 );
 
 select is(
   (select count(*)::int from public.presentation_designs where id = 'd1000000-0000-0000-0000-000000000002'),
   1,
   'and it is still there afterwards'
+);
+
+/**
+ * Saying you meant it is enough.
+ *
+ * The foreign key is `set null` because this is survivable: the deck's slides
+ * are already rows, so it keeps opening and keeps exporting. What it loses is
+ * the record of what drew it, which is worth a second question and not worth a
+ * wall — refusing outright meant a test deck permanently pinned the design it
+ * was made to test.
+ */
+select lives_ok(
+  $$select public.admin_delete_design('d1000000-0000-0000-0000-000000000002', true)$$,
+  'a design in use is deleted when the caller says so deliberately'
+);
+
+select is(
+  (select design_id from public.presentations where id = 'd2000000-0000-0000-0000-000000000001'),
+  null,
+  'and the deck it made survives, with its design link cleared'
 );
 
 /**

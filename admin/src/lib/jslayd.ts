@@ -158,8 +158,8 @@ export async function archiveDesign(id: string, reason: string | null) {
  * admin the delete failed — when what failed was tidying up after it — would
  * have them press the button again on something that no longer exists.
  */
-export async function deleteDesign(id: string): Promise<void> {
-  const { data, error } = await supabase.rpc("admin_delete_design", { p_design_id: id });
+export async function deleteDesign(id: string, force = false): Promise<void> {
+  const { data, error } = await supabase.rpc("admin_delete_design", { p_design_id: id, p_force: force });
   if (error) throw error;
 
   const paths = (data ?? {}) as { fonts?: string[]; sources?: string[] };

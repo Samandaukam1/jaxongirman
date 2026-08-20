@@ -245,19 +245,16 @@ export function JslaydDesignsPage() {
                           Arxivlash
                         </button>
                       )}
-                      {/* Only where it can succeed: a design a deck was made
-                          with is refused by the server, and offering a button
-                          that always fails teaches nobody anything. */}
-                      {item.used_by === 0 ? (
-                        <button
-                          className="danger-button compact"
-                          type="button"
-                          title="Dizaynni butunlay o‘chirish"
-                          onClick={() => void remove(item, load, setError)}
-                        >
-                          <Trash2 size={15} strokeWidth={1.9} /> O‘chirish
-                        </button>
-                      ) : null}
+                      <button
+                        className="danger-button compact"
+                        type="button"
+                        title={item.used_by > 0
+                          ? `${item.used_by} ta taqdimot bu dizayn bilan yaratilgan`
+                          : "Dizaynni butunlay o‘chirish"}
+                        onClick={() => void remove(item, load, setError)}
+                      >
+                        <Trash2 size={15} strokeWidth={1.9} /> O‘chirish
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -292,21 +289,27 @@ async function archive(item: DesignRow, reload: () => Promise<void>, onError: (m
 /**
  * Deleting, which is not archiving.
  *
- * A design a deck was made with cannot be deleted — the server refuses it and
- * says how many are in the way — so the button is not offered there at all: an
- * action that is always going to fail is worse than no action, because the
- * person clicking it learns nothing until after they have decided.
+ * This used to hide the button for any design a deck had been made with, on
+ * the grounds that `presentations.design_id` is the only record of what drew
+ * that deck. The record is real; the prohibition was the wrong shape for it.
+ * A test deck made to check an import permanently pinned the design it was
+ * testing, and hiding the control left no way to find out why.
  *
- * What is left is the design that never became anything: a draft, a template
- * imported to see what it looked like, a duplicate made to try a colour. The
- * confirmation names the design and says plainly that this one does not come
- * back, since `Arxivlash` sits right beside it and does.
+ * The foreign key is `set null` because this is survivable: those decks keep
+ * opening, exporting and printing, since their slides are already rows. What
+ * they lose is the ability to be re-generated in that design. So the button is
+ * always offered and the confirmation says exactly what it costs, with the
+ * number in it.
  */
 async function remove(item: DesignRow, reload: () => Promise<void>, onError: (message: string) => void) {
-  const warning = `«${item.name}» butunlay o‘chirilsinmi?\n\n`
+  const consequence = item.used_by > 0
+    ? `${item.used_by} ta taqdimot shu dizayn bilan yaratilgan. Ular ochilaveradi va eksport qilinaveradi, `
+      + "lekin qaysi dizayn bilan yaratilgani yozuvi yo‘qoladi va ular shu dizaynda qayta yaratilmaydi.\n\n"
+    : "";
+  const warning = `«${item.name}» butunlay o‘chirilsinmi?\n\n${consequence}`
     + "Sahifalari, shriftlari va yuklangan shablon fayli ham o‘chadi. Bu amalni qaytarib bo‘lmaydi.";
   if (!window.confirm(warning)) return;
-  await guard(() => deleteDesign(item.id), reload, onError);
+  await guard(() => deleteDesign(item.id, item.used_by > 0), reload, onError);
 }
 
 /**
