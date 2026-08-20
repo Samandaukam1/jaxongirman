@@ -249,14 +249,37 @@ function canHold(page: PageProfile, needs: SlideNeeds): boolean {
 }
 
 /**
+ * No source slide twice inside this many slides.
+ *
+ * A deck built from a template is built out of that template's real pages, and
+ * a reader recognises a page they saw two slides ago instantly — the design
+ * stops reading as a design and starts reading as one slide repeated, which is
+ * the complaint this exists to answer.
+ *
+ * Seven is a person's sense of "recently" in a deck rather than a measured
+ * constant. It is also a ceiling, not a promise: a family with four pages
+ * cannot put seven between repeats, so the window narrows to what the family
+ * can actually deliver and the pages simply rotate.
+ */
+export const PAGE_REPEAT_WINDOW = 7;
+
+/**
  * Which page of the family does each slide's job.
  *
  * Scored rather than filtered, because every constraint here is a preference
  * and a deck must come out the other side regardless. A page that matches the
  * role outright beats one that lists it as an alternative; a page whose
  * suggested position is near this slide's beats one composed for the other end
- * of a talk; and a composition used two slides ago loses to one that was not,
- * which is the only way repetition can be seen at all.
+ * of a talk; and a composition used two slides ago loses to one that was not.
+ *
+ * One thing is not a preference. A page used inside the last few slides is
+ * removed from the running rather than penalised, because a penalty is a number
+ * that a strong enough role match beats — and it did, which is how a deck ended
+ * up showing the same source slide three times while every individual choice
+ * looked reasonable. The window narrows to the number of pages actually
+ * available for a slide, so the pool it leaves is never empty: at most
+ * `window - 1` pages can be blocked and there are at least `window` to choose
+ * from.
  *
  * Terminal pages are held back for the last slide. A sign-off in the middle is
  * the single most obviously wrong thing a page selector can do.
@@ -265,19 +288,57 @@ export function selectPages(
   profiles: readonly PageProfile[],
   plan: readonly StoryRole[],
   needs: readonly SlideNeeds[],
+  options: {
+    /**
+     * Pages already decided, by slide.
+     *
+     * A template deck's copy is written box by box for one specific source
+     * slide, so once a slide has been written its page cannot change — the
+     * words would go to shape ids that are not on the page being cloned. Those
+     * choices are taken as given and, importantly, counted: the slides still
+     * free are spaced against them rather than against a second, different
+     * selection nobody kept.
+     */
+    fixed?: readonly (string | null | undefined)[];
+  } = {},
 ): PageChoice[] {
   if (profiles.length === 0) return [];
 
   const chosen: PageChoice[] = [];
   const recent: string[] = [];
   const usedCount = new Map<string, number>();
+  /** The slide each page was last used on, for the window. */
+  const usedAt = new Map<string, number>();
+  const byId = new Map(profiles.map((page) => [page.archetypeId, page]));
+
+  const remember = (page: PageProfile, index: number) => {
+    recent.push(page.layoutSignature);
+    if (recent.length > 3) recent.shift();
+    usedCount.set(page.archetypeId, (usedCount.get(page.archetypeId) ?? 0) + 1);
+    usedAt.set(page.archetypeId, index);
+  };
 
   plan.forEach((wanted, index) => {
     const slide = needs[index] ?? { purpose: "title_content", textVolume: 0, hasImage: false };
     const last = index === plan.length - 1;
 
-    const scored = profiles
-      .filter((page) => (page.isTerminal ? last : true))
+    const settled = byId.get(String(options.fixed?.[index] ?? ""));
+    if (settled) {
+      chosen.push({ archetypeId: settled.archetypeId, substituted: settled.role !== wanted });
+      remember(settled, index);
+      return;
+    }
+
+    const eligible = profiles.filter((page) => (page.isTerminal ? last : true));
+    // What "recently" means for this family, which may have fewer pages than
+    // the window is wide.
+    const window = Math.max(1, Math.min(PAGE_REPEAT_WINDOW, eligible.length));
+    const fresh = eligible.filter((page) => {
+      const at = usedAt.get(page.archetypeId);
+      return at === undefined || index - at >= window;
+    });
+
+    const scored = (fresh.length > 0 ? fresh : eligible)
       .map((page) => {
         let score = 0;
         if (page.role === wanted) score += 100;
@@ -305,10 +366,7 @@ export function selectPages(
 
     const best = scored[0]?.page ?? profiles[0]!;
     chosen.push({ archetypeId: best.archetypeId, substituted: best.role !== wanted });
-
-    recent.push(best.layoutSignature);
-    if (recent.length > 3) recent.shift();
-    usedCount.set(best.archetypeId, (usedCount.get(best.archetypeId) ?? 0) + 1);
+    remember(best, index);
   });
 
   return chosen;

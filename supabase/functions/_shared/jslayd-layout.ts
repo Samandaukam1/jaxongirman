@@ -171,6 +171,7 @@ function baseSelection(
   design: ResolvedDesign,
   data: readonly SlideData[],
   pictures: readonly (unknown | null)[],
+  fixed: readonly (string | null)[],
 ): { archetype: JslaydDocument["archetypes"][number]; substituted: boolean }[] {
   const profiles = design.profiles ?? [];
   if (profiles.length === 0) return selectArchetypes(design.document, data as SlideData[]);
@@ -183,7 +184,18 @@ function baseSelection(
   }));
 
   const byId = new Map(design.document.archetypes.map((archetype) => [archetype.id, archetype]));
-  return selectPages(profiles, plan, needs).map((choice, index) => {
+  /**
+   * One selection for the whole deck, not two that never met.
+   *
+   * The body slides were assigned their pages before a word was written and
+   * cannot move — the copy was written for those boxes. The cover, agenda,
+   * bibliography and closing slides are chosen here. Handing the settled ones
+   * in means the free ones are spaced against what the deck actually contains;
+   * running this without them produced a second opinion that was thrown away
+   * for the body and kept for the four, so a closing page could repeat a page
+   * from two slides earlier and nothing had noticed.
+   */
+  return selectPages(profiles, plan, needs, { fixed }).map((choice, index) => {
     const archetype = byId.get(choice.archetypeId);
     // A profile naming a page the document does not have means the two were
     // stored at different versions. The shape-based chooser still answers, so
@@ -261,7 +273,7 @@ export function buildJslaydSlides(input: BuildInput): { slides: SlideRow[]; elem
   // avoiding repetition is a property of the sequence and a chooser seeing one
   // slide cannot know it already used a composition.
   const preselected = input.archetypeIds ?? [];
-  const chosen = baseSelection(input.design, data, pictures).map((selection, index) => {
+  const chosen = baseSelection(input.design, data, pictures, preselected).map((selection, index) => {
     const wanted = preselected[index];
     if (!wanted) return selection;
     const archetype = input.design.document.archetypes.find((entry) => entry.id === wanted);

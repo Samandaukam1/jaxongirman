@@ -460,3 +460,107 @@ test("a brief comes back for every page the plan now uses", () => {
   const moved = reseatOverflowing(doc, plan, written);
   assert.ok(moved.briefs.some((brief) => brief.archetypeId === plan.slides[0].archetypeId));
 });
+
+/* ------------------------------------------- no page twice, close together */
+
+/**
+ * A deck must not show the same source slide again while a reader still
+ * remembers it.
+ *
+ * This was a penalty and penalties lose. A page matching the wanted role scores
+ * a hundred and repetition cost eight, so a family with one obvious page for a
+ * role used it over and over — every individual choice defensible, the deck as
+ * a whole reading as one slide repeated. It is now a hard exclusion.
+ *
+ * The window narrows to what the family can deliver, which is the only sane
+ * behaviour for a template with three pages and a deck with twelve slides:
+ * they rotate, and no rotation is tighter than it has to be.
+ */
+
+const sourcePage = (id, role, over = {}) => ({
+  archetypeId: id,
+  role,
+  alternativeRoles: [],
+  recommendedStoryPosition: 8,
+  layoutSignature: id,
+  isTerminal: false,
+  supportsImage: true,
+  supportsChart: true,
+  supportsTable: true,
+  supportsQuote: true,
+  supportsStats: true,
+  minText: 0,
+  maxText: 5000,
+  ...over,
+});
+
+const anySlide = () => ({ purpose: "title_content", textVolume: 200, hasImage: false });
+
+/** The closest two uses of any one page, in slides. */
+function tightestRepeat(choices) {
+  const seen = new Map();
+  let tightest = Infinity;
+  choices.forEach((choice, index) => {
+    const at = seen.get(choice.archetypeId);
+    if (at !== undefined) tightest = Math.min(tightest, index - at);
+    seen.set(choice.archetypeId, index);
+  });
+  return tightest;
+}
+
+test("a page every slide wants is still not used twice within seven", () => {
+  // Eight pages, one of which answers the wanted role outright. The old
+  // scoring picked it for all ten slides.
+  const profiles = [
+    sourcePage("p1", "analysis"),
+    ...Array.from({ length: 7 }, (_, index) => sourcePage(`q${index}`, "overview")),
+  ];
+  const plan = Array.from({ length: 10 }, () => "analysis");
+  const choices = selectPages(profiles, plan, plan.map(anySlide));
+
+  assert.equal(choices.length, 10);
+  assert.ok(tightestRepeat(choices) >= 7, `repeated after ${tightestRepeat(choices)} slides`);
+});
+
+test("a small family rotates as tightly as it can and no tighter", () => {
+  const profiles = [sourcePage("p1", "analysis"), sourcePage("p2", "analysis"), sourcePage("p3", "analysis")];
+  const plan = Array.from({ length: 9 }, () => "analysis");
+  const choices = selectPages(profiles, plan, plan.map(anySlide));
+
+  // Three pages cannot put seven between repeats; three is the ceiling and it
+  // reaches it rather than falling back to one page over and over.
+  assert.equal(tightestRepeat(choices), 3);
+  assert.equal(new Set(choices.map((choice) => choice.archetypeId)).size, 3);
+});
+
+test("a single-page family still produces a deck", () => {
+  const profiles = [sourcePage("only", "analysis")];
+  const plan = Array.from({ length: 4 }, () => "analysis");
+  const choices = selectPages(profiles, plan, plan.map(anySlide));
+  assert.deepEqual(choices.map((choice) => choice.archetypeId), ["only", "only", "only", "only"]);
+});
+
+test("pages already written for are kept, and the rest are spaced around them", () => {
+  const profiles = Array.from({ length: 8 }, (_, index) => sourcePage(`p${index}`, "analysis"));
+  const plan = Array.from({ length: 8 }, () => "analysis");
+  // Slides 2 and 5 were written for p3 and cannot move.
+  const fixed = [null, null, "p3", null, null, "p3", null, null];
+  const choices = selectPages(profiles, plan, plan.map(anySlide), { fixed });
+
+  assert.equal(choices[2].archetypeId, "p3");
+  assert.equal(choices[5].archetypeId, "p3");
+  // The free slides never reuse a settled page while it is still recent.
+  const free = choices.filter((_, index) => fixed[index] === null);
+  assert.ok(!free.some((choice) => choice.archetypeId === "p3"));
+});
+
+test("a closing page is still held back for the last slide", () => {
+  const profiles = [
+    sourcePage("body1", "analysis"), sourcePage("body2", "analysis"),
+    sourcePage("end", "thanks", { isTerminal: true }),
+  ];
+  const plan = ["analysis", "analysis", "thanks"];
+  const choices = selectPages(profiles, plan, plan.map(anySlide));
+  assert.equal(choices[2].archetypeId, "end");
+  assert.ok(!choices.slice(0, 2).some((choice) => choice.archetypeId === "end"));
+});
