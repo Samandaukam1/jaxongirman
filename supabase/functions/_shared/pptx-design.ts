@@ -41,6 +41,7 @@ import type {
   VisualDNA,
 } from "./jslayd/document.ts";
 import {
+  CANVAS_WIDTH as JSLAYD_CANVAS_WIDTH,
   COLOR_ROLES,
   JSLAYD_VERSION,
   type ArchetypePurpose,
@@ -485,14 +486,39 @@ const GUARD: Partial<Record<Binding, Condition>> = {
 
 /* ------------------------------------------------------------- conversion */
 
+/**
+ * From the parser's canvas to the one a JSLAYD document is authored on.
+ *
+ * Two coordinate systems meet in this file and they are not the same size. The
+ * parser measures a slide onto 1000 × 562.5, which is the model every stored
+ * deck, the database constraint and all four renderers speak. A JSLAYD document
+ * is authored on 1920 × 1080, and the renderer projects that down by the same
+ * ratio on its way to a screen.
+ *
+ * Writing parser numbers straight into a document therefore had them scaled a
+ * second time. Every imported template arrived at 52% of its size, tucked into
+ * the top-left corner of a slide that was otherwise the background colour —
+ * which is exactly what an imported design looked like, and why it read as a
+ * flat coloured rectangle rather than as the design somebody had made.
+ *
+ * Every length that reaches the document goes through this. Ratios do not:
+ * a line height and a rotation are the same number on either canvas.
+ */
+const TO_DOCUMENT = JSLAYD_CANVAS_WIDTH / CANVAS_WIDTH;
+
+/** A length on the authoring canvas, to one decimal. */
+function toDocument(value: number): number {
+  return Math.round(value * TO_DOCUMENT * 10) / 10;
+}
+
 function geometryOf(element: ImportedElement, zIndex: number): Geometry {
-  const round = (value: number) => Math.round(value * 10) / 10;
   return {
-    x: round(element.x),
-    y: round(element.y),
-    width: round(Math.max(1, element.width)),
-    height: round(Math.max(1, element.height)),
-    rotation: round(element.rotation),
+    x: toDocument(element.x),
+    y: toDocument(element.y),
+    width: toDocument(Math.max(1, element.width)),
+    height: toDocument(Math.max(1, element.height)),
+    // A rotation is an angle, not a length.
+    rotation: Math.round(element.rotation * 10) / 10,
     zIndex,
     anchor: "top-left",
   };
@@ -506,18 +532,21 @@ function textStyleOf(typography: Typography, height: number, fonts: readonly Fon
   const font = fonts.find((declared) => declared.name === typography.fontFamily) ?? fonts[0]!;
   return {
     font: font.id,
-    fontSize: Math.round(size * 10) / 10,
+    // A type size is a length: on the authoring canvas it is 1.92× what the
+    // parser measured, and the renderer takes it back down again.
+    fontSize: toDocument(size),
     fontWeight: typography.fontWeight,
     fontStyle: typography.italic ? "italic" : "normal",
-    letterSpacing: typography.letterSpacing,
+    letterSpacing: toDocument(typography.letterSpacing),
     lineHeight: ratio,
     align: typography.align,
     verticalAlign: typography.verticalAlign,
     transform: typography.transform,
     color: colourValue(typography.color, family),
+    // Both sides are in the parser's units, so the count is the same either way.
     maxLines: Math.max(1, Math.floor(height / Math.max(1, size * ratio))),
     overflow: "shrink",
-    minFontSize: Math.round(Math.max(10, size * 0.6) * 10) / 10,
+    minFontSize: toDocument(Math.max(10, size * 0.6)),
     effect: "none",
     shadows: [],
     strokeWidth: 0,
@@ -805,12 +834,18 @@ function convertSlide(
           stops: gradient.stops.map((stop) => ({ offset: stop.offset, color: colourValue(stop.color, family) })),
         }
         : fill ? colourValue(fill, family) : null,
+      // Radii, rules and shadows are lengths like any other, so they travel to
+      // the authoring canvas with the box they belong to. A corner that stayed
+      // in parser units would be half as round as the shape it rounds.
       corners: radius > 0
-        ? { topLeft: radius, topRight: radius, bottomRight: radius, bottomLeft: radius }
+        ? {
+          topLeft: toDocument(radius), topRight: toDocument(radius),
+          bottomRight: toDocument(radius), bottomLeft: toDocument(radius),
+        }
         : null,
       border: stroke
         ? {
-          width: Math.max(0.5, detail?.strokeWidth || 1),
+          width: Math.max(0.5, toDocument(detail?.strokeWidth || 1)),
           color: colourValue(stroke, family),
           style: "solid",
           opacity: 1,
@@ -818,16 +853,16 @@ function convertSlide(
         : null,
       shadows: detail?.shadow
         ? [{
-          offsetX: detail.shadow.offsetX,
-          offsetY: detail.shadow.offsetY,
-          blur: detail.shadow.blur,
+          offsetX: toDocument(detail.shadow.offsetX),
+          offsetY: toDocument(detail.shadow.offsetY),
+          blur: toDocument(detail.shadow.blur),
           spread: 0,
           opacity: detail.shadow.opacity,
           color: colourValue(detail.shadow.color, family),
         }]
         : [],
       sides: detail?.sides && detail.sides > 4 ? detail.sides : null,
-      thickness: detail?.preset === "line" ? Math.max(1, detail.strokeWidth) : 0,
+      thickness: detail?.preset === "line" ? Math.max(1, toDocument(detail.strokeWidth)) : 0,
     });
   }
 

@@ -8,6 +8,9 @@ const { readPptx, themeFonts, CANVAS_WIDTH } = await import(`${edge}/pptx.js`);
 const { assignBindings, colourValue, inferPurpose, readFonts, readPalette, toJslaydDocument } =
   await import(`${edge}/pptx-design.js`);
 const { readDocument } = await import(`${edge}/jslayd/serialize.js`);
+const { renderPreview } = await import(`${edge}/jslayd/render.js`);
+const { CANVAS_WIDTH: DOCUMENT_WIDTH, CANVAS_HEIGHT: DOCUMENT_HEIGHT, RENDER_WIDTH, RENDER_HEIGHT } =
+  await import(`${edge}/jslayd/spec.js`);
 
 /**
  * Reading a designer's template as a design.
@@ -871,4 +874,68 @@ test("GIF and BMP are drawable and are kept", () => {
       + `<Relationship Id="rId9" Target="../media/a.${extension}"/></Relationships>`));
     assert.equal(readPptx(entries).slides[0].elements[0]?.type, "image", extension);
   }
+});
+
+/* ----------------------------------------------------- the two canvases */
+
+/**
+ * A template arrives the size it was drawn.
+ *
+ * Two coordinate systems meet in the importer and they are not the same size.
+ * The parser measures a slide onto 1000 × 562.5 — the model every stored deck
+ * and all four renderers speak — while a JSLAYD document is authored on
+ * 1920 × 1080 and projected back down on its way to a screen.
+ *
+ * Writing parser numbers straight into a document had them scaled a second
+ * time, so every imported design was 52% of its size in the top-left corner of
+ * a slide that was otherwise the background colour. It looked like a flat
+ * coloured rectangle, which is what got reported, several times, as the design
+ * not having been imported at all.
+ *
+ * Nothing caught it: every unit test passed, because each stage was
+ * self-consistent and the mistake was in the seam between two of them. So the
+ * assertion is deliberately end-to-end — a shape covering the whole slide comes
+ * out covering the whole rendered slide.
+ */
+test("a full-bleed shape fills the whole slide, not a corner of it", () => {
+  const deck = readPptx(template({
+    slides: [slide(
+      `<p:sp><p:nvSpPr><p:cNvPr id="2" name="Ground"/></p:nvSpPr>
+        <p:spPr>${frame(0, 0, 12, 12)}<a:solidFill><a:srgbClr val="112233"/></a:solidFill></p:spPr></p:sp>`
+      + textShape({ geometry: frame(1, 1, 6, 2), runs: run("Sarlavha") }),
+    )],
+  }));
+  const draft = toJslaydDocument(deck, options);
+  const ground = draft.document.archetypes[0].elements[0];
+
+  // The document is authored on the canonical canvas.
+  assert.equal(ground.geometry.width, DOCUMENT_WIDTH);
+  assert.equal(ground.geometry.height, DOCUMENT_HEIGHT);
+
+  // And the renderer projects it onto the whole rendered slide.
+  const drawn = renderPreview(draft.document, draft.document.archetypes[0].id);
+  const shape = drawn.elements.find((element) => element.type === "shape");
+  assert.equal(Math.round(shape.width), RENDER_WIDTH);
+  assert.equal(Math.round(shape.height), Math.round(RENDER_HEIGHT));
+  assert.equal(shape.x, 0);
+  assert.equal(shape.y, 0);
+});
+
+test("type is measured on the canvas it will be drawn on", () => {
+  const deck = readPptx(template({
+    slides: [slide(textShape({ geometry: frame(1, 1, 8, 3), runs: run("Sarlavha", 'sz="4000"') }))],
+  }));
+  const draft = toJslaydDocument(deck, options);
+  const text = draft.document.archetypes[0].elements.find((element) => element.type === "text");
+
+  // Carried to the 1920-wide authoring canvas and projected back, the size a
+  // reader sees is the size the parser measured — not that size halved.
+  const measured = deck.slides[0].elements.find((element) => element.type === "text").typography.fontSize;
+  const drawn = renderPreview(draft.document, draft.document.archetypes[0].id);
+  const rendered = drawn.elements.find((element) => element.type === "text");
+  assert.ok(text.text.fontSize > measured, "the document is authored on the larger canvas");
+  assert.ok(
+    Math.abs(rendered.style.fontSize - measured) < 0.5,
+    `rendered ${rendered.style.fontSize} should match the measured ${measured}`,
+  );
 });
