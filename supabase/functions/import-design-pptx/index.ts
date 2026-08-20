@@ -22,6 +22,7 @@ import { requestContext } from "../_shared/auth.ts";
 import { preflight } from "../_shared/cors.ts";
 import { geminiWriter } from "../_shared/gemini.ts";
 import { bodyJson, errorResponse, HttpError, json } from "../_shared/http.ts";
+import { decompile } from "../_shared/jslayd/decompile.ts";
 import { contentHash } from "../_shared/jslayd/serialize.ts";
 import { renderPreview } from "../_shared/jslayd/render.ts";
 import {
@@ -302,7 +303,20 @@ Deno.serve(async (request) => {
       p_is_premium: body.premium ?? false,
       // A template has no prompt behind it. Saying so is more useful than an
       // empty string that looks like an author's work went missing.
-      p_source_prompt: `PowerPoint shablonidan import qilindi: ${body.originalName ?? storagePath}`,
+      /**
+       * The document, written back out as the source an author would have
+       * typed.
+       *
+       * A prose note here was the obvious thing and the wrong one: the admin
+       * editor compiles this field, so a sentence about where the file came
+       * from opened as four errors — no `[DESIGN]`, no `[COLOR_FAMILY]`, no
+       * `[FONTS]`, no slides — and the design could not be published at all.
+       *
+       * Writing real source makes an imported design an ordinary one: it
+       * compiles, it publishes, and an admin can adjust a colour or a font by
+       * hand afterwards instead of re-exporting from PowerPoint.
+       */
+      p_source_prompt: decompile(draft.document),
       p_compiled_config: draft.document as never,
       p_preview: renderPreview(draft.document) as never,
       p_content_hash: await contentHash(draft.document),

@@ -11,3 +11,4 @@ export * from "./select.ts";
 export * from "./serialize.ts";
 export * from "./text-metrics.ts";
 export * from "./budget.ts";
+export * from "./decompile.ts";

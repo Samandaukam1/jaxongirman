@@ -12,6 +12,7 @@ const { toJslaydDocument } = await import(`${edge}/pptx-design.js`);
 const { factsFor, readSlideProfiles } = await import(`${edge}/pptx-classify.js`);
 const { planDeckLayout } = await import(`${edge}/layout-brief.js`);
 const { readDocument } = await import(`${edge}/jslayd/serialize.js`);
+const { decompile } = await import(`${edge}/jslayd/decompile.js`);
 
 /**
  * One real file, all the way through.
@@ -204,6 +205,22 @@ test("the same drawing hashes the same however often it is packed", async () => 
 test("the document survives being read back the way a stored design is", () => {
   const read = readDocument(draft.document);
   assert.ok(read.document, read.diagnostics.errors.map((entry) => `${entry.code}: ${entry.message}`).join("; "));
+});
+
+/**
+ * The other boundary: the admin editor.
+ *
+ * It compiles `source_prompt`, so an imported design needs real source behind
+ * it, not a note saying where the file came from. A note opened as four errors
+ * — no `[DESIGN]`, no `[COLOR_FAMILY]`, no `[FONTS]`, no slides — and left the
+ * design unpublishable.
+ */
+test("the document writes back out as source an editor would accept", () => {
+  const source = decompile(draft.document);
+  assert.match(source, /^JSLAYD-DESIGN/);
+  for (const section of ["[DESIGN]", "[COLOR_FAMILY", "[FONTS]", "[SLIDE"]) {
+    assert.ok(source.includes(section), `${section} missing from the written source`);
+  }
 });
 
 test("the design carries a named palette, so the phone has a family to offer", () => {

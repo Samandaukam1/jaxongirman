@@ -509,3 +509,33 @@ test("almost nothing at the end is a sign-off, and in the middle is a divider", 
   assert.equal(inferPurpose(sparse, 9, 10), "thank_you");
   assert.equal(inferPurpose(sparse, 4, 10), "section");
 });
+
+/* ------------------------------------------------------- every font is used */
+
+test("every declared font owns at least one duty", () => {
+  // A font with no role is not merely idle: the compiler refuses it, then
+  // refuses every element that named it, and the design cannot be published.
+  // Four faces is what a real template ships; the fixtures here had two, which
+  // is why this went out.
+  const face = (family, size) => ({
+    type: "text", x: 0, y: 0, width: 400, height: 60, rotation: 0, zIndex: 0, opacity: 1,
+    style: {}, content: { text: "x" },
+    typography: { fontFamily: family, fontSize: size, fontWeight: 400, italic: false, align: "left", verticalAlign: "top", lineHeightRatio: 1.2, letterSpacing: 0, transform: "none", color: "#000000", mixed: false },
+  });
+
+  for (let count = 1; count <= 4; count += 1) {
+    const elements = ["Alpha", "Beta", "Gamma", "Delta"]
+      .slice(0, count)
+      .map((family, index) => face(family, 60 - index * 10));
+    const fonts = readFonts([{ background: {}, elements }], "studio");
+
+    assert.equal(fonts.length, count);
+    for (const font of fonts) {
+      assert.ok(font.roles.length > 0, `${count} fonts: ${font.id} owns nothing`);
+    }
+    // And between them they answer every duty exactly once.
+    const owned = fonts.flatMap((font) => font.roles);
+    assert.equal(new Set(owned).size, owned.length, "a duty was claimed twice");
+    assert.equal(owned.length, 7, `${count} fonts: ${owned.length} duties assigned`);
+  }
+});

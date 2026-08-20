@@ -54,6 +54,12 @@ const MODULES = [
   // second copy on the server.
   "text-metrics.ts",
   "budget.ts",
+  // Not the compiler — the other direction. A design imported from a template
+  // is a document with no source text behind it, and the admin editor reads
+  // source text: without this the editor opens an imported design and reports
+  // that every section is missing, with no way to publish it. Writing the
+  // source at import time makes an imported design an ordinary one.
+  "decompile.ts",
 ];
 
 const BANNER = `// GENERATED FILE — do not edit by hand.
@@ -77,6 +83,7 @@ export * from "./select.ts";
 export * from "./serialize.ts";
 export * from "./text-metrics.ts";
 export * from "./budget.ts";
+export * from "./decompile.ts";
 `;
 
 /**

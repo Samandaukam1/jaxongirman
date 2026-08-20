@@ -244,11 +244,17 @@ const BUNDLED = ["Manrope", "League Spartan", "Arimo", "Pinyon Script", "Inter",
  * Which font holds which duty, by size rank.
  *
  * A template's largest face is its display face; its most-used one is its body.
- * Where a template ships fewer fonts than duties the extra duties fall back to
- * the last font it does ship, so every role is always answered.
+ * Where a template ships fewer fonts than duties, the extra duties fall to the
+ * last font it does ship, so every role is always answered.
+ *
+ * The duties are spread so that every declared font owns at least one. A font
+ * with no role is not merely idle — the compiler refuses it, and then refuses
+ * every element that referenced it, so a template using four faces produced a
+ * design that could not be published at all. It was invisible until a real
+ * eleven-page template with four fonts went through; the fixtures had two.
  */
 const ROLE_OWNER: Record<FontRole, number> = {
-  display: 0, heading: 0, subheading: 0, body: 1, caption: 1, number: 1, quote: 1,
+  display: 0, heading: 0, subheading: 1, body: 1, caption: 1, number: 2, quote: 3,
 };
 
 export function readFonts(slides: readonly ImportedSlide[], slug: string): FontDeclaration[] {
