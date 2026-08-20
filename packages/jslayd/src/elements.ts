@@ -41,6 +41,7 @@ import {
   SHAPE_KINDS,
   TEXT_ALIGNMENTS,
   TEXT_EFFECTS,
+  ASSET_NAME_PATTERN,
   TEXT_TRANSFORMS,
   VERTICAL_ALIGNMENTS,
   type Anchor,
@@ -398,7 +399,7 @@ function resolveFont(raw: string, key: string, line: number, fonts: readonly Fon
 
 const IMAGE_KEYS = [
   ...GEOMETRY_KEYS, ...BOX_KEYS, "shadow", "shadows",
-  "slot", "bind", "sourceStrategy", "imageRequired", "queryFrom", "queryStrategy",
+  "slot", "bind", "asset", "sourceStrategy", "imageRequired", "queryFrom", "queryStrategy",
   "orientation", "stylePreference", "fit", "focusX", "focusY", "overlay", "overlayGradient", "overlayOpacity",
 ];
 
@@ -451,13 +452,28 @@ function imageElement(
   }
 
   const slot = readString(nodes, "slot", bag, LIMITS.identifierLength) ?? base.id;
+
+  /**
+   * The design's own picture, by file name.
+   *
+   * A name rather than a path: the folder is the design's and is built from
+   * its slug, so a document cannot address another design's bucket. An `asset`
+   * outranks a `bind` because artwork is not a hole — if a designer said both,
+   * they meant the picture.
+   */
+  const assetName = readString(nodes, "asset", bag, 160);
+  let asset: string | null = null;
+  if (assetName) {
+    if (ASSET_NAME_PATTERN.test(assetName)) asset = assetName;
+    else bag.error("invalid_asset", `\`asset\` fayl nomi noto'g'ri: "${assetName}".`, section.line, "Masalan: logo.png");
+  }
   const gradient = readGradient(nodes, "overlayGradient", bag);
 
   return {
     ...base,
     type,
     slot,
-    source: binding ? { bind: binding } : null,
+    source: asset ? { asset } : binding ? { bind: binding } : null,
     strategy,
     required: readBoolean(nodes, "imageRequired", bag) ?? false,
     queryFrom,

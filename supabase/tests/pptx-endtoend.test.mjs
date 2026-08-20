@@ -137,7 +137,12 @@ const SLIDES = [
     textBox('<p:ph type="title"/>', box(1, 3, 10, 3), "148%", 9600)
     + textBox("", box(1, 7, 10, 1), "ceo@zenithcorp.example", 1400),
   ),
-  slide(textBox('<p:ph type="ctrTitle"/>', box(1, 5, 10, 2), "Thank you", 5400)),
+  slide(
+    textBox('<p:ph type="ctrTitle"/>', box(1, 5, 10, 2), "Thank you", 5400)
+    // A logo in the corner: the template's own, not a hole for the deck.
+    + `<p:pic><p:nvPicPr><p:nvPr/></p:nvPicPr>
+       <p:blipFill><a:blip r:embed="rId9"/></p:blipFill><p:spPr>${box(10, 0, 2, 1)}</p:spPr></p:pic>`,
+  ),
 ];
 
 function template() {
@@ -221,6 +226,43 @@ test("the document writes back out as source an editor would accept", () => {
   for (const section of ["[DESIGN]", "[COLOR_FAMILY", "[FONTS]", "[SLIDE"]) {
     assert.ok(source.includes(section), `${section} missing from the written source`);
   }
+});
+
+/**
+ * The template's own pictures.
+ *
+ * They were read and thrown away, because nothing could hold one: a logo, a
+ * texture, the photograph a cover was built around all arrived and vanished,
+ * and an imported design turned up without the artwork it was built on. A
+ * design that loses its logo is not that design.
+ */
+test("a picture the template draws itself stays in the design", () => {
+  const owned = draft.document.archetypes
+    .flatMap((archetype) => archetype.elements)
+    .filter((element) => element.type === "image" && element.source && "asset" in element.source);
+  assert.ok(owned.length > 0, "the template's own picture was dropped");
+  // It draws itself and waits for nothing.
+  assert.equal(owned[0].when, "always");
+  assert.equal(owned[0].strategy, "none");
+});
+
+test("its bytes are findable by the name the document uses", () => {
+  const art = draft.pages.flatMap((page) => page.artwork);
+  assert.ok(art.length > 0);
+  for (const entry of art) {
+    assert.ok(entries.has(entry.part), `${entry.part} is not in the package`);
+    assert.match(entry.name, /^[a-z0-9][a-z0-9._-]*\.(png|jpg|jpeg|webp|svg)$/i);
+  }
+});
+
+test("a slot the deck fills and a picture the design owns stay different things", () => {
+  const images = draft.document.archetypes
+    .flatMap((archetype) => archetype.elements)
+    .filter((element) => element.type === "image");
+  const bound = images.filter((element) => element.source && "bind" in element.source);
+  const owned = images.filter((element) => element.source && "asset" in element.source);
+  assert.ok(bound.length > 0 && owned.length > 0, "the fixture must exercise both");
+  for (const element of bound) assert.equal(element.when, "hasImage");
 });
 
 test("the design carries a named palette, so the phone has a family to offer", () => {

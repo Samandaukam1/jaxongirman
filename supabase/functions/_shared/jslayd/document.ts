@@ -294,11 +294,25 @@ export type TextElement = ElementBase & {
   padding: number;
 };
 
+/**
+ * Where a picture comes from.
+ *
+ * `bind` is a hole the deck fills — a slot the generator resolves a photograph
+ * into. `asset` is the design's own artwork: a logo, a texture, a cover
+ * photograph that came with the template and is part of the composition rather
+ * than a place to put something.
+ *
+ * The two are genuinely different things and were not distinguishable before
+ * this existed, so an imported template's own pictures had nowhere to live and
+ * were dropped. A design that loses its logo is not that design.
+ */
+export type ImageSource = { bind: Binding } | { asset: string };
+
 export type ImageElement = ElementBase & {
   type: "image" | "frame";
   /** Semantic slot id the generator fills, e.g. `hero_image` (§27). */
   slot: string;
-  source: { bind: Binding } | null;
+  source: ImageSource | null;
   strategy: ImageSourceStrategy;
   required: boolean;
   queryFrom: readonly string[];

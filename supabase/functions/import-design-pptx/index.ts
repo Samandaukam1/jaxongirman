@@ -37,6 +37,13 @@ import { unzip, ZipError } from "../_shared/unzip.ts";
 import { ProviderUnavailable } from "../_shared/writer.ts";
 
 const BUCKET = "design-source";
+/** Where a design's own pictures live, readable by every renderer. */
+const ASSET_BUCKET = "design-assets";
+
+const MIME_BY_EXTENSION: Record<string, string> = {
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
+  webp: "image/webp", svg: "image/svg+xml",
+};
 
 type Body = {
   storagePath?: string;
@@ -362,6 +369,32 @@ Deno.serve(async (request) => {
       { onConflict: "design_id,design_version,archetype_id" },
     );
     if (stored.error) throw stored.error;
+
+    /**
+     * The template's own pictures, uploaded under the names the document uses.
+     *
+     * Before the row is finished rather than after: a design referencing a file
+     * that is not there yet draws a hole, and the window between the two is
+     * exactly when somebody opens the preview to see what they just imported.
+     *
+     * A failure is a warning, not a refusal. The design is otherwise complete,
+     * and losing the whole import because one texture would not upload is a
+     * worse trade than a design an admin can see is missing a picture.
+     */
+    for (const page of draft.pages) {
+      for (const art of page.artwork) {
+        const bytes = entries.get(art.part);
+        const extension = art.name.slice(art.name.lastIndexOf(".") + 1).toLowerCase();
+        const mime = MIME_BY_EXTENSION[extension];
+        if (!bytes || !mime) {
+          warnings.push(`"${art.name}" rasmi yuklanmadi — turi qo‘llab-quvvatlanmaydi.`);
+          continue;
+        }
+        const stored = await service.storage.from(ASSET_BUCKET)
+          .upload(`${slug}/${art.name}`, bytes, { contentType: mime, upsert: true });
+        if (stored.error) warnings.push(`"${art.name}" rasmi yuklanmadi.`);
+      }
+    }
 
     const recorded = await service.from("design_source_assets").insert({
       design_id: id,

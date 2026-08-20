@@ -3,6 +3,7 @@ import { DiagnosticBag, type Diagnostics } from "./diagnostics.ts";
 import {
   ANCHORS,
   ARCHETYPE_PURPOSES,
+  ASSET_NAME_PATTERN,
   BINDINGS,
   CHART_KINDS,
   COLOR_ROLES,
@@ -365,6 +366,11 @@ function checkElement(value: unknown, fontIds: ReadonlySet<string>, bag: Diagnos
     const source = record(holder);
     if (!source) return bag.error("invalid_element", `\`${element.id}.${label}\` yo'q.`, 0);
     if (typeof source.literal === "string") return;
+    // The design's own artwork — a logo, a texture, the photograph the template
+    // was built around. A file name inside the design's folder, never a path,
+    // so a document cannot address another design's bucket or escape the one
+    // it owns.
+    if (typeof source.asset === "string" && ASSET_NAME_PATTERN.test(source.asset)) return;
     if (typeof source.bind === "string" && (BINDINGS as readonly string[]).includes(source.bind)) return;
     bag.error("invalid_binding", `\`${element.id}.${label}\` noma'lum bog'lanish.`, 0);
   };

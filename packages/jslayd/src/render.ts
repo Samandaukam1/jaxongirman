@@ -30,7 +30,7 @@ import type {
   TextSource,
   TextStyle,
 } from "./document.ts";
-import { CHART_FALLBACKS, MIN_FONT_SIZE, MIN_RENDER_FONT_SIZE, RENDER_SCALE } from "./spec.ts";
+import { CHART_FALLBACKS, DESIGN_ASSET_BUCKET, MIN_FONT_SIZE, MIN_RENDER_FONT_SIZE, RENDER_SCALE } from "./spec.ts";
 
 /**
  * The JSLAYD render engine.
@@ -635,7 +635,17 @@ function renderImage(element: ImageElement, box: Box, geometry: Geometry, contex
   // A design may declare the slot takes an element instead of a picture.
   if (element.strategy === "jelement") return renderPlacedElement(element, box, geometry, context);
 
-  const picture = context.slide.images[element.slot] ?? null;
+  /**
+   * The design's own artwork resolves to itself.
+   *
+   * A template's logo, texture or cover photograph is part of the composition
+   * rather than a place to put something, so it does not wait for the deck to
+   * supply anything and does not disappear when the deck supplies nothing.
+   */
+  const owned = element.source && "asset" in element.source
+    ? { bucket: DESIGN_ASSET_BUCKET, path: `${context.slug}/${element.source.asset}` }
+    : null;
+  const picture = owned ?? context.slide.images[element.slot] ?? null;
   // A slot with no picture still draws when the design says the image is
   // required: the renderer shows a placeholder, which is a composition with a
   // hole in it rather than a composition that silently lost a quarter of itself.

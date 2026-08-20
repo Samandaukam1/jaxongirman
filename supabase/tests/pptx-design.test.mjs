@@ -437,7 +437,11 @@ test("a picture placeholder becomes a slot the deck fills", () => {
   assert.equal(image.when, "hasImage");
 });
 
-test("the template's own artwork is kept beside the document, not inside it", () => {
+test("the template's own artwork stays in the design, as its own picture", () => {
+  // This once asserted the opposite — that artwork was kept beside the document
+  // rather than in it — because no element type could hold a picture the design
+  // owns. That was a limitation written down as a rule, and a template arriving
+  // without its logo is not that template.
   const entries = template({
     slides: [slide(
       textShape({ placeholder: '<p:ph type="title"/>', geometry: frame(1, 4, 10, 2), runs: run("Sarlavha", 'sz="4000"') })
@@ -451,9 +455,18 @@ test("the template's own artwork is kept beside the document, not inside it", ()
     + '<Relationship Id="rId9" Target="../media/image1.png"/></Relationships>'));
 
   const draft = toJslaydDocument(readPptx(entries), options);
+  const owned = draft.document.archetypes[0].elements
+    .filter((element) => element.type === "image" && element.source && "asset" in element.source);
+
+  assert.equal(owned.length, 1);
+  // It draws itself: no deck supplies it and none can take it away.
+  assert.equal(owned[0].when, "always");
+  assert.equal(owned[0].strategy, "none");
+
+  // And the bytes are still findable under the name the document used.
   assert.equal(draft.pages[0].artwork.length, 1);
   assert.equal(draft.pages[0].artwork[0].part, "ppt/media/image1.png");
-  assert.equal(draft.document.archetypes[0].elements.filter((element) => element.type === "image").length, 0);
+  assert.equal(draft.pages[0].artwork[0].name, owned[0].source.asset);
 });
 
 test("surplus text boxes are dropped and said out loud, never left as template copy", () => {

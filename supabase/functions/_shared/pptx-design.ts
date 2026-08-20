@@ -54,10 +54,19 @@ import { CANVAS_HEIGHT, CANVAS_WIDTH, type ImportedDeck, type ImportedElement, t
 
 /* ------------------------------------------------------------------ output */
 
-/** Artwork the template draws itself, which no element type can carry yet. */
+/**
+ * A picture the template draws itself.
+ *
+ * A logo, a texture, the photograph a cover was built around: part of the
+ * composition rather than a place to put something. The document references it
+ * by `name`, and the importer uploads the bytes at `part` under that name, so
+ * the two agree without either having to ask the other.
+ */
 export type TemplateArtwork = {
   /** The package part, so the importer can upload the bytes it already has. */
   part: string;
+  /** The file name the document refers to it by, inside the design's folder. */
+  name: string;
   x: number;
   y: number;
   width: number;
@@ -540,7 +549,37 @@ function convertSlide(
       // rather than thrown away or turned into an empty frame.
       const isSlot = element.placeholder?.kind === "pic" || element.placeholder?.kind === "obj";
       if (!isSlot || images >= 3) {
-        if (element.media) artwork.push({ part: element.media.part, x: geometry.x, y: geometry.y, width: geometry.width, height: geometry.height });
+        if (!element.media) continue;
+        // The design's own picture. It draws itself, always, and waits for
+        // nothing: a template that loses its logo is not that template.
+        const extension = element.media.part.slice(element.media.part.lastIndexOf(".") + 1).toLowerCase();
+        const name = `${id.replace(/[^a-z0-9]/g, "")}-art${artwork.length + 1}.${extension}`;
+        artwork.push({
+          part: element.media.part, name,
+          x: geometry.x, y: geometry.y, width: geometry.width, height: geometry.height,
+        });
+        elements.push({
+          type: "image",
+          id: `${id}_art_${artwork.length}`,
+          geometry,
+          when: "always",
+          opacity: element.opacity,
+          grow: false,
+          slot: `art_${artwork.length}`,
+          source: { asset: name },
+          strategy: "none",
+          required: false,
+          queryFrom: [],
+          orientation: "any",
+          stylePreference: null,
+          fit: "cover",
+          focus: { x: 0.5, y: 0.5 },
+          corners: null,
+          border: null,
+          shadows: [],
+          overlay: null,
+          overlayOpacity: 0,
+        });
         continue;
       }
       images += 1;

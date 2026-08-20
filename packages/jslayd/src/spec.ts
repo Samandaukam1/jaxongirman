@@ -343,6 +343,18 @@ export function toSlug(value: string): string | null {
     .replace(/-+$/, "");
   return SLUG_PATTERN.test(slug) && slug.length >= 3 ? slug : null;
 }
+/**
+ * Where a design's own pictures live.
+ *
+ * Public, like the font bucket, because every renderer has to fetch them —
+ * the phone, the web preview, both exporters — and a signed URL that expires
+ * is a design that stops drawing after an hour.
+ */
+export const DESIGN_ASSET_BUCKET = "design-assets";
+
+/** A design asset is a file name inside the design's own folder, never a path. */
+export const ASSET_NAME_PATTERN = /^[a-z0-9][a-z0-9._-]*\.(png|jpg|jpeg|webp|svg)$/i;
+
 export const IDENTIFIER_PATTERN = /^[a-z][a-z0-9_]*$/;
 
 export const HEX_COLOR_PATTERN = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;

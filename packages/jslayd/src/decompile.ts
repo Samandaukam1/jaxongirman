@@ -188,7 +188,10 @@ function elementLines(element: JslaydElement, parent: string | null, origin: { x
       break;
     case "image": case "frame":
       out.push(`slot: ${element.slot}`);
-      if (element.source) out.push(`bind: {{${element.source.bind}}}`);
+      // A design's own artwork and a slot the deck fills are written
+      // differently because they are different things.
+      if (element.source && "asset" in element.source) out.push(`asset: ${element.source.asset}`);
+      else if (element.source) out.push(`bind: {{${element.source.bind}}}`);
       out.push(`sourceStrategy: ${element.strategy}`);
       if (element.required) out.push("imageRequired: true");
       if (element.queryFrom.length) out.push(`queryFrom: ${element.queryFrom.join(", ")}`);
