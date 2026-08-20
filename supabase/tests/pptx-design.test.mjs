@@ -237,12 +237,30 @@ test("one look throughout is not reported as mixed", () => {
   assert.equal(deck.slides[0].elements[0].typography.mixed, false);
 });
 
-test("percentage line spacing becomes the ratio everything downstream uses", () => {
-  const deck = readPptx(template({
-    slides: [slide(`<p:sp><p:nvSpPr><p:nvPr/></p:nvSpPr><p:spPr>${frame(1, 1, 10, 2)}</p:spPr>
-      <p:txBody><a:p><a:pPr><a:lnSpc><a:spcPct val="90000"/></a:lnSpc></a:pPr>${run("Matn")}</a:p></p:txBody></p:sp>`)],
-  }));
-  assert.equal(deck.slides[0].elements[0].typography.lineHeightRatio, 0.9);
+const spaced = (percent) => readPptx(template({
+  slides: [slide(`<p:sp><p:nvSpPr><p:cNvPr id="9" name="Box"/><p:nvPr/></p:nvSpPr><p:spPr>${frame(1, 1, 10, 2)}</p:spPr>
+    <p:txBody><a:p><a:pPr><a:lnSpc><a:spcPct val="${percent}"/></a:lnSpc></a:pPr>${run("Matn")}</a:p></p:txBody></p:sp>`)],
+})).slides[0].elements[0].typography.lineHeightRatio;
+
+/**
+ * PowerPoint's percentage is not a CSS line height.
+ *
+ * "Single" spacing is 100% and PowerPoint draws it at about 1.2× the type size.
+ * Read raw, a heading set at 75% arrived as a line height of 0.75 — a line box
+ * shorter than the letters in it — so the first line's ascenders were drawn
+ * above the shape and clipped against it, and the line below was lapped. That
+ * is the half-cut title on an imported cover.
+ */
+test("percentage line spacing is read against PowerPoint's single, not against one", () => {
+  assert.equal(spaced("100000"), 1.2);
+  assert.equal(spaced("150000"), 1.8);
+});
+
+test("spacing tight enough to cut the type is opened to where it does not", () => {
+  // 75% of single is 0.9, which still clips. A slide that reads is worth more
+  // than a percentage that was honoured.
+  assert.equal(spaced("75000"), 1);
+  assert.equal(spaced("40000"), 1);
 });
 
 test("all-capitals is carried as a transform, not baked into the words", () => {

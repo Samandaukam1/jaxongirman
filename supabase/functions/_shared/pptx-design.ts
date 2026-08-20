@@ -530,11 +530,16 @@ function textStyleOf(typography: Typography, height: number, fonts: readonly Fon
   // Which font this is depends on how big it is, matching how the roles were
   // handed out: the display face is the one the largest type was measured at.
   const font = fonts.find((declared) => declared.name === typography.fontFamily) ?? fonts[0]!;
+  // Both the box and the type are on the authoring canvas, so the count of
+  // lines that fit is worked out there. Measuring a document-sized box against
+  // a parser-sized type said a box held twice the lines it does, and the
+  // renderer laid out copy that then had nowhere to go.
+  const documentSize = toDocument(size);
   return {
     font: font.id,
     // A type size is a length: on the authoring canvas it is 1.92× what the
     // parser measured, and the renderer takes it back down again.
-    fontSize: toDocument(size),
+    fontSize: documentSize,
     fontWeight: typography.fontWeight,
     fontStyle: typography.italic ? "italic" : "normal",
     letterSpacing: toDocument(typography.letterSpacing),
@@ -543,8 +548,7 @@ function textStyleOf(typography: Typography, height: number, fonts: readonly Fon
     verticalAlign: typography.verticalAlign,
     transform: typography.transform,
     color: colourValue(typography.color, family),
-    // Both sides are in the parser's units, so the count is the same either way.
-    maxLines: Math.max(1, Math.floor(height / Math.max(1, size * ratio))),
+    maxLines: Math.max(1, Math.floor(height / Math.max(1, documentSize * ratio))),
     overflow: "shrink",
     minFontSize: toDocument(Math.max(10, size * 0.6)),
     effect: "none",
@@ -673,6 +677,7 @@ function convertSlide(
       x: element.x, y: element.y,
       width: Math.max(1, element.width), height: Math.max(1, element.height),
       fontSize: element.typography?.fontSize ?? FALLBACK_TYPOGRAPHY.fontSize,
+      lineHeight: element.typography?.lineHeightRatio ?? FALLBACK_TYPOGRAPHY.lineHeightRatio,
     });
   }
   const slots = readTemplateSlots(slide.markup, measured, {

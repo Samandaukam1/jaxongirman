@@ -50,6 +50,15 @@ export type SlotGeometry = {
   width: number;
   height: number;
   fontSize: number;
+  /**
+   * The box's own line spacing, as a multiple of the type size.
+   *
+   * How many lines a box holds is the height divided by the line advance, and
+   * the advance is the designer's, not a constant. A display heading set tight
+   * fits two lines where a fixed 1.25 said one, so the writer was told to
+   * produce half the copy the composition was built for.
+   */
+  lineHeight?: number;
 };
 
 export type TemplateSlot = {
@@ -100,7 +109,7 @@ export type TemplateSlot = {
 
 /** Roughly how wide a character is, as a fraction of its point size. */
 const CHARACTER_WIDTH = 0.53;
-/** Line box as a multiple of point size — PowerPoint's single spacing. */
+/** Line box as a multiple of point size, where the box does not say. */
 const LINE_HEIGHT = 1.25;
 /** An Uzbek word, plus the space after it. */
 const WORD_LENGTH = 7;
@@ -227,7 +236,8 @@ export function readTemplateSlots(
     const text = object.text;
 
     const charactersPerLine = Math.max(1, Math.round(box.width / Math.max(1, fontSize * CHARACTER_WIDTH)));
-    const lines = Math.max(1, Math.floor(box.height / Math.max(1, fontSize * LINE_HEIGHT)));
+    const advance = Math.max(1, fontSize * (box.lineHeight && box.lineHeight > 0 ? box.lineHeight : LINE_HEIGHT));
+    const lines = Math.max(1, Math.floor(box.height / advance));
 
     const slot: TemplateSlot = {
       shapeId: object.shapeId,

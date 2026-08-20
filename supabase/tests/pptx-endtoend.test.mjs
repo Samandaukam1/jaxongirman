@@ -445,3 +445,80 @@ test("rows the generator writes are rows the exporter can clone", async () => {
   assert.equal(exported.report.structuralFidelityPassed, true);
   assert.equal(exported.report.slides.length, draft.pages.length);
 });
+
+/**
+ * What the deck shows and what the file contains are the same words.
+ *
+ * They were not. The renderer resolves `{{title}}` from the slide's own fields,
+ * which carry the outline title — decided before anything knew how much room
+ * the page had — while the export writes what the box writer produced, which
+ * was fitted to the box. So a cover displayed a sentence measured for a box
+ * half its length, overflowed it and was cut off at the top, and the .pptx the
+ * same deck produced said something else entirely.
+ */
+test("a template slide displays the copy its boxes will be given", () => {
+  const carried = draft.pages.map((page, index) => ({
+    archetypeId: page.archetype.id,
+    role: profiles[index].role,
+    alternativeRoles: [],
+    recommendedStoryPosition: index + 1,
+    layoutSignature: "",
+    isTerminal: false,
+    supportsImage: true, supportsChart: false, supportsTable: false,
+    supportsQuote: false, supportsStats: false,
+    minText: 0, maxText: 4000,
+    sourcePart: page.sourcePart,
+    sourceIndex: page.sourceIndexInFile,
+    slots: page.textMap,
+  }));
+
+  const written = draft.pages.map((page) => Object.fromEntries(
+    readTemplateAnswer(
+      { boxes: asksFor(page.textMap).map((ask) => ({ id: ask.id, text: `Quti ${ask.id}` })) },
+      page.textMap,
+      { title: "Sarlavha" },
+    ).texts,
+  ));
+
+  const rows = buildJslaydSlides({
+    presentationId: "11111111-1111-4111-8111-111111111111",
+    ownerId: "22222222-2222-4222-8222-222222222222",
+    design: { id: "d", version: 1, slug: "studio-zenith", document: draft.document, profiles: carried },
+    slides: draft.pages.map(() => ({
+      // Deliberately nothing like the box copy: an outline title, as the old
+      // path would have drawn.
+      title: "Rejadagi uzun sarlavha, qutiga hech qachon sig‘maydi",
+      subtitle: "Reja quyi sarlavhasi",
+      purpose: "content",
+      layout: "title_content",
+      bullets: ["Rejadagi band"],
+      body: "Rejadagi tana matni",
+      quote: null, statistic: null, chart: null, table: null, visualPrompt: null,
+    })),
+    sources: [],
+    generatedImages: [],
+    uploadedImages: [],
+    authorName: null,
+    teacherName: null,
+    archetypeIds: draft.pages.map((page) => page.archetype.id),
+    templateText: written,
+  });
+
+  const drawn = rows.elements.filter((element) => element.type === "text");
+  assert.ok(drawn.length > 0);
+  for (const element of drawn) {
+    const shown = String(element.content.text ?? "");
+    if (!shown) continue;
+    assert.ok(
+      !shown.includes("Rejadagi"),
+      `a template slide drew the outline copy «${shown}» instead of its box copy`,
+    );
+  }
+
+  // And the boxes the export will fill say the same thing.
+  const slots = rows.slides[0].quality_report.slots;
+  const shownTexts = new Set(drawn.map((element) => String(element.content.text ?? "")));
+  const bound = draft.pages[0].textMap.filter((slot) => slot.elementId && (slots[slot.shapeId] ?? "").trim());
+  assert.ok(bound.length > 0);
+  assert.ok(bound.some((slot) => shownTexts.has(slots[slot.shapeId])));
+});

@@ -10,7 +10,7 @@ import {
   type SlideData,
 } from "./jslayd/index.ts";
 import { planStory, selectPages, type PageProfile } from "./design-select.ts";
-import { fillFromSlide, usableSlots } from "./pptx-writer.ts";
+import { bindingsFromSlots, fillFromSlide, usableSlots, type WritableSlot } from "./pptx-writer.ts";
 import { validateAndRepair } from "./layout.ts";
 import type { ElementRow, GeneratedImage, SemanticSlide, SlideRow } from "./presentation-types.ts";
 
@@ -217,34 +217,46 @@ function baseSelection(
  * `engine` is checked by the exporter before it does anything else, so
  * `"jslayd"` appearing on a template slide is a bug rather than a fallback.
  */
-function templateReport(
+/**
+ * What each box of a template page will say, for one slide.
+ *
+ * Null when the page is not a template page, which is every page of a written
+ * design. Otherwise it is what the writer produced for this slide — or, for the
+ * four slides the server assembles rather than writes, what those slides say,
+ * fitted to the boxes. A box with nothing in it keeps the template's own words,
+ * so there is no third answer.
+ */
+function boxTextFor(
   profile: PageProfile | undefined,
   written: Record<string, string> | null,
   slide: SlideData,
-): Record<string, unknown> {
-  if (!profile?.sourcePart) return { engine: "jslayd" };
+): { slots: WritableSlot[]; texts: Record<string, string> } | null {
+  if (!profile?.sourcePart) return null;
   const slots = usableSlots(profile.slots ?? []);
   return {
-    engine: "pptx_clone",
-    source_slide_index: profile.sourceIndex ?? 0,
-    source_slide_part: profile.sourcePart,
-    text_objects_found: slots.length,
-    /**
-     * One entry per box, so the export needs the design only for the package
-     * itself. A box the user later edits is read from its element instead.
-     *
-     * Four slides of every deck are assembled here rather than written — the
-     * cover, the agenda, the bibliography and the closing line — so they arrive
-     * with nothing from the writer and their boxes are filled from what they do
-     * say. Without that the export refuses the whole deck, because a box with
-     * no copy keeps the template's own words.
-     */
-    slots: written ?? Object.fromEntries(fillFromSlide(slots, {
+    slots,
+    texts: written ?? Object.fromEntries(fillFromSlide(slots, {
       title: slide.title,
       subtitle: slide.subtitle,
       body: slide.body,
       bullets: slide.bullets,
     })),
+  };
+}
+
+function templateReport(
+  profile: PageProfile | undefined,
+  box: { slots: WritableSlot[]; texts: Record<string, string> } | null,
+): Record<string, unknown> {
+  if (!profile?.sourcePart || !box) return { engine: "jslayd" };
+  return {
+    engine: "pptx_clone",
+    source_slide_index: profile.sourceIndex ?? 0,
+    source_slide_part: profile.sourcePart,
+    text_objects_found: box.slots.length,
+    // One entry per box, so the export needs the design only for the package
+    // itself. A box the user later edits is read from its element instead.
+    slots: box.texts,
   };
 }
 
@@ -304,6 +316,29 @@ export function buildJslaydSlides(input: BuildInput): { slides: SlideRow[]; elem
     const drawn = input.slideElements?.[index];
     if (drawn) slide.elements = { ...drawn };
 
+    /**
+     * A template slide is drawn with the copy written for its boxes.
+     *
+     * Without this the deck showed one text and exported another. The renderer
+     * resolves `{{title}}` from the slide's own fields, which carry the outline
+     * title — written before anything knew how much room the page had — while
+     * the export writes what the box writer produced, which was fitted to it. A
+     * cover then read "Tibbiyot sohasiga kirish" in a box measured for
+     * seventeen characters, overflowed it, and was cut off at the top.
+     *
+     * Set before rendering rather than after, because the renderer's fit pass
+     * measures whatever it is given: overwriting the words afterwards would
+     * leave the type sized for a sentence that is no longer there.
+     */
+    const box = boxTextFor(profileByArchetype.get(selection.archetype.id), input.templateText?.[index] ?? null, slide);
+    if (box) {
+      const bound = bindingsFromSlots(box.slots, new Map(Object.entries(box.texts)));
+      slide.title = bound.title ?? slide.title;
+      slide.subtitle = bound.subtitle;
+      slide.body = bound.body;
+      slide.bullets = bound.bullets;
+    }
+
     const rendered = renderArchetype(input.design.document, selection.archetype, slide, input.paletteCode);
     const rows: ElementRow[] = rendered.elements.map((element) => ({
       id: crypto.randomUUID(),
@@ -346,7 +381,7 @@ export function buildJslaydSlides(input: BuildInput): { slides: SlideRow[]; elem
          * a source slide, and a design with none is drawn. Asking whether the
          * chosen page has one is the same question the exporter asks.
          */
-        ...templateReport(profileByArchetype.get(selection.archetype.id), input.templateText?.[index] ?? null, slide),
+        ...templateReport(profileByArchetype.get(selection.archetype.id), box),
         design: input.design.slug,
         design_version: input.design.version,
         archetype: selection.archetype.id,

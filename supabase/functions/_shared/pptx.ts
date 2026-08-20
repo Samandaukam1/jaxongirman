@@ -534,9 +534,29 @@ function readTextLook(
   const spacing = child(paragraphProperties, "lnSpc") ?? child(inherited.paragraph, "lnSpc");
   const percent = integerAttribute(child(spacing, "spcPct"), "val");
   const exact = integerAttribute(child(spacing, "spcPts"), "val");
+  /**
+   * Line spacing, as a multiple of the type size.
+   *
+   * PowerPoint's percentage is not a CSS `line-height`. "Single" spacing is
+   * 100% and PowerPoint draws it at about 1.2× the type size — which is why the
+   * fallback three lines down is 1.2 and not 1. Taking the percentage raw made
+   * a heading set at 83% arrive as a line height of 0.83, and a line box
+   * shorter than the letters in it clips their ascenders against the top of the
+   * shape and laps the line below. That is the half-cut first line on an
+   * imported cover, and the two lines of a title drawn on top of each other.
+   *
+   * Floored at one rather than trusted. Below a line height of 1 the line box
+   * is shorter than the letters it holds, so the first line's ascenders are
+   * drawn above the shape and clipped against it — the tightness a designer
+   * asked for is not worth a title with its top cut off. A slide that reads is
+   * worth more than a percentage that was honoured.
+   */
+  const SINGLE_SPACING = 1.2;
   const lineHeightRatio = percent
-    ? Math.round((percent / 100000) * 100) / 100
-    : exact && points > 0 ? Math.round((exact / 100 / points) * 100) / 100 : 1.2;
+    ? Math.max(1, Math.round((percent / 100000) * SINGLE_SPACING * 100) / 100)
+    : exact && points > 0
+      ? Math.max(1, Math.round((exact / 100 / points) * 100) / 100)
+      : SINGLE_SPACING;
 
   const letterSpacingPoints = (integerAttribute(runProperties, "spc") ?? integerAttribute(inherited.run, "spc") ?? 0) / 100;
   const capitals = inheritedAttribute("cap", runProperties, inherited.run);
