@@ -4441,6 +4441,7 @@ export type Database = {
       }
       admin_dashboard_metrics: { Args: never; Returns: Json }
       admin_delete_coin_package: { Args: { p_code: string }; Returns: boolean }
+      admin_delete_design: { Args: { p_design_id: string }; Returns: Json }
       admin_delete_design_font: {
         Args: { p_design_id: string; p_font_id: string }
         Returns: undefined

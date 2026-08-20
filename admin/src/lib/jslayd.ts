@@ -147,6 +147,33 @@ export async function archiveDesign(id: string, reason: string | null) {
   if (error) throw error;
 }
 
+/**
+ * Removes a design and the files it owned.
+ *
+ * The row goes first and the objects after, which is the order that fails
+ * safely: an object with no row is litter nobody sees, while a row pointing at
+ * a deleted object is a design that renders a missing font.
+ *
+ * A sweep that fails is not raised. The design is gone by then, and telling an
+ * admin the delete failed — when what failed was tidying up after it — would
+ * have them press the button again on something that no longer exists.
+ */
+export async function deleteDesign(id: string): Promise<void> {
+  const { data, error } = await supabase.rpc("admin_delete_design", { p_design_id: id });
+  if (error) throw error;
+
+  const paths = (data ?? {}) as { fonts?: string[]; sources?: string[] };
+  const fonts = (paths.fonts ?? []).filter(Boolean);
+  const sources = (paths.sources ?? []).filter(Boolean);
+
+  try {
+    if (fonts.length) await supabase.storage.from(FONT_BUCKET).remove(fonts);
+    if (sources.length) await supabase.storage.from(TEMPLATE_BUCKET).remove(sources);
+  } catch {
+    // Deliberately swallowed; see above.
+  }
+}
+
 export async function restoreDesign(id: string) {
   const { error } = await supabase.rpc("admin_restore_design", { p_design_id: id });
   if (error) throw error;

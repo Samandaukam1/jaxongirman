@@ -1,6 +1,6 @@
 import { decompile, SAMPLE_PROMPT, SLUG_PATTERN, TIERS, TIER_LABELS, toSlug, type Tier } from "@jaxongirman/jslayd";
 import { ScaledSlide } from "@jaxongirman/slide-dom";
-import { Download, FileUp, Plus, Search, Upload } from "lucide-react";
+import { Download, FileUp, Plus, Search, Trash2, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { EmptyState, ErrorState, PageHeader, StatusBadge, TableSkeleton } from "@/components/AdminUI";
@@ -11,6 +11,7 @@ import { dateTime, errorMessage } from "@/lib/format";
 import {
   allPreviewsOf,
   archiveDesign,
+  deleteDesign,
   compilePrompt,
   downloadDocument,
   duplicateDesign,
@@ -228,6 +229,19 @@ export function JslaydDesignsPage() {
                           Arxivlash
                         </button>
                       )}
+                      {/* Only where it can succeed: a design a deck was made
+                          with is refused by the server, and offering a button
+                          that always fails teaches nobody anything. */}
+                      {item.used_by === 0 ? (
+                        <button
+                          className="danger-button compact"
+                          type="button"
+                          title="Dizaynni butunlay o‘chirish"
+                          onClick={() => void remove(item, load, setError)}
+                        >
+                          <Trash2 size={15} strokeWidth={1.9} /> O‘chirish
+                        </button>
+                      ) : null}
                     </td>
                   </tr>
                 ))}
@@ -257,6 +271,26 @@ async function archive(item: DesignRow, reload: () => Promise<void>, onError: (m
     : `«${item.name}» arxivlansinmi?`;
   if (!window.confirm(warning)) return;
   await guard(() => archiveDesign(item.id, null), reload, onError);
+}
+
+/**
+ * Deleting, which is not archiving.
+ *
+ * A design a deck was made with cannot be deleted — the server refuses it and
+ * says how many are in the way — so the button is not offered there at all: an
+ * action that is always going to fail is worse than no action, because the
+ * person clicking it learns nothing until after they have decided.
+ *
+ * What is left is the design that never became anything: a draft, a template
+ * imported to see what it looked like, a duplicate made to try a colour. The
+ * confirmation names the design and says plainly that this one does not come
+ * back, since `Arxivlash` sits right beside it and does.
+ */
+async function remove(item: DesignRow, reload: () => Promise<void>, onError: (message: string) => void) {
+  const warning = `«${item.name}» butunlay o‘chirilsinmi?\n\n`
+    + "Sahifalari, shriftlari va yuklangan shablon fayli ham o‘chadi. Bu amalni qaytarib bo‘lmaydi.";
+  if (!window.confirm(warning)) return;
+  await guard(() => deleteDesign(item.id), reload, onError);
 }
 
 async function duplicate(item: DesignRow, reload: () => Promise<void>, onError: (message: string) => void) {
