@@ -42,7 +42,7 @@ const ASSET_BUCKET = "design-assets";
 
 const MIME_BY_EXTENSION: Record<string, string> = {
   png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
-  webp: "image/webp", svg: "image/svg+xml",
+  webp: "image/webp", svg: "image/svg+xml", gif: "image/gif", bmp: "image/bmp",
 };
 
 type Body = {

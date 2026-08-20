@@ -815,3 +815,50 @@ test("a colour on the master is used when nothing nearer states one", () => {
   }));
   assert.equal(deck.slides[0].background.color, "#ffe500");
 });
+
+test("a shape filled with a photograph is a photograph", () => {
+  // This is how a designer places most pictures: a rectangle or a circle with
+  // `blipFill` in its shape properties, cropped by the shape. Reading blipFill
+  // only on `<p:pic>` found almost none of the photography in a real template.
+  const entries = template({
+    slides: [slide(`<p:sp><p:nvSpPr><p:nvPr/></p:nvSpPr>
+      <p:spPr>${frame(1, 1, 6, 4)}<a:prstGeom prst="ellipse"/>
+      <a:blipFill><a:blip r:embed="rId9"/></a:blipFill></p:spPr></p:sp>`)],
+  });
+  entries.set("ppt/media/photographer.jpg", bytes("JPG"));
+  entries.set("ppt/slides/_rels/slide1.xml.rels", bytes(
+    '<Relationships><Relationship Id="rId1" Target="../slideLayouts/slideLayout1.xml"/>'
+    + '<Relationship Id="rId9" Target="../media/photographer.jpg"/></Relationships>'));
+
+  const [element] = readPptx(entries).slides[0].elements;
+  assert.equal(element.type, "image", "the photograph was read as an empty shape");
+  assert.equal(element.media.part, "ppt/media/photographer.jpg");
+});
+
+test("a picture the previewer cannot draw is a caveat, not a silent loss", () => {
+  const entries = template({
+    slides: [slide(`<p:pic><p:nvPicPr><p:nvPr/></p:nvPicPr>
+      <p:blipFill><a:blip r:embed="rId9"/></p:blipFill><p:spPr>${frame(1, 1, 3, 3)}</p:spPr></p:pic>`)],
+  });
+  entries.set("ppt/media/icon.emf", bytes("EMF"));
+  entries.set("ppt/slides/_rels/slide1.xml.rels", bytes(
+    '<Relationships><Relationship Id="rId1" Target="../slideLayouts/slideLayout1.xml"/>'
+    + '<Relationship Id="rId9" Target="../media/icon.emf"/></Relationships>'));
+
+  const deck = readPptx(entries);
+  assert.ok(deck.warnings.some((warning) => /EMF/.test(warning)), deck.warnings.join(" | "));
+});
+
+test("GIF and BMP are drawable and are kept", () => {
+  for (const extension of ["gif", "bmp"]) {
+    const entries = template({
+      slides: [slide(`<p:pic><p:nvPicPr><p:nvPr/></p:nvPicPr>
+        <p:blipFill><a:blip r:embed="rId9"/></p:blipFill><p:spPr>${frame(1, 1, 3, 3)}</p:spPr></p:pic>`)],
+    });
+    entries.set(`ppt/media/a.${extension}`, bytes("IMG"));
+    entries.set("ppt/slides/_rels/slide1.xml.rels", bytes(
+      '<Relationships><Relationship Id="rId1" Target="../slideLayouts/slideLayout1.xml"/>'
+      + `<Relationship Id="rId9" Target="../media/a.${extension}"/></Relationships>`));
+    assert.equal(readPptx(entries).slides[0].elements[0]?.type, "image", extension);
+  }
+});

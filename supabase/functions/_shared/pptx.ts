@@ -664,8 +664,24 @@ function shapeDetail(shape: XmlNode, frame: Frame, scale: Scale, theme: Map<stri
 /* ------------------------------------------------------------------- shapes */
 
 const MIME_BY_EXTENSION: Record<string, string> = {
-  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp", svg: "image/svg+xml",
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp",
+  svg: "image/svg+xml", gif: "image/gif", bmp: "image/bmp",
 };
+
+/**
+ * Pictures no renderer here can draw, which is not the same as pictures lost.
+ *
+ * Metafiles are how PowerPoint stores a vector drawing pasted from another
+ * Office program, and corporate templates are full of them. Nothing in this
+ * project can rasterise one, so it cannot appear in a preview — but the export
+ * clones the original package, where the bytes are carried across untouched.
+ * Saying which is the difference between a caveat and a bug report.
+ */
+const UNDRAWABLE = new Set(["emf", "wmf", "tiff", "tif", "wdp", "emz", "wmz"]);
+
+export function isUndrawableMedia(partName: string): boolean {
+  return UNDRAWABLE.has(partName.slice(partName.lastIndexOf(".") + 1).toLowerCase());
+}
 
 function mediaFor(entries: ZipEntries, partName: string): ImportedMedia | null {
   const bytes = entries.get(partName);
@@ -723,6 +739,36 @@ function convertShape(shape: XmlNode, transform: GroupTransform, zIndex: number,
 
   // No words: keep it only if it is actually painted, so the invisible boxes a
   // deck is full of do not become invisible boxes the user has to select past.
+  /**
+   * A shape whose fill is a photograph.
+   *
+   * This is how a designer places most pictures: a rectangle or a circle with
+   * `<a:blipFill>` in its shape properties, cropped by the shape rather than by
+   * the picture. Reading `blipFill` only on `<p:pic>` therefore found almost
+   * none of the photography in a real template — which is why an eleven-page
+   * journalism deck imported with no images at all.
+   */
+  const filled = attribute(path(shape, "spPr", "blipFill", "blip"), "embed");
+  if (filled) {
+    const target = context.rels.get(filled);
+    const media = target ? mediaFor(context.entries, target) : null;
+    if (media) {
+      return {
+        type: "image",
+        ...frame,
+        zIndex,
+        opacity: 1,
+        style: { objectFit: "cover", borderRadius: 0 },
+        content: {},
+        media,
+        ...(placeholder ? { placeholder } : {}),
+      };
+    }
+    if (target && isUndrawableMedia(target)) {
+      context.warnings.push("Ba'zi vektor rasmlar (EMF/WMF) oldindan ko‘rishda chizilmaydi; eksportda saqlanadi.");
+    }
+  }
+
   const detail = shapeDetail(shape, frame, context.scale, context.theme);
   const fill = detail.fill;
   const outline = detail.stroke;
@@ -757,7 +803,9 @@ function convertPicture(picture: XmlNode, transform: GroupTransform, zIndex: num
   if (!target) return null;
   const media = mediaFor(context.entries, target);
   if (!media) {
-    context.warnings.push(`"${target.split("/").pop()}" rasm turini ilova qo‘llab-quvvatlamaydi.`);
+    context.warnings.push(isUndrawableMedia(target)
+      ? "Ba'zi vektor rasmlar (EMF/WMF) oldindan ko‘rishda chizilmaydi; eksportda saqlanadi."
+      : `"${target.split("/").pop()}" rasm turini ilova qo‘llab-quvvatlamaydi.`);
     return null;
   }
 
