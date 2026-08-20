@@ -116,6 +116,105 @@ export async function listDesigns(filters: {
   return data ?? [];
 }
 
+/** One page of an imported template, as the editor shows it. */
+export type TemplatePageRow = {
+  archetypeId: string;
+  sourceIndex: number;
+  role: string;
+  recommendedStoryPosition: number;
+  isTerminal: boolean;
+  /** How many editable text boxes the source slide has. Zero means re-import. */
+  boxes: number;
+};
+
+export type TemplateDetail = {
+  id: string;
+  slug: string;
+  name: string;
+  tier: Tier;
+  description: string;
+  premium: boolean;
+  keywords: { keyword: string; score: number }[];
+  pages: TemplatePageRow[];
+  /** Which version the pages were read from, so the editor can say so. */
+  version: number;
+};
+
+/**
+ * A template and its pages, for editing.
+ *
+ * Pages are read at the highest version that has any, rather than at the
+ * published one: an unpublished template has them at version 1 and a published
+ * one carries them forward, so the newest set is always the right set.
+ */
+export async function loadTemplate(id: string): Promise<TemplateDetail> {
+  const [design, profiles] = await Promise.all([
+    supabase.from("presentation_designs")
+      .select("id, slug, name, tier, description, is_premium, keywords, design_source")
+      .eq("id", id).single(),
+    supabase.from("design_slide_profiles")
+      .select("archetype_id, design_version, source_index, role, recommended_story_position, is_terminal, text_map")
+      .eq("design_id", id)
+      .order("design_version", { ascending: false })
+      .order("source_index"),
+  ]);
+  if (design.error) throw design.error;
+  if (profiles.error) throw profiles.error;
+  if (design.data.design_source !== "pptx") throw new Error("Bu dizayn PowerPoint shabloni emas.");
+
+  const rows = profiles.data ?? [];
+  const version = rows.length > 0 ? Math.max(...rows.map((row) => row.design_version)) : 1;
+
+  return {
+    id: design.data.id,
+    slug: design.data.slug,
+    name: design.data.name,
+    tier: design.data.tier as Tier,
+    description: design.data.description,
+    premium: design.data.is_premium,
+    keywords: Array.isArray(design.data.keywords)
+      ? (design.data.keywords as { keyword: string; score: number }[])
+      : [],
+    version,
+    pages: rows
+      .filter((row) => row.design_version === version)
+      .map((row) => ({
+        archetypeId: row.archetype_id,
+        sourceIndex: row.source_index,
+        role: row.role as string,
+        recommendedStoryPosition: row.recommended_story_position,
+        isTerminal: row.is_terminal,
+        boxes: Array.isArray(row.text_map) ? row.text_map.length : 0,
+      })),
+  };
+}
+
+export async function updateTemplate(input: {
+  id: string;
+  name: string;
+  tier: Tier;
+  description: string;
+  premium: boolean;
+  /** Omitted leaves the stored subjects alone; an empty list is not sent. */
+  keywords?: { keyword: string; score: number }[];
+  pages: { archetypeId: string; role: string; recommendedStoryPosition: number }[];
+}): Promise<void> {
+  const { error } = await supabase.rpc("admin_update_template", {
+    p_design_id: input.id,
+    p_name: input.name,
+    p_tier: input.tier,
+    p_description: input.description,
+    p_is_premium: input.premium,
+    ...(input.keywords && input.keywords.length > 0 ? { p_keywords: input.keywords } : {}),
+    p_pages: input.pages.map((page) => ({
+      archetype_id: page.archetypeId,
+      role: page.role,
+      recommended_story_position: page.recommendedStoryPosition,
+    })),
+  });
+  if (error) throw error;
+}
+
 export async function loadDesign(id: string) {
   const [design, fonts] = await Promise.all([
     supabase.from("presentation_designs").select("*").eq("id", id).single(),

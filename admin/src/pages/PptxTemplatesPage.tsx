@@ -1,7 +1,8 @@
-import { FileUp, Rocket, Search, Trash2 } from "lucide-react";
+import { FileUp, Pencil, Rocket, Search, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { EmptyState, ErrorState, PageHeader, StatusBadge, TableSkeleton } from "@/components/AdminUI";
+import { PptxTemplateEditor } from "@/components/PptxTemplateEditor";
 import { TemplateImport } from "@/components/TemplateImport";
 import { archive, duplicate, publish, remove, restore } from "@/lib/design-actions";
 import { dateTime, errorMessage } from "@/lib/format";
@@ -33,6 +34,7 @@ export function PptxTemplatesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -56,6 +58,8 @@ export function PptxTemplatesPage() {
   // inside this page, so the browser never knew it opened.
   const closeImport = useCallback(() => { setImporting(false); void load(); }, [load]);
   const dismissImport = useDismissable(importing, closeImport);
+  const closeEditor = useCallback(() => { setEditing(null); void load(); }, [load]);
+  const dismissEditor = useDismissable(editing !== null, closeEditor);
 
   const sorted = useMemo(
     () => [...items].sort((first, second) =>
@@ -65,6 +69,10 @@ export function PptxTemplatesPage() {
 
   if (importing) {
     return <TemplateImport onClose={dismissImport} onImported={() => { void load(); }} />;
+  }
+
+  if (editing) {
+    return <PptxTemplateEditor designId={editing} onClose={dismissEditor} onSaved={() => { void load(); }} />;
   }
 
   return (
@@ -145,6 +153,13 @@ export function PptxTemplatesPage() {
                     <td><StatusBadge value={item.status} /></td>
                     <td>{dateTime.format(new Date(item.updated_at))}</td>
                     <td className="row-actions">
+                      <button
+                        className="secondary-button compact"
+                        type="button"
+                        onClick={() => setEditing(item.id)}
+                      >
+                        <Pencil size={15} strokeWidth={1.9} /> Tahrirlash
+                      </button>
                       {item.status === "archived" ? null : (
                         <button
                           className="primary-button compact"

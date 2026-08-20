@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/AdminUI";
 import { errorMessage } from "@/lib/format";
 import { buildPrompt, readDesignCode, type CodeReading, type Topic } from "@/lib/design-code";
+import { ROLE_GROUPS, ROLE_LABELS } from "@/lib/design-roles";
 import {
   importTemplate, inspectTemplate, listTopics, resolveDesignFonts, uploadTemplate,
   type FontResolution, type TemplatePage, type TemplateReport,
@@ -24,34 +25,6 @@ import { TIER_LABELS, TIERS, type Tier } from "@jaxongirman/jslayd";
  * is not obliged to answer the same way twice, and a screen that shows one list
  * and saves another is worse than one that shows nothing.
  */
-
-const ROLE_GROUPS: { label: string; roles: string[] }[] = [
-  {
-    label: "Hikoya",
-    roles: [
-      "welcome", "introduction", "overview", "key_concepts", "importance",
-      "types", "structure", "process", "methods", "analysis", "challenges",
-      "solutions", "applications", "examples", "results", "recommendations",
-      "conclusion", "thanks",
-    ],
-  },
-  {
-    label: "Ko‘rinish",
-    roles: ["agenda", "timeline", "comparison", "big_number", "quote", "case_study", "data", "chart", "table", "image_story", "references"],
-  },
-];
-
-const ROLE_LABELS: Record<string, string> = {
-  welcome: "Ochilish", introduction: "Kirish", overview: "Umumiy ko‘rinish",
-  key_concepts: "Asosiy tushunchalar", importance: "Ahamiyati", types: "Turlari",
-  structure: "Tuzilishi", process: "Jarayon", methods: "Usullar", analysis: "Tahlil",
-  challenges: "Muammolar", solutions: "Yechimlar", applications: "Qo‘llanilishi",
-  examples: "Misollar", results: "Natijalar", recommendations: "Tavsiyalar",
-  conclusion: "Xulosa", thanks: "Yakun", agenda: "Reja", timeline: "Vaqt chizig‘i",
-  comparison: "Taqqoslash", big_number: "Katta raqam", quote: "Iqtibos",
-  case_study: "Amaliy misol", data: "Ma’lumot", chart: "Diagramma", table: "Jadval",
-  image_story: "Rasmli sahifa", references: "Manbalar",
-};
 
 /** A design's own name, guessed from the file so the admin edits rather than types. */
 function slugFrom(name: string): string {

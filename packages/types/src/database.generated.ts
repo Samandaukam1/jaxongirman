@@ -5234,6 +5234,18 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      admin_update_template: {
+        Args: {
+          p_description?: string
+          p_design_id: string
+          p_is_premium?: boolean
+          p_keywords?: Json
+          p_name?: string
+          p_pages?: Json
+          p_tier?: Database["public"]["Enums"]["presentation_style"]
+        }
+        Returns: undefined
+      }
       admin_upsert_coin_package: {
         Args: {
           p_bonus_coins?: number
