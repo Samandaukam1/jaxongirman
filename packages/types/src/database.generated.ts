@@ -2648,6 +2648,39 @@ export type Database = {
           },
         ]
       }
+      portrait_sheets: {
+        Row: {
+          created_at: string
+          id: string
+          owner_id: string
+          sheet_path: string | null
+          source_height: number | null
+          source_path: string
+          source_width: number | null
+          warnings: Json
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          owner_id: string
+          sheet_path?: string | null
+          source_height?: number | null
+          source_path: string
+          source_width?: number | null
+          warnings?: Json
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          owner_id?: string
+          sheet_path?: string | null
+          source_height?: number | null
+          source_path?: string
+          source_width?: number | null
+          warnings?: Json
+        }
+        Relationships: []
+      }
       presentation_assets: {
         Row: {
           alt_text: string | null
