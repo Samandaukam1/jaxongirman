@@ -4,19 +4,16 @@ import {
 } from "@jaxongirman/tariff-card";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { Check, Crown, Info, Sparkles, X } from "lucide-react-native";
+import { Check, Crown, Info, RotateCcw, Sparkles, X } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
-import {
-  ActivityIndicator, Modal, Pressable, RefreshControl, ScrollView,
-  StyleSheet, Text, View,
-} from "react-native";
+import { ActivityIndicator, Alert, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { ErrorState, SkeletonCard } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
 import { createSubscriptionOrder } from "@/lib/orders";
 import {
-  myMembership, myUsage, subscriptionPlans,
+  myMembership, myUsage, restartPreview, subscriptionPlans, type RestartPreview,
   type Membership, type TariffPlan,
 } from "@/lib/subscription";
 import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
@@ -47,16 +44,19 @@ export default function TariffScreen() {
   const [error, setError] = useState<string | null>(null);
   const [opening, setOpening] = useState<string | null>(null);
   const [detailFor, setDetailFor] = useState<TariffPlan | null>(null);
+  const [restart, setRestart] = useState<RestartPreview | null>(null);
 
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true); else setLoading(true);
     try {
-      const [planRows, member, usageRows] = await Promise.all([
+      const [planRows, member, usageRows, preview] = await Promise.all([
         subscriptionPlans(), myMembership(), myUsage(),
+        restartPreview().catch(() => null),
       ]);
       setPlans(planRows);
       setMembership(member);
       setUsage(usageRows);
+      setRestart(preview);
       setError(null);
     } catch (nextError) {
       setError(asErrorMessage(nextError));
@@ -75,17 +75,40 @@ export default function TariffScreen() {
    * server read from the plan — there is no parameter here that could carry a
    * different figure.
    */
-  async function buy(planCode: string) {
+  async function buy(planCode: string, restart = false) {
     setOpening(planCode);
     setError(null);
     try {
-      const order = await createSubscriptionOrder(planCode);
+      const order = await createSubscriptionOrder(planCode, restart);
       router.push({ pathname: "/(app)/checkout/[orderId]", params: { orderId: order.order_id } });
     } catch (failure) {
       setError(asErrorMessage(failure));
     } finally {
       setOpening(null);
     }
+  }
+
+  /**
+   * Restarting is offered only to somebody who has something to give up.
+   *
+   * Shown to a person with no membership it is a second, more confusing way to
+   * buy one; shown on the first day of a cycle it is an invitation to throw
+   * away twenty-nine days. It appears when there is a live plan, and it says
+   * exactly what is being given up.
+   */
+  function confirmRestart() {
+    if (!restart?.member || !restart.planCode) return;
+    const spent = restart.used.reduce((sum, entry) => sum + entry.used, 0);
+    Alert.alert(
+      "Tarifni qayta boshlash",
+      `Yangi davr bugundan boshlanadi va ${restart.planName ?? "tarif"} uchun to‘liq narx to‘lanadi.\n\n`
+      + `Hozirgi davringizdan qolgan ${restart.remainingDays} kun bekor qilinadi va yangi davrga qo‘shilmaydi.`
+      + (spent > 0 ? `\nIshlatilgan ${spent} ta imkoniyat yangilanadi.` : ""),
+      [
+        { text: "Bekor qilish", style: "cancel" },
+        { text: "Qayta boshlash", style: "destructive", onPress: () => void buy(restart.planCode!, true) },
+      ],
+    );
   }
 
   const lines = usageLines(usage);
@@ -146,6 +169,21 @@ export default function TariffScreen() {
                 })}
                 {nextReset ? <Text style={styles.reset}>{nextReset}</Text> : null}
               </View>
+            ) : null}
+
+            {/* Offered only to somebody who has something to give up: shown
+                without a membership it is a second, more confusing way to buy
+                one. */}
+            {restart?.member ? (
+              <Pressable
+                accessibilityRole="button"
+                disabled={opening !== null}
+                onPress={confirmRestart}
+                style={[styles.restart, opening !== null && styles.restartBusy]}
+              >
+                <RotateCcw color={colors.onPrimary} size={icon.sm} strokeWidth={2.1} />
+                <Text style={styles.restartText}>Tarifni qayta boshlash</Text>
+              </Pressable>
             ) : null}
           </LinearGradient>
         ) : null}
@@ -285,6 +323,13 @@ const styles = StyleSheet.create({
   usageDetail: { ...typography.caption, color: colors.onPrimaryMuted },
   track: { height: 6, borderRadius: radius.pill, backgroundColor: "rgba(255,255,255,0.22)", overflow: "hidden" },
   fill: { height: "100%", borderRadius: radius.pill, backgroundColor: colors.onPrimary },
+  restart: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm,
+    marginTop: spacing.md, minHeight: 46, borderRadius: radius.pill,
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.4)",
+  },
+  restartBusy: { opacity: 0.5 },
+  restartText: { ...typography.caption, fontWeight: "700", color: colors.onPrimary },
   reset: { ...typography.caption, color: colors.onPrimaryMuted },
 
   freeCard: { backgroundColor: colors.surfaceMuted, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.sm },

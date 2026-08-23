@@ -3939,6 +3939,67 @@ export type Database = {
         }
         Relationships: []
       }
+      subscription_restarts: {
+        Row: {
+          created_at: string
+          discarded_days: number
+          discarded_usage: Json
+          id: string
+          new_subscription_id: string | null
+          order_id: string | null
+          plan_code: string
+          previous_subscription_id: string | null
+          reason: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          discarded_days?: number
+          discarded_usage?: Json
+          id?: string
+          new_subscription_id?: string | null
+          order_id?: string | null
+          plan_code: string
+          previous_subscription_id?: string | null
+          reason?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          discarded_days?: number
+          discarded_usage?: Json
+          id?: string
+          new_subscription_id?: string | null
+          order_id?: string | null
+          plan_code?: string
+          previous_subscription_id?: string | null
+          reason?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_restarts_new_subscription_id_fkey"
+            columns: ["new_subscription_id"]
+            isOneToOne: false
+            referencedRelation: "user_subscriptions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_restarts_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscription_restarts_previous_subscription_id_fkey"
+            columns: ["previous_subscription_id"]
+            isOneToOne: false
+            referencedRelation: "user_subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subscription_usage: {
         Row: {
           feature_key: string
@@ -5427,6 +5488,10 @@ export type Database = {
         }
         Returns: number
       }
+      apply_subscription_restart: {
+        Args: { p_order_id: string; p_plan_id: string; p_user_id: string }
+        Returns: string
+      }
       assert_marketplace_member: {
         Args: { p_action: string }
         Returns: undefined
@@ -5839,10 +5904,16 @@ export type Database = {
         Args: { p_module_code?: string; p_platform?: string }
         Returns: Json
       }
-      order_create_subscription: {
-        Args: { p_plan_code: string; p_platform?: string }
-        Returns: Json
-      }
+      order_create_subscription:
+        | { Args: { p_plan_code: string; p_platform?: string }; Returns: Json }
+        | {
+            Args: {
+              p_plan_code: string
+              p_platform?: string
+              p_restart?: boolean
+            }
+            Returns: Json
+          }
       order_fail: {
         Args: { p_code: string; p_message: string; p_order_id: string }
         Returns: boolean
@@ -6461,6 +6532,10 @@ export type Database = {
       }
       submit_survey_response: {
         Args: { p_answers: Json; p_form_id: string; p_idempotency_key?: string }
+        Returns: Json
+      }
+      subscription_restart_preview: {
+        Args: { p_user_id?: string }
         Returns: Json
       }
       survey_can_read_response: {

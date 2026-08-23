@@ -68,6 +68,47 @@ export async function myMembership(): Promise<Membership> {
   };
 }
 
+export type RestartPreview = {
+  member: boolean;
+  planName: string | null;
+  planCode: string | null;
+  priceAmount: number;
+  currency: string;
+  remainingDays: number;
+  /** Allowances already spent this period, which a restart gives back. */
+  used: { feature: string; used: number }[];
+};
+
+/**
+ * What a restart would cost, before it is paid for.
+ *
+ * The confirmation is only honest with the real numbers in it: "nine days left
+ * and two of four presentations still unused" is a decision somebody can weigh,
+ * and "your remaining balance will be cancelled" is a warning they cannot.
+ */
+export async function restartPreview(): Promise<RestartPreview> {
+  const { data, error } = await supabase.rpc("subscription_restart_preview");
+  if (error) throw error;
+  const answer = (data ?? {}) as {
+    member?: boolean;
+    plan?: { code?: string; name?: string; price_amount?: number; currency?: string };
+    remaining_days?: number;
+    used?: { feature?: string; used?: number }[];
+  };
+  return {
+    member: Boolean(answer.member),
+    planName: answer.plan?.name ?? null,
+    planCode: answer.plan?.code ?? null,
+    priceAmount: answer.plan?.price_amount ?? 0,
+    currency: answer.plan?.currency ?? "UZS",
+    remainingDays: answer.remaining_days ?? 0,
+    used: (answer.used ?? []).map((entry) => ({
+      feature: String(entry.feature ?? ""),
+      used: Number(entry.used ?? 0),
+    })),
+  };
+}
+
 /**
  * Every metered allowance and how much of it is gone.
  *

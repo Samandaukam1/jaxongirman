@@ -51,8 +51,20 @@ export const createJcoinOrder = (packageId: string) =>
 export const createModuleOrder = (moduleCode = "data_collection") =>
   rpc<OrderSummary>("order_create_module", { p_module_code: moduleCode, p_platform: clientPlatform });
 
-export const createSubscriptionOrder = (planCode: string) =>
-  rpc<OrderSummary>("order_create_subscription", { p_plan_code: planCode, p_platform: clientPlatform });
+/**
+ * Buying a plan, either to renew it or to restart it.
+ *
+ * The same purchase at the same price; what differs is what settlement does
+ * with it. Renewing adds a period to whatever is left; restarting gives that up
+ * for a fresh cycle. The flag rides on the order, so the decision is recorded
+ * with the money that paid for it and cannot change between asking and paying.
+ */
+export const createSubscriptionOrder = (planCode: string, restart = false) =>
+  rpc<OrderSummary>("order_create_subscription", {
+    p_plan_code: planCode,
+    p_platform: clientPlatform,
+    p_restart: restart,
+  });
 
 /**
  * Opens a marketplace order.
