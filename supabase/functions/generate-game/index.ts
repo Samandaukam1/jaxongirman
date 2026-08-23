@@ -4,6 +4,7 @@ import { privacySafeIdentifier, requestContext } from "../_shared/auth.ts";
 import { preflight } from "../_shared/cors.ts";
 import { bodyJson, errorResponse, HttpError, json } from "../_shared/http.ts";
 import { geminiWriter } from "../_shared/gemini.ts";
+import { ProviderUnavailable } from "../_shared/writer.ts";
 
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void } | undefined;
 
@@ -352,6 +353,93 @@ function mockGame(source: string, count: number, types: AiType[]): RawGame {
   return { title: `Sinov o‘yini — ${source.slice(0, 40)}`, description: "Mock rejimida yaratilgan sinov o‘yini.", questions };
 }
 
+/**
+ * How many questions to ask for at a time.
+ *
+ * The whole quiz used to be one request: up to thirty questions, a twelve-field
+ * schema with a union in every second property, and a sixteen-thousand-token
+ * ceiling. Gemini answers a request that size with "Request contains an invalid
+ * argument", which names nothing — and the refusal follows the count rather
+ * than any word in the prompt. The presentation pipeline met exactly this and
+ * the fix there was to write one slide per request; every game since the
+ * sixteenth of August has failed for what is almost certainly the same reason.
+ *
+ * Four keeps a batch well under any of the limits and still costs three
+ * requests for the default ten. A batch that fails no longer takes the others
+ * with it: nine good questions are a game, and an error message is not.
+ */
+const QUESTIONS_PER_BATCH = 4;
+
+export function batchSizes(count: number): number[] {
+  const sizes: number[] = [];
+  for (let left = Math.max(1, count); left > 0; left -= QUESTIONS_PER_BATCH) {
+    sizes.push(Math.min(QUESTIONS_PER_BATCH, left));
+  }
+  return sizes;
+}
+
+/**
+ * The quiz, asked for a few questions at a time.
+ *
+ * Batches run three at a time, which is what the deck writer settled on for the
+ * same provider. Order is preserved regardless of which finished first, because
+ * a quiz whose questions arrive shuffled by network timing is a different quiz
+ * every time it is generated.
+ *
+ * A batch that fails is recorded and skipped. Every batch failing is the only
+ * failure, and it carries the first reason rather than the last, because the
+ * first is the one that was not caused by whatever the first one did.
+ */
+async function writeInBatches(
+  task: GenerationTask,
+  writer: ReturnType<typeof geminiWriter>,
+  system: string,
+  promptFor: (batch: number, index: number) => string,
+  onUsage: (answer: { usage: { input_tokens?: number; output_tokens?: number }; requestId: string | null }) => void,
+): Promise<RawGame> {
+  const sizes = batchSizes(task.count);
+  const results: (RawGame | null)[] = new Array(sizes.length).fill(null);
+  let firstFailure: unknown = null;
+  let next = 0;
+
+  const worker = async () => {
+    for (;;) {
+      const index = next;
+      next += 1;
+      if (index >= sizes.length) return;
+      try {
+        const answer = await writer.structured<RawGame>({
+          prompt: `${system}\n\n${promptFor(sizes[index]!, index)}`,
+          system,
+          schemaName: "oyingoh_game",
+          schema: gameSchema as unknown as Record<string, unknown>,
+          // Four questions with options and explanations, with room to spare.
+          maxOutputTokens: 6_000,
+        });
+        results[index] = answer.data;
+        onUsage(answer);
+      } catch (failure) {
+        firstFailure = firstFailure ?? failure;
+        stage("game_generation_batch_failed", task, { batch: index, size: sizes[index] });
+      }
+    }
+  };
+
+  await Promise.all([worker(), worker(), worker()]);
+
+  const done = results.filter((entry): entry is RawGame => entry !== null);
+  if (done.length === 0) throw firstFailure ?? new Error("no batch returned");
+  if (done.length < sizes.length) {
+    stage("game_generation_batches_partial", task, { asked: sizes.length, got: done.length });
+  }
+
+  return {
+    title: done[0]!.title,
+    description: done[0]!.description,
+    questions: results.flatMap((entry) => entry?.questions ?? []).slice(0, task.count),
+  };
+}
+
 // ------------------------------------------------------------- generation --
 type GenerationTask = {
   service: SupabaseClient;
@@ -376,8 +464,57 @@ async function providerPricing(service: SupabaseClient, model: string) {
   return { inputPerMillion: Number(text?.input_per_million ?? 0), outputPerMillion: Number(text?.output_per_million ?? 0) };
 }
 
+/**
+ * One line per stage, so a failure can be found without the edge log.
+ *
+ * The log is where the cause went and the log is not reachable from a laptop.
+ * These lines are still logs — but they name the stage, so the moment one
+ * question of a batch is the problem, or the provider is, the row and the line
+ * agree about which.
+ */
+function stage(event: string, task: GenerationTask, extra: Record<string, unknown> = {}): void {
+  console.log(JSON.stringify({
+    event,
+    game_id: task.gameId,
+    user_id: task.ownerId,
+    count: task.count,
+    ...extra,
+  }));
+}
+
+/** What went wrong, in a shape the row can hold and a person cannot be shown. */
+class GenerationFailure extends Error {
+  constructor(readonly code: string, readonly detail: string, readonly advice?: string) {
+    super(detail);
+  }
+}
+
+/**
+ * The sentence the person who pressed the button reads.
+ *
+ * Specific wherever the cause is known, because "qayta urinib ko‘ring" is not
+ * advice when retrying is exactly what will not help.
+ */
+function adviceFor(code: string): string {
+  switch (code) {
+    case "provider_not_configured":
+      return "AI xizmati sozlanmagan. Administratorga xabar bering.";
+    case "provider_unavailable":
+      return "AI xizmati hozir javob bermayapti. Bir-ikki daqiqadan so‘ng qayta urinib ko‘ring.";
+    case "provider_refused":
+      return "AI so‘rovni bajara olmadi. Savollar sonini kamaytiring yoki mavzuni qisqartiring.";
+    case "no_usable_questions":
+      return "AI bu mavzuda savol tuza olmadi. Mavzuni aniqroq yozing yoki boshqa savol turlarini tanlang.";
+    case "save_failed":
+      return "Savollar saqlanmadi. Qayta urinib ko‘ring.";
+    default:
+      return "O‘yin yaratilmadi. Qayta urinib ko‘ring — muammo takrorlansa mavzuni qisqartiring.";
+  }
+}
+
 async function runGeneration(task: GenerationTask): Promise<void> {
   const { service } = task;
+  stage("game_generation_started", task, { mode: task.replaceQuestionId ? "regenerate" : "fill" });
   try {
     const mode = Deno.env.get("GENERATION_MODE") ?? "real";
     let game: RawGame;
@@ -400,30 +537,71 @@ async function runGeneration(task: GenerationTask): Promise<void> {
        */
       const writer = geminiWriter();
       if (!writer.configured) {
-        throw new HttpError(503, "AI xizmati sozlanmagan.", "provider_not_configured");
+        throw new GenerationFailure("provider_not_configured", "GEMINI_API_KEY is not set");
       }
       model = writer.writingModel;
 
       const system = systemPrompt();
-      const prompt = userPrompt(
-        task.source, task.difficulty, task.audience, task.count, task.types, task.onlyFromSource,
-      );
-      const result = await writer.structured<RawGame>({
-        prompt: `${system}\n\n${prompt}`,
-        system,
-        schemaName: "oyingoh_game",
-        schema: gameSchema as unknown as Record<string, unknown>,
-        // A dozen questions with options and explanations is a long answer, and
-        // a truncated one is a game with three questions in it.
-        maxOutputTokens: 16_000,
+      stage("game_generation_ai_started", task, { model, batches: batchSizes(task.count).length });
+      try {
+        game = await writeInBatches(task, writer, system, (batch, index) =>
+          userPrompt(task.source, task.difficulty, task.audience, batch, task.types, task.onlyFromSource)
+          + (index === 0 ? "" : `\n\nDIQQAT: bu shu o‘yinning ${index + 1}-to‘plami. Oldingi to‘plamlardagi savollarni takrorlama.`),
+          (batchUsage) => {
+            usage = {
+              input_tokens: (usage.input_tokens ?? 0) + (batchUsage.usage.input_tokens ?? 0),
+              output_tokens: (usage.output_tokens ?? 0) + (batchUsage.usage.output_tokens ?? 0),
+            };
+            requestId = requestId ?? batchUsage.requestId;
+          });
+      } catch (refusal) {
+        /**
+         * Which half of "the model did not answer" this was.
+         *
+         * A provider that is down and a provider that read the request and
+         * would not do it need different sentences: one is worth waiting out,
+         * the other is worth asking for less. Told apart by the writer's own
+         * reason rather than by matching on message text.
+         */
+        const reason = refusal instanceof ProviderUnavailable ? refusal.reason : "unknown";
+        /**
+         * A 4xx is the model reading the request and declining it — the schema,
+         * the size, the count. Asking again changes nothing, so the person is
+         * told to ask for less rather than to wait. Everything else is weather.
+         */
+        const declined = /^http_4\d\d$/.test(reason);
+        const code = reason === "not_configured"
+          ? "provider_not_configured"
+          : declined ? "provider_refused" : "provider_unavailable";
+        throw new GenerationFailure(code, `${reason}: ${String((refusal as Error)?.message ?? "").slice(0, 200)}`);
+      }
+      stage("game_generation_ai_completed", task, {
+        model,
+        returned: game.questions?.length ?? 0,
+        output_tokens: usage.output_tokens ?? 0,
       });
-      game = result.data;
-      usage = result.usage;
-      requestId = result.requestId;
     }
 
+    const returned = game.questions?.length ?? 0;
     const mapped = game.questions.map(mapQuestion).filter((question) => question !== null);
-    if (mapped.length < 1) throw new Error("Model returned no usable questions");
+    /**
+     * One malformed question used to lose the whole game.
+     *
+     * `mapQuestion` rejects a row whose fields contradict its type — a
+     * `single_choice` with no options, a `matching` with no pairs — which is
+     * right, because such a row cannot be graded. What was wrong was throwing
+     * away the other eleven with it. A game of nine good questions is a game;
+     * an error message is not.
+     */
+    if (mapped.length < 1) {
+      throw new GenerationFailure(
+        "no_usable_questions",
+        `model returned ${returned} question(s), none usable`,
+      );
+    }
+    if (mapped.length < returned) {
+      stage("game_generation_partial", task, { returned, usable: mapped.length });
+    }
 
     if (task.replaceQuestionId) {
       const question = mapped[0]!;
@@ -450,7 +628,8 @@ async function runGeneration(task: GenerationTask): Promise<void> {
         config: question.config,
       }));
       const { error } = await service.from("game_questions").insert(rows);
-      if (error) throw error;
+      if (error) throw new GenerationFailure("save_failed", `${error.code ?? ""} ${error.message}`.trim().slice(0, 300));
+      stage("game_generation_saved", task, { saved: rows.length });
 
       const { data: current } = await service.from("games").select("title, description").eq("id", task.gameId).single();
       await service.from("games").update({
@@ -474,11 +653,28 @@ async function runGeneration(task: GenerationTask): Promise<void> {
       request_id: requestId,
       metadata: { game_id: task.gameId, count: mapped.length },
     });
+    stage("game_generation_completed", task, { saved: mapped.length });
   } catch (failure) {
-    console.error("game generation failed", failure);
+    const code = failure instanceof GenerationFailure ? failure.code : "unknown";
+    const detail = failure instanceof GenerationFailure
+      ? failure.detail
+      : String((failure as Error)?.message ?? failure).slice(0, 400);
+
+    stage("game_generation_failed", task, { code, detail });
+
+    /**
+     * The cause is written to the row, not only to the log.
+     *
+     * Every failure since the sixteenth carried one generic sentence, so five
+     * of them were indistinguishable — and the real reason went to a log this
+     * machine cannot read. Now the row itself says which stage and why, while
+     * the person still reads one sentence in their own language.
+     */
     await service.from("games").update({
       status: "failed",
-      failure_reason: "O‘yin yaratilmadi. Qayta urinib ko‘ring — muammo takrorlansa mavzuni qisqartiring.",
+      failure_reason: adviceFor(code),
+      failure_code: code,
+      failure_detail: detail,
     }).eq("id", task.gameId).eq("status", "generating");
   }
 }
