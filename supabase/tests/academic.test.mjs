@@ -108,34 +108,73 @@ test("a page number is printed only when the research established one", () => {
   assert.ok(!referenceLine(sources[0], 0).includes("B."));
 });
 
-test("the document is set the way it has to be handed in", () => {
+/**
+ * The typography is the requirement, not a preference.
+ *
+ * A paper handed in at single spacing comes back, and so does one set in
+ * Calibri — which is what a word processor gives you if nobody says otherwise.
+ */
+test("body text is justified, 1.5, indented 1.25 and has no space around it", () => {
   const blocks = documentBlocks({
     kind: "referat", topic: "Mavzu", field: "Fan", authorName: "A B",
     organization: "OTM",
-    sections: [{ heading: "Kirish", body: "Birinchi abzas.\n\nIkkinchi abzas." }],
+    sections: [{ key: "introduction", heading: "Kirish", body: "Birinchi abzas.\n\nIkkinchi abzas." }],
     sources,
   });
-  const prose = blocks.filter((block) => block.kind === "paragraph" && block.lineSpacing === 1.5);
-  assert.ok(prose.length >= 2, "matn 1.5 intervalda bo‘lsin");
-  assert.ok(prose.every((block) => block.align === "both" || block.indent === undefined));
-  // Paragraphs are split, not shipped as one block with newlines in it.
   const body = blocks.filter((block) => block.kind === "paragraph"
     && block.runs.some((run) => run.text.startsWith("Birinchi") || run.text.startsWith("Ikkinchi")));
+  // Paragraphs are split, not shipped as one block with newlines in it.
   assert.equal(body.length, 2);
+  for (const block of body) {
+    assert.equal(block.align, "both");
+    assert.equal(block.lineSpacing, 1.5);
+    assert.equal(block.indent, 1.25);
+    assert.equal(block.spaceAfter, 0);
+  }
 });
 
-test("the bibliography starts on its own page and is assembled, not written", () => {
+test("the title is capitals, bold, centred and larger than the body", () => {
+  const [title] = documentBlocks({
+    kind: "article", topic: "Kimyoviy xavfsizlik", field: "", authorName: null,
+    organization: null, sections: [], sources: [],
+  });
+  assert.equal(title.align, "center");
+  assert.equal(title.runs[0].text, "KIMYOVIY XAVFSIZLIK");
+  assert.equal(title.runs[0].bold, true);
+  assert.ok(title.runs[0].size >= 16);
+});
+
+test("the abstract's label is bold and its text is not", () => {
   const blocks = documentBlocks({
     kind: "article", topic: "T", field: "", authorName: null, organization: null,
-    sections: [{ heading: "Kirish", body: "Matn." }],
-    sources,
+    sections: [{ key: "abstract", heading: "Annotatsiya", body: "Qisqacha mazmun." }],
+    sources: [],
   });
-  const references = blocks.find((block) => block.kind === "paragraph"
+  const line = blocks.find((block) => block.kind === "paragraph"
+    && block.runs.some((run) => run.text.startsWith("Annotatsiya:")));
+  assert.ok(line, "annotatsiya yorlig‘i topilmadi");
+  assert.equal(line.runs[0].bold, true);
+  assert.equal(line.runs[1].bold, undefined);
+  assert.equal(line.runs[1].text, "Qisqacha mazmun.");
+  // On one line, so it is runs rather than two paragraphs.
+  assert.equal(line.runs.length, 2);
+});
+
+test("an article's bibliography follows on; a bound work's starts a page", () => {
+  const referencesOf = (kind) => documentBlocks({
+    kind, topic: "T", field: "", authorName: null, organization: null,
+    sections: [{ key: "introduction", heading: "Kirish", body: "Matn." }],
+    sources,
+  }).find((block) => block.kind === "paragraph"
     && block.runs.some((run) => run.text === "Foydalanilgan adabiyotlar"));
-  assert.ok(references);
-  assert.equal(references.pageBreakBefore, true);
-  const lines = blocks.filter((block) => block.kind === "paragraph"
-    && block.runs.some((run) => /^\d+\./.test(run.text)));
+
+  assert.ok(!referencesOf("article").pageBreakBefore);
+  assert.equal(referencesOf("coursework").pageBreakBefore, true);
+
+  const lines = documentBlocks({
+    kind: "article", topic: "T", field: "", authorName: null, organization: null,
+    sections: [], sources,
+  }).filter((block) => block.kind === "paragraph" && block.runs.some((run) => /^\d+\./.test(run.text)));
   assert.equal(lines.length, sources.length);
 });
 

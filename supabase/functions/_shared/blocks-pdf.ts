@@ -16,7 +16,7 @@ import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
 
 import type { Block, DocxImage, Paragraph, Run, Table } from "./docx.ts";
-import { DEFAULT_FACE, bundledUrl } from "./fonts.ts";
+import { DEFAULT_FACE, SERIF_BOLD_FACE, SERIF_FACE, bundledUrl } from "./fonts.ts";
 
 /** Points per centimetre. */
 const PT_PER_CM = 72 / 2.54;
@@ -226,19 +226,33 @@ export async function renderBlocksPdf(input: {
   images?: readonly DocxImage[];
   fontSize?: number;
   page?: { widthCm: number; heightCm: number; marginCm: { top: number; right: number; bottom: number; left: number } };
+  /** Times-metric serif, which every document this renders is required to be. */
+  serif?: boolean;
 }): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
 
   /**
-   * The face is embedded, not chosen from the standard fourteen.
+   * Times New Roman, as far as a PDF can carry it.
    *
-   * Helvetica has no o‘ and no g‘, and a document that drops them is not the
-   * person's name any more.
+   * The real face is Microsoft's and is not ours to embed. Tinos has the same
+   * metrics — a line breaks where Times breaks — and may be redistributed, so a
+   * PDF set in it is the document the requirement describes rather than an
+   * approximation of it.
+   *
+   * The standard fourteen are the last resort and a poor one: Helvetica and the
+   * built-in Times have no o‘ and no g‘, and a document that drops them is not
+   * the person's name any more.
    */
-  const bytes = await load(bundledUrl(DEFAULT_FACE));
-  const book: Book = bytes
-    ? { regular: await pdf.embedFont(bytes, { subset: true }), bold: await pdf.embedFont(bytes, { subset: true }) }
+  const serif = input.serif ?? true;
+  const regularBytes = await load(bundledUrl(serif ? SERIF_FACE : DEFAULT_FACE));
+  const boldBytes = serif ? await load(bundledUrl(SERIF_BOLD_FACE)) : regularBytes;
+
+  const book: Book = regularBytes
+    ? {
+      regular: await pdf.embedFont(regularBytes, { subset: true }),
+      bold: await pdf.embedFont(boldBytes ?? regularBytes, { subset: true }),
+    }
     : { regular: await pdf.embedFont(StandardFonts.TimesRoman), bold: await pdf.embedFont(StandardFonts.TimesRomanBold) };
 
   const layout = input.page ?? {

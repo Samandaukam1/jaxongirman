@@ -1,3 +1,4 @@
+import * as Clipboard from "expo-clipboard";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import * as Sharing from "expo-sharing";
@@ -132,28 +133,31 @@ export default function PortraitScreen() {
             <View style={styles.promptCard}>
               <Text style={styles.promptText} numberOfLines={12}>{prompt || "…"}</Text>
             </View>
-            {/**
-              * The system share sheet rather than a clipboard call.
-              *
-              * It offers "Copy" like a clipboard button would, and it also
-              * offers to send the text straight into whichever app the person
-              * is going to paste it in — which is the actual next step. It
-              * costs no native module, so it does not put a rebuild between
-              * this screen and the people waiting for it.
-              */}
+            {/* Straight to the clipboard: the next thing the person does is
+                paste, and a share sheet in between is a menu to dismiss. */}
             <Pressable
               disabled={!prompt}
               onPress={() => {
-                void Share.share({ message: prompt }).then(() => {
+                void Clipboard.setStringAsync(prompt).then(() => {
                   setCopied(true);
                   setTimeout(() => setCopied(false), 2000);
-                }).catch(() => { /* dismissed */ });
+                });
               }}
               style={[styles.primary, !prompt && styles.disabled]}
             >
               {copied
-                ? <><Check color={colors.onPrimary} size={icon.sm} strokeWidth={2.6} /><Text style={styles.primaryText}>Yuborildi</Text></>
+                ? <><Check color={colors.onPrimary} size={icon.sm} strokeWidth={2.6} /><Text style={styles.primaryText}>Nusxalandi</Text></>
                 : <><ClipboardCopy color={colors.onPrimary} size={icon.sm} strokeWidth={2} /><Text style={styles.primaryText}>Promptni nusxalash</Text></>}
+            </Pressable>
+
+            {/* Sharing stays as a second way out, for people who would rather
+                send the text into the app than paste it there. */}
+            <Pressable
+              disabled={!prompt}
+              onPress={() => { void Share.share({ message: prompt }).catch(() => { /* dismissed */ }); }}
+              style={styles.secondary}
+            >
+              <Text style={styles.secondaryText}>Ulashish</Text>
             </Pressable>
             <Pressable onPress={() => setStep(1)} style={styles.ghost}>
               <Text style={styles.ghostText}>Keyingisi</Text>

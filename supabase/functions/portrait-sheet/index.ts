@@ -10,7 +10,7 @@
  * fail in an interesting way.
  */
 import fontkit from "@pdf-lib/fontkit";
-import { PDFDocument, rgb } from "pdf-lib";
+import { clip, endPath, popGraphicsState, pushGraphicsState, rectangle, PDFDocument, rgb } from "pdf-lib";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js";
 
 import { requestContext } from "../_shared/auth.ts";
@@ -32,7 +32,23 @@ async function render(source: Uint8Array, kind: "jpg" | "png"): Promise<{
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
 
-  const image = kind === "png" ? await pdf.embedPng(source) : await pdf.embedJpg(source);
+  /**
+   * pdf-lib embeds PNG and JPEG and nothing else.
+   *
+   * A WebP or a HEIC reaches here looking like a picture and throws something
+   * about markers, which the person reads as "Server operation failed". Named
+   * before it is opened instead.
+   */
+  let image;
+  try {
+    image = kind === "png" ? await pdf.embedPng(source) : await pdf.embedJpg(source);
+  } catch {
+    throw new HttpError(
+      422,
+      "Rasm turi qo‘llab-quvvatlanmaydi. PNG yoki JPG formatdagi rasm yuklang.",
+      "unsupported_image",
+    );
+  }
   const { problems, warnings } = checkSource(image.width, image.height);
   if (problems.length > 0) throw new HttpError(422, problems[0]!.message, problems[0]!.code);
 
@@ -54,11 +70,27 @@ async function render(source: Uint8Array, kind: "jpg" | "png"): Promise<{
 
   for (const slot of slots()) {
     const scale = slot.width / crop.width;
-    page.pushOperators();
-    page.drawRectangle({
-      x: slot.x, y: slot.y, width: slot.width, height: slot.height,
-      borderColor: CUT, borderWidth: 0.4,
-    });
+
+    /**
+     * The crop is a clipping rectangle, not a re-encode.
+     *
+     * The whole image is scaled so the kept part exactly covers the slot, and
+     * everything outside is clipped away — same result as cutting the pixels,
+     * without re-encoding them, which is where an identity photograph loses the
+     * sharpness it was just checked for.
+     *
+     * `pushGraphicsState` … `popGraphicsState` is the only way to undo a clip
+     * in PDF: it is a state, not a shape. The first version of this called a
+     * `page.popOperators()` that pdf-lib does not have, so every sheet failed
+     * with "Server operation failed" — and, had it not, nine unclipped copies
+     * would have been drawn across the whole page.
+     */
+    page.pushOperators(
+      pushGraphicsState(),
+      rectangle(slot.x, slot.y, slot.width, slot.height),
+      clip(),
+      endPath(),
+    );
     page.drawImage(image, {
       x: slot.x - crop.x * scale,
       // PDF's origin is bottom-left and the crop is measured from the top.
@@ -66,7 +98,14 @@ async function render(source: Uint8Array, kind: "jpg" | "png"): Promise<{
       width: image.width * scale,
       height: image.height * scale,
     });
-    page.popOperators();
+    page.pushOperators(popGraphicsState());
+
+    // Drawn after the clip is released, so a cut line is never clipped by the
+    // slot it belongs to.
+    page.drawRectangle({
+      x: slot.x, y: slot.y, width: slot.width, height: slot.height,
+      borderColor: CUT, borderWidth: 0.4,
+    });
   }
 
   return { bytes: await pdf.save(), width: image.width, height: image.height, warnings };

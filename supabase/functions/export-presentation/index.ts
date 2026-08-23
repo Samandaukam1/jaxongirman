@@ -177,9 +177,16 @@ async function cloneIfTemplate(service: SupabaseClient, presentationId: string) 
     return { ok: false as const, reason: "Taqdimot sahifalari o‘qilmadi. Qayta urinib ko‘ring." };
   }
 
-  const cloned = (slides.data ?? []).some((slide) =>
+  /**
+   * Named for what it answers, and not `cloned` — which is what the finished
+   * package is called sixty lines below, in the same scope. Two `const cloned`
+   * in one function is a parse error, so the module never loaded and every
+   * export, in both formats, came back as "Edge Function returned a non-2xx
+   * status code" with nothing in the logs a person could reach.
+   */
+  const madeByCloning = (slides.data ?? []).some((slide) =>
     (slide.quality_report as { engine?: unknown } | null)?.engine === "pptx_clone");
-  if (!cloned) return null;
+  if (!madeByCloning) return null;
 
   const presentation = await service
     .from("presentations")

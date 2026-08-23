@@ -39,6 +39,18 @@ const BUNDLED: Record<string, string> = {
   Manrope_700Bold: "https://unpkg.com/@expo-google-fonts/manrope@0.4.2/700Bold/Manrope_700Bold.ttf",
   LeagueSpartan_700Bold: "https://unpkg.com/@expo-google-fonts/league-spartan@0.4.2/700Bold/LeagueSpartan_700Bold.ttf",
   LeagueSpartan_800ExtraBold: "https://unpkg.com/@expo-google-fonts/league-spartan@0.4.2/800ExtraBold/LeagueSpartan_800ExtraBold.ttf",
+  /**
+   * Times New Roman, in the only way we may ship it.
+   *
+   * The real face is Microsoft's and is not ours to distribute. Tinos is
+   * metric-compatible with it — the same advance widths, so a line breaks in
+   * the same place — and is licensed to redistribute. A Word document still
+   * *names* Times New Roman, because the machine opening it almost certainly
+   * has the genuine article; a PDF embeds Tinos, because a PDF carries its own
+   * type and has to carry something.
+   */
+  Tinos_400Regular: "https://unpkg.com/@expo-google-fonts/tinos@0.4.2/400Regular/Tinos_400Regular.ttf",
+  Tinos_700Bold: "https://unpkg.com/@expo-google-fonts/tinos@0.4.2/700Bold/Tinos_700Bold.ttf",
   Arimo_400Regular: "https://unpkg.com/@expo-google-fonts/arimo@0.4.3/400Regular/Arimo_400Regular.ttf",
   Arimo_700Bold: "https://unpkg.com/@expo-google-fonts/arimo@0.4.3/700Bold/Arimo_700Bold.ttf",
   PinyonScript_400Regular: "https://unpkg.com/@expo-google-fonts/pinyon-script@0.4.1/400Regular/PinyonScript_400Regular.ttf",
@@ -48,6 +60,10 @@ const BUNDLED: Record<string, string> = {
 };
 
 export const DEFAULT_FACE = "Manrope_400Regular";
+
+/** The serif an academic document is required to be set in. */
+export const SERIF_FACE = "Tinos_400Regular";
+export const SERIF_BOLD_FACE = "Tinos_700Bold";
 export const DEFAULT_BOLD_FACE = "Manrope_700Bold";
 
 /** The PowerPoint display name for a bundled family file name. */

@@ -76,7 +76,7 @@ Deno.serve(async (request) => {
 
     const blocks = objectiveBlocks(objective, { textWidthCm: TEXT_WIDTH_CM });
     const bytes = format === "pdf"
-      ? await renderBlocksPdf({ blocks, images })
+      ? await renderBlocksPdf({ blocks, images, serif: true })
       : await buildDocx({ blocks, images });
 
     const path = `${context.user.id}/obyektivka/${id}.${format}`;

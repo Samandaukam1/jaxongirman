@@ -301,7 +301,7 @@ async function writeSection(service: SupabaseClient, workId: string, ownerId: st
 async function render(service: SupabaseClient, workId: string, ownerId: string, format: "docx" | "pdf") {
   const work = await loadWork(service, workId, ownerId);
   const sections = await service
-    .from("academic_sections").select("heading, body, status").eq("work_id", workId).order("position");
+    .from("academic_sections").select("key, heading, body, status").eq("work_id", workId).order("position");
   if (sections.error) throw sections.error;
 
   const written = (sections.data ?? []).filter((section) => section.status === "ready" && section.body);
@@ -309,6 +309,8 @@ async function render(service: SupabaseClient, workId: string, ownerId: string, 
 
   const profile = await service.from("profiles")
     .select("first_name, last_name, organization").eq("id", ownerId).maybeSingle();
+  // The address the person signs in with, which is the one an article prints.
+  const account = await service.auth.admin.getUserById(ownerId);
   const authorName = [profile.data?.last_name, profile.data?.first_name].filter(Boolean).join(" ") || null;
 
   const blocks = documentBlocks({
@@ -317,12 +319,17 @@ async function render(service: SupabaseClient, workId: string, ownerId: string, 
     field: work.field,
     authorName,
     organization: profile.data?.organization ?? null,
-    sections: written.map((section) => ({ heading: section.heading as string, body: section.body as string })),
+    email: account.data?.user?.email ?? null,
+    sections: written.map((section) => ({
+      key: section.key as string,
+      heading: section.heading as string,
+      body: section.body as string,
+    })),
     sources: (work.sources ?? []) as Source[],
   });
 
   const bytes = format === "pdf"
-    ? await renderBlocksPdf({ blocks, fontSize: 14 })
+    ? await renderBlocksPdf({ blocks, fontSize: 14, serif: true })
     : await buildDocx({ blocks, fontSize: 14 });
 
   const path = `${ownerId}/ilmiy/${workId}.${format}`;

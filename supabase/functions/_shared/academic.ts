@@ -353,39 +353,84 @@ export function documentBlocks(input: {
   field: string;
   authorName: string | null;
   organization: string | null;
-  sections: readonly { heading: string; body: string }[];
+  email?: string | null;
+  sections: readonly { key: string; heading: string; body: string }[];
   sources: readonly Source[];
 }): Block[] {
-  const label = WORK_KINDS.find((entry) => entry.kind === input.kind)?.label ?? "Ilmiy ish";
   const blocks: Block[] = [];
 
-  // The title page, which every one of these is handed in with.
-  blocks.push(paragraph(input.organization ?? "", { align: "center", spaceAfter: 24 }));
-  blocks.push(paragraph([{ text: label.toLocaleUpperCase("uz"), bold: true }], { align: "center", spaceAfter: 12 }));
-  blocks.push(paragraph([{ text: input.topic, bold: true, size: 16 }], { align: "center", spaceAfter: 24 }));
-  if (input.field) blocks.push(paragraph(`Yo‘nalish: ${input.field}`, { align: "center", spaceAfter: 6 }));
-  if (input.authorName) blocks.push(paragraph(`Bajardi: ${input.authorName}`, { align: "center", spaceAfter: 6 }));
-  blocks.push(paragraph(String(new Date().getFullYear()), { align: "center" }));
+  /**
+   * The typography is the requirement, not a preference.
+   *
+   * A4 portrait, Times New Roman 14, body and abstract justified, line spacing
+   * exactly 1.5, nothing before or after a paragraph, first line indented
+   * 1.25 cm. A paper handed in at single spacing comes back, and so does one
+   * set in Calibri — which is what a word processor gives you if nobody says
+   * otherwise. Nothing here leaves it unsaid.
+   */
+  const BODY = { align: "both" as const, lineSpacing: 1.5, indent: 1.25, spaceAfter: 0 };
+  const CENTRED = { align: "center" as const, lineSpacing: 1.5, spaceAfter: 0 };
 
-  input.sections.forEach((section, index) => {
+  // The title: 16–18 pt, bold, capitals, centred.
+  blocks.push(paragraph([{ text: input.topic.toLocaleUpperCase("uz"), bold: true, size: 16 }], CENTRED));
+  blocks.push(paragraph("", { spaceAfter: 6 }));
+
+  // Who wrote it: organisation, course or field, name — centred, 14 bold.
+  for (const line of [input.organization, input.field, input.authorName]) {
+    if (line) blocks.push(paragraph([{ text: line, bold: true }], CENTRED));
+  }
+  // The email is centred and 14 point, and deliberately not bold.
+  if (input.email) blocks.push(paragraph(input.email, CENTRED));
+  blocks.push(paragraph("", { spaceAfter: 6 }));
+
+  /**
+   * `Annotatsiya:` and `Kalit so‘zlar:` are bold labels with regular text after
+   * them, on the same line — which is why they are runs rather than paragraphs.
+   */
+  const LABELLED: Partial<Record<string, string>> = {
+    abstract: "Annotatsiya: ",
+    keywords: "Kalit so‘zlar: ",
+  };
+
+  for (const section of input.sections) {
+    const label = LABELLED[section.key];
+    if (label) {
+      blocks.push(paragraph(
+        [{ text: label, bold: true }, { text: section.body.replace(/\s+/g, " ").trim() }],
+        { align: "both", lineSpacing: 1.5, spaceAfter: 6 },
+      ));
+      continue;
+    }
+
     blocks.push(paragraph([{ text: section.heading, bold: true }], {
       style: "Heading1",
       align: "center",
-      pageBreakBefore: index === 0,
-      spaceAfter: 8,
+      lineSpacing: 1.5,
+      spaceAfter: 0,
     }));
     for (const block of section.body.split(/\n{2,}/)) {
       if (!block.trim()) continue;
-      blocks.push(paragraph(block.trim(), { align: "both", lineSpacing: 1.5, indent: 1.25, spaceAfter: 0 }));
+      blocks.push(paragraph(block.trim(), BODY));
     }
-  });
+  }
 
   if (input.sources.length > 0) {
+    /**
+     * An article's bibliography follows on; a longer work's starts a page.
+     *
+     * The typography rule this document is held to is written for an article,
+     * where the text runs continuously and a page break in the middle of eight
+     * pages is a blank half-page. A course paper is bound, and its
+     * "Foydalanilgan adabiyotlar" is expected to open on its own sheet.
+     */
     blocks.push(paragraph([{ text: REFERENCES_HEADING, bold: true }], {
-      style: "Heading1", align: "center", pageBreakBefore: true, spaceAfter: 8,
+      style: "Heading1", align: "center", lineSpacing: 1.5, spaceAfter: 0,
+      pageBreakBefore: input.kind !== "article",
     }));
     input.sources.forEach((source, index) => {
-      blocks.push(paragraph(referenceLine(source, index), { lineSpacing: 1.5, spaceAfter: 0 }));
+      // Not indented: a numbered list reads as a list, and the number is the
+      // hanging mark the eye follows.
+      blocks.push(paragraph(referenceLine(source, index), { align: "both", lineSpacing: 1.5, spaceAfter: 0 }));
     });
   }
 
