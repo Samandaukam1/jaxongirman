@@ -285,6 +285,23 @@ export function readTemplateAnswer(
 
   for (const ask of asksFor(slots)) {
     let written = given.get(ask.id) ?? "";
+    /**
+     * An answer that repeats the sample is not an answer.
+     *
+     * The sample is in the prompt because the length a designer chose is the
+     * best statement of what fits, and the prompt says not to copy it. A model
+     * mostly obeys — and then meets a box saying `www.reallygreatsite.com` and
+     * hands it straight back, because there is nothing else a URL could
+     * plausibly become. That one box then fails the whole export: leftover
+     * template copy is refused, so the deck cannot be downloaded at all.
+     *
+     * Eight characters is the same threshold the export checks at, so what is
+     * caught here is exactly what would be caught there. Below it a repeat is a
+     * page number or a year, which is usually the right answer twice.
+     */
+    if (written && ask.sample.length >= 8 && written.trim().toLowerCase() === ask.sample.trim().toLowerCase()) {
+      written = "";
+    }
     if (!written) {
       written = ask.role === "display" || ask.role === "title" || ask.role === "heading" || ask.role === "letter"
         ? fallback.title

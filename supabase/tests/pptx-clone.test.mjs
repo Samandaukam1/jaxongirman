@@ -420,3 +420,33 @@ test("the report says what came through, per page and for the deck", () => {
   assert.equal(report.slides[0].structuralFidelityPassed, true);
   assert.equal(report.structuralFidelityPassed, true);
 });
+
+test("a box still holding the template's own words is emptied rather than refused", () => {
+  const profiles = [{
+    archetype_id: "page_01",
+    source_slide_part: "ppt/slides/slide1.xml",
+    text_map: [slotRow("2", { originalText: "www.reallygreatsite.com" })],
+  }];
+  const slides = [{
+    id: "s1",
+    position: 0,
+    // What a deck generated before the writer caught this still has stored.
+    quality_report: { archetype: "page_01", slots: { 2: "www.reallygreatsite.com" } },
+  }];
+
+  const planned = planClone(slides, [], profiles);
+  assert.ok(planned.ok, planned.ok ? "" : planned.reason);
+  assert.deepEqual(planned.plan[0].edits[0].paragraphs, [""]);
+});
+
+test("copy that merely resembles a short original is left alone", () => {
+  const profiles = [{
+    archetype_id: "page_01",
+    source_slide_part: "ppt/slides/slide1.xml",
+    text_map: [slotRow("2", { originalText: "2026" })],
+  }];
+  const slides = [{ id: "s1", position: 0, quality_report: { archetype: "page_01", slots: { 2: "2026" } } }];
+  const planned = planClone(slides, [], profiles);
+  assert.ok(planned.ok);
+  assert.deepEqual(planned.plan[0].edits[0].paragraphs, ["2026"]);
+});

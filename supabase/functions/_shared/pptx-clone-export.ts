@@ -110,11 +110,30 @@ export function planClone(
       if (!slot.shapeId) continue;
       const edited = slot.elementId ? drawn.get(slot.elementId) : undefined;
       const generated = written[slot.shapeId];
-      const text = edited ?? (typeof generated === "string" ? generated : undefined);
+      let text = edited ?? (typeof generated === "string" ? generated : undefined);
       if (text === undefined) {
         missing.push(slot.shapeName || slot.shapeId);
         continue;
       }
+
+      /**
+       * Copy that is still the template's own copy is emptied, not shipped.
+       *
+       * The writer is told not to reuse the sample and mostly does not — then
+       * meets a box saying `www.reallygreatsite.com`, which has no plausible
+       * second answer, and hands it straight back. One such box fails the whole
+       * export, so a deck somebody paid for could not be downloaded at all
+       * because of a footer.
+       *
+       * The writer now catches this, but decks generated before it did are
+       * still in the database and would fail forever. Blanking here is the same
+       * rule at the last line of defence: the box keeps its size, its fill and
+       * its place and simply says nothing, which is the smaller failure by a
+       * long way. Eight characters is the threshold the leftover check uses, so
+       * what is emptied here is exactly what would be refused there.
+       */
+      const original = (slot.originalText ?? "").trim();
+      if (original.length >= 8 && text.trim().toLowerCase() === original.toLowerCase()) text = "";
 
       // Split back into the paragraph count the original box held: a box of
       // three lines wants three replacements, not one long one.

@@ -283,3 +283,22 @@ test("a title longer than the box is cut, not overflowed", () => {
   });
   assert.ok(texts.get("2").length <= 12);
 });
+
+test("an answer that hands the sample back is not shipped as an answer", () => {
+  const slots = [slotOf({ role: "label", originalText: "www.reallygreatsite.com", characters: 23 })];
+  const fill = readTemplateAnswer(
+    { boxes: [{ id: "2", text: "www.reallygreatsite.com" }] },
+    slots,
+    { title: "Sarlavha" },
+  );
+  // Blank, not the template's own words: a leftover fails the whole export.
+  assert.equal(fill.texts.get("2"), "");
+  assert.deepEqual(fill.filled, ["2"]);
+});
+
+test("a short repeat is left alone — a year is the right answer twice", () => {
+  const slots = [slotOf({ role: "number", originalText: "2026", characters: 4 })];
+  const fill = readTemplateAnswer({ boxes: [{ id: "2", text: "2026" }] }, slots, { title: "S" });
+  assert.equal(fill.texts.get("2"), "2026");
+  assert.deepEqual(fill.filled, []);
+});
