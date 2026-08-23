@@ -24,7 +24,7 @@
     "test:functions:local": "node supabase/tests/function-smoke.mjs",
     "test:jslayd": "node supabase/scripts/build-jslayd-runtime.mjs --check && node --test packages/jslayd/tests/jslayd.test.mjs packages/jslayd/tests/render.test.mjs packages/jslayd/tests/decompile.test.mjs packages/jslayd/tests/budget.test.mjs supabase/tests/jslayd-layout.test.mjs supabase/tests/font-versions.test.mjs",
     "jslayd:runtime": "node supabase/scripts/build-jslayd-runtime.mjs",
-    "verify": "npm run typecheck && npm run lint && npm run test:jslayd && npm run test:gemini && npm run test:design && npm run test:game && npm run test:jelement && npm run test:qrvideo && npm run test:tariff && npm run test:auth && npm run test:web && npm run test:payme && npm run test:cards && npm run test:rpc && npm run test:grants && npm run test:admin && node supabase/scripts/vendor-admin-packages.mjs --check && npm run build:admin && npm run build:web",
+    "verify": "npm run typecheck && npm run lint && npm run test:jslayd && npm run test:gemini && npm run test:design && npm run test:game && npm run test:docs && npm run test:jelement && npm run test:qrvideo && npm run test:tariff && npm run test:auth && npm run test:web && npm run test:payme && npm run test:cards && npm run test:rpc && npm run test:grants && npm run test:admin && node supabase/scripts/vendor-admin-packages.mjs --check && npm run build:admin && npm run build:web",
     "test:survey": "node supabase/tests/survey-smoke.mjs",
     "test:marketplace": "node supabase/tests/marketplace-smoke.mjs",
     "test:pptx": "node supabase/tests/pptx-import-smoke.mjs",
@@ -48,7 +48,8 @@
     "test:jelement": "node --test packages/jelement/tests/compile.test.mjs packages/jelement/tests/raster.test.mjs packages/jelement/tests/manifest.test.mjs packages/jelement/tests/render.test.mjs packages/jelement/tests/health.test.mjs packages/jelement/tests/duplicates.test.mjs",
     "test:jelement:smoke": "node supabase/tests/jelement-smoke.mjs",
     "test:design": "node --test supabase/tests/pptx-safety.test.mjs supabase/tests/pptx-design.test.mjs supabase/tests/pptx-classify.test.mjs supabase/tests/design-select.test.mjs supabase/tests/font-source.test.mjs supabase/tests/pptx-endtoend.test.mjs supabase/tests/pptx-text.test.mjs supabase/tests/pptx-clone.test.mjs supabase/tests/pptx-slots.test.mjs supabase/tests/portrait-sheet.test.mjs",
-    "test:game": "node --test supabase/tests/game-batches.test.mjs"
+    "test:game": "node --test supabase/tests/game-batches.test.mjs",
+    "test:docs": "node --test supabase/tests/objective.test.mjs"
   },
   "engines": {
     "node": ">=20"

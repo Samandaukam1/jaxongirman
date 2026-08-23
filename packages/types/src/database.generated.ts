@@ -2258,6 +2258,50 @@ export type Database = {
         }
         Relationships: []
       }
+      objective_documents: {
+        Row: {
+          created_at: string
+          fields: Json
+          full_name: string
+          id: string
+          owner_id: string
+          portrait_id: string | null
+          relatives: Json
+          updated_at: string
+          work: Json
+        }
+        Insert: {
+          created_at?: string
+          fields?: Json
+          full_name?: string
+          id?: string
+          owner_id: string
+          portrait_id?: string | null
+          relatives?: Json
+          updated_at?: string
+          work?: Json
+        }
+        Update: {
+          created_at?: string
+          fields?: Json
+          full_name?: string
+          id?: string
+          owner_id?: string
+          portrait_id?: string | null
+          relatives?: Json
+          updated_at?: string
+          work?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "objective_documents_portrait_id_fkey"
+            columns: ["portrait_id"]
+            isOneToOne: false
+            referencedRelation: "portrait_sheets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       orders: {
         Row: {
           attempt_expires_at: string | null
