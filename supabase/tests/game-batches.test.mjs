@@ -31,7 +31,7 @@ const batchSizes = (() => {
       depth -= 1;
       if (depth === 0) {
         const body = source.slice(start, index + 1).replace(/: number\[\]|: number/g, "");
-        return new Function("QUESTIONS_PER_BATCH", `return function batchSizes(count) ${body}`)(4);
+        return new Function("QUESTIONS_PER_BATCH", `return function batchSizes(count) ${body}`)(12);
       }
     }
   }
@@ -48,13 +48,14 @@ test("the batches add up to what was asked for", () => {
 test("no batch is empty and none is over the limit", () => {
   for (const count of [1, 3, 7, 10, 30]) {
     for (const size of batchSizes(count)) {
-      assert.ok(size >= 1 && size <= 4, `noto‘g‘ri to‘plam: ${size}`);
+      assert.ok(size >= 1 && size <= 12, `noto‘g‘ri to‘plam: ${size}`);
     }
   }
 });
 
-test("the default ten-question game is three requests, not one", () => {
-  assert.deepEqual(batchSizes(10), [4, 4, 2]);
+test("an ordinary game is one request, and the largest is three", () => {
+  assert.deepEqual(batchSizes(10), [10]);
+  assert.deepEqual(batchSizes(30), [12, 12, 6]);
 });
 
 test("regenerating one question is one request", () => {

@@ -75,8 +75,22 @@ const questionSchema = {
     type: { type: "string", enum: [...AI_TYPES] },
     prompt: { type: "string", description: "Savol matni, o‘zbek lotin alifbosida" },
     explanation: { type: "string", description: "To‘g‘ri javob izohi, 1-2 gap" },
-    time_limit_seconds: { type: "integer", enum: [10, 15, 20, 30, 60] },
-    base_points: { type: "integer", enum: [0, 500, 1000, 1500, 2000] },
+    /**
+     * No `enum` on a number, however much one is wanted here.
+     *
+     * Gemini's `enum` is a list of strings and is only meaningful beside
+     * `type: "string"`. Given `{type: "integer", enum: [10, 15, …]}` it rejects
+     * the whole request with "Invalid value at
+     * generation_config.response_schema…enum[0] (TYPE_STRING), 10" — which
+     * names the field, once you know to look in the edge log, and otherwise
+     * arrives as "O'yin yaratilmadi".
+     *
+     * The allowed values are enforced where they were always enforced anyway:
+     * `mapQuestion` snaps anything outside the list to the nearest sensible
+     * default, so the model choosing 25 seconds costs a question nothing.
+     */
+    time_limit_seconds: { type: "integer", description: "10, 15, 20, 30 yoki 60" },
+    base_points: { type: "integer", description: "0, 500, 1000, 1500 yoki 2000" },
     options: { type: ["array", "null"], items: { type: "string" }, description: "Variantlar (single_choice, multiple_choice, poll)" },
     correct_index: { type: ["integer", "null"], description: "single_choice: to‘g‘ri variant indeksi" },
     correct_indexes: { type: ["array", "null"], items: { type: "integer" }, description: "multiple_choice: to‘g‘ri indekslar" },
@@ -356,19 +370,21 @@ function mockGame(source: string, count: number, types: AiType[]): RawGame {
 /**
  * How many questions to ask for at a time.
  *
- * The whole quiz used to be one request: up to thirty questions, a twelve-field
- * schema with a union in every second property, and a sixteen-thousand-token
- * ceiling. Gemini answers a request that size with "Request contains an invalid
- * argument", which names nothing — and the refusal follows the count rather
- * than any word in the prompt. The presentation pipeline met exactly this and
- * the fix there was to write one slide per request; every game since the
- * sixteenth of August has failed for what is almost certainly the same reason.
+ * Twelve, which is one request for an ordinary game and three for the largest
+ * one anybody can ask for.
  *
- * Four keeps a batch well under any of the limits and still costs three
- * requests for the default ten. A batch that fails no longer takes the others
- * with it: nine good questions are a game, and an error message is not.
+ * This started at four, on the theory that the whole quiz in one call was too
+ * large — the deck writer had met exactly that and been changed to one slide
+ * per request. The theory was wrong: the recorded failure named a numeric
+ * `enum` in the schema, and size had nothing to do with it. Splitting a
+ * ten-question game into three requests would repeat the prompt and the schema
+ * three times for no benefit.
+ *
+ * The batching stays because it earns its keep at thirty questions, and because
+ * a batch that fails no longer takes the others with it: nine good questions
+ * are a game, and an error message is not.
  */
-const QUESTIONS_PER_BATCH = 4;
+const QUESTIONS_PER_BATCH = 12;
 
 export function batchSizes(count: number): number[] {
   const sizes: number[] = [];

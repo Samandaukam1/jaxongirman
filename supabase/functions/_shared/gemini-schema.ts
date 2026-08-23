@@ -40,6 +40,25 @@ export function toGeminiSchema(schema: unknown): unknown {
       continue;
     }
 
+    /**
+     * `enum` is a list of strings, and only means anything beside a string.
+     *
+     * Given `{type: "integer", enum: [10, 15]}` Gemini rejects the entire
+     * request — "Invalid value at …enum[0] (TYPE_STRING), 10" — and the caller
+     * sees a generic refusal with no field named. Every O‘yingoh game failed
+     * this way for a week.
+     *
+     * Dropped rather than stringified: turning the numbers into strings would
+     * change what comes back, so a schema promising an integer would deliver
+     * `"10"`. The allowed values belong in the reader, which has to check them
+     * anyway — a model is free to answer 25 whatever the schema said.
+     */
+    if (key === "enum") {
+      const strings = Array.isArray(value) && value.every((entry) => typeof entry === "string");
+      if (strings) out.enum = value;
+      continue;
+    }
+
     if (key === "properties" && value && typeof value === "object") {
       const properties: Record<string, unknown> = {};
       for (const [name, child] of Object.entries(value as Record<string, unknown>)) {
@@ -147,6 +166,28 @@ export function geminiSchemaProblems(schema: unknown, path = "$"): SchemaProblem
     if (key === "enum") {
       if (!Array.isArray(value) || value.length === 0) {
         problems.push({ path: `${path}.enum`, problem: "enum bo'sh yoki massiv emas" });
+        continue;
+      }
+      /**
+       * Every member has to be a string, and the field has to be one too.
+       *
+       * `{type: "integer", enum: [10, 15]}` is valid JSON Schema and is not
+       * valid here: Gemini answers the whole request with "Invalid value at
+       * …enum[0] (TYPE_STRING), 10". Every O‘yingoh game failed that way for a
+       * week, and this check is the one that should have said so before a
+       * single request was sent.
+       */
+      const wrong = value.find((entry) => typeof entry !== "string");
+      if (wrong !== undefined) {
+        problems.push({
+          path: `${path}.enum`,
+          problem: `enum faqat matn bo'lishi kerak, ${JSON.stringify(wrong)} kelgan`,
+        });
+      } else if (node.type !== undefined && node.type !== "string") {
+        problems.push({
+          path: `${path}.enum`,
+          problem: `enum faqat string turida ishlaydi, "${String(node.type)}" emas`,
+        });
       }
       continue;
     }

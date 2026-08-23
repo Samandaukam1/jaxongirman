@@ -272,3 +272,51 @@ test("a slide is written on its own, so no schema counts them", async () => {
     "the refused schema was the same size as the accepted one",
   );
 });
+
+/* --------------------------------------------- enum is a list of strings */
+
+/**
+ * `{type: "integer", enum: [10, 15]}` is valid JSON Schema and invalid here.
+ *
+ * Gemini answers the whole request with "Invalid value at …enum[0]
+ * (TYPE_STRING), 10", which names the field only in an edge log nobody can
+ * reach from a laptop. Every O‘yingoh game failed this way for a week while the
+ * person saw "O‘yin yaratilmadi. Qayta urinib ko‘ring."
+ */
+
+test("a numeric enum is dropped rather than sent", () => {
+  const converted = toGeminiSchema({
+    type: "object",
+    properties: {
+      seconds: { type: "integer", enum: [10, 15, 20], description: "10, 15 yoki 20" },
+      kind: { type: "string", enum: ["a", "b"] },
+    },
+  });
+  // Dropped, not stringified: a schema promising an integer must not start
+  // delivering "10".
+  assert.equal(converted.properties.seconds.enum, undefined);
+  assert.equal(converted.properties.seconds.type, "integer");
+  assert.equal(converted.properties.seconds.description, "10, 15 yoki 20");
+  // A string enum is exactly what Gemini wants and is untouched.
+  assert.deepEqual(converted.properties.kind.enum, ["a", "b"]);
+});
+
+test("the checker names a numeric enum, which is what it failed to do", () => {
+  const problems = geminiSchemaProblems({ type: "integer", enum: [10, 15] });
+  assert.equal(problems.length, 1);
+  assert.match(problems[0].problem, /matn bo'lishi kerak/);
+});
+
+test("a string enum on a non-string field is also refused", () => {
+  const problems = geminiSchemaProblems({ type: "integer", enum: ["10"] });
+  assert.equal(problems.length, 1);
+  assert.match(problems[0].problem, /string turida/);
+});
+
+test("a converted schema always passes its own checker", () => {
+  const converted = toGeminiSchema({
+    type: "object",
+    properties: { seconds: { type: "integer", enum: [10] } },
+  });
+  assert.deepEqual(geminiSchemaProblems(converted), []);
+});
