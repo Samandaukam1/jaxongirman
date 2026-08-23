@@ -5,6 +5,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { ArrowLeft, Check, Download, LoaderCircle, MessageSquareQuote, Redo2, Send, Sparkles, Undo2 } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, { runOnJS, runOnUI, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 
 import { AddElementBar, type AddKind } from "@/components/AddElementBar";
 import { ElementPicker } from "@/components/ElementPicker";
@@ -97,9 +99,62 @@ export default function PresentationEditorScreen() {
   /** The text element whose box should track its rewrapped copy right now. */
   const fitTarget = useRef<string | null>(null);
 
-  const canvasWidth = Math.min(screenWidth - spacing.xl * 2, 760);
+  const baseWidth = Math.min(screenWidth - spacing.xl * 2, 760);
+
+  /**
+   * Two fingers to magnify the slide, the way the presenter remote already
+   * does — because the thing people actually need to zoom into is a caption
+   * they are trying to nudge two pixels, and at phone size that is guesswork.
+   *
+   * The zoom is committed into `displayScale` rather than laid over it. Every
+   * drag, handle and hit test on this screen converts screen pixels to model
+   * units by dividing by `displayScale`; a second transform on top would leave
+   * all of that arithmetic describing a slide the size it used to be, and an
+   * element would move at a fraction of the finger. Making the scale actually
+   * larger keeps one number true for everybody.
+   *
+   * During the pinch itself nothing is committed — a shared value scales the
+   * view for free, without re-rendering a slide's worth of elements sixty times
+   * a second — and the final value lands in state when the fingers lift.
+   */
+  const [zoom, setZoom] = useState(1);
+  const liveZoom = useSharedValue(1);
+
+  const canvasWidth = baseWidth * zoom;
   const displayScale = canvasWidth / MODEL_WIDTH;
   const canvasHeight = MODEL_HEIGHT * displayScale;
+
+  /**
+   * Built each render rather than memoised.
+   *
+   * A `useMemo` callback is a pure function as far as the compiler is
+   * concerned, so writing a shared value from a gesture created inside one is
+   * flagged — correctly, in the general case. `GestureDetector` diffs the
+   * gesture it is given, so constructing it here costs nothing.
+   */
+  const pinch = Gesture.Pinch()
+    .onUpdate((event) => {
+      "worklet";
+      liveZoom.value = Math.min(4, Math.max(1, zoom * event.scale));
+    })
+    .onEnd(() => {
+      "worklet";
+      runOnJS(setZoom)(liveZoom.value);
+    });
+
+  /** Back to life size. The shared value is written where shared values live. */
+  const resetZoom = useCallback(() => {
+    runOnUI(() => {
+      "worklet";
+      liveZoom.value = 1;
+    })();
+    setZoom(1);
+  }, [liveZoom]);
+
+  const pinchStyle = useAnimatedStyle(() => ({
+    // Once committed the two agree and this is exactly 1.
+    transform: [{ scale: liveZoom.value / zoom }],
+  }), [zoom]);
   const currentSlide = slides.find((slide) => slide.id === currentSlideId) ?? null;
   const currentElements = useMemo(() => elements.filter((element) => element.slide_id === currentSlideId).sort((a, b) => a.z_index - b.z_index), [currentSlideId, elements]);
   const selected = elements.find((element) => element.id === selectedId) ?? null;
@@ -635,7 +690,8 @@ export default function PresentationEditorScreen() {
 
       <ScrollView contentContainerStyle={[styles.editorScroll, { paddingBottom: dockHeight + spacing.xl }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {/* The stage is unclipped so selection handles can sit outside the slide. */}
-        <View style={{ width: canvasWidth, height: canvasHeight }}>
+        <GestureDetector gesture={pinch}>
+        <Animated.View style={[{ width: canvasWidth, height: canvasHeight }, pinchStyle]}>
           <View style={[styles.canvasFrame, StyleSheet.absoluteFill]}>
             <View style={{ width: MODEL_WIDTH, height: MODEL_HEIGHT, transform: [{ scale: displayScale }], transformOrigin: "top left" }}>
               <SlideCanvas
@@ -675,7 +731,18 @@ export default function PresentationEditorScreen() {
               onDelete={deleteSelected}
             />
           ) : null}
-        </View>
+        </Animated.View>
+        </GestureDetector>
+
+        {/* Only while it is doing something: a control that undoes nothing is
+            a control to read past. */}
+        {zoom > 1 ? (
+          <Pressable accessibilityRole="button" onPress={resetZoom} style={styles.zoomReset}>
+            <Text style={styles.zoomResetText}>{Math.round(zoom * 100)}% · asliga qaytarish</Text>
+          </Pressable>
+        ) : (
+          <Text style={styles.zoomHint}>Kattalashtirish uchun ikki barmoq bilan suring</Text>
+        )}
 
         <View style={styles.historyBar}>
           <Pressable disabled={!past.length} onPress={undo} style={[styles.historyButton, !past.length && styles.disabled]}><Undo2 color={colors.primary} size={icon.sm} strokeWidth={icon.stroke} /><Text style={styles.historyText}>Orqaga</Text></Pressable>
@@ -762,6 +829,9 @@ const styles = StyleSheet.create({
   saved: { ...typography.caption, color: colors.inkSoft },
   editorScroll: { paddingTop: spacing.xl, alignItems: "center" },
   canvasFrame: { backgroundColor: colors.surface, borderRadius: radius.md, overflow: "hidden", ...shadow },
+  zoomReset: { alignSelf: "center", paddingVertical: 8, paddingHorizontal: spacing.lg, borderRadius: radius.pill, backgroundColor: colors.primarySoft },
+  zoomResetText: { ...typography.caption, fontWeight: "700", color: colors.primaryDeep },
+  zoomHint: { ...typography.caption, color: colors.inkSoft, textAlign: "center" },
   historyBar: { width: "100%", flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.xl, marginTop: spacing.xxl, gap: spacing.sm },
   historyButton: { height: 38, paddingHorizontal: spacing.md, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderStrong, flexDirection: "row", alignItems: "center", gap: 6 },
   historyText: { ...typography.caption, color: colors.ink },

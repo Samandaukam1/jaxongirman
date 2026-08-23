@@ -8,7 +8,7 @@ import {
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ChevronLeft, ChevronRight, Gamepad2, PowerOff, RotateCcw } from "lucide-react-native";
+import { ChevronLeft, ChevronRight, Eye, EyeOff, Gamepad2, PowerOff, RotateCcw } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
@@ -17,6 +17,7 @@ import { ScreenHeader } from "@/components/ScreenHeader";
 import { ErrorState, InlineError } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
 import { launchPresentationGame, presentationHasGame } from "@/lib/games";
+import { loadDefense, type Defense } from "@/lib/defense";
 import { supabase } from "@/lib/supabase";
 import { colors, radius, shadow, spacing, typography } from "@/theme/tokens";
 
@@ -151,6 +152,17 @@ export default function RemoteScreen() {
     setLoading(false);
   }, [sessionId]);
 
+  /**
+   * The spoken script, beside the slide it belongs to.
+   *
+   * This screen is what the presenter is actually holding while they talk, so
+   * it is where the script has to be — reading it anywhere else means leaving
+   * the remote, and nobody does that mid-sentence. Hidden with one tap for
+   * people who would rather look at the room.
+   */
+  const [defense, setDefense] = useState<Defense | null>(null);
+  const [showScript, setShowScript] = useState(true);
+
   const loadDeck = useCallback(async (presentationId: string) => {
     const sequence = ++deckLoadSequence.current;
     setDeckLoading(true);
@@ -250,6 +262,16 @@ export default function RemoteScreen() {
 
   // Whether the launch button belongs on screen at all. Re-asked when the deck
   // changes, because a different deck has a different answer.
+  useEffect(() => {
+    const presentationId = session?.presentation_id;
+    if (!presentationId) { setDefense(null); return; }
+    let alive = true;
+    // A deck with no script is the ordinary case, not an error: the card simply
+    // does not appear.
+    loadDefense(presentationId).then((script) => { if (alive) setDefense(script); }).catch(() => {});
+    return () => { alive = false; };
+  }, [session?.presentation_id]);
+
   useEffect(() => {
     const presentationId = session?.presentation_id;
     if (!presentationId) { setHasGame(false); return; }
@@ -407,7 +429,15 @@ export default function RemoteScreen() {
           <>
             <View style={styles.stageHeader}>
               <Text style={styles.stageLabel}>Joriy slayd</Text>
-              <Text style={styles.stageCount}>{session.slide_count > 0 ? `${session.current_slide + 1} / ${session.slide_count}` : "—"}</Text>
+              <View style={styles.stageRight}>
+                {/* Reset belongs beside what it resets, not at the end of a
+                    scroll: it undoes a zoom, and a zoom is on the picture. */}
+                <Pressable accessibilityLabel="Masshtabni asliga qaytarish" disabled={ended} onPress={() => previewRef.current?.reset()} style={styles.resetButton}>
+                  <RotateCcw color={colors.primary} size={16} strokeWidth={2} />
+                  <Text style={styles.resetText}>Reset</Text>
+                </Pressable>
+                <Text style={styles.stageCount}>{session.slide_count > 0 ? `${session.current_slide + 1} / ${session.slide_count}` : "—"}</Text>
+              </View>
             </View>
 
             {deckLoading ? (
@@ -454,10 +484,42 @@ export default function RemoteScreen() {
               </Pressable>
             </View>
 
-            <Pressable accessibilityLabel="Masshtabni asliga qaytarish" disabled={ended} onPress={() => previewRef.current?.reset()} style={styles.resetButton}>
-              <RotateCcw color={colors.primary} size={18} strokeWidth={2} />
-              <Text style={styles.resetText}>Reset</Text>
-            </Pressable>
+            {/**
+              * What to say about the slide that is on the screen right now.
+              *
+              * Its own scroll, so a long passage does not push the buttons off
+              * the bottom — the thing a presenter must never have to hunt for
+              * is the one that changes the slide.
+              */}
+            {defense?.status === "ready" && showScript ? (
+              <View style={styles.script}>
+                <View style={styles.scriptHead}>
+                  <Text style={styles.scriptTitle}>Himoya matni</Text>
+                  <Pressable accessibilityLabel="Himoya matnini yashirish" onPress={() => setShowScript(false)} style={styles.scriptHide}>
+                    <EyeOff color={colors.inkMuted} size={16} strokeWidth={2} />
+                    <Text style={styles.scriptHideText}>Yashirish</Text>
+                  </Pressable>
+                </View>
+                <ScrollView style={styles.scriptScroll} nestedScrollEnabled showsVerticalScrollIndicator>
+                  <Text style={styles.scriptBody}>
+                    {defense.sections[session.current_slide]?.speaker_text?.trim()
+                      || "Bu slayd uchun matn yozilmagan."}
+                  </Text>
+                  {defense.sections[session.current_slide]?.key_point ? (
+                    <Text style={styles.scriptPoint}>
+                      Asosiy fikr: {defense.sections[session.current_slide]!.key_point}
+                    </Text>
+                  ) : null}
+                </ScrollView>
+              </View>
+            ) : null}
+
+            {defense?.status === "ready" && !showScript ? (
+              <Pressable accessibilityRole="button" onPress={() => setShowScript(true)} style={styles.scriptShow}>
+                <Eye color={colors.primary} size={16} strokeWidth={2} />
+                <Text style={styles.scriptShowText}>Himoya matnini ko‘rsatish</Text>
+              </Pressable>
+            ) : null}
 
             {commandError ? <InlineError message={commandError} /> : null}
 
@@ -521,6 +583,25 @@ const styles = StyleSheet.create({
   navPrimaryText: { color: colors.onPrimary },
   pressed: { opacity: 0.9, transform: [{ scale: 0.98 }] },
   disabled: { opacity: 0.35 },
+  stageRight: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  script: {
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  scriptHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  scriptTitle: { ...typography.caption, fontWeight: "700", color: colors.primary, letterSpacing: 0.5 },
+  scriptHide: { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 4, paddingHorizontal: 6 },
+  scriptHideText: { ...typography.caption, color: colors.inkMuted },
+  // Tall enough for a paragraph, short enough that the buttons stay on screen.
+  scriptScroll: { maxHeight: 190 },
+  scriptBody: { fontFamily: "Manrope_400Regular", fontSize: 16, lineHeight: 26, color: colors.ink },
+  scriptPoint: { ...typography.caption, color: colors.inkMuted, marginTop: spacing.sm },
+  scriptShow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, minHeight: 44, borderRadius: radius.pill, backgroundColor: colors.primarySoft },
+  scriptShowText: { ...typography.caption, fontWeight: "700", color: colors.primaryDeep },
   resetButton: { alignSelf: "center", minWidth: 132, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderRadius: radius.pill, backgroundColor: colors.surfaceMuted },
   resetText: { ...typography.bodyMedium, color: colors.primary, fontSize: 14 },
   launchButton: {

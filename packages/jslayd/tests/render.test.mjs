@@ -371,3 +371,63 @@ test("legacy layout names map onto archetype purposes", () => {
   assert.equal(purposeForLayout("thanks"), "thank_you");
   assert.equal(purposeForLayout("something_new"), "title_content");
 });
+
+/* ------------------------------------------------- text you can actually read */
+
+/**
+ * A design states a colour for its type and a colour for the panel under it,
+ * and both resolve against a palette. When those land on the same value the
+ * words are drawn, correctly, and nobody can read them — every deck made from
+ * that design has the fault and no single slide looks broken enough to report.
+ */
+
+/** The sample design with one palette role collided into another. */
+function collided(role, onto) {
+  const copy = JSON.parse(JSON.stringify(DESIGN));
+  for (const family of copy.colorFamilies) family.colors[role] = family.colors[onto];
+  copy.colors[role] = copy.colors[onto];
+  return copy;
+}
+
+const titleOf = (slide) => slide.elements.find((element) => element.type === "text");
+
+test("type that cannot be seen against its ground is made visible", () => {
+  // Text set to exactly the background: a contrast ratio of one.
+  const design = collided("text", "background");
+  for (const { slide } of renderAllPreviews(design)) {
+    for (const element of elementsOf(slide, "text")) {
+      const ground = typeof slide.background.color === "string" ? slide.background.color : null;
+      if (!ground || !/^#[0-9a-f]{6}$/i.test(element.style.color)) continue;
+      // Only the ones actually sitting on the slide's own ground are checked;
+      // a panel underneath is its own case, below.
+      assert.notEqual(element.style.color.toLowerCase(), ground.toLowerCase());
+    }
+  }
+});
+
+test("a colour the designer chose that reads perfectly well is left alone", () => {
+  /**
+   * The sample design is legible by construction, so the floor must not touch
+   * any of it. This is the guard against a rule that quietly repaints every
+   * deck in black and white.
+   */
+  const before = renderAllPreviews(DESIGN)
+    .flatMap(({ slide }) => elementsOf(slide, "text").map((element) => element.style.color));
+  assert.ok(before.length > 0);
+  const flattened = before.filter((color) => ["#ffffff", "#000000"].includes(String(color).toLowerCase()));
+  // Some of the sample legitimately is black or white; most of it is not, and a
+  // rule that had repainted everything would show up here.
+  assert.ok(flattened.length < before.length, "matnlarning hammasi qora/oqqa aylandi");
+});
+
+test("the floor fires when the palette collides, and lands on black or white", () => {
+  const design = collided("text", "background");
+  const rescued = renderAllPreviews(design)
+    .flatMap(({ slide }) => elementsOf(slide, "text"))
+    .map((element) => String(element.style.color).toLowerCase())
+    .filter((color) => color === "#ffffff" || color === "#000000");
+
+  // At least one piece of type was unreadable and was made readable. The exact
+  // count depends on the sample and is not the property worth pinning.
+  assert.ok(rescued.length > 0, "kontrast qoidasi umuman ishlamadi");
+});

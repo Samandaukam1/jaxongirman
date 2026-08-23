@@ -14,7 +14,7 @@ import { formatNumber } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
 import { useAccount } from "@/providers/AccountProvider";
 import { useAuth } from "@/providers/AuthProvider";
-import { colors, icon, radius, shadowLifted, spacing, typography } from "@/theme/tokens";
+import { colors, icon, radius, spacing, typography } from "@/theme/tokens";
 
 type Presentation = Tables<"presentations">;
 
@@ -168,36 +168,38 @@ const styles = StyleSheet.create({
   tools: { flexDirection: "row", gap: spacing.sm },
   tool: {
     flex: 1,
-    alignItems: "flex-start",
-    gap: 3,
+    // Square-ish, so three sit across a phone without the labels wrapping.
+    aspectRatio: 0.92,
+    justifyContent: "flex-end",
+    gap: 2,
     padding: spacing.md,
     borderRadius: radius.lg,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    ...shadowLifted,
   },
   toolPressed: { opacity: 0.72 },
   toolIcon: {
-    width: 40, height: 40, borderRadius: 14, marginBottom: 5,
+    width: 38, height: 38, borderRadius: 13,
     alignItems: "center", justifyContent: "center",
     backgroundColor: colors.primarySoft,
+    marginBottom: "auto",
   },
-  toolLabel: { ...typography.body, fontWeight: "700", color: colors.ink },
-  toolDetail: { ...typography.caption, color: colors.inkSoft },
+  toolLabel: { ...typography.caption, fontWeight: "700", color: colors.ink },
+  toolDetail: { ...typography.caption, fontSize: 11, color: colors.inkSoft },
   secondaryRow: { flexDirection: "row", gap: spacing.sm },
   secondary: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: spacing.sm,
-    minHeight: 46,
-    paddingHorizontal: spacing.md,
+    gap: 6,
+    minHeight: 42,
+    paddingHorizontal: spacing.sm,
     borderRadius: radius.pill,
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.surfaceMuted,
   },
-  secondaryText: { ...typography.caption, fontWeight: "700", color: colors.primaryDeep },
+  secondaryText: { ...typography.caption, fontSize: 12, fontWeight: "600", color: colors.inkMuted },
   sectionHeader: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.xxl, marginBottom: spacing.lg },
   sectionTitle: { ...typography.heading, color: colors.ink },
   sectionCount: { ...typography.caption, color: colors.primary, backgroundColor: colors.primarySoft, paddingHorizontal: 9, paddingVertical: 3, borderRadius: radius.pill },

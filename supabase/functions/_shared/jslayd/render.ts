@@ -4,7 +4,7 @@
 //
 // The JSLAYD runtime, projected into the Edge tree. Edit the package, not this.
 
-import { extendChartPalette, resolveColor } from "./colors.ts";
+import { contrastRatio, extendChartPalette, readableOn, resolveColor } from "./colors.ts";
 import {
   conditionHolds,
   previewSlide,
@@ -112,7 +112,66 @@ export function renderArchetype(
   // The apps sort by z_index, but a stable emit order keeps two renders of one
   // slide byte-identical, which is what visual regression compares.
   elements.sort((first, second) => first.z_index - second.z_index);
-  return { background: paintBackground(archetype.background, context.colors), elements };
+
+  const background = paintBackground(archetype.background, context.colors);
+  ensureReadable(elements, typeof background.color === "string" ? background.color : context.colors.background);
+  return { background, elements };
+}
+
+/** Below this, type on a projected slide cannot be read from the back of a room. */
+const MIN_CONTRAST = 3;
+
+/**
+ * Text that cannot be seen against what is behind it is made visible.
+ *
+ * A design states a colour for its type and a colour for the panel the type
+ * sits on, and both are resolved against a palette. When those two land on the
+ * same value — an imported template whose heading was the same blue as the
+ * block behind it, a family whose `text` role is close to its `surface` — the
+ * words are drawn, correctly, and nobody can read them. Every deck made from
+ * that design has the fault and no individual slide looks broken enough to
+ * report.
+ *
+ * So contrast is checked once, at the end, against what is actually underneath:
+ * the nearest opaque filled shape covering the text, or the slide's own
+ * background. Below the floor the colour is replaced with black or white,
+ * whichever the ground can carry.
+ *
+ * Deliberately a floor and not an opinion. Three to one is roughly where type
+ * stops being legible at the back of a room; anything above it is the
+ * designer's choice and is left exactly as authored. Text over a picture is
+ * left alone too — nothing here knows what colour a photograph is, and a guess
+ * would be worse than the author's decision.
+ */
+function ensureReadable(elements: RenderedElement[], slideBackground: string): void {
+  const isHex = (value: unknown): value is string => typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
+
+  elements.forEach((element, index) => {
+    if (element.type !== "text") return;
+    const style = element.style as Record<string, unknown>;
+    const color = style.color;
+    if (!isHex(color)) return;
+
+    let ground = slideBackground;
+    for (let below = 0; below < index; below += 1) {
+      const under = elements[below]!;
+      if (under.type === "image" || under.type === "chart" || under.type === "table") continue;
+      const fill = (under.style as Record<string, unknown>)?.fill;
+      if (!isHex(fill)) continue;
+      const opacity = typeof under.opacity === "number" ? under.opacity : 1;
+      if (opacity < 0.6) continue;
+      // The text's centre is the honest test: a panel that merely touches a
+      // corner of the box is not what the words are sitting on.
+      const centreX = element.x + element.width / 2;
+      const centreY = element.y + element.height / 2;
+      if (centreX < under.x || centreX > under.x + under.width) continue;
+      if (centreY < under.y || centreY > under.y + under.height) continue;
+      ground = fill;
+    }
+
+    if (contrastRatio(color, ground) >= MIN_CONTRAST) return;
+    style.color = readableOn(ground);
+  });
 }
 
 type RenderContext = {

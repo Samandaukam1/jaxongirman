@@ -37,6 +37,8 @@ export default function ObyektivkaScreen() {
   const [busy, setBusy] = useState<"docx" | "pdf" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** One input per field, so a tap on the document can put the cursor in it. */
+  const inputs = useRef<Record<string, TextInput | null>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -122,6 +124,48 @@ export default function ObyektivkaScreen() {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
+        {/**
+          * The document as it will be, above the form that fills it.
+          *
+          * A form of twenty inputs tells you what you have typed; it does not
+          * tell you what you are going to hand in. Tapping a line here puts the
+          * cursor in the field behind it, so the document is also the way you
+          * navigate the form — which is how somebody with the paper original in
+          * their other hand actually works: they read down the page.
+          */}
+        <View style={styles.sheet}>
+          <Text style={styles.sheetTitle}>MA’LUMOTNOMA</Text>
+          <Text style={styles.sheetName}>{doc.fullName || "—"}</Text>
+          <View style={styles.sheetRule} />
+          {FIELDS.map((entry) => (
+            <Pressable
+              key={entry.id}
+              accessibilityRole="button"
+              accessibilityLabel={`${entry.label} maydoniga o‘tish`}
+              onPress={() => inputs.current[entry.id]?.focus()}
+              style={styles.sheetRow}
+            >
+              <Text style={styles.sheetLabel}>{entry.label}:</Text>
+              <Text style={[styles.sheetValue, !(doc.fields[entry.id] ?? "").trim() && styles.sheetEmpty]} numberOfLines={2}>
+                {(doc.fields[entry.id] ?? "").trim() || "—"}
+              </Text>
+            </Pressable>
+          ))}
+          {doc.work.length > 0 ? (
+            <>
+              <Text style={styles.sheetHeading}>MEHNAT FAOLIYATI</Text>
+              {doc.work.map((row, index) => (
+                <Text key={index} style={styles.sheetValue}>
+                  {[row.period.trim(), row.detail.trim()].filter(Boolean).join(" - ") || "—"}
+                </Text>
+              ))}
+            </>
+          ) : null}
+          {doc.relatives.length > 0 ? (
+            <Text style={styles.sheetHeading}>QARINDOSHLAR: {doc.relatives.length} ta</Text>
+          ) : null}
+        </View>
+
         <View style={styles.card}>
           <Text style={styles.label}>F.I.Sh.</Text>
           <TextInput
@@ -139,6 +183,7 @@ export default function ObyektivkaScreen() {
                 <View key={entry.id} style={row.length === 2 ? styles.pairItem : undefined}>
                   <Text style={styles.label}>{entry.label}</Text>
                   <TextInput
+                    ref={(node) => { inputs.current[entry.id] = node; }}
                     value={doc.fields[entry.id] ?? ""}
                     onChangeText={(value) => field(entry.id, value)}
                     placeholder={entry.hint ?? ""}
@@ -281,6 +326,23 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.canvas },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl },
   content: { padding: spacing.xl, paddingBottom: spacing.xxxl, gap: spacing.lg },
+  sheet: {
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 6,
+  },
+  // Serif and centred, because that is what the paper looks like.
+  sheetTitle: { fontFamily: "Manrope_700Bold", fontSize: 15, textAlign: "center", color: colors.ink, letterSpacing: 0.5 },
+  sheetName: { fontFamily: "Manrope_700Bold", fontSize: 14, textAlign: "center", color: colors.ink },
+  sheetRule: { height: 1, backgroundColor: colors.border, marginVertical: spacing.sm },
+  sheetRow: { flexDirection: "row", gap: spacing.sm, paddingVertical: 3 },
+  sheetLabel: { ...typography.caption, fontWeight: "700", color: colors.ink, flexShrink: 0, maxWidth: "48%" },
+  sheetValue: { ...typography.caption, flex: 1, color: colors.ink },
+  sheetEmpty: { color: colors.inkSoft },
+  sheetHeading: { ...typography.caption, fontWeight: "700", textAlign: "center", color: colors.ink, marginTop: spacing.sm },
   card: { padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, gap: 2, ...shadow },
   label: { ...typography.caption, color: colors.inkMuted, marginTop: spacing.sm, marginBottom: 5 },
   input: { ...typography.body, color: colors.ink, minHeight: 46, paddingHorizontal: spacing.md, paddingTop: Platform.OS === "ios" ? 12 : 8, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceMuted },

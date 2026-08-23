@@ -102,7 +102,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
-    paddingVertical: spacing.lg,
+    paddingVertical: spacing.md + 2,
     paddingHorizontal: spacing.lg,
     borderRadius: radius.xl,
     overflow: "hidden",
@@ -116,11 +116,11 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.16)",
   },
   glyph: {
-    width: 46, height: 46, borderRadius: 16,
+    width: 42, height: 42, borderRadius: 14,
     alignItems: "center", justifyContent: "center",
     backgroundColor: colors.onPrimary,
   },
   copy: { flex: 1, gap: 2 },
-  title: { ...typography.heading, color: colors.onPrimary },
+  title: { ...typography.body, fontWeight: "700", fontSize: 18, color: colors.onPrimary },
   detail: { ...typography.caption, color: "rgba(255,255,255,0.8)" },
 });
