@@ -1131,6 +1131,8 @@ export type Database = {
           created_at: string
           description: string
           difficulty: string
+          failure_code: string | null
+          failure_detail: string | null
           failure_reason: string | null
           featured_at: string | null
           id: string
@@ -1151,6 +1153,8 @@ export type Database = {
           created_at?: string
           description?: string
           difficulty?: string
+          failure_code?: string | null
+          failure_detail?: string | null
           failure_reason?: string | null
           featured_at?: string | null
           id?: string
@@ -1171,6 +1175,8 @@ export type Database = {
           created_at?: string
           description?: string
           difficulty?: string
+          failure_code?: string | null
+          failure_detail?: string | null
           failure_reason?: string | null
           featured_at?: string | null
           id?: string
@@ -3209,11 +3215,13 @@ export type Database = {
           avatar_url: string | null
           bio: string
           created_at: string
+          field_of_study: string | null
           first_name: string
           full_name: string
           id: string
           last_name: string
           last_seen_at: string | null
+          organization: string | null
           status: Database["public"]["Enums"]["user_status"]
           timezone: string
           updated_at: string
@@ -3223,11 +3231,13 @@ export type Database = {
           avatar_url?: string | null
           bio?: string
           created_at?: string
+          field_of_study?: string | null
           first_name?: string
           full_name?: string
           id: string
           last_name?: string
           last_seen_at?: string | null
+          organization?: string | null
           status?: Database["public"]["Enums"]["user_status"]
           timezone?: string
           updated_at?: string
@@ -3237,11 +3247,13 @@ export type Database = {
           avatar_url?: string | null
           bio?: string
           created_at?: string
+          field_of_study?: string | null
           first_name?: string
           full_name?: string
           id?: string
           last_name?: string
           last_seen_at?: string | null
+          organization?: string | null
           status?: Database["public"]["Enums"]["user_status"]
           timezone?: string
           updated_at?: string
@@ -5162,11 +5174,13 @@ export type Database = {
           avatar_url: string | null
           bio: string
           created_at: string
+          field_of_study: string | null
           first_name: string
           full_name: string
           id: string
           last_name: string
           last_seen_at: string | null
+          organization: string | null
           status: Database["public"]["Enums"]["user_status"]
           timezone: string
           updated_at: string
@@ -6168,6 +6182,7 @@ export type Database = {
         Args: { p_feature_key: string; p_user_id?: string }
         Returns: Json
       }
+      reap_stale_export_jobs: { Args: { p_owner_id?: string }; Returns: number }
       record_survey_export: {
         Args: {
           p_form_id: string
