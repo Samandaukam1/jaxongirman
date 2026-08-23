@@ -1,14 +1,18 @@
+import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
-import { ChevronRight, CreditCard, Crown, LogOut, Receipt, Store, User as UserIcon, Wallet } from "lucide-react-native";
+import {
+  ChevronRight, Coins, CreditCard, Crown, Gamepad2, LogOut, Pencil, Presentation,
+  Receipt, Store, User as UserIcon, Wallet,
+} from "lucide-react-native";
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { BOTTOM_NAV_SPACE } from "@/components/BottomNav";
 import { asErrorMessage } from "@/lib/format";
 import { myMembership } from "@/lib/subscription";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
-import { colors, icon, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { colors, gradients, icon, radius, spacing, typography } from "@/theme/tokens";
 
 type Identity = {
   firstName: string;
@@ -94,63 +98,106 @@ export default function ProfileScreen() {
   if (loading) return <View style={styles.centered}><ActivityIndicator color={colors.primary} size="large" /></View>;
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.screen}>
+    <View style={styles.screen}>
       <ScrollView
         contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={colors.primary} />}
       >
-        <Text style={styles.pageTitle}>Profil</Text>
-
-        <View style={styles.identity}>
-          <View style={styles.avatarWrap}>
+        {/**
+          * The header is one object: a coloured field with the person in it.
+          *
+          * A page title, an avatar, a name and a row of buttons used to be four
+          * things stacked with gaps between them, which reads as a settings
+          * screen. Put on a single ground with the card below overlapping its
+          * edge, the same content reads as somebody's profile — and the actions
+          * sit where a thumb already is rather than at the end of a scroll.
+          */}
+        <LinearGradient
+          colors={gradients.primary}
+          start={{ x: 0.1, y: 0 }}
+          end={{ x: 0.9, y: 1 }}
+          style={styles.hero}
+        >
+          <View style={styles.avatarRing}>
             {avatarUrl
               ? <Image source={{ uri: avatarUrl }} style={styles.avatar} />
-              : <View style={[styles.avatar, styles.avatarEmpty]}><UserIcon color={colors.primary} size={38} strokeWidth={1.7} /></View>}
+              : <View style={[styles.avatar, styles.avatarEmpty]}><UserIcon color={colors.onPrimary} size={44} strokeWidth={1.6} /></View>}
           </View>
-          <View style={styles.identityCopy}>
-            <Text style={styles.name} numberOfLines={2}>{fullName || "Ismingizni kiriting"}</Text>
-            <Text style={styles.email} numberOfLines={1}>{user?.email}</Text>
-            {identity.username ? <Text style={styles.handle}>@{identity.username}</Text> : null}
-            {plan ? (
-              <View style={styles.planChip}>
-                <Crown color={colors.primaryDeep} size={13} strokeWidth={2.2} />
-                <Text style={styles.planText}>{plan}</Text>
+
+          <View style={styles.heroRow}>
+            <View style={styles.heroCopy}>
+              <Text style={styles.name} numberOfLines={1}>{fullName || "Ismingizni kiriting"}</Text>
+              <View style={styles.heroMeta}>
+                <Text style={styles.email} numberOfLines={1}>
+                  {identity.username ? `@${identity.username}` : user?.email}
+                </Text>
+                {plan ? (
+                  <View style={styles.planChip}>
+                    <Crown color={colors.primaryDeep} size={12} strokeWidth={2.4} />
+                    <Text style={styles.planText}>{plan}</Text>
+                  </View>
+                ) : null}
               </View>
-            ) : null}
+            </View>
+
+            <View style={styles.heroActions}>
+              <Pressable
+                accessibilityLabel="Tarif"
+                accessibilityRole="button"
+                onPress={() => router.push("/(app)/tarif")}
+                style={styles.circle}
+              >
+                <Crown color={colors.primary} size={19} strokeWidth={2} />
+              </Pressable>
+              <Pressable
+                accessibilityLabel="Do‘kon"
+                accessibilityRole="button"
+                onPress={() => router.push("/(app)/marketplace/seller")}
+                style={styles.circle}
+              >
+                <Store color={colors.primary} size={19} strokeWidth={2} />
+              </Pressable>
+              {/* Filled, because editing is the one thing this screen is for. */}
+              <Pressable
+                accessibilityLabel="Profilni tahrirlash"
+                accessibilityRole="button"
+                onPress={() => router.push("/(app)/profile-edit")}
+                style={[styles.circle, styles.circleFilled]}
+              >
+                <Pencil color={colors.onPrimary} size={18} strokeWidth={2.1} />
+              </Pressable>
+            </View>
           </View>
-        </View>
+        </LinearGradient>
 
-        {identity.organization || identity.fieldOfStudy ? (
-          <Text style={styles.study} numberOfLines={2}>
-            {[identity.organization, identity.fieldOfStudy].filter(Boolean).join(" · ")}
-          </Text>
-        ) : null}
-        {identity.bio ? <Text style={styles.bio}>{identity.bio}</Text> : null}
-
-        {/* What this account has actually made, which is the number people
-            come to this screen to see. */}
+        {/* Overlapping the field above, so the two read as one header. */}
         <View style={styles.stats}>
           {[
-            { value: counts.presentations, label: counts.presentations === 1 ? "taqdimot" : "taqdimot" },
-            { value: counts.games, label: "o‘yin" },
-            { value: credits, label: "tanga" },
+            { key: "decks", value: counts.presentations, label: "Taqdimot", Glyph: Presentation },
+            { key: "games", value: counts.games, label: "O‘yin", Glyph: Gamepad2 },
+            { key: "coins", value: credits, label: "Tanga", Glyph: Coins },
           ].map((stat) => (
-            <View key={stat.label} style={styles.stat}>
-              <Text style={styles.statValue}>{stat.value}</Text>
-              <Text style={styles.statLabel}>{stat.label}</Text>
+            <View key={stat.key} style={styles.stat}>
+              <View style={styles.statIcon}><stat.Glyph color={colors.primary} size={18} strokeWidth={2} /></View>
+              <View style={styles.statCopy}>
+                <Text style={styles.statValue}>{stat.value}</Text>
+                <Text style={styles.statLabel}>{stat.label}</Text>
+              </View>
             </View>
           ))}
         </View>
 
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.push("/(app)/profile-edit")}
-          style={styles.editButton}
-        >
-          <Text style={styles.editText}>Profilni tahrirlash</Text>
-        </Pressable>
+        {identity.organization || identity.fieldOfStudy || identity.bio ? (
+          <View style={styles.about}>
+            {identity.organization || identity.fieldOfStudy ? (
+              <Text style={styles.study} numberOfLines={2}>
+                {[identity.organization, identity.fieldOfStudy].filter(Boolean).join(" · ")}
+              </Text>
+            ) : null}
+            {identity.bio ? <Text style={styles.bio}>{identity.bio}</Text> : null}
+          </View>
+        ) : null}
 
         {error ? <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View> : null}
 
@@ -184,41 +231,73 @@ export default function ProfileScreen() {
           <Text style={styles.signOutText}>Hisobdan chiqish</Text>
         </Pressable>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.canvas },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.canvas },
-  content: { padding: spacing.xl, paddingTop: Platform.OS === "ios" ? 66 : 38, paddingBottom: BOTTOM_NAV_SPACE + spacing.xl, gap: spacing.lg },
-  pageTitle: { ...typography.display, color: colors.ink },
-  identity: { flexDirection: "row", alignItems: "center", gap: spacing.lg },
-  avatarWrap: { width: 92, height: 92 },
-  avatar: { width: 92, height: 92, borderRadius: 30 },
-  avatarEmpty: { alignItems: "center", justifyContent: "center", backgroundColor: colors.primarySoft },
-  identityCopy: { flex: 1, gap: 3 },
-  name: { ...typography.heading, color: colors.ink },
-  email: { ...typography.caption, color: colors.inkMuted },
-  handle: { ...typography.caption, color: colors.inkSoft },
-  planChip: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 5, marginTop: 5, paddingHorizontal: 9, paddingVertical: 4, borderRadius: radius.sm, backgroundColor: colors.primarySoft },
+  // The hero bleeds to the edges, so padding moves onto the sections below it.
+  content: { paddingBottom: BOTTOM_NAV_SPACE + spacing.xl, gap: spacing.lg },
+  hero: {
+    paddingTop: Platform.OS === "ios" ? 72 : 44,
+    paddingHorizontal: spacing.xl,
+    // Room for the stats card, which sits over the last of it.
+    paddingBottom: spacing.xl + 34,
+    borderBottomLeftRadius: 34,
+    borderBottomRightRadius: 34,
+    alignItems: "center",
+    gap: spacing.lg,
+  },
+  avatarRing: {
+    width: 128, height: 128, borderRadius: 44,
+    alignItems: "center", justifyContent: "center",
+    // A ring rather than a border, so the picture keeps its own edge.
+    backgroundColor: "rgba(255,255,255,0.22)",
+  },
+  avatar: { width: 116, height: 116, borderRadius: 38 },
+  avatarEmpty: { alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.18)" },
+  heroRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, width: "100%" },
+  heroCopy: { flex: 1, gap: 4 },
+  name: { ...typography.heading, color: colors.onPrimary },
+  heroMeta: { flexDirection: "row", alignItems: "center", gap: spacing.sm, flexWrap: "wrap" },
+  email: { ...typography.caption, color: "rgba(255,255,255,0.78)" },
+  planChip: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 9, paddingVertical: 4, borderRadius: radius.sm, backgroundColor: colors.onPrimary },
   planText: { ...typography.caption, fontWeight: "700", color: colors.primaryDeep },
+  heroActions: { flexDirection: "row", gap: spacing.sm },
+  circle: {
+    width: 46, height: 46, borderRadius: 23,
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: colors.onPrimary,
+  },
+  circleFilled: { backgroundColor: colors.primaryDeep },
+  stats: {
+    flexDirection: "row",
+    alignItems: "center",
+    // Lifted onto the gradient, which is what makes the two one header.
+    marginTop: -34,
+    marginHorizontal: spacing.xl,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.primarySoft,
+  },
+  stat: { flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  statIcon: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
+  statCopy: { flexShrink: 1 },
+  statValue: { fontFamily: "Manrope_700Bold", fontSize: 17, color: colors.primaryDeep, letterSpacing: -0.3 },
+  statLabel: { ...typography.caption, color: colors.primaryDeep, opacity: 0.72 },
+  about: { paddingHorizontal: spacing.xl, gap: 4 },
   study: { ...typography.caption, color: colors.inkMuted },
   bio: { ...typography.body, color: colors.ink },
-  stats: { flexDirection: "row", gap: spacing.sm },
-  stat: { flex: 1, alignItems: "center", paddingVertical: spacing.md, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  statValue: { fontFamily: "Manrope_700Bold", fontSize: 22, color: colors.ink, letterSpacing: -0.4 },
-  statLabel: { ...typography.caption, color: colors.inkMuted },
-  editButton: { minHeight: 50, borderRadius: radius.lg, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, ...shadow },
-  editText: { ...typography.body, fontWeight: "700", color: colors.ink },
-  errorBox: { padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.dangerSoft },
+  errorBox: { marginHorizontal: spacing.xl, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.dangerSoft },
   errorText: { ...typography.caption, color: colors.danger },
-  settingsBlock: { gap: spacing.sm },
+  settingsBlock: { marginHorizontal: spacing.xl, gap: spacing.sm },
   settingsRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   settingsIcon: { width: 38, height: 38, borderRadius: 13, alignItems: "center", justifyContent: "center", backgroundColor: colors.primarySoft },
   settingsCopy: { flex: 1, gap: 1 },
   settingsLabel: { ...typography.bodyMedium, color: colors.ink, fontSize: 14 },
   settingsDetail: { ...typography.caption, fontSize: 11, color: colors.inkSoft },
-  signOut: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, height: 50, borderRadius: radius.md, borderWidth: 1, borderColor: colors.dangerSoft, backgroundColor: colors.surface },
+  signOut: { marginHorizontal: spacing.xl, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, height: 50, borderRadius: radius.md, borderWidth: 1, borderColor: colors.dangerSoft, backgroundColor: colors.surface },
   signOutText: { ...typography.bodyMedium, color: colors.danger },
 });

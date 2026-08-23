@@ -1,13 +1,12 @@
 import type { Tables } from "@jaxongirman/types";
-import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
-import { ArrowUpRight, FileUp, MonitorPlay, Plus, Sparkles } from "lucide-react-native";
+import { FileText, FileUp, GraduationCap, Image as Image_, MonitorPlay, Sparkles } from "lucide-react-native";
 import { useCallback, useState } from "react";
 import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import coinIcon from "../../../assets/coin/coin-icon.png";
 import { BOTTOM_NAV_SPACE } from "@/components/BottomNav";
-import { IconChip } from "@/components/IconChip";
+import { CreateDeckButton } from "@/components/CreateDeckButton";
 import { PresentationCard } from "@/components/PresentationCard";
 import { EmptyState, ErrorState, SkeletonCard } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
@@ -15,7 +14,7 @@ import { formatNumber } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
 import { useAccount } from "@/providers/AccountProvider";
 import { useAuth } from "@/providers/AuthProvider";
-import { colors, gradients, icon, radius, shadowLifted, spacing, typography } from "@/theme/tokens";
+import { colors, icon, radius, shadowLifted, spacing, typography } from "@/theme/tokens";
 
 type Presentation = Tables<"presentations">;
 
@@ -75,43 +74,62 @@ export default function ProjectsScreen() {
             <Text style={styles.eyebrow}>JAXONGIRMAN</Text>
             <Text style={styles.brand}>Loyihalar</Text>
           </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Taqdimot qilish"
-            onPress={() => router.push("/(app)/present/scan")}
-            style={styles.presentButton}
-          >
-            <MonitorPlay color={colors.primary} size={icon.sm} strokeWidth={2.2} />
-            <Text style={styles.presentText}>Taqdimot qilish</Text>
-          </Pressable>
           <View style={styles.creditPill}>
             <Text style={styles.creditText}>{formatNumber(balance)}</Text>
             <Image source={coinIcon} resizeMode="contain" style={styles.coinIcon} />
           </View>
         </View>
 
-        <LinearGradient colors={gradients.hero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
-          <View style={styles.heroOrb} />
-          <View style={styles.heroOrbSmall} />
-          <IconChip icon={Sparkles} variant="glass" size="sm" />
-          <Text style={styles.heroTitle}>G‘oyangizni{`\n`}taqdimotga aylantiring.</Text>
-          <Text style={styles.heroCopy}>Mavzuni yozing. Jaxongir AI mazmun, vizual uslub va mukammal kompozitsiyani yaratadi.</Text>
-          <Pressable onPress={() => router.push("/(app)/create")} style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}>
-            <View style={styles.ctaIcon}><Plus color={colors.primary} size={icon.md} strokeWidth={icon.strokeBold} /></View>
-            <Text style={styles.ctaText}>Slayd tayyorlash</Text>
-            <ArrowUpRight color={colors.onPrimary} size={icon.md} strokeWidth={icon.stroke} />
-          </Pressable>
-          {/* Second on purpose: generating is the product, importing is the
-              door for people who already have a deck. */}
+        <CreateDeckButton onPress={() => router.push("/(app)/create")} />
+
+        {/**
+          * The other three things this account can make.
+          *
+          * Peers with each other and deliberately not with the button above:
+          * making a deck is what most people opened the app to do, and a row of
+          * four equal cards would say the opposite. Each is one tap to its own
+          * workflow.
+          */}
+        <View style={styles.tools}>
+          {[
+            { key: "portrait", label: "3×4 rasm", detail: "Hujjatga", Glyph: Image_, href: "/(app)/portrait" as const },
+            { key: "objective", label: "Obyektivka", detail: "DOCX / PDF", Glyph: FileText, href: "/(app)/obyektivka" as const },
+            { key: "academic", label: "Ilmiy ish", detail: "Maqola, referat", Glyph: GraduationCap, href: "/(app)/ilmiy" as const },
+          ].map((tool) => (
+            <Pressable
+              key={tool.key}
+              accessibilityRole="button"
+              accessibilityLabel={tool.label}
+              onPress={() => router.push(tool.href)}
+              style={({ pressed }) => [styles.tool, pressed && styles.toolPressed]}
+            >
+              <View style={styles.toolIcon}><tool.Glyph color={colors.primary} size={20} strokeWidth={2} /></View>
+              <Text style={styles.toolLabel} numberOfLines={1}>{tool.label}</Text>
+              <Text style={styles.toolDetail} numberOfLines={1}>{tool.detail}</Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {/* Second on purpose: generating is the product, importing is the door
+            for people who already have a deck. */}
+        <View style={styles.secondaryRow}>
           <Pressable
             accessibilityRole="button"
             onPress={() => router.push("/(app)/import")}
-            style={({ pressed }) => [styles.secondaryCta, pressed && styles.ctaPressed]}
+            style={({ pressed }) => [styles.secondary, pressed && styles.toolPressed]}
           >
-            <FileUp color={colors.onPrimary} size={icon.sm} strokeWidth={icon.stroke} />
-            <Text style={styles.secondaryCtaText}>PowerPoint’dan yuklash</Text>
+            <FileUp color={colors.primary} size={icon.sm} strokeWidth={icon.stroke} />
+            <Text style={styles.secondaryText}>PowerPoint’dan yuklash</Text>
           </Pressable>
-        </LinearGradient>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/(app)/present/scan")}
+            style={({ pressed }) => [styles.secondary, pressed && styles.toolPressed]}
+          >
+            <MonitorPlay color={colors.primary} size={icon.sm} strokeWidth={icon.stroke} />
+            <Text style={styles.secondaryText}>Taqdimot qilish</Text>
+          </Pressable>
+        </View>
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Oxirgi prezentatsiyalar</Text>
@@ -147,20 +165,39 @@ const styles = StyleSheet.create({
   // The coin art is square, so a square box with `contain` keeps its proportions.
   coinIcon: { width: 28, height: 28 },
   creditText: { ...typography.bodyMedium, color: colors.primaryDeep },
-  hero: { minHeight: 330, borderRadius: radius.xl, padding: spacing.xl, overflow: "hidden", justifyContent: "flex-end", ...shadowLifted },
-  heroOrb: { position: "absolute", width: 250, height: 250, borderRadius: 125, borderWidth: 1, borderColor: "rgba(255,255,255,.16)", right: -80, top: -100 },
-  heroOrbSmall: { position: "absolute", width: 130, height: 130, borderRadius: 65, backgroundColor: "rgba(255,255,255,.06)", right: -20, top: -30 },
-  heroTitle: { ...typography.display, color: colors.onPrimary, marginTop: spacing.lg },
-  heroCopy: { ...typography.body, color: colors.onPrimaryMuted, maxWidth: 320, marginTop: spacing.md, marginBottom: spacing.xl },
-  cta: { height: 58, borderRadius: radius.md, backgroundColor: "rgba(255,255,255,.14)", borderWidth: 1, borderColor: "rgba(255,255,255,.2)", flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.md, gap: spacing.md },
-  ctaPressed: { opacity: 0.85, transform: [{ scale: 0.99 }] },
-  ctaIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
-  ctaText: { ...typography.bodyMedium, color: colors.onPrimary, flex: 1 },
-  secondaryCta: {
-    height: 44, borderRadius: radius.md, flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: spacing.sm, marginTop: spacing.sm,
+  tools: { flexDirection: "row", gap: spacing.sm },
+  tool: {
+    flex: 1,
+    alignItems: "flex-start",
+    gap: 3,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadowLifted,
   },
-  secondaryCtaText: { ...typography.caption, color: colors.onPrimary, opacity: 0.92 },
+  toolPressed: { opacity: 0.72 },
+  toolIcon: {
+    width: 40, height: 40, borderRadius: 14, marginBottom: 5,
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: colors.primarySoft,
+  },
+  toolLabel: { ...typography.body, fontWeight: "700", color: colors.ink },
+  toolDetail: { ...typography.caption, color: colors.inkSoft },
+  secondaryRow: { flexDirection: "row", gap: spacing.sm },
+  secondary: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    minHeight: 46,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primarySoft,
+  },
+  secondaryText: { ...typography.caption, fontWeight: "700", color: colors.primaryDeep },
   sectionHeader: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.xxl, marginBottom: spacing.lg },
   sectionTitle: { ...typography.heading, color: colors.ink },
   sectionCount: { ...typography.caption, color: colors.primary, backgroundColor: colors.primarySoft, paddingHorizontal: 9, paddingVertical: 3, borderRadius: radius.pill },
