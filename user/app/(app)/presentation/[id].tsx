@@ -2,7 +2,7 @@ import type { Json, Tables } from "@jaxongirman/types";
 import * as Crypto from "expo-crypto";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { ArrowLeft, Check, Download, LoaderCircle, Redo2, Send, Sparkles, Undo2 } from "lucide-react-native";
+import { ArrowLeft, Check, Download, LoaderCircle, MessageSquareQuote, Redo2, Send, Sparkles, Undo2 } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 
@@ -621,6 +621,15 @@ export default function PresentationEditorScreen() {
       <View style={styles.header}>
         <Pressable onPress={() => router.replace("/(app)/(tabs)/projects")} style={styles.iconButton}><ArrowLeft color={colors.ink} size={icon.md} strokeWidth={icon.stroke} /></Pressable>
         <View style={styles.headerCenter}><Text numberOfLines={1} style={styles.title}>{presentation.title}</Text><View style={styles.saveRow}>{saving ? <LoaderCircle color={colors.inkSoft} size={12} strokeWidth={icon.stroke} /> : <Check color={colors.success} size={12} strokeWidth={icon.strokeBold} />}<Text style={styles.saved}>{saving ? "Saqlanmoqda" : "Saqlandi"}</Text></View></View>
+        {/* Beside the download, because they are the same decision: what do I
+            leave with. One is the deck, the other is what to say beside it. */}
+        <Pressable
+          accessibilityLabel="Himoya matni"
+          onPress={() => router.push({ pathname: "/(app)/defense/[id]", params: { id: presentationId } })}
+          style={styles.iconButton}
+        >
+          <MessageSquareQuote color={colors.ink} size={icon.md} strokeWidth={icon.stroke} />
+        </Pressable>
         <Pressable onPress={() => setExportOpen(true)} style={styles.iconButton}><Download color={colors.ink} size={icon.md} strokeWidth={icon.stroke} /></Pressable>
       </View>
 

@@ -52,6 +52,7 @@ export function buildEdgeModules() {
       path.join(shared, "pptx-design.ts"),
       path.join(shared, "pptx-classify.ts"),
       path.join(shared, "design-select.ts"),
+      path.join(shared, "defense.ts"),
       path.join(shared, "font-source.ts"),
       path.join(shared, "layout-brief.ts"),
       path.join(shared, "photo-query.ts"),

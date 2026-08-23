@@ -2725,6 +2725,53 @@ export type Database = {
           },
         ]
       }
+      presentation_defenses: {
+        Row: {
+          conclusion: string
+          created_at: string
+          failure_reason: string | null
+          introduction: string
+          owner_id: string
+          presentation_id: string
+          sections: Json
+          status: string
+          updated_at: string
+          written_for: string | null
+        }
+        Insert: {
+          conclusion?: string
+          created_at?: string
+          failure_reason?: string | null
+          introduction?: string
+          owner_id: string
+          presentation_id: string
+          sections?: Json
+          status?: string
+          updated_at?: string
+          written_for?: string | null
+        }
+        Update: {
+          conclusion?: string
+          created_at?: string
+          failure_reason?: string | null
+          introduction?: string
+          owner_id?: string
+          presentation_id?: string
+          sections?: Json
+          status?: string
+          updated_at?: string
+          written_for?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "presentation_defenses_presentation_id_fkey"
+            columns: ["presentation_id"]
+            isOneToOne: true
+            referencedRelation: "presentations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       presentation_design_fonts: {
         Row: {
           asset_path: string | null

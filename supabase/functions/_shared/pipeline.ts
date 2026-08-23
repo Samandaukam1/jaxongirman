@@ -574,6 +574,35 @@ async function writeTemplateSlide(input: {
   };
 }
 
+/**
+ * Asks the defence function to write this deck's script.
+ *
+ * A function-to-function call rather than importing the writer here. The script
+ * is a different document with a different failure mode and a different cost,
+ * and a deck that is already finished should not be able to fail because of it.
+ * The caller does not await this.
+ */
+async function writeDefenseScript(input: { presentationId: string; ownerId: string; service: SupabaseClient }): Promise<void> {
+  const url = Deno.env.get("SUPABASE_URL");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !key) return;
+
+  const response = await fetch(`${url}/functions/v1/generate-defense`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${key}`,
+      // The function reads the caller from the token; the service role is not a
+      // person, so the deck's owner is named explicitly.
+      "x-owner-id": input.ownerId,
+    },
+    body: JSON.stringify({ presentationId: input.presentationId, action: "write" }),
+  });
+  if (!response.ok) {
+    throw new Error(`defense function returned ${response.status}`);
+  }
+}
+
 /** A slide with nothing on it but its own headline. */
 function bareSlide(title: string, purpose: string, layout: LayoutName, subtitle: string | null = null, bullets: string[] = []): SemanticSlide {
   return { title, subtitle, purpose, layout, bullets, body: null, quote: null, statistic: null, chart: null, table: null, visualPrompt: null };
@@ -1390,6 +1419,26 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
     }, (value) => `${value} kredit bo‘yicha hisob yakunlandi`);
 
     await input.service.from("generation_steps").update({ status: "succeeded", progress: 100, started_at: new Date().toISOString(), completed_at: new Date().toISOString(), message: "Taqdimot tayyor" }).eq("job_id", input.jobId).eq("key", "ready");
+
+    /**
+     * The spoken script, started once the deck is somebody's.
+     *
+     * After the deck is marked ready and never before it: a script that fails
+     * must not cost a person the deck it was written for. Nothing here waits
+     * for it or reads its answer — the app finds it when somebody opens
+     * "Himoya matni", and offers to write one if it is not there yet.
+     *
+     * Its own function rather than a stage, so its cost, its failures and its
+     * retries are separate from the deck's.
+     */
+    void writeDefenseScript(input).catch((failure) => {
+      console.error(JSON.stringify({
+        event: "presentation_defense_not_started",
+        job_id: input.jobId,
+        presentation_id: input.presentationId,
+        detail: String((failure as Error)?.message ?? failure).slice(0, 200),
+      }));
+    });
   } catch (error) {
     /**
      * The author is told what they can act on, and nothing else.
