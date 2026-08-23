@@ -49,7 +49,7 @@
     "test:jelement:smoke": "node supabase/tests/jelement-smoke.mjs",
     "test:design": "node --test supabase/tests/pptx-safety.test.mjs supabase/tests/pptx-design.test.mjs supabase/tests/pptx-classify.test.mjs supabase/tests/design-select.test.mjs supabase/tests/font-source.test.mjs supabase/tests/pptx-endtoend.test.mjs supabase/tests/pptx-text.test.mjs supabase/tests/pptx-clone.test.mjs supabase/tests/pptx-slots.test.mjs supabase/tests/portrait-sheet.test.mjs",
     "test:game": "node --test supabase/tests/game-batches.test.mjs",
-    "test:docs": "node --test supabase/tests/objective.test.mjs"
+    "test:docs": "node --test supabase/tests/objective.test.mjs supabase/tests/academic.test.mjs"
   },
   "engines": {
     "node": ">=20"

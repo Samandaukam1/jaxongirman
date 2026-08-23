@@ -56,6 +56,7 @@ export function buildEdgeModules() {
       path.join(shared, "portrait-sheet.ts"),
       path.join(shared, "docx.ts"),
       path.join(shared, "objective.ts"),
+      path.join(shared, "academic.ts"),
       path.join(shared, "font-source.ts"),
       path.join(shared, "layout-brief.ts"),
       path.join(shared, "photo-query.ts"),

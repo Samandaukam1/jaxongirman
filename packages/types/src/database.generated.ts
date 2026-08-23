@@ -14,6 +14,116 @@ export type Database = {
   }
   public: {
     Tables: {
+      academic_sections: {
+        Row: {
+          body: string
+          brief: string
+          citations: Json
+          created_at: string
+          heading: string
+          id: string
+          key: string
+          owner_id: string
+          position: number
+          status: string
+          updated_at: string
+          words: number
+          work_id: string
+        }
+        Insert: {
+          body?: string
+          brief?: string
+          citations?: Json
+          created_at?: string
+          heading: string
+          id?: string
+          key: string
+          owner_id: string
+          position: number
+          status?: string
+          updated_at?: string
+          words?: number
+          work_id: string
+        }
+        Update: {
+          body?: string
+          brief?: string
+          citations?: Json
+          created_at?: string
+          heading?: string
+          id?: string
+          key?: string
+          owner_id?: string
+          position?: number
+          status?: string
+          updated_at?: string
+          words?: number
+          work_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "academic_sections_work_id_fkey"
+            columns: ["work_id"]
+            isOneToOne: false
+            referencedRelation: "academic_works"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      academic_works: {
+        Row: {
+          created_at: string
+          empirical: boolean
+          estimated_credits: number
+          failure_reason: string | null
+          field: string
+          id: string
+          kind: string
+          owner_id: string
+          paused_reason: string | null
+          requirements: string
+          sources: Json
+          spent_credits: number
+          status: string
+          topic: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          empirical?: boolean
+          estimated_credits?: number
+          failure_reason?: string | null
+          field?: string
+          id?: string
+          kind: string
+          owner_id: string
+          paused_reason?: string | null
+          requirements?: string
+          sources?: Json
+          spent_credits?: number
+          status?: string
+          topic: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          empirical?: boolean
+          estimated_credits?: number
+          failure_reason?: string | null
+          field?: string
+          id?: string
+          kind?: string
+          owner_id?: string
+          paused_reason?: string | null
+          requirements?: string
+          sources?: Json
+          spent_credits?: number
+          status?: string
+          topic?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       admin_audit_logs: {
         Row: {
           action: string
