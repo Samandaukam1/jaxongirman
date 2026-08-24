@@ -8,12 +8,12 @@ import Animated, {
 } from "react-native-reanimated";
 
 import coinIcon from "../../../assets/coin/coin-icon.png";
-import SlideCreateArt from "../../../assets/soft-ai/01_slide_create.svg";
-import PortraitArt from "../../../assets/soft-ai/02_portrait_3x4.svg";
-import ObjectiveArt from "../../../assets/soft-ai/03_objective_doc.svg";
-import ScientificArt from "../../../assets/soft-ai/04_scientific_work.svg";
-import PowerPointArt from "../../../assets/soft-ai/05_powerpoint_edit.svg";
-import PresentArt from "../../../assets/soft-ai/06_present_remote.svg";
+import SlideCreateArt from "../../../assets/liquid-glass/01_slayd_yaratish.png";
+import PortraitArt from "../../../assets/liquid-glass/02_3x4_rasm_yaratish.png";
+import ObjectiveArt from "../../../assets/liquid-glass/03_obyektivka_yaratish.png";
+import ScientificArt from "../../../assets/liquid-glass/04_ilmiy_ish_yaratish.png";
+import PowerPointArt from "../../../assets/liquid-glass/05_powerpoint.png";
+import PresentArt from "../../../assets/liquid-glass/06_taqdimot_qilish.png";
 import { Appear } from "@/components/Appear";
 import { BOTTOM_NAV_SPACE } from "@/components/BottomNav";
 
@@ -75,13 +75,15 @@ const TOOLS: readonly Tool[] = [
 ];
 
 /**
- * Artwork sizes, per row. Bigger where there is room for it and the action
- * matters more, and never a size the drawing has to be stretched to reach.
+ * Tile sizes, per row. Bigger where there is room for it and the action matters
+ * more. These are smaller than the sizes the vector pack needed: each Liquid
+ * Glass tile fills its own frame, so the number here is what you see, with no
+ * empty margin to pay for.
  */
-const HERO_ART = 80;
-const TILE_ART = 58;
-const WIDE_ART = 64;
-const CHIP_ART = 34;
+const HERO_ART = 74;
+const TILE_ART = 54;
+const WIDE_ART = 60;
+const CHIP_ART = 32;
 
 /**
  * The pieces the header is built from, named so the two heights it moves
@@ -101,7 +103,7 @@ const CHIP_ROW = 48;
  * only the first frame's guess — close enough that nothing jumps when the real
  * number arrives one layout later.
  */
-const ESTIMATED_CARDS = 354;
+const ESTIMATED_CARDS = 332;
 
 export default function ProjectsScreen() {
   const { colors } = useTheme();
@@ -335,7 +337,7 @@ export default function ProjectsScreen() {
             onPress={() => go("/(app)/create")}
             style={styles.chip}
           >
-            <SlideCreateArt width={CHIP_ART} height={CHIP_ART} />
+            <Image source={SlideCreateArt} resizeMode="contain" style={{ width: CHIP_ART, height: CHIP_ART }} />
           </Touchable>
           {TOOLS.map((tool) => (
             <Touchable
@@ -345,7 +347,7 @@ export default function ProjectsScreen() {
               onPress={() => go(tool.href)}
               style={styles.chip}
             >
-              <tool.art width={CHIP_ART} height={CHIP_ART} />
+              <Image source={tool.art} resizeMode="contain" style={{ width: CHIP_ART, height: CHIP_ART }} />
             </Touchable>
           ))}
         </Animated.View>

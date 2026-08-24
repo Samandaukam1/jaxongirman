@@ -1,8 +1,8 @@
 import * as Haptics from "expo-haptics";
-import { memo, type FC } from "react";
-import { Platform, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { memo } from "react";
+import { Image, Platform, Text, View, type ImageSourcePropType, type StyleProp, type ViewStyle } from "react-native";
 import Animated, { useAnimatedStyle, type SharedValue } from "react-native-reanimated";
-import Svg, { Path, type SvgProps } from "react-native-svg";
+import Svg, { Path } from "react-native-svg";
 
 import { Touchable } from "@/components/Touchable";
 import { radius, spacing, typography } from "@/theme/tokens";
@@ -17,11 +17,13 @@ import { makeStyles, useTheme } from "@/theme/ThemeProvider";
  * row reads as one system, and what tells the tools apart is the drawing rather
  * than the background it sits on.
  *
- * `art` is the compiled SVG, not a bitmap: it is drawn at whatever size the
- * layout gives it and stays sharp while the scroll shrinks it.
+ * `art` is one of the Liquid Glass tiles, each of which already carries its own
+ * glass plate. The card under it is deliberately quieter than the tile on it —
+ * a cool near-white ground and a hairline — so the two read as one object
+ * rather than as a picture pasted onto a button.
  */
 
-export type ToolArt = FC<SvgProps>;
+export type ToolArt = ImageSourcePropType;
 
 /**
  * How far the artwork shrinks as the page scrolls, as a fraction of the way
@@ -30,23 +32,8 @@ export type ToolArt = FC<SvgProps>;
  */
 type Progress = SharedValue<number>;
 
-/**
- * The window onto the artwork.
- *
- * Every drawing in the pack is composed inside a 256-unit square with a wide
- * empty margin — the shapes themselves live in roughly x 52–211, y 40–216. Left
- * at its natural viewBox a card asks for seventy points and gets a mark that
- * reads as forty, with the rest of the box air.
- *
- * This is not a crop of the artwork: it is a tighter window on the same
- * drawing, centred on it, with sixteen units of margin kept so the soft glow
- * still has somewhere to fall off. Nothing is scaled unevenly — the aspect
- * ratio is square in and square out.
- */
-const ART_BOX = "27 24 208 208";
-
-const SHRINK_TO = 0.82;
-const FADE_TO = 0.92;
+const SHRINK_TO = 0.84;
+const FADE_TO = 0.94;
 const RISE_TO = -3;
 
 function useArtStyle(progress: Progress) {
@@ -99,7 +86,7 @@ type CardProps = {
  * The wide one at the top: artwork left, words in the middle, arrow at the end.
  */
 export const HeroToolCard = memo(function HeroToolCard({
-  art: Art, size, title, detail, onPress, progress, style,
+  art, size, title, detail, onPress, progress, style,
 }: CardProps) {
   const { colors } = useTheme();
   const styles = useStyles();
@@ -115,7 +102,9 @@ export const HeroToolCard = memo(function HeroToolCard({
     >
       {/* The artwork never takes the touch — the whole card is the target. */}
       <Animated.View pointerEvents="none" style={artStyle}>
-        <Art width={size} height={size} viewBox={ART_BOX} />
+        {/* `contain` and a square box: the tiles are 512×512 and must not be
+            cropped or stretched to fit whatever the layout hands them. */}
+        <Image source={art} resizeMode="contain" style={{ width: size, height: size }} />
       </Animated.View>
       <View style={styles.heroCopy}>
         <Text numberOfLines={1} style={styles.heroTitle}>{title}</Text>
@@ -134,7 +123,7 @@ export const HeroToolCard = memo(function HeroToolCard({
  * have no width to put words beside a drawing.
  */
 export const ToolCard = memo(function ToolCard({
-  art: Art, size, title, detail, onPress, progress, style,
+  art, size, title, detail, onPress, progress, style,
 }: CardProps) {
   const styles = useStyles();
   const artStyle = useArtStyle(progress);
@@ -147,7 +136,7 @@ export const ToolCard = memo(function ToolCard({
       style={[styles.card, styles.tile, style]}
     >
       <Animated.View pointerEvents="none" style={artStyle}>
-        <Art width={size} height={size} viewBox={ART_BOX} />
+        <Image source={art} resizeMode="contain" style={{ width: size, height: size }} />
       </Animated.View>
       <View style={styles.tileCopy}>
         <Text numberOfLines={1} style={styles.title}>{title}</Text>

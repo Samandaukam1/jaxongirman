@@ -64,7 +64,6 @@
     "@types/react": "latest",
     "eslint": "latest",
     "eslint-config-expo": "latest",
-    "react-native-svg-transformer": "^1.5.3",
     "typescript": "~6.0.3"
   }
 }
