@@ -10,7 +10,7 @@ import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ChevronLeft, ChevronRight, Eye, EyeOff, Gamepad2, PowerOff, RotateCcw } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Pressable, ScrollView, Text, View } from "react-native";
 
 import { PresentationPreview, type PresentationPreviewHandle } from "@/components/PresentationPreview";
 import { ScreenHeader } from "@/components/ScreenHeader";
@@ -19,7 +19,8 @@ import { asErrorMessage } from "@/lib/format";
 import { launchPresentationGame, presentationHasGame } from "@/lib/games";
 import { loadDefense, type Defense } from "@/lib/defense";
 import { supabase } from "@/lib/supabase";
-import { colors, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { radius, shadow, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type Session = Tables<"presentation_sessions"> & {
   translate_x?: number;
@@ -102,6 +103,8 @@ async function hydrateImages(rows: Element[]): Promise<Element[]> {
 
 /** The phone renders and manipulates the same deck that the projector follows. */
 export default function RemoteScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const params = useLocalSearchParams<{ sessionId?: string }>();
   const sessionId = typeof params.sessionId === "string" ? params.sessionId : "";
@@ -259,7 +262,6 @@ export default function RemoteScreen() {
     };
   }, [session?.realtime_token]);
 
-
   // Whether the launch button belongs on screen at all. Re-asked when the deck
   // changes, because a different deck has a different answer.
   useEffect(() => {
@@ -318,7 +320,6 @@ export default function RemoteScreen() {
     setViewport(viewportOf(next));
     if (command === "end") router.replace("/(app)/(tabs)/projects");
   }
-
 
   /**
    * Hands the projector over to O‘yingoh.
@@ -558,7 +559,7 @@ export default function RemoteScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
   centered: { flex: 1, alignItems: "center", justifyContent: "center" },
   content: { paddingHorizontal: spacing.xl, paddingBottom: 60, gap: spacing.lg },
@@ -611,4 +612,4 @@ const styles = StyleSheet.create({
   launchText: { ...typography.bodyMedium, color: colors.onPrimary, fontSize: 16 },
   endButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, height: 52, borderRadius: radius.md, borderWidth: 1, borderColor: colors.dangerSoft, backgroundColor: colors.surface },
   endText: { ...typography.bodyMedium, color: colors.danger, fontSize: 14 },
-});
+}));

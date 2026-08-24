@@ -5,9 +5,7 @@ import {
   Check, ChevronRight, Gift, Minus, Play, Plus, Square, SquareCheck, Users, Volume2, VolumeX, X,
 } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
-import {
-  ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View,
-} from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from "react-native";
 
 import { GameLeaderboardList } from "@/components/GameAnswerInput";
 import { GameAvatar } from "@/components/GameAvatar";
@@ -22,7 +20,8 @@ import {
 import { formatNumber } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
 import { useAccount } from "@/providers/AccountProvider";
-import { colors, icon, radius, spacing, typography } from "@/theme/tokens";
+import { icon, radius, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type Player = { id: string; nickname: string; avatar_id: number; team: string | null; total_score: number; correct_count: number; rank: number | null };
 type OpenAnswer = { id: string; text: string; nickname: string; is_correct: boolean | null };
@@ -62,6 +61,8 @@ const RESULT_SECONDS = 6;
 const LEADERBOARD_SECONDS = 8;
 
 export default function HostGameScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
   const { balance, refresh: refreshWallet } = useAccount();
@@ -259,7 +260,6 @@ export default function HostGameScreen() {
       setError(asErrorMessage(failure));
     }
   }
-
 
 
   function confirmCancel() {
@@ -535,7 +535,7 @@ export default function HostGameScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   safe: { flex: 1, backgroundColor: colors.canvas },
   center: { alignItems: "center", justifyContent: "center" },
   content: { padding: spacing.xl, gap: spacing.md, paddingBottom: spacing.xxxl },
@@ -595,4 +595,4 @@ const styles = StyleSheet.create({
   },
   reviewGood: { backgroundColor: colors.success },
   reviewBad: { backgroundColor: colors.danger },
-});
+}));

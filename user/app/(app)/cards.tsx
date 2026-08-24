@@ -2,14 +2,15 @@ import { formatCardPan, formatStoredCardExpiry, type Tables } from "@jaxongirman
 import { useFocusEffect } from "expo-router";
 import { CreditCard, ShieldCheck, Trash2 } from "lucide-react-native";
 import { useCallback, useState } from "react";
-import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { EmptyState, ErrorState, SkeletonCard } from "@/components/StateBlocks";
 import { formatShortDateTime } from "@/lib/datetime";
 import { asErrorMessage } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
-import { colors, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { radius, shadow, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type PartialCard = Tables<"partial_cards">;
 
@@ -22,6 +23,8 @@ type PartialCard = Tables<"partial_cards">;
  * simply appears the next time one is used.
  */
 export default function CardsScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const [cards, setCards] = useState<PartialCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -118,7 +121,7 @@ export default function CardsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
   content: { paddingHorizontal: spacing.xl, paddingBottom: 60, gap: spacing.lg },
   notice: { flexDirection: "row", gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.primarySoft },
@@ -129,4 +132,4 @@ const styles = StyleSheet.create({
   pan: { ...typography.bodyMedium, color: colors.ink, fontSize: 15, letterSpacing: 1.2 },
   meta: { ...typography.caption, color: colors.inkSoft },
   remove: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: colors.dangerSoft },
-});
+}));

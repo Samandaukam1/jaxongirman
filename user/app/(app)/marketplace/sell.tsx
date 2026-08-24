@@ -5,7 +5,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { BookOpenText, FileUp, Image as ImageIcon, Send, X } from "lucide-react-native";
 import { useMemo, useState } from "react";
-import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { PaymentUnavailable } from "@/components/PaymentUnavailable";
@@ -17,7 +17,8 @@ import { formatBytes, formatSom } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
 import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
 import { useAuth } from "@/providers/AuthProvider";
-import { colors, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { radius, shadow, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type PickedFile = { uri: string; name: string; mimeType: string; sizeBytes: number };
 
@@ -38,6 +39,8 @@ function extensionFor(mimeType: string, name: string): string {
  * keystroke shows the new numbers.
  */
 export default function SellScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const { user } = useAuth();
   const { types } = useMaterialTypes();
@@ -478,7 +481,7 @@ export default function SellScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
   content: { paddingHorizontal: spacing.xl, paddingBottom: 60, gap: spacing.lg },
 
@@ -526,4 +529,4 @@ const styles = StyleSheet.create({
 
   problem: { ...typography.caption, color: colors.inkSoft, textAlign: "center" },
   footnote: { ...typography.caption, color: colors.inkSoft, textAlign: "center", lineHeight: 18, ...shadow, shadowOpacity: 0 },
-});
+}));

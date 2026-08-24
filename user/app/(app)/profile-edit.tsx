@@ -3,17 +3,15 @@ import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { Camera, User as UserIcon } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
-import {
-  ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable,
-  ScrollView, StyleSheet, Text, TextInput, View,
-} from "react-native";
+import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { avatarContentType, avatarObjectPath, cacheBusted } from "@/lib/avatar";
 import { asErrorMessage } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
-import { colors, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { radius, shadow, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /**
  * Editing a profile, which is not the same screen as having one.
@@ -44,6 +42,8 @@ const EMPTY: Draft = {
 const USERNAME_RULE = /^[a-z0-9_]{3,24}$/;
 
 export default function ProfileEditScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const { user } = useAuth();
   const [draft, setDraft] = useState<Draft>(EMPTY);
@@ -250,7 +250,7 @@ export default function ProfileEditScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.canvas },
   content: { padding: spacing.xl, paddingBottom: spacing.xl * 2, gap: spacing.lg },
@@ -276,4 +276,4 @@ const styles = StyleSheet.create({
   saveButton: { minHeight: 54, borderRadius: radius.lg, alignItems: "center", justifyContent: "center", backgroundColor: colors.primary },
   saveText: { ...typography.body, fontWeight: "700", color: colors.onPrimary },
   disabled: { opacity: 0.5 },
-});
+}));

@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
 
 import {
   getSocialAuthAvailability, signInWithApple, signInWithGoogle,
   type SocialAuthAvailability,
 } from "@/lib/auth/social-auth";
-import { colors, radius, spacing, typography } from "@/theme/tokens";
+import { radius, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /**
  * Apple's mark, drawn rather than imported.
@@ -64,6 +65,8 @@ type Provider = "apple" | "google";
  * knows they changed their mind, and an error toast for it reads as a fault.
  */
 export function SocialAuthButtons({ onSignedIn }: { onSignedIn?: () => void }) {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const [available, setAvailable] = useState<SocialAuthAvailability>({ apple: false, google: true });
   const [busy, setBusy] = useState<Provider | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -145,7 +148,7 @@ export function SocialAuthButtons({ onSignedIn }: { onSignedIn?: () => void }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   wrapper: { gap: spacing.sm },
   button: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm,
@@ -164,4 +167,4 @@ const styles = StyleSheet.create({
   divider: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.md },
   rule: { flex: 1, height: 1, backgroundColor: colors.border },
   dividerText: { ...typography.caption, color: colors.inkSoft },
-});
+}));

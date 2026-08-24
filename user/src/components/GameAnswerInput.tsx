@@ -1,13 +1,12 @@
 import * as Haptics from "expo-haptics";
 import { Check, Square, SquareCheck } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
-import {
-  Image, LayoutChangeEvent, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
-} from "react-native";
+import { Image, LayoutChangeEvent, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import type { SanitizedQuestion } from "@/lib/games";
 import { supabase } from "@/lib/supabase";
-import { colors, icon, radius, spacing, typography } from "@/theme/tokens";
+import { icon, radius, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /**
  * Answer identity is shape and letter first, colour second.
@@ -49,6 +48,8 @@ type Props = {
  * one — so there is no way for a fast thumb to read the key off the device.
  */
 export function GameAnswerInput({ question, locked, onSubmit }: Props) {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const [choices, setChoices] = useState<string[]>([]);
   const [text, setText] = useState("");
   const [order, setOrder] = useState<string[]>([]);
@@ -340,6 +341,7 @@ export function GameAnswerInput({ question, locked, onSubmit }: Props) {
 function OptionButton({ index, text, disabled, onPress }: {
   index: number; text: string; disabled: boolean; onPress: () => void;
 }) {
+  const styles = useStyles();
   const style = optionStyle(index);
   return (
     <Pressable
@@ -364,6 +366,8 @@ function OptionButton({ index, text, disabled, onPress }: {
 }
 
 function SubmitBar({ label, disabled, onPress }: { label: string; disabled: boolean; onPress: () => void }) {
+  const { colors } = useTheme();
+  const styles = useStyles();
   return (
     <Pressable
       style={({ pressed }) => [styles.submitBar, pressed && styles.pressed, disabled && styles.dim]}
@@ -383,6 +387,8 @@ export function GameRevealPanel({ question, config, stats }: {
   config: Record<string, unknown>;
   stats: { answers: number; correct: number; incorrect: number; choices: Record<string, number>; words: Record<string, number> };
 }) {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const options = question.config.options ?? [];
   const correct = config.correct;
 
@@ -474,6 +480,7 @@ export function GameRevealPanel({ question, config, stats }: {
 
 /** A horizontal strip of option letters, for the compact result header. */
 export function GameStatsSummary({ stats }: { stats: { answers: number; correct: number; incorrect: number } }) {
+  const styles = useStyles();
   const total = Math.max(stats.correct + stats.incorrect, 1);
   return (
     <View style={{ gap: spacing.sm }}>
@@ -493,6 +500,7 @@ export function GameLeaderboardList({ players, meId }: {
   players: { id: string; nickname: string; avatar_id: number; total_score: number; rank: number }[];
   meId?: string;
 }) {
+  const styles = useStyles();
   return (
     <ScrollView contentContainerStyle={{ gap: spacing.sm }}>
       {players.map((player) => (
@@ -506,7 +514,7 @@ export function GameLeaderboardList({ players, meId }: {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   pressed: { transform: [{ scale: 0.97 }] },
   dim: { opacity: 0.5 },
   hint: { ...typography.caption, color: colors.inkMuted },
@@ -587,4 +595,4 @@ const styles = StyleSheet.create({
   boardRank: { ...typography.bodyMedium, color: colors.primaryDeep, width: 26 },
   boardName: { ...typography.body, color: colors.ink, flex: 1 },
   boardScore: { ...typography.bodyMedium, color: colors.ink },
-});
+}));

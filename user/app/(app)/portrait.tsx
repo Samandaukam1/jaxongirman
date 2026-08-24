@@ -4,15 +4,14 @@ import * as ImagePicker from "expo-image-picker";
 import * as Sharing from "expo-sharing";
 import { Check, ClipboardCopy, Download, ExternalLink, ImagePlus, Sparkles } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
-import {
-  ActivityIndicator, Image, Linking, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View,
-} from "react-native";
+import { ActivityIndicator, Image, Linking, Platform, Pressable, ScrollView, Share, Text, View } from "react-native";
 
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { asErrorMessage } from "@/lib/format";
 import { buildPortraitSheet, portraitPrompt, sheetUrl, uploadPortrait, type PortraitSheet } from "@/lib/portrait";
 import { useAuth } from "@/providers/AuthProvider";
-import { colors, icon, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { icon, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /**
  * A picture becomes nine printable identity photographs.
@@ -31,6 +30,8 @@ import { colors, icon, radius, shadow, spacing, typography } from "@/theme/token
 const STEPS = ["Prompt", "ChatGPT", "Rasm", "Chop etish"] as const;
 
 export default function PortraitScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const { user } = useAuth();
   const [step, setStep] = useState(0);
   const [prompt, setPrompt] = useState("");
@@ -244,7 +245,7 @@ export default function PortraitScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
   steps: { flexDirection: "row", paddingHorizontal: spacing.xl, paddingBottom: spacing.md, gap: spacing.xs },
   stepItem: { flex: 1, alignItems: "center", gap: 5 },
@@ -280,4 +281,4 @@ const styles = StyleSheet.create({
   ghostText: { ...typography.body, color: colors.inkMuted },
   disabled: { opacity: 0.5 },
   error: { ...typography.caption, color: colors.danger },
-});
+}));

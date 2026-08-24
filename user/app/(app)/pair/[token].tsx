@@ -1,13 +1,14 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Text, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { ErrorState } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
-import { colors, spacing, typography } from "@/theme/tokens";
+import { spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /**
  * The deep-link target for `jaxongirman://pair/<token>`.
@@ -17,6 +18,8 @@ import { colors, spacing, typography } from "@/theme/tokens";
  * scanner makes, with the same one-use guarantee.
  */
 export default function PairScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const params = useLocalSearchParams<{ token?: string }>();
   const token = typeof params.token === "string" ? params.token : "";
@@ -67,9 +70,9 @@ export default function PairScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.lg },
   content: { paddingHorizontal: spacing.xl, gap: spacing.lg },
   copy: { ...typography.body, color: colors.inkMuted },
-});
+}));

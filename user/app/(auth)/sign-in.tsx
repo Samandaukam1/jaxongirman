@@ -1,10 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { ArrowRight } from "lucide-react-native";
 import { useState } from "react";
-import {
-  Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView,
-  StyleSheet, Text, View,
-} from "react-native";
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from "react-native";
 
 import { AuthHero } from "@/components/AuthHero";
 import { FormField } from "@/components/FormField";
@@ -13,7 +10,8 @@ import { SocialAuthButtons } from "@/components/SocialAuthButtons";
 import { authRedirectTo } from "@/lib/authLinking";
 import { asErrorMessage } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
-import { colors, radius, spacing, typography } from "@/theme/tokens";
+import { radius, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /**
  * The first screen, and for most people the only one they will judge the app by
@@ -26,6 +24,8 @@ import { colors, radius, spacing, typography } from "@/theme/tokens";
  * welcome screen makes the fast paths look like an afterthought beside them.
  */
 export default function SignInScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
   const [emailOpen, setEmailOpen] = useState(false);
   const [email, setEmail] = useState("");
@@ -64,7 +64,7 @@ export default function SignInScreen() {
     // sticker needs something to sit on. It fades out before the buttons so
     // nothing competes with them for the eye.
     <LinearGradient
-      colors={["#F4EDFE", "#FDF1F8", "#FFFFFF"]}
+      colors={colors.authWash}
       locations={[0, 0.42, 0.78]}
       style={styles.screen}
     >
@@ -129,7 +129,7 @@ export default function SignInScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   screen: { flex: 1 },
   flex: { flex: 1 },
   content: {
@@ -155,4 +155,4 @@ const styles = StyleSheet.create({
   switchText: { ...typography.caption, color: colors.primary },
 
   legal: { ...typography.caption, color: colors.inkSoft, textAlign: "center", paddingTop: spacing.sm },
-});
+}));

@@ -3,20 +3,23 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { AlertCircle, ArrowLeft, Check, ChevronRight, Clock3, Gamepad2, LoaderCircle, RefreshCw, Sparkles } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from "react-native";
 
 import { IconChip } from "@/components/IconChip";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { asErrorMessage, asFunctionErrorMessage } from "@/lib/format";
 import { generateGame } from "@/lib/games";
 import { supabase } from "@/lib/supabase";
-import { colors, gradients, icon, radius, shadow, shadowLifted, spacing, typography } from "@/theme/tokens";
+import { brandInk, gradients, icon, radius, shadow, shadowLifted, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type Job = Tables<"generation_jobs">;
 type Step = Tables<"generation_steps">;
 type Presentation = Tables<"presentations">;
 
 export default function GenerationScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const params = useLocalSearchParams<{ id: string; withGame?: string }>();
   const presentationId = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
@@ -68,7 +71,6 @@ export default function GenerationScreen() {
     const poll = setInterval(() => void load(), 5000);
     return () => { clearInterval(poll); void supabase.removeChannel(channel); };
   }, [load, presentationId]);
-
 
   /**
    * The deck finishing is what makes an O‘yingoh possible: the questions come
@@ -200,7 +202,7 @@ export default function GenerationScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
   gameWaiting: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, marginTop: spacing.md },
   gameNote: { ...typography.caption, color: colors.inkMuted, textAlign: "center", marginTop: spacing.sm },
@@ -213,14 +215,14 @@ const styles = StyleSheet.create({
   content: { padding: spacing.xl, paddingBottom: 100 },
   hero: { borderRadius: radius.xl, padding: spacing.xl, overflow: "hidden", ...shadowLifted },
   heroIcon: { marginBottom: spacing.xl },
-  heroEyebrow: { ...typography.caption, color: "rgba(255,255,255,.72)", letterSpacing: 1.5 },
-  heroTitle: { ...typography.title, color: colors.onPrimary, marginTop: spacing.sm },
-  heroCopy: { ...typography.body, color: "rgba(255,255,255,.82)", marginTop: spacing.md },
+  heroEyebrow: { ...typography.caption, color: brandInk.muted, letterSpacing: 1.5 },
+  heroTitle: { ...typography.title, color: brandInk.strong, marginTop: spacing.sm },
+  heroCopy: { ...typography.body, color: brandInk.muted, marginTop: spacing.md },
   progressHeader: { flexDirection: "row", justifyContent: "space-between", marginTop: spacing.xxl },
-  progressStage: { ...typography.caption, color: colors.onPrimary, textTransform: "capitalize" },
-  progressValue: { ...typography.bodyMedium, color: colors.onPrimary },
+  progressStage: { ...typography.caption, color: brandInk.strong, textTransform: "capitalize" },
+  progressValue: { ...typography.bodyMedium, color: brandInk.strong },
   progressTrack: { height: 7, borderRadius: 4, backgroundColor: "rgba(255,255,255,.2)", overflow: "hidden", marginTop: spacing.sm },
-  progressFill: { height: "100%", borderRadius: 4, backgroundColor: colors.onPrimary },
+  progressFill: { height: "100%", borderRadius: 4, backgroundColor: brandInk.strong },
   sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: spacing.xxl, marginBottom: spacing.lg },
   sectionTitle: { ...typography.heading, color: colors.ink },
   live: { flexDirection: "row", alignItems: "center", gap: 6 },
@@ -244,4 +246,4 @@ const styles = StyleSheet.create({
   emptyStep: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md },
   emptyStepText: { ...typography.body, color: colors.inkMuted, flex: 1 },
   action: { marginTop: spacing.xl },
-});
+}));

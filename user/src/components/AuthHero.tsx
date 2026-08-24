@@ -1,10 +1,11 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { Gamepad2, House, Layers, Store, User, type LucideIcon } from "lucide-react-native";
-import { Image, StyleSheet, Text, View } from "react-native";
+import { Image, Text, View } from "react-native";
 
 import appIcon from "../../assets/icon.png";
 import coinIcon from "../../assets/coin/coin-icon.png";
-import { colors, typography } from "@/theme/tokens";
+import { typography } from "@/theme/tokens";
+import { makeStyles } from "@/theme/ThemeProvider";
 
 /**
  * What the app is, before anybody has signed in to find out.
@@ -48,6 +49,7 @@ function polar(angle: number): { left: number; top: number } {
 }
 
 export function AuthHero() {
+  const styles = useStyles();
   return (
     <View style={styles.wrapper}>
       <View style={styles.orbit}>
@@ -85,7 +87,7 @@ export function AuthHero() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   wrapper: { alignItems: "center", gap: 18 },
   orbit: { width: ORBIT * 2, height: ORBIT * 2, alignItems: "center", justifyContent: "center" },
 
@@ -120,4 +122,4 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.primary, letterSpacing: 3, fontFamily: "Manrope_700Bold",
   },
-});
+}));

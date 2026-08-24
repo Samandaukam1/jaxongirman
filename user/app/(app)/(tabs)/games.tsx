@@ -5,9 +5,10 @@ import {
   Bell, Gamepad2, Gift, Medal, MonitorPlay, Plus, QrCode, ShoppingBag, Sparkles, Trophy,
 } from "lucide-react-native";
 import { useCallback, useMemo, useState } from "react";
-import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 
 import coinIcon from "../../../assets/coin/coin-icon.png";
+import { Appear } from "@/components/Appear";
 import { BOTTOM_NAV_SPACE } from "@/components/BottomNav";
 import { EmptyState, InlineError, SkeletonCard } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
@@ -18,7 +19,8 @@ import {
 import { formatNumber } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
 import { useAccount } from "@/providers/AccountProvider";
-import { colors, gradients, icon, radius, shadow, shadowLifted, spacing, typography } from "@/theme/tokens";
+import { brandInk, gradients, icon, radius, shadow, shadowLifted, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type Shelf = "all" | "mine" | "bought" | "presentation" | "played";
 
@@ -39,6 +41,8 @@ type Stats = { played: number; wins: number; top3: number; average_score: number
  * "bought" are separated by ownership, not by copies.
  */
 export default function GamesScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const { balance, unreadCount } = useAccount();
   const [shelf, setShelf] = useState<Shelf>("all");
@@ -126,13 +130,13 @@ export default function GamesScreen() {
         >
           <LinearGradient colors={gradients.create} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.createCta}>
             <View style={styles.createIcon}>
-              <Plus color={colors.onPrimary} size={icon.lg} strokeWidth={icon.strokeBold} />
+              <Plus color={brandInk.strong} size={icon.lg} strokeWidth={icon.strokeBold} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.createTitle}>Yangi o‘yin yaratish</Text>
               <Text style={styles.createSubtitle}>AI bilan, matndan yoki qo‘lda</Text>
             </View>
-            <Sparkles color={colors.onPrimaryMuted} size={icon.lg} strokeWidth={icon.stroke} />
+            <Sparkles color={brandInk.muted} size={icon.lg} strokeWidth={icon.stroke} />
           </LinearGradient>
         </Pressable>
 
@@ -145,7 +149,7 @@ export default function GamesScreen() {
             accessibilityRole="button"
           >
             <LinearGradient colors={gradients.join} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.halfCta}>
-              <QrCode color={colors.onPrimary} size={icon.xl} strokeWidth={icon.stroke} />
+              <QrCode color={brandInk.strong} size={icon.xl} strokeWidth={icon.stroke} />
               <Text style={styles.halfTitle}>O‘yinga qo‘shilish</Text>
               <Text style={styles.halfSubtitle}>QR yoki kod</Text>
             </LinearGradient>
@@ -157,7 +161,7 @@ export default function GamesScreen() {
             accessibilityRole="button"
           >
             <LinearGradient colors={gradients.host} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.halfCta}>
-              <MonitorPlay color={colors.onPrimary} size={icon.xl} strokeWidth={icon.stroke} />
+              <MonitorPlay color={brandInk.strong} size={icon.xl} strokeWidth={icon.stroke} />
               <Text style={styles.halfTitle}>Mezbon bo‘lish</Text>
               <Text style={styles.halfSubtitle}>Katta ekranni ulash</Text>
             </LinearGradient>
@@ -217,8 +221,10 @@ export default function GamesScreen() {
           />
         ) : (
           <View style={{ gap: spacing.sm }}>
-            {shelfGames.map((game) => (
-              <GameRow key={game.id} game={game} onPress={() => router.push(`/oyingoh/${game.id}`)} />
+            {shelfGames.map((game, index) => (
+              <Appear key={game.id} index={index}>
+                <GameRow game={game} onPress={() => router.push(`/oyingoh/${game.id}`)} />
+              </Appear>
             ))}
           </View>
         )}
@@ -269,6 +275,8 @@ export default function GamesScreen() {
 }
 
 function StatCard({ icon: Icon, value, label }: { icon: typeof Trophy; value: number; label: string }) {
+  const { colors } = useTheme();
+  const styles = useStyles();
   return (
     <View style={styles.statCard}>
       <Icon color={colors.primary} size={icon.md} strokeWidth={icon.stroke} />
@@ -279,6 +287,8 @@ function StatCard({ icon: Icon, value, label }: { icon: typeof Trophy; value: nu
 }
 
 function GameRow({ game, onPress }: { game: Game; onPress: () => void }) {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const status = game.status as GameStatus;
   return (
     <Pressable style={({ pressed }) => [styles.gameRow, pressed && styles.pressed]} onPress={onPress}>
@@ -296,7 +306,7 @@ function GameRow({ game, onPress }: { game: Game; onPress: () => void }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   safe: { flex: 1, backgroundColor: colors.canvas, paddingTop: 58 },
   content: { paddingHorizontal: spacing.xl, paddingBottom: BOTTOM_NAV_SPACE + spacing.xl, gap: spacing.lg },
   headerRow: { flexDirection: "row", alignItems: "flex-start", gap: spacing.md },
@@ -326,16 +336,16 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.22)",
     alignItems: "center", justifyContent: "center",
   },
-  createTitle: { ...typography.bodyMedium, color: colors.onPrimary, fontSize: 17 },
-  createSubtitle: { ...typography.caption, color: "rgba(255,255,255,0.78)" },
+  createTitle: { ...typography.bodyMedium, color: brandInk.strong, fontSize: 17 },
+  createSubtitle: { ...typography.caption, color: brandInk.muted },
   scanRow: { flexDirection: "row", gap: spacing.md },
   halfShadow: { flex: 1, borderRadius: radius.lg, ...shadow },
   halfCta: {
     minHeight: 128, borderRadius: radius.lg, padding: spacing.lg,
     justifyContent: "space-between", gap: spacing.sm,
   },
-  halfTitle: { ...typography.bodyMedium, color: colors.onPrimary, fontSize: 15 },
-  halfSubtitle: { ...typography.caption, color: "rgba(255,255,255,0.76)" },
+  halfTitle: { ...typography.bodyMedium, color: brandInk.strong, fontSize: 15 },
+  halfSubtitle: { ...typography.caption, color: brandInk.muted },
   pressed: { transform: [{ scale: 0.98 }], opacity: 0.92 },
   statsRow: { flexDirection: "row", gap: spacing.sm },
   statCard: {
@@ -402,4 +412,4 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   marketLinkText: { ...typography.body, color: colors.primary },
-});
+}));

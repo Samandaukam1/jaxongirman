@@ -1,10 +1,12 @@
 import { Redirect } from "expo-router";
-import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { ActivityIndicator, View } from "react-native";
 
 import { useAuth } from "@/providers/AuthProvider";
-import { colors } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 export default function Index() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const { session, loading } = useAuth();
   if (loading) {
     return (
@@ -16,4 +18,4 @@ export default function Index() {
   return <Redirect href={session ? "/(app)" : "/(auth)/sign-in"} />;
 }
 
-const styles = StyleSheet.create({ loading: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.canvas } });
+const useStyles = makeStyles((colors) => ({ loading: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.canvas } }));

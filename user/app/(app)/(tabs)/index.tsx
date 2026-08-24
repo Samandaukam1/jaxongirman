@@ -3,9 +3,10 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
 import { ArrowRight, Bell, CirclePlus, ClipboardList, HandCoins, Plus, Store } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
-import { AppState, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { AppState, Image, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 
 import coinIcon from "../../../assets/coin/coin-icon.png";
+import { Appear } from "@/components/Appear";
 import { Avatar } from "@/components/Avatar";
 import { BOTTOM_NAV_SPACE } from "@/components/BottomNav";
 import { SurveyCard, type SurveySummary } from "@/components/SurveyCard";
@@ -16,7 +17,8 @@ import { useModuleAccess } from "@/lib/modules";
 import { formatNumber } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
 import { displayFirstName, profileInitials, useAccount } from "@/providers/AccountProvider";
-import { colors, gradients, icon, radius, shadow, shadowLifted, spacing, typography } from "@/theme/tokens";
+import { brandInk, gradients, icon, radius, shadow, shadowLifted, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /** How many survey cards the home screen shows before deferring to the module. */
 const ACTIVITY_LIMIT = 2;
@@ -30,6 +32,8 @@ const ACTIVITY_LIMIT = 2;
  * plainly when it has nothing to show rather than filling itself with examples.
  */
 export default function HomeScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const { profile, balance, unreadCount, entitlements, loading: accountLoading, error: accountError, refresh } = useAccount();
   const { state: moduleState } = useModuleAccess(DATA_COLLECTION_MODULE);
@@ -188,7 +192,7 @@ export default function HomeScreen() {
               style={({ pressed }) => [styles.accountAction, styles.accountActionGhost, pressed && styles.pressedSoft]}
             >
               <View style={[styles.accountActionIcon, styles.accountActionIconGhost]}>
-                <CirclePlus color={colors.onPrimary} size={18} strokeWidth={2} />
+                <CirclePlus color={brandInk.strong} size={18} strokeWidth={2} />
               </View>
               <Text style={styles.accountActionGhostText}>Tangalarni{"\n"}sotib olish</Text>
             </Pressable>
@@ -239,16 +243,17 @@ export default function HomeScreen() {
           </View>
         ) : null}
         <View style={styles.list}>
-          {activity.map((item) => (
-            <SurveyCard
-              key={item.id}
-              item={item}
-              onPress={() => router.push(
-                item.is_owner
-                  ? { pathname: "/(app)/survey/results/[id]", params: { id: item.id } }
-                  : { pathname: "/(app)/survey/[id]", params: { id: item.id } },
-              )}
-            />
+          {activity.map((item, index) => (
+            <Appear key={item.id} index={index}>
+              <SurveyCard
+                item={item}
+                onPress={() => router.push(
+                  item.is_owner
+                    ? { pathname: "/(app)/survey/results/[id]", params: { id: item.id } }
+                    : { pathname: "/(app)/survey/[id]", params: { id: item.id } },
+                )}
+              />
+            </Appear>
           ))}
         </View>
 
@@ -272,7 +277,7 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   safe: { flex: 1, backgroundColor: colors.canvas, paddingTop: 58 },
   content: { paddingHorizontal: spacing.xl, paddingBottom: BOTTOM_NAV_SPACE + spacing.xl, gap: spacing.lg },
 
@@ -293,32 +298,34 @@ const styles = StyleSheet.create({
   account: { borderRadius: radius.xl, padding: spacing.xl, overflow: "hidden", gap: spacing.lg, marginTop: spacing.sm, ...shadowLifted },
   accountOrb: { position: "absolute", width: 220, height: 220, borderRadius: 110, borderWidth: 1, borderColor: "rgba(255,255,255,.14)", right: -70, top: -90 },
   accountHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  accountEyebrow: { ...typography.caption, color: colors.onPrimaryMuted, letterSpacing: 1.8 },
+  accountEyebrow: { ...typography.caption, color: brandInk.muted, letterSpacing: 1.8 },
   planChip: { paddingHorizontal: spacing.md, paddingVertical: 5, borderRadius: radius.pill, backgroundColor: "rgba(255,255,255,.16)" },
-  planChipText: { ...typography.caption, color: colors.onPrimary },
+  planChipText: { ...typography.caption, color: brandInk.strong },
   balanceBlock: { gap: 2 },
   balanceRow: { flexDirection: "row", alignItems: "center" },
   // Sized and nudged against the digits themselves, not the text box: Manrope's
   // line box is taller than its cap height, so centring on it alone would leave
   // the coin sitting low.
   balanceCoin: { width: 54, height: 54, marginLeft: 8, marginTop: 3 },
-  balanceLabel: { ...typography.caption, color: colors.onPrimaryMuted },
-  balanceValue: { fontFamily: "Manrope_700Bold", fontSize: 46, lineHeight: 54, color: colors.onPrimary, letterSpacing: -1.4 },
+  balanceLabel: { ...typography.caption, color: brandInk.muted },
+  balanceValue: { fontFamily: "Manrope_700Bold", fontSize: 46, lineHeight: 54, color: brandInk.strong, letterSpacing: -1.4 },
   balanceSkeleton: { backgroundColor: "rgba(255,255,255,.18)" },
-  planDetail: { ...typography.caption, color: colors.onPrimaryMuted },
+  planDetail: { ...typography.caption, color: brandInk.muted },
   accountActions: { flexDirection: "row", gap: spacing.md },
   accountAction: {
     flex: 1, minHeight: 62, borderRadius: radius.lg, flexDirection: "row",
     alignItems: "center", gap: spacing.sm, paddingHorizontal: spacing.md,
   },
   accountActionPrimary: {
-    backgroundColor: colors.onPrimary,
+    backgroundColor: brandInk.plate,
     shadowColor: colors.shadow, shadowOpacity: 0.2, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 4,
   },
-  accountActionPrimaryText: { fontFamily: "Manrope_700Bold", fontSize: 13, lineHeight: 17, color: colors.primaryDeep, flex: 1 },
+  accountActionPrimaryText: { fontFamily: "Manrope_700Bold", fontSize: 13, lineHeight: 17, color: brandInk.onPlate, flex: 1 },
   accountActionGhost: { backgroundColor: "rgba(255,255,255,.16)", borderWidth: 1, borderColor: "rgba(255,255,255,.3)" },
-  accountActionGhostText: { fontFamily: "Manrope_700Bold", fontSize: 13, lineHeight: 17, color: colors.onPrimary, flex: 1 },
+  accountActionGhostText: { fontFamily: "Manrope_700Bold", fontSize: 13, lineHeight: 17, color: brandInk.strong, flex: 1 },
   accountActionIcon: { width: 34, height: 34, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  // A violet chip on the white plate: this one is a flat primary surface,
+  // so it keeps the themed pair rather than the brand ink.
   accountActionIconPrimary: { backgroundColor: colors.primary },
   accountActionIconGhost: { backgroundColor: "rgba(255,255,255,.22)", borderWidth: 1, borderColor: "rgba(255,255,255,.28)" },
   pressedSoft: { opacity: 0.9, transform: [{ scale: 0.99 }] },
@@ -344,4 +351,4 @@ const styles = StyleSheet.create({
   quietCopy: { ...typography.caption, color: colors.inkMuted, lineHeight: 18 },
   quietAction: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderStrong },
   quietActionText: { ...typography.caption, color: colors.primary, fontFamily: "Manrope_600SemiBold" },
-});
+}));

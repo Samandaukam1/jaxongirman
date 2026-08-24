@@ -2,7 +2,7 @@ import { SURVEY_QUESTION_LABELS, type SurveyQuestionType } from "@jaxongirman/ty
 import { useFocusEffect, useRouter } from "expo-router";
 import { BookmarkCheck, Copy, FilePlus2, Pencil, Trash2 } from "lucide-react-native";
 import { useCallback, useState } from "react";
-import { Alert, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Modal, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
@@ -10,7 +10,8 @@ import { EmptyState, ErrorState, InlineError, SkeletonCard } from "@/components/
 import { formatShortDateTime } from "@/lib/datetime";
 import { asErrorMessage } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
-import { colors, icon, radius, spacing, typography } from "@/theme/tokens";
+import { icon, radius, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type TemplateQuestion = { id: string; label: string; type: SurveyQuestionType; position: number };
 type Template = {
@@ -30,6 +31,8 @@ type Template = {
  * this screen is where they are renamed, reused and thrown away on purpose.
  */
 export default function SurveyTemplatesScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
@@ -203,7 +206,7 @@ export default function SurveyTemplatesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
   content: { paddingHorizontal: spacing.xl, paddingBottom: 60, gap: spacing.lg },
 
@@ -239,4 +242,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border,
     borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
   },
-});
+}));

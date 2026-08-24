@@ -10,12 +10,13 @@ import {
   ImagePlus, Minus, Plus, RefreshCw, Square, SquareCheck, Trash2, X,
 } from "lucide-react-native";
 import { useState } from "react";
-import { ActivityIndicator, Image, LayoutChangeEvent, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Image, LayoutChangeEvent, Pressable, Text, TextInput, View } from "react-native";
 
 import { asErrorMessage } from "@/lib/format";
 import type { GameQuestion } from "@/lib/games";
 import { supabase } from "@/lib/supabase";
-import { colors, icon, radius, spacing, typography } from "@/theme/tokens";
+import { icon, radius, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type Props = {
   question: GameQuestion;
@@ -45,6 +46,8 @@ function publicUrl(path: string | null): string | null {
  * into a live match.
  */
 export function GameQuestionCard({ question, index, total, onSaved, onDelete, onDuplicate, onMove, onRegenerate, regenerating }: Props) {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const [open, setOpen] = useState(false);
   const [prompt, setPrompt] = useState(question.prompt);
   const [explanation, setExplanation] = useState(question.explanation);
@@ -478,6 +481,8 @@ export function GameQuestionCard({ question, index, total, onSaved, onDelete, on
 }
 
 function AddRow({ label, onPress }: { label: string; onPress: () => void }) {
+  const { colors } = useTheme();
+  const styles = useStyles();
   return (
     <Pressable style={styles.addRow} onPress={onPress}>
       <Plus color={colors.primary} size={icon.md} strokeWidth={icon.stroke} />
@@ -487,6 +492,8 @@ function AddRow({ label, onPress }: { label: string; onPress: () => void }) {
 }
 
 function AnswerInput({ onAdd }: { onAdd: (value: string) => void }) {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const [value, setValue] = useState("");
   return (
     <View style={styles.optionRow}>
@@ -503,6 +510,8 @@ function AnswerInput({ onAdd }: { onAdd: (value: string) => void }) {
 function IconAction({ icon: Icon, label, onPress, disabled, danger, spinning }: {
   icon: typeof Copy; label: string; onPress: () => void; disabled?: boolean; danger?: boolean; spinning?: boolean;
 }) {
+  const { colors } = useTheme();
+  const styles = useStyles();
   return (
     <Pressable style={styles.iconAction} onPress={onPress} disabled={disabled || spinning} accessibilityLabel={label}>
       {spinning ? <ActivityIndicator size="small" color={colors.primary} /> : (
@@ -512,7 +521,7 @@ function IconAction({ icon: Icon, label, onPress, disabled, danger, spinning }: 
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   card: {
     backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
     borderRadius: radius.lg, overflow: "hidden",
@@ -591,4 +600,4 @@ const styles = StyleSheet.create({
     width: 40, height: 40, borderRadius: radius.sm, backgroundColor: colors.surfaceMuted,
     alignItems: "center", justifyContent: "center",
   },
-});
+}));

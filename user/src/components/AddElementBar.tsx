@@ -1,7 +1,8 @@
 import { Frame, Image as ImageIcon, Library, Plus, Shapes, Type, Video, X, type LucideIcon } from "lucide-react-native";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 
-import { colors, icon, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { icon, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 export type AddKind = "text" | "shape" | "image" | "video" | "frame" | "element";
 
@@ -34,6 +35,8 @@ export function AddElementBar({
   onToggle: () => void;
   onAdd: (kind: AddKind) => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useStyles();
   return (
     <View style={styles.card}>
       {open ? (
@@ -61,7 +64,7 @@ export function AddElementBar({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   card: { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, overflow: "hidden", ...shadow },
   options: { gap: spacing.sm, paddingHorizontal: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.sm },
   option: { width: 72, alignItems: "center", gap: 5 },
@@ -71,4 +74,4 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.sm },
   button: { width: 44, height: 44, borderRadius: 15, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   hint: { ...typography.caption, color: colors.inkMuted, flex: 1 },
-});
+}));

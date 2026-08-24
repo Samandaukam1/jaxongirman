@@ -6,7 +6,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { Check, Crown, Info, RotateCcw, Sparkles, X } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Modal, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { ErrorState, SkeletonCard } from "@/components/StateBlocks";
@@ -17,7 +17,8 @@ import {
   type Membership, type TariffPlan,
 } from "@/lib/subscription";
 import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
-import { colors, gradients, icon, radius, shadow, shadowLifted, spacing, typography } from "@/theme/tokens";
+import { brandInk, gradients, icon, radius, shadow, shadowLifted, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /**
  * The tariff screen.
@@ -33,6 +34,8 @@ import { colors, gradients, icon, radius, shadow, shadowLifted, spacing, typogra
  * screen cannot read differently on the other.
  */
 export default function TariffScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const policy = usePaymentPolicy();
 
@@ -137,7 +140,7 @@ export default function TariffScreen() {
           <LinearGradient colors={gradients.hero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.statusCard}>
             <View style={styles.statusTop}>
               <View style={styles.statusBadge}>
-                <Crown color={colors.onPrimary} size={icon.sm} strokeWidth={icon.strokeBold} />
+                <Crown color={brandInk.strong} size={icon.sm} strokeWidth={icon.strokeBold} />
                 <Text style={styles.statusBadgeText}>{membership.planName ?? "Premium"}</Text>
               </View>
               {membership.expiresAt ? (
@@ -181,7 +184,7 @@ export default function TariffScreen() {
                 onPress={confirmRestart}
                 style={[styles.restart, opening !== null && styles.restartBusy]}
               >
-                <RotateCcw color={colors.onPrimary} size={icon.sm} strokeWidth={2.1} />
+                <RotateCcw color={brandInk.strong} size={icon.sm} strokeWidth={2.1} />
                 <Text style={styles.restartText}>Tarifni qayta boshlash</Text>
               </Pressable>
             ) : null}
@@ -306,31 +309,31 @@ export default function TariffScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
   content: { padding: spacing.lg, paddingBottom: spacing.xxxl, gap: spacing.lg },
 
   statusCard: { borderRadius: radius.lg, padding: spacing.lg, gap: spacing.lg, ...shadowLifted },
   statusTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   statusBadge: { flexDirection: "row", alignItems: "center", gap: spacing.xs, backgroundColor: "rgba(255,255,255,0.18)", paddingVertical: spacing.xs, paddingHorizontal: spacing.md, borderRadius: radius.pill },
-  statusBadgeText: { ...typography.caption, color: colors.onPrimary, textTransform: "uppercase", letterSpacing: 0.6 },
-  statusExpiry: { ...typography.caption, color: colors.onPrimaryMuted },
+  statusBadgeText: { ...typography.caption, color: brandInk.strong, textTransform: "uppercase", letterSpacing: 0.6 },
+  statusExpiry: { ...typography.caption, color: brandInk.muted },
 
   usage: { gap: spacing.md },
   usageRow: { gap: spacing.xs },
   usageHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" },
-  usageLabel: { ...typography.bodyMedium, color: colors.onPrimary },
-  usageDetail: { ...typography.caption, color: colors.onPrimaryMuted },
+  usageLabel: { ...typography.bodyMedium, color: brandInk.strong },
+  usageDetail: { ...typography.caption, color: brandInk.muted },
   track: { height: 6, borderRadius: radius.pill, backgroundColor: "rgba(255,255,255,0.22)", overflow: "hidden" },
-  fill: { height: "100%", borderRadius: radius.pill, backgroundColor: colors.onPrimary },
+  fill: { height: "100%", borderRadius: radius.pill, backgroundColor: brandInk.strong },
   restart: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm,
     marginTop: spacing.md, minHeight: 46, borderRadius: radius.pill,
     borderWidth: 1, borderColor: "rgba(255,255,255,0.4)",
   },
   restartBusy: { opacity: 0.5 },
-  restartText: { ...typography.caption, fontWeight: "700", color: colors.onPrimary },
-  reset: { ...typography.caption, color: colors.onPrimaryMuted },
+  restartText: { ...typography.caption, fontWeight: "700", color: brandInk.strong },
+  reset: { ...typography.caption, color: brandInk.muted },
 
   freeCard: { backgroundColor: colors.surfaceMuted, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.sm },
   freeTitle: { ...typography.heading, color: colors.ink },
@@ -339,7 +342,7 @@ const styles = StyleSheet.create({
   freeValue: { ...typography.bodyMedium, color: colors.ink },
   freeReset: { ...typography.caption, color: colors.inkSoft, marginTop: spacing.xs },
 
-  notice: { flexDirection: "row", alignItems: "flex-start", gap: spacing.sm, padding: spacing.md, borderRadius: radius.md, backgroundColor: "#FDF6E9" },
+  notice: { flexDirection: "row", alignItems: "flex-start", gap: spacing.sm, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.warningSoft },
   noticeText: { ...typography.caption, color: colors.ink, flex: 1 },
 
   card: { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, gap: spacing.sm, ...shadow },
@@ -379,4 +382,4 @@ const styles = StyleSheet.create({
   sectionLabel: { ...typography.body, color: colors.inkMuted, flex: 1 },
   sectionValue: { ...typography.bodyMedium, color: colors.ink },
   sectionValueOff: { color: colors.inkSoft },
-});
+}));

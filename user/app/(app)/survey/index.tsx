@@ -2,7 +2,7 @@ import { DATA_COLLECTION_MODULE } from "@jaxongirman/types";
 import { useFocusEffect, useRouter } from "expo-router";
 import { BookmarkCheck, ClipboardList, Plus, ShieldCheck } from "lucide-react-native";
 import { useCallback, useMemo, useState } from "react";
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
@@ -11,7 +11,8 @@ import { EmptyState, ErrorState, SkeletonCard } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
 import { moduleGate, useModuleAccess } from "@/lib/modules";
 import { supabase } from "@/lib/supabase";
-import { colors, icon, radius, spacing, typography } from "@/theme/tokens";
+import { icon, radius, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type Tab = "created" | "participating";
 type Filter = "all" | "active" | "finished";
@@ -34,6 +35,8 @@ function isFinished(item: SurveySummary): boolean {
 
 /** The module's home: what you have made, and what you have been asked to fill in. */
 export default function SurveyModuleScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const { state: access } = useModuleAccess(DATA_COLLECTION_MODULE);
 
@@ -185,13 +188,13 @@ export default function SurveyModuleScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
   content: { paddingHorizontal: spacing.xl, paddingBottom: 60, gap: spacing.lg },
   headerAction: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", backgroundColor: colors.primarySoft },
 
   accessCard: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.border },
-  accessCardActive: { backgroundColor: colors.successSoft, borderColor: "#BEE7DA" },
+  accessCardActive: { backgroundColor: colors.successSoft, borderColor: colors.successBorder },
   accessCopy: { flex: 1, gap: 2 },
   accessTitle: { ...typography.bodyMedium, color: colors.ink, fontSize: 14 },
   accessBody: { ...typography.caption, color: colors.inkMuted, lineHeight: 17 },
@@ -211,4 +214,4 @@ const styles = StyleSheet.create({
   filterTextActive: { color: colors.onPrimary },
 
   list: { gap: spacing.md },
-});
+}));

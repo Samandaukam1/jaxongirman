@@ -3,7 +3,7 @@ import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { ArrowLeft, Check, Search, Send, UserRound } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import coinIcon from "../../../assets/coin/coin-icon.png";
 import { Avatar } from "@/components/Avatar";
@@ -14,7 +14,8 @@ import { asErrorMessage } from "@/lib/format";
 import { formatCoins, formatNumber } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
 import { useAccount } from "@/providers/AccountProvider";
-import { colors, icon, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { icon, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type Match = { id: string; full_name: string; username: string; avatar_url: string | null };
 
@@ -36,6 +37,8 @@ function initialsFor(match: Match): string {
  * confirmed amount, so a dropped response cannot become a second payment.
  */
 export default function SendCoinsScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const { balance, refresh } = useAccount();
 
@@ -279,7 +282,7 @@ export default function SendCoinsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
   content: { paddingHorizontal: spacing.xl, paddingBottom: 48, gap: spacing.lg },
 
@@ -337,4 +340,4 @@ const styles = StyleSheet.create({
   successCopy: { ...typography.body, color: colors.inkMuted, textAlign: "center" },
   successBalance: { ...typography.caption, color: colors.inkSoft, marginTop: spacing.sm },
   successActions: { alignSelf: "stretch", gap: spacing.md, marginTop: spacing.xxl },
-});
+}));

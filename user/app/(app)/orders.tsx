@@ -1,7 +1,7 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { Receipt } from "lucide-react-native";
 import { useCallback, useState } from "react";
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { RefreshControl, ScrollView, Text, View } from "react-native";
 
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { EmptyState, ErrorState, SkeletonCard } from "@/components/StateBlocks";
@@ -9,7 +9,8 @@ import { formatShortDateTime } from "@/lib/datetime";
 import { asErrorMessage } from "@/lib/format";
 import { formatSom } from "@/lib/money";
 import { myOrders } from "@/lib/orders";
-import { colors, icon, radius, spacing, typography } from "@/theme/tokens";
+import { icon, radius, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type Row = Awaited<ReturnType<typeof myOrders>>[number];
 
@@ -43,6 +44,8 @@ const STATUS_LABELS: Record<string, string> = {
  * masked, not hinted, nothing. A receipt does not need it.
  */
 export default function OrdersScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
@@ -118,7 +121,7 @@ export default function OrdersScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
   content: { padding: spacing.xl, gap: spacing.sm, paddingBottom: spacing.xxxl },
   row: {
@@ -139,4 +142,4 @@ const styles = StyleSheet.create({
   badgeTextFailed: { color: colors.danger },
   badgeTextPending: { color: colors.inkMuted },
   icon: { width: icon.md },
-});
+}));

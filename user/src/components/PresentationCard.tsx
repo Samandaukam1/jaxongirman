@@ -1,10 +1,13 @@
 import type { Tables } from "@jaxongirman/types";
 import { LinearGradient } from "expo-linear-gradient";
 import { ChevronRight, Clock3, Layers3 } from "lucide-react-native";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
+import Animated from "react-native-reanimated";
 
+import { usePressScale } from "@/lib/motion";
 import { formatRelativeDate } from "@/lib/format";
-import { colors, icon, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { brandInk, icon, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type Presentation = Tables<"presentations">;
 
@@ -31,10 +34,16 @@ const statusLabel: Record<Presentation["status"], string> = {
   archived: "Arxiv",
 };
 
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
 export function PresentationCard({ item, onPress }: { item: Presentation; onPress: () => void }) {
+  const { colors } = useTheme();
+  const styles = useStyles();
+  const press = usePressScale();
   const isDark = item.style === "super_professional" || item.style === "great";
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
+    <AnimatedPressable onPress={onPress} {...press.handlers}
+      style={({ pressed }: PressableStateCallbackType) => [styles.card, pressed && styles.pressed, press.style]}>
       <LinearGradient colors={palette[item.style]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.preview}>
         <View style={[styles.previewLine, isDark && styles.previewLineDark]} />
         <Text numberOfLines={3} style={[styles.previewTitle, isDark && styles.previewTitleDark]}>{item.title}</Text>
@@ -56,18 +65,20 @@ export function PresentationCard({ item, onPress }: { item: Presentation; onPres
           </View>
         </View>
       </View>
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   card: { flexDirection: "row", backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md, gap: spacing.lg, borderWidth: 1, borderColor: colors.border, ...shadow },
-  pressed: { opacity: 0.92, transform: [{ scale: 0.995 }] },
+  pressed: { opacity: 0.92 },
   preview: { width: 116, aspectRatio: 16 / 10, borderRadius: radius.md, padding: spacing.md, justifyContent: "center", overflow: "hidden" },
   previewLine: { position: "absolute", width: 90, height: 1, backgroundColor: "rgba(21,14,36,.16)", transform: [{ rotate: "-35deg" }], right: -18, top: 16 },
   previewLineDark: { backgroundColor: "rgba(255,255,255,.28)" },
   previewTitle: { fontFamily: "Manrope_700Bold", fontSize: 11, lineHeight: 14, color: colors.ink, maxWidth: 83 },
-  previewTitleDark: { color: colors.onPrimary },
+  // The thumbnail is a swatch of the deck's own palette, not app chrome:
+  // a dark swatch takes light text in either theme.
+  previewTitleDark: { color: brandInk.strong },
   previewDot: { position: "absolute", width: 24, height: 24, borderRadius: 12, backgroundColor: "rgba(255,255,255,.55)", right: -5, bottom: -5 },
   previewDotDark: { backgroundColor: "rgba(255,255,255,.22)" },
   details: { flex: 1, justifyContent: "space-between", paddingVertical: spacing.xs },
@@ -84,4 +95,4 @@ const styles = StyleSheet.create({
   statusText: { fontFamily: "Manrope_600SemiBold", fontSize: 10, color: colors.inkMuted },
   statusTextReady: { color: colors.success },
   statusTextFailed: { color: colors.danger },
-});
+}));

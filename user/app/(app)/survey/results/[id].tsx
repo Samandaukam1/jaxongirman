@@ -4,7 +4,7 @@ import * as Sharing from "expo-sharing";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Clock, Download, Link2, Lock, Pencil, Play, Users } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Alert, Image, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Pressable, RefreshControl, ScrollView, Share, Text, View } from "react-native";
 
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { CountdownText } from "@/components/SurveyCard";
@@ -12,7 +12,8 @@ import { EmptyState, ErrorState, InlineError, SkeletonCard } from "@/components/
 import { formatShortDateTime, useNow } from "@/lib/datetime";
 import { asErrorMessage, asFunctionErrorMessage } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
-import { colors, icon, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { icon, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type QuestionStat = {
   id: string;
@@ -58,6 +59,8 @@ type ResponseRow = {
  * this bucket is ever public.
  */
 export default function SurveyResultsScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
   const formId = typeof params.id === "string" ? params.id : "";
@@ -362,7 +365,7 @@ export default function SurveyResultsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
   content: { paddingHorizontal: spacing.xl, paddingBottom: 60, gap: spacing.lg },
   headerAction: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", backgroundColor: colors.primarySoft },
@@ -419,4 +422,4 @@ const styles = StyleSheet.create({
   rowAnswer: { paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border, gap: 2 },
   rowQuestion: { ...typography.caption, fontSize: 11, color: colors.inkSoft },
   rowValue: { ...typography.body, color: colors.ink, fontSize: 14 },
-});
+}));

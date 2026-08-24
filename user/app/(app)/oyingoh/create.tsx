@@ -6,7 +6,7 @@ import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Check, FileText, Presentation, Sparkles, SquarePen } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
@@ -14,7 +14,8 @@ import { InlineError } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
 import { generateGame } from "@/lib/games";
 import { supabase } from "@/lib/supabase";
-import { colors, icon, radius, spacing, typography } from "@/theme/tokens";
+import { icon, radius, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type Mode = "topic" | "text" | "presentation" | "manual";
 type DeckRow = { id: string; title: string };
@@ -27,6 +28,8 @@ const COUNT_PRESETS = [5, 10, 15, 20] as const;
  * screen, because an AI question that cannot be edited does not ship.
  */
 export default function CreateGameScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const params = useLocalSearchParams<{ categoryId?: string; presentationId?: string }>();
   const [mode, setMode] = useState<Mode>("topic");
@@ -231,6 +234,8 @@ export default function CreateGameScreen() {
 function ModeCard({ active, icon: Icon, label, hint, onPress }: {
   active: boolean; icon: typeof Sparkles; label: string; hint: string; onPress: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useStyles();
   return (
     <Pressable style={[styles.modeCard, active && styles.modeCardActive]} onPress={onPress} accessibilityRole="button">
       <Icon color={active ? colors.primary : colors.inkMuted} size={icon.lg} strokeWidth={icon.stroke} />
@@ -241,6 +246,7 @@ function ModeCard({ active, icon: Icon, label, hint, onPress }: {
 }
 
 function Chip({ active, label, onPress }: { active: boolean; label: string; onPress: () => void }) {
+  const styles = useStyles();
   return (
     <Pressable style={[styles.chip, active && styles.chipActive]} onPress={onPress}>
       <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
@@ -248,7 +254,7 @@ function Chip({ active, label, onPress }: { active: boolean; label: string; onPr
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   safe: { flex: 1, backgroundColor: colors.canvas },
   content: { padding: spacing.xl, gap: spacing.lg, paddingBottom: spacing.xxxl },
   modeGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
@@ -287,4 +293,4 @@ const styles = StyleSheet.create({
   deckRowActive: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
   deckTitle: { ...typography.body, color: colors.ink, flex: 1 },
   deckTitleActive: { color: colors.primaryDeep },
-});
+}));

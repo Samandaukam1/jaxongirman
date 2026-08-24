@@ -1,9 +1,10 @@
 import { useRouter } from "expo-router";
 import { ChevronLeft, X } from "lucide-react-native";
 import type { ReactNode } from "react";
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, Text, View } from "react-native";
 
-import { colors, icon, spacing, typography } from "@/theme/tokens";
+import { icon, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type Props = {
   title: string;
@@ -16,6 +17,8 @@ type Props = {
 
 /** The one header used by every pushed screen, so they all sit on the same grid. */
 export function ScreenHeader({ title, subtitle, variant = "back", onLeave, action }: Props) {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const Glyph = variant === "close" ? X : ChevronLeft;
 
@@ -38,7 +41,7 @@ export function ScreenHeader({ title, subtitle, variant = "back", onLeave, actio
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -51,4 +54,4 @@ const styles = StyleSheet.create({
   copy: { flex: 1 },
   title: { ...typography.heading, color: colors.ink },
   subtitle: { ...typography.caption, color: colors.inkMuted, marginTop: 1 },
-});
+}));

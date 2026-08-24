@@ -1,12 +1,13 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { ArrowUpRight, Sparkles } from "lucide-react-native";
 import { useEffect, useState } from "react";
-import { AccessibilityInfo, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { AccessibilityInfo, Platform, Pressable, Text, View } from "react-native";
 import Animated, {
   Easing, cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withTiming,
 } from "react-native-reanimated";
 
-import { colors, gradients, icon, radius, spacing, typography } from "@/theme/tokens";
+import { brandInk, gradients, icon, radius, spacing, typography } from "@/theme/tokens";
+import { makeStyles } from "@/theme/ThemeProvider";
 
 /**
  * The one thing this screen is for, made to look like it.
@@ -28,6 +29,7 @@ const SWEEP_MS = 2600;
 const REST_MS = 3400;
 
 export function CreateDeckButton({ onPress }: { onPress: () => void }) {
+  const styles = useStyles();
   const [still, setStill] = useState(false);
   const shift = useSharedValue(-1);
 
@@ -75,19 +77,19 @@ export function CreateDeckButton({ onPress }: { onPress: () => void }) {
         {still ? null : <Animated.View pointerEvents="none" style={[styles.sweep, sweep]} />}
 
         <View style={styles.glyph}>
-          <Sparkles color={colors.primary} size={icon.md} strokeWidth={2.2} />
+          <Sparkles color={brandInk.onPlate} size={icon.md} strokeWidth={2.2} />
         </View>
         <View style={styles.copy}>
           <Text style={styles.title}>Taqdimot yaratish</Text>
           <Text style={styles.detail}>Jaxongir AI bilan yangi slayd</Text>
         </View>
-        <ArrowUpRight color={colors.onPrimary} size={icon.md} strokeWidth={icon.stroke} />
+        <ArrowUpRight color={brandInk.strong} size={icon.md} strokeWidth={icon.stroke} />
       </LinearGradient>
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   wrap: {
     borderRadius: radius.xl,
     // The lift is static. An animated shadow is a re-rasterisation every frame.
@@ -118,9 +120,9 @@ const styles = StyleSheet.create({
   glyph: {
     width: 42, height: 42, borderRadius: 14,
     alignItems: "center", justifyContent: "center",
-    backgroundColor: colors.onPrimary,
+    backgroundColor: brandInk.plate,
   },
   copy: { flex: 1, gap: 2 },
-  title: { ...typography.body, fontWeight: "700", fontSize: 18, color: colors.onPrimary },
-  detail: { ...typography.caption, color: "rgba(255,255,255,0.8)" },
-});
+  title: { ...typography.body, fontWeight: "700", fontSize: 18, color: brandInk.strong },
+  detail: { ...typography.caption, color: brandInk.muted },
+}));

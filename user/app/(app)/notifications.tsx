@@ -5,14 +5,15 @@ import {
   ShieldAlert, Sparkles, Store, Timer, Wallet, X, type LucideIcon,
 } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Platform, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 
 import { CelebrationOverlay } from "@/components/CelebrationOverlay";
 import { asErrorMessage } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
 import { useAccount } from "@/providers/AccountProvider";
 import { useAuth } from "@/providers/AuthProvider";
-import { colors, icon, radius, shadow, shadowLifted, spacing, typography } from "@/theme/tokens";
+import { icon, radius, shadow, shadowLifted, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type Notification = Tables<"notifications">;
 
@@ -64,6 +65,8 @@ const KIND_ICONS: Record<string, LucideIcon> = {
 const CELEBRATED: readonly string[] = ["credit_gift", "credit_received"];
 
 export default function NotificationsScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const { user } = useAuth();
   const { setUnreadCount } = useAccount();
@@ -250,7 +253,7 @@ export default function NotificationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
   header: { paddingTop: Platform.OS === "ios" ? 58 : 30, paddingHorizontal: spacing.xl, paddingBottom: spacing.md, flexDirection: "row", alignItems: "center", gap: spacing.sm },
   headerCopy: { flex: 1 },
@@ -287,4 +290,4 @@ const styles = StyleSheet.create({
   emptyTitle: { ...typography.bodyMedium, color: colors.ink, marginTop: spacing.sm },
   emptyCopy: { ...typography.caption, color: colors.inkMuted, textAlign: "center", maxWidth: 260 },
   error: { ...typography.caption, color: colors.danger, paddingHorizontal: spacing.xl, paddingTop: spacing.sm },
-});
+}));

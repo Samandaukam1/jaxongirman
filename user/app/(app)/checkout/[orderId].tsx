@@ -13,10 +13,7 @@ import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { CheckCircle2, CreditCard, ShieldCheck } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView,
-  StyleSheet, Text, TextInput, View,
-} from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { PaymentUnavailable } from "@/components/PaymentUnavailable";
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -29,7 +26,8 @@ import {
 import { supabase } from "@/lib/supabase";
 import { useAccount } from "@/providers/AccountProvider";
 import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
-import { colors, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { radius, shadow, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 const OTP_LENGTH = 6;
 const RESEND_SECONDS = 60;
@@ -71,6 +69,8 @@ const DESTINATIONS: Record<string, { label: string; path: string }> = {
  * paid — which the server writes only after the provider confirms the receipt.
  */
 export default function OrderCheckoutScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const policy = usePaymentPolicy();
   const { refresh: refreshWallet } = useAccount();
@@ -523,7 +523,7 @@ export default function OrderCheckoutScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
   centered: { alignItems: "center", justifyContent: "center" },
   content: { padding: spacing.xl, gap: spacing.lg, paddingBottom: spacing.xxxl },
@@ -596,4 +596,4 @@ const styles = StyleSheet.create({
   orderNumber: { ...typography.caption, color: colors.inkMuted },
   successAmount: { ...typography.display, color: colors.primaryDeep },
   cardHint: { ...typography.caption, color: colors.inkSoft },
-});
+}));

@@ -12,7 +12,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AuthProvider } from "@/providers/AuthProvider";
-import { colors } from "@/theme/tokens";
+import { ThemeProvider, useTheme } from "@/theme/ThemeProvider";
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -41,16 +41,35 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <AuthProvider>
-          <StatusBar style="dark" />
-          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.canvas } }}>
-            <Stack.Screen name="index" />
-            <Stack.Screen name="(auth)" />
-            <Stack.Screen name="(app)" />
-            <Stack.Screen name="auth/callback" />
-          </Stack>
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <ThemedShell />
+          </AuthProvider>
+        </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
+  );
+}
+
+/**
+ * The navigator, inside the theme rather than around it.
+ *
+ * The status bar and the colour behind every screen are both decided by the
+ * palette, and a component cannot read a provider it is a parent of — so the
+ * shell is its own component under `ThemeProvider`. Without this, the gap that
+ * shows during a push transition stays white all night.
+ */
+function ThemedShell() {
+  const { colors, scheme } = useTheme();
+  return (
+    <>
+      <StatusBar style={scheme === "dark" ? "light" : "dark"} />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.canvas } }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="(app)" />
+        <Stack.Screen name="auth/callback" />
+      </Stack>
+    </>
   );
 }

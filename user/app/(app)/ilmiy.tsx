@@ -2,10 +2,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { BookOpen, Check, Download, Pause, Play, Sparkles } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
-import {
-  ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView,
-  StyleSheet, Text, TextInput, View,
-} from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { ScreenHeader } from "@/components/ScreenHeader";
 import {
@@ -13,7 +10,8 @@ import {
   type Section, type Work, type WorkKind,
 } from "@/lib/academic";
 import { asErrorMessage } from "@/lib/format";
-import { colors, icon, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { icon, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /**
  * Writing an academic work, a section at a time.
@@ -25,6 +23,8 @@ import { colors, icon, radius, shadow, spacing, typography } from "@/theme/token
  * failure with an apology.
  */
 export default function IlmiyScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const [works, setWorks] = useState<Work[]>([]);
   const [work, setWork] = useState<Work | null>(null);
   const [sections, setSections] = useState<Section[]>([]);
@@ -272,7 +272,7 @@ export default function IlmiyScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
   centered: { flex: 1, alignItems: "center", justifyContent: "center" },
   content: { padding: spacing.xl, paddingBottom: spacing.xxxl, gap: spacing.sm },
@@ -311,4 +311,4 @@ const styles = StyleSheet.create({
   workMeta: { ...typography.caption, color: colors.inkSoft },
   disabled: { opacity: 0.55 },
   error: { ...typography.caption, color: colors.danger },
-});
+}));

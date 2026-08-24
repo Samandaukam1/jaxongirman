@@ -1,7 +1,7 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { BookOpenText, Download, Library } from "lucide-react-native";
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { EmptyState, ErrorState, SkeletonCard } from "@/components/StateBlocks";
@@ -10,7 +10,8 @@ import { asErrorMessage, asFunctionErrorMessage } from "@/lib/format";
 import { downloadPurchasedFile, shareFile } from "@/lib/marketplace";
 import { formatSom } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
-import { colors, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { radius, shadow, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type Purchase = {
   id: string;
@@ -29,6 +30,8 @@ type Purchase = {
  * action rather than a URL.
  */
 export default function LibraryScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [loading, setLoading] = useState(true);
@@ -134,7 +137,7 @@ export default function LibraryScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
   content: { paddingHorizontal: spacing.xl, paddingBottom: 60, gap: spacing.lg },
   list: { gap: spacing.md },
@@ -145,4 +148,4 @@ const styles = StyleSheet.create({
   actionText: { ...typography.caption, color: colors.primary, fontFamily: "Manrope_600SemiBold" },
   cardTitle: { ...typography.bodyMedium, color: colors.ink, fontSize: 15 },
   cardMeta: { ...typography.caption, color: colors.inkSoft },
-});
+}));

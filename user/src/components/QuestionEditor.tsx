@@ -3,9 +3,10 @@ import {
   type SurveyQuestionType,
 } from "@jaxongirman/types";
 import { ChevronDown, ChevronUp, Copy, GripVertical, Plus, Trash2, X } from "lucide-react-native";
-import { Pressable, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { Pressable, Switch, Text, TextInput, View } from "react-native";
 
-import { colors, radius, spacing, typography } from "@/theme/tokens";
+import { radius, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 export type DraftOption = { key: string; label: string };
 
@@ -90,6 +91,8 @@ type Props = {
  * operation — the list owner never learns which one moved a row.
  */
 export function QuestionEditor({ question, index, total, onChange, onRemove, onDuplicate, onMove }: Props) {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const hasOptions = questionHasOptions(question.type);
   const canBeLatin = supportsLatinOnly(question.type);
 
@@ -261,7 +264,7 @@ export function QuestionEditor({ question, index, total, onChange, onRemove, onD
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   card: { padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, gap: spacing.md },
   head: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   position: { ...typography.caption, color: colors.inkMuted, flex: 1 },
@@ -299,4 +302,4 @@ const styles = StyleSheet.create({
   toggleCopy: { flex: 1, gap: 1 },
   toggleLabel: { ...typography.caption, color: colors.ink, fontFamily: "Manrope_600SemiBold" },
   toggleHint: { ...typography.caption, fontSize: 11, color: colors.inkSoft },
-});
+}));

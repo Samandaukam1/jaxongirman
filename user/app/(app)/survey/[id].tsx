@@ -5,7 +5,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Check, CircleCheck, Clock, ImagePlus, Lock, ShieldCheck, X } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
@@ -16,7 +16,8 @@ import { asErrorMessage } from "@/lib/format";
 import { formatBytes } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
-import { colors, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { radius, shadow, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type OpenQuestion = {
   id: string;
@@ -75,6 +76,8 @@ function extensionFor(mimeType: string): string {
  * you; that is the privacy rule, implemented rather than promised.
  */
 export default function SurveyRespondScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const { user } = useAuth();
   const params = useLocalSearchParams<{ id?: string }>();
@@ -475,7 +478,7 @@ export default function SurveyRespondScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.xl, gap: spacing.sm },
   content: { paddingHorizontal: spacing.xl, paddingBottom: 60, gap: spacing.lg, paddingTop: spacing.lg },
@@ -495,7 +498,7 @@ const styles = StyleSheet.create({
   privacyTitle: { ...typography.caption, color: colors.primaryDeep, fontFamily: "Manrope_600SemiBold" },
   privacyBody: { ...typography.caption, color: colors.inkMuted, lineHeight: 18 },
 
-  closedCard: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.dangerSoft, borderWidth: 1, borderColor: "#F3D4DB" },
+  closedCard: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.dangerSoft, borderWidth: 1, borderColor: colors.dangerBorder },
   closedText: { ...typography.caption, color: colors.danger, flex: 1, lineHeight: 18 },
 
   questions: { gap: spacing.md },
@@ -542,4 +545,4 @@ const styles = StyleSheet.create({
   doneCopy: { ...typography.body, color: colors.inkMuted, textAlign: "center" },
   doneMeta: { ...typography.caption, color: colors.inkSoft, textAlign: "center", marginTop: spacing.sm, lineHeight: 18 },
   doneAction: { alignSelf: "stretch", marginTop: spacing.xxl },
-});
+}));

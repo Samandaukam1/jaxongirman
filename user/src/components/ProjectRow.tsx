@@ -1,8 +1,11 @@
 import { FileText, GraduationCap, Image as ImageIcon, Presentation } from "lucide-react-native";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
+import Animated from "react-native-reanimated";
 
+import { usePressScale } from "@/lib/motion";
 import { KIND_LABEL, statusLabel, type Project, type ProjectKind } from "@/lib/projects";
-import { colors, radius, spacing, typography } from "@/theme/tokens";
+import { radius, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /**
  * One thing this account has made, whatever kind of thing it is.
@@ -34,17 +37,23 @@ function ago(iso: string): string {
   return days < 30 ? `${days} kun oldin` : new Date(iso).toLocaleDateString("uz");
 }
 
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
 export function ProjectRow({ project, onPress }: { project: Project; onPress: () => void }) {
+  const { colors } = useTheme();
+  const styles = useStyles();
+  const press = usePressScale();
   const Glyph = GLYPH[project.kind];
   const status = statusLabel(project.status);
   const loud = project.status ? LOUD.has(project.status) : false;
 
   return (
-    <Pressable
+    <AnimatedPressable
       accessibilityRole="button"
       accessibilityLabel={`${KIND_LABEL[project.kind]}: ${project.title}`}
       onPress={onPress}
-      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+      {...press.handlers}
+      style={({ pressed }: PressableStateCallbackType) => [styles.row, pressed && styles.pressed, press.style]}
     >
       <View style={styles.glyph}><Glyph color={colors.primary} size={20} strokeWidth={1.9} /></View>
       <View style={styles.copy}>
@@ -56,11 +65,11 @@ export function ProjectRow({ project, onPress }: { project: Project; onPress: ()
       {status && loud ? (
         <View style={styles.badge}><Text style={styles.badgeText}>{status}</Text></View>
       ) : null}
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -82,4 +91,4 @@ const styles = StyleSheet.create({
   meta: { ...typography.caption, color: colors.inkSoft },
   badge: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: radius.sm, backgroundColor: colors.primarySoft },
   badgeText: { ...typography.caption, fontWeight: "700", color: colors.primaryDeep },
-});
+}));

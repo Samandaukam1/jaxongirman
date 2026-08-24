@@ -2,7 +2,7 @@ import * as DocumentPicker from "expo-document-picker";
 import { useRouter } from "expo-router";
 import { Coins, FileUp, Info } from "lucide-react-native";
 import { useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
@@ -10,7 +10,8 @@ import { InlineError } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
-import { colors, radius, spacing, typography } from "@/theme/tokens";
+import { radius, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 const PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
 /** The bucket's own ceiling. Checking here saves a 50 MB round trip to a refusal. */
@@ -29,6 +30,8 @@ type Quote = { cost: number; balance: number; affordable: boolean };
  * instead of showing anything of its own.
  */
 export default function ImportScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const { user } = useAuth();
   const [file, setFile] = useState<Picked | null>(null);
@@ -213,7 +216,7 @@ export default function ImportScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
   content: { paddingHorizontal: spacing.xl, paddingBottom: 48, gap: spacing.lg },
   lead: { ...typography.body, color: colors.inkMuted, lineHeight: 22 },
@@ -249,4 +252,4 @@ const styles = StyleSheet.create({
   topUpText: { ...typography.caption, color: colors.primary, fontFamily: "Manrope_600SemiBold" },
   busy: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, paddingVertical: spacing.md },
   busyText: { ...typography.body, color: colors.inkMuted },
-});
+}));

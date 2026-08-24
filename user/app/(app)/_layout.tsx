@@ -3,10 +3,11 @@ import { Redirect, Stack } from "expo-router";
 import { AccountProvider } from "@/providers/AccountProvider";
 import { PaymentPolicyProvider } from "@/providers/PaymentPolicyProvider";
 import { useAuth } from "@/providers/AuthProvider";
-import { colors } from "@/theme/tokens";
+import { useTheme } from "@/theme/ThemeProvider";
 
 export default function AppLayout() {
   const { session, loading } = useAuth();
+  const { colors } = useTheme();
   if (!loading && !session) return <Redirect href="/(auth)/sign-in" />;
   return (
     // Mounted inside the authenticated area so the wallet, profile and inbox

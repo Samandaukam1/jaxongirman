@@ -2,7 +2,7 @@ import { MARKETPLACE_STATUS_LABELS, type MarketplaceProductStatus } from "@jaxon
 import { useFocusEffect, useRouter } from "expo-router";
 import { Package, Plus, Wallet } from "lucide-react-native";
 import { useCallback, useState } from "react";
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { PaymentUnavailable } from "@/components/PaymentUnavailable";
@@ -13,7 +13,8 @@ import { asErrorMessage } from "@/lib/format";
 import { formatSom } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
 import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
-import { colors, icon, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { icon, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type Product = {
   id: string; title: string; status: MarketplaceProductStatus; base_price: number;
@@ -25,6 +26,8 @@ type Summary = { sales_count: number; net_total: number; pending_total: number; 
 
 /** The seller's shelf: what is listed, what state each listing is in, what it earned. */
 export default function SellerDashboardScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const policy = usePaymentPolicy();
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
@@ -149,7 +152,7 @@ export default function SellerDashboardScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
   content: { paddingHorizontal: spacing.xl, paddingBottom: 60, gap: spacing.lg },
   headerAction: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", backgroundColor: colors.primarySoft },
@@ -169,9 +172,9 @@ const styles = StyleSheet.create({
   badge: { paddingHorizontal: spacing.md, paddingVertical: 4, borderRadius: radius.pill },
   badgeText: { ...typography.caption, fontSize: 10, color: colors.inkMuted },
   badge_draft: { backgroundColor: colors.surfaceMuted },
-  badge_pending_review: { backgroundColor: "#FDF4E5" },
+  badge_pending_review: { backgroundColor: colors.warningSoft },
   badge_approved: { backgroundColor: colors.successSoft },
   badge_rejected: { backgroundColor: colors.dangerSoft },
   badge_hidden: { backgroundColor: colors.surfaceMuted },
   badge_archived: { backgroundColor: colors.surfaceMuted },
-});
+}));

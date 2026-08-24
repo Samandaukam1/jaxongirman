@@ -12,7 +12,8 @@ import {
   type PresentationExportFormat,
 } from "@/lib/presentationExport";
 import { asErrorMessage } from "@/lib/format";
-import { colors, icon, radius, shadowLifted, spacing, typography } from "@/theme/tokens";
+import { icon, radius, shadowLifted, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type Phase = "idle" | "generating" | "downloading" | "ready" | "failed";
 
@@ -24,10 +25,13 @@ type Props = {
 };
 
 function ProgressBar({ value }: { value: number }) {
+  const styles = useStyles();
   return <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${Math.round(Math.max(0, Math.min(1, value)) * 100)}%` }]} /></View>;
 }
 
 export function ExportSheet({ visible, presentationId, presentationTitle, onClose }: Props) {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const [format, setFormat] = useState<PresentationExportFormat>("pdf");
   const [phase, setPhase] = useState<Phase>("idle");
   const [generationProgress, setGenerationProgress] = useState(0);
@@ -151,7 +155,7 @@ export function ExportSheet({ visible, presentationId, presentationTitle, onClos
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(21,14,36,.36)" },
   sheet: { backgroundColor: colors.canvas, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, paddingHorizontal: spacing.xl, paddingTop: spacing.sm, paddingBottom: Platform.OS === "ios" ? 36 : spacing.xl, ...shadowLifted },
   handle: { width: 44, height: 5, borderRadius: 3, backgroundColor: colors.borderStrong, alignSelf: "center", marginBottom: spacing.lg },
@@ -186,5 +190,5 @@ const styles = StyleSheet.create({
   actionButton: { minHeight: 48, borderRadius: radius.md, borderWidth: 1, borderColor: colors.borderStrong, backgroundColor: colors.surface, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, paddingHorizontal: spacing.md },
   actionText: { ...typography.bodyMedium, color: colors.primary, textAlign: "center" },
   expiry: { ...typography.caption, color: colors.inkSoft, marginTop: spacing.lg },
-});
+}));
 

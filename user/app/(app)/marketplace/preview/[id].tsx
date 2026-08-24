@@ -2,15 +2,13 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import * as ScreenCapture from "expo-screen-capture";
 import { ChevronLeft, ShieldAlert } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
-import {
-  ActivityIndicator, Dimensions, FlatList, Image, Pressable,
-  StyleSheet, Text, View,
-} from "react-native";
+import { ActivityIndicator, Dimensions, FlatList, Image, Pressable, Text, View } from "react-native";
 
 import { signPaths } from "@/lib/marketplace";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
-import { colors, icon, radius, spacing, typography } from "@/theme/tokens";
+import { icon, radius, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -30,6 +28,8 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
  * actually achievable.
  */
 export default function ProductPreviewScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const { user } = useAuth();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -134,7 +134,7 @@ export default function ProductPreviewScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: "#0B0814" },
   header: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingTop: 52, paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
   back: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.1)" },
@@ -151,4 +151,4 @@ const styles = StyleSheet.create({
 
   footer: { flexDirection: "row", alignItems: "center", gap: spacing.sm, padding: spacing.lg, paddingBottom: 34 },
   footerText: { ...typography.caption, color: "rgba(255,255,255,0.6)", flex: 1, lineHeight: 17 },
-});
+}));

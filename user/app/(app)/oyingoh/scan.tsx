@@ -10,7 +10,8 @@ import { ScreenHeader } from "@/components/ScreenHeader";
 import { InlineError } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
 import { claimPairing } from "@/lib/games";
-import { colors, icon, radius, spacing, typography } from "@/theme/tokens";
+import { icon, radius, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /**
  * `jaxongirman://game-pair/<token>`, or a bare token.
@@ -35,6 +36,8 @@ function extractToken(raw: string): string | null {
  * run afterwards.
  */
 export default function HostScanScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const params = useLocalSearchParams<{ token?: string }>();
   const [permission, requestPermission] = useCameraPermissions();
@@ -117,7 +120,7 @@ export default function HostScanScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   safe: { flex: 1, backgroundColor: colors.canvas },
   content: { padding: spacing.xl, gap: spacing.lg, paddingBottom: spacing.xxxl },
   cameraFrame: { height: 320, borderRadius: radius.xl, overflow: "hidden", backgroundColor: colors.primaryDeep },
@@ -131,4 +134,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceMuted, borderRadius: radius.lg, padding: spacing.lg,
   },
   linkText: { ...typography.body, color: colors.primary, textAlign: "center" },
-});
+}));

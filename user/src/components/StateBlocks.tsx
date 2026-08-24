@@ -1,9 +1,10 @@
 import type { LucideIcon } from "lucide-react-native";
 import { useEffect, useState, type ReactNode } from "react";
-import { Animated, Easing, Pressable, StyleSheet, Text, View, type DimensionValue, type ViewStyle } from "react-native";
+import { Animated, Easing, Pressable, Text, View, type DimensionValue, type ViewStyle } from "react-native";
 
 import { IconChip } from "@/components/IconChip";
-import { colors, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { radius, shadow, spacing, typography } from "@/theme/tokens";
+import { makeStyles } from "@/theme/ThemeProvider";
 
 /**
  * The four things every data-bearing section on this app can be: loading, empty,
@@ -13,6 +14,7 @@ import { colors, radius, shadow, spacing, typography } from "@/theme/tokens";
 
 /** A quietly pulsing placeholder block. */
 export function Skeleton({ height = 16, width, radius: corner = 10, style }: { height?: number; width?: DimensionValue; radius?: number; style?: ViewStyle }) {
+  const styles = useStyles();
   // Held in state rather than a ref: a ref's `.current` may not be read during
   // render, and this value is passed straight into the style below.
   const [pulse] = useState(() => new Animated.Value(0.5));
@@ -42,6 +44,7 @@ export function Skeleton({ height = 16, width, radius: corner = 10, style }: { h
 
 /** A card-shaped skeleton, for lists that load into cards. */
 export function SkeletonCard({ lines = 2 }: { lines?: number }) {
+  const styles = useStyles();
   return (
     <View style={styles.skeletonCard}>
       <Skeleton height={18} width="62%" />
@@ -53,6 +56,7 @@ export function SkeletonCard({ lines = 2 }: { lines?: number }) {
 }
 
 export function EmptyState({ icon, title, message, action }: { icon: LucideIcon; title: string; message: string; action?: ReactNode }) {
+  const styles = useStyles();
   return (
     <View style={styles.card}>
       <IconChip icon={icon} variant="soft" size="lg" />
@@ -64,6 +68,7 @@ export function EmptyState({ icon, title, message, action }: { icon: LucideIcon;
 }
 
 export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
+  const styles = useStyles();
   return (
     <View style={[styles.card, styles.errorCard]}>
       <Text style={styles.errorTitle}>Ma’lumot yuklanmadi</Text>
@@ -79,6 +84,7 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry?: ()
 
 /** A one-line inline error, for forms where a whole card would be too loud. */
 export function InlineError({ message }: { message: string }) {
+  const styles = useStyles();
   return (
     <View style={styles.inline}>
       <Text style={styles.inlineText}>{message}</Text>
@@ -86,7 +92,7 @@ export function InlineError({ message }: { message: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   skeleton: { backgroundColor: colors.surfaceMuted },
   fullWidth: { alignSelf: "stretch" },
   skeletonCard: {
@@ -108,12 +114,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     ...shadow,
   },
-  errorCard: { borderColor: "#F3D4DB", backgroundColor: colors.dangerSoft },
+  errorCard: { borderColor: colors.dangerBorder, backgroundColor: colors.dangerSoft },
   title: { ...typography.heading, color: colors.ink, textAlign: "center", marginTop: spacing.sm },
   errorTitle: { ...typography.heading, color: colors.danger, textAlign: "center" },
   copy: { ...typography.body, color: colors.inkMuted, textAlign: "center", maxWidth: 300 },
   retry: { marginTop: spacing.md, paddingHorizontal: spacing.xl, paddingVertical: spacing.md, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderStrong },
   retryText: { ...typography.bodyMedium, color: colors.primary },
-  inline: { backgroundColor: colors.dangerSoft, borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderWidth: 1, borderColor: "#F3D4DB" },
+  inline: { backgroundColor: colors.dangerSoft, borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderWidth: 1, borderColor: colors.dangerBorder },
   inlineText: { ...typography.caption, color: colors.danger, lineHeight: 18 },
-});
+}));

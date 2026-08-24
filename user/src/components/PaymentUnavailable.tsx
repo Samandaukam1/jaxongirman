@@ -1,9 +1,10 @@
 import { Lock } from "lucide-react-native";
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
-import { colors, icon, radius, spacing, typography } from "@/theme/tokens";
+import { icon, radius, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /**
  * What a screen shows instead of a purchase, on a platform that may not offer
@@ -25,6 +26,8 @@ export function PaymentUnavailable({ title, message, action, onLeave }: {
   /** When set, the screen draws its own header with a close affordance. */
   onLeave?: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useStyles();
   return (
     <View style={styles.screen}>
       {onLeave ? <ScreenHeader title="Jaxongirman" variant="close" onLeave={onLeave} /> : null}
@@ -40,7 +43,7 @@ export function PaymentUnavailable({ title, message, action, onLeave }: {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
   body: { flex: 1, justifyContent: "center", paddingHorizontal: spacing.xl, gap: spacing.lg },
   badge: {
@@ -49,4 +52,4 @@ const styles = StyleSheet.create({
   },
   title: { ...typography.heading, color: colors.ink, textAlign: "center" },
   message: { ...typography.body, color: colors.inkMuted, textAlign: "center", lineHeight: 22 },
-});
+}));

@@ -12,10 +12,7 @@ import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { CheckCircle2, CreditCard, Info, Plus, ShieldCheck } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView,
-  StyleSheet, Text, TextInput, View,
-} from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
@@ -24,7 +21,8 @@ import { asFunctionErrorMessage } from "@/lib/format";
 import { formatSom } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
 import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
-import { colors, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { radius, shadow, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /** The columns a buyer is granted; the provider token and order id are not. */
 type Transaction = Omit<Tables<"payment_transactions">, "provider_card_token" | "order_id">;
@@ -48,6 +46,8 @@ const RESEND_SECONDS = 60;
  * is a fresh card, a fresh code and a fresh receipt.
  */
 export default function CheckoutScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const policy = usePaymentPolicy();
   const router = useRouter();
   const params = useLocalSearchParams<{ transactionId?: string }>();
@@ -495,7 +495,7 @@ export default function CheckoutScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   blockedWrap: { flex: 1, justifyContent: "center", paddingHorizontal: spacing.xl, gap: spacing.lg },
   blockedTitle: { ...typography.heading, color: colors.ink, textAlign: "center" },
   screen: { flex: 1, backgroundColor: colors.canvas },
@@ -513,8 +513,8 @@ const styles = StyleSheet.create({
   snapshotNote: { ...typography.caption, fontSize: 11, color: colors.inkSoft, marginTop: 4 },
 
   notice: { flexDirection: "row", gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg, borderWidth: 1 },
-  noticeReady: { backgroundColor: colors.successSoft, borderColor: "#BEE7DA" },
-  noticePending: { backgroundColor: "#FDF4E5", borderColor: "#F0DFC0" },
+  noticeReady: { backgroundColor: colors.successSoft, borderColor: colors.successBorder },
+  noticePending: { backgroundColor: colors.warningSoft, borderColor: colors.warningBorder },
   noticeCopy: { flex: 1, gap: 3 },
   noticeTitle: { ...typography.bodyMedium, color: colors.ink, fontSize: 14 },
   noticeBody: { ...typography.caption, color: colors.inkMuted, lineHeight: 18 },
@@ -553,7 +553,7 @@ const styles = StyleSheet.create({
     textAlign: "center", minHeight: 68,
     backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md,
   },
-  sandboxHint: { padding: spacing.md, borderRadius: radius.md, backgroundColor: "#FDF4E5" },
+  sandboxHint: { padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.warningSoft },
   sandboxText: { ...typography.caption, color: colors.warning, textAlign: "center" },
   resend: { alignItems: "center", paddingVertical: spacing.md },
   resendText: { ...typography.caption, color: colors.primary, fontFamily: "Manrope_600SemiBold" },
@@ -563,4 +563,4 @@ const styles = StyleSheet.create({
   privacyCopy: { flex: 1, gap: 4 },
   privacyText: { ...typography.caption, color: colors.inkMuted, lineHeight: 18 },
   paymeBrand: { ...typography.caption, color: colors.primaryDeep, fontFamily: "Manrope_700Bold" },
-});
+}));

@@ -23,7 +23,8 @@ import {
 import { supabase } from "@/lib/supabase";
 import { bag, isDarkColor, slideSwatches, str } from "@/lib/textStyle";
 import { useAuth } from "@/providers/AuthProvider";
-import { colors, icon, radius, shadow, shadowLifted, spacing, typography } from "@/theme/tokens";
+import { icon, radius, shadow, shadowLifted, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type Presentation = Tables<"presentations">;
 type Slide = Tables<"slides">;
@@ -70,6 +71,8 @@ function operationPatch(patch: Patch): Record<string, Json> {
 }
 
 export default function PresentationEditorScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const params = useLocalSearchParams<{ id: string }>();
   const presentationId = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
@@ -852,7 +855,7 @@ export default function PresentationEditorScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
   loading: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.canvas },
   header: { paddingTop: 55, paddingHorizontal: spacing.lg, paddingBottom: spacing.md, flexDirection: "row", alignItems: "center", gap: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.canvas },
@@ -884,4 +887,4 @@ const styles = StyleSheet.create({
   aiInput: { ...typography.body, color: colors.ink, flex: 1, minHeight: 42 },
   sendButton: { width: 42, height: 42, borderRadius: 13, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   disabled: { opacity: 0.35 },
-});
+}));

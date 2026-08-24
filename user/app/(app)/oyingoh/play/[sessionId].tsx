@@ -2,7 +2,7 @@ import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Check, Clock, Trophy, Users, X } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Image, ScrollView, Text, View } from "react-native";
 
 import { GameAnswerInput, GameLeaderboardList, GameRevealPanel, GameStatsSummary } from "@/components/GameAnswerInput";
 import { GameAvatar } from "@/components/GameAvatar";
@@ -11,7 +11,8 @@ import { ErrorState } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
 import { playerState, submitAnswer, subscribeToSession, type PlayerState } from "@/lib/games";
 import { supabase } from "@/lib/supabase";
-import { colors, icon, radius, spacing, typography } from "@/theme/tokens";
+import { icon, radius, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /** A local clock only to draw the ring; the server owns the real deadline. */
 function useCountdown(deadline: string | null): number {
@@ -39,6 +40,8 @@ function publicUrl(path: string | null | undefined): string | undefined {
  * carry a hundred small payloads instead of one broadcast that leaks answers.
  */
 export default function PlayGameScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
   const [state, setState] = useState<PlayerState | null>(null);
@@ -283,6 +286,7 @@ export default function PlayGameScreen() {
 }
 
 function Podium({ players }: { players: { id: string; nickname: string; avatar_id: number; total_score: number; rank: number }[] }) {
+  const styles = useStyles();
   const top = players.filter((player) => player.rank <= 3);
   const order = [top.find((p) => p.rank === 2), top.find((p) => p.rank === 1), top.find((p) => p.rank === 3)];
   const heights = [96, 130, 74];
@@ -303,7 +307,7 @@ function Podium({ players }: { players: { id: string; nickname: string; avatar_i
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   safe: { flex: 1, backgroundColor: colors.canvas, paddingTop: 54 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.md, padding: spacing.xl },
   content: { padding: spacing.xl, gap: spacing.lg, paddingBottom: spacing.xxxl },
@@ -364,4 +368,4 @@ const styles = StyleSheet.create({
   podiumMedal: { fontSize: 26 },
   myResult: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm },
   myResultText: { ...typography.bodyMedium, color: colors.primaryDeep },
-});
+}));

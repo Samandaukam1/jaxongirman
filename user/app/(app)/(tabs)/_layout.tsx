@@ -1,7 +1,7 @@
 import { Tabs } from "expo-router";
 
 import { BottomNav } from "@/components/BottomNav";
-import { colors } from "@/theme/tokens";
+import { useTheme } from "@/theme/ThemeProvider";
 
 /**
  * The five places a person moves between. A tab navigator rather than stack
@@ -11,12 +11,18 @@ import { colors } from "@/theme/tokens";
  * Order matters: it is the order the pill draws, left to right.
  */
 export default function TabsLayout() {
+  const { colors } = useTheme();
   return (
     <Tabs
       tabBar={(props) => <BottomNav {...props} />}
       screenOptions={{
         headerShown: false,
-        animation: "none",
+        // A short cross-fade rather than an instant swap. Nothing slides —
+        // sliding implies the tabs are laid out side by side and invites a
+        // swipe that does not exist — but a hard cut reads as a dropped frame,
+        // which is exactly what the app was being accused of.
+        animation: "fade",
+        transitionSpec: { animation: "timing", config: { duration: 160 } },
         sceneStyle: { backgroundColor: colors.canvas },
       }}
     >

@@ -8,7 +8,8 @@ import { PanResponder, Pressable, StyleSheet, View } from "react-native";
 
 import { MODEL_HEIGHT, MODEL_WIDTH } from "@/components/SlideCanvas";
 import { bag, scaleTextStyle, type StyleBag } from "@/lib/textStyle";
-import { colors, icon, radius, shadowLifted } from "@/theme/tokens";
+import { icon, radius, shadowLifted } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type Element = Tables<"slide_elements">;
 
@@ -101,6 +102,8 @@ export function SelectionOverlay({
   onDuplicate,
   onDelete,
 }: Props) {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const isText = element.type === "text";
   const radians = (element.rotation * Math.PI) / 180;
   const cos = Math.abs(Math.cos(radians));
@@ -326,7 +329,7 @@ export function SelectionOverlay({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   box: { position: "absolute" },
   frame: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, borderWidth: 1.5, borderColor: colors.primaryBright },
   handle: { position: "absolute", width: HANDLE, height: HANDLE, borderRadius: HANDLE / 2, backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.primaryBright, ...shadowLifted },
@@ -335,4 +338,4 @@ const styles = StyleSheet.create({
   pill: { position: "absolute", width: PILL_WIDTH, height: PILL_HEIGHT, borderRadius: radius.lg, backgroundColor: colors.primaryDeep, flexDirection: "row", alignItems: "center", justifyContent: "center", ...shadowLifted },
   pillButton: { width: 48, height: PILL_HEIGHT, alignItems: "center", justifyContent: "center" },
   pillDivider: { width: 1, height: 22, backgroundColor: "rgba(255,255,255,.22)" },
-});
+}));

@@ -16,7 +16,8 @@ import { asErrorMessage } from "@/lib/format";
 import { isTransport, TRANSPORT_MESSAGE } from "@/lib/retry";
 import { joinGame, joinGameByCode } from "@/lib/games";
 import { useAccount } from "@/providers/AccountProvider";
-import { colors, icon, radius, spacing, typography } from "@/theme/tokens";
+import { icon, radius, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /** `https://…/join/<token>`, or a bare token pasted by hand. */
 function extractToken(raw: string): string | null {
@@ -37,6 +38,8 @@ type Step = "scan" | "identity";
  * to pick a character.
  */
 export default function JoinGameScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const params = useLocalSearchParams<{ token?: string; code?: string }>();
   const { profile } = useAccount();
@@ -199,7 +202,7 @@ export default function JoinGameScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   safe: { flex: 1, backgroundColor: colors.canvas },
   content: { padding: spacing.xl, gap: spacing.lg, paddingBottom: spacing.xxxl },
   cameraFrame: {
@@ -226,4 +229,4 @@ const styles = StyleSheet.create({
     ...typography.body, color: colors.ink, backgroundColor: colors.surfaceMuted,
     borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
   },
-});
+}));

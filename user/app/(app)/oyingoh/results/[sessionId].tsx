@@ -1,14 +1,15 @@
 import { GAME_TYPE_LABELS, type GameQuestionType } from "@jaxongirman/types";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, ScrollView, Text, View } from "react-native";
 
 import { GameLeaderboardList } from "@/components/GameAnswerInput";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { ErrorState } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
-import { colors, radius, spacing, typography } from "@/theme/tokens";
+import { radius, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type Player = { id: string; nickname: string; avatar_id: number; total_score: number; correct_count: number; rank: number | null };
 type QuestionRow = { id: string; position: number; type: string; prompt: string };
@@ -30,6 +31,8 @@ type QuestionAnalytics = {
  * content — which question was too hard, which was free.
  */
 export default function GameResultsScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
   const [players, setPlayers] = useState<Player[]>([]);
@@ -172,6 +175,7 @@ export default function GameResultsScreen() {
 }
 
 function Summary({ value, label }: { value: string; label: string }) {
+  const styles = useStyles();
   return (
     <View style={styles.summaryCard}>
       <Text style={styles.summaryValue}>{value}</Text>
@@ -180,7 +184,7 @@ function Summary({ value, label }: { value: string; label: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   safe: { flex: 1, backgroundColor: colors.canvas },
   center: { alignItems: "center", justifyContent: "center" },
   content: { padding: spacing.xl, gap: spacing.md, paddingBottom: spacing.xxxl },
@@ -208,4 +212,4 @@ const styles = StyleSheet.create({
   barFill: { backgroundColor: colors.success },
   barRest: { backgroundColor: colors.danger },
   questionMeta: { ...typography.caption, color: colors.inkMuted },
-});
+}));

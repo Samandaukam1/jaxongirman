@@ -5,7 +5,7 @@ import {
   Underline, WandSparkles, type LucideIcon,
 } from "lucide-react-native";
 import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { ChartDataEditor, TableDataEditor } from "@/components/DataEditor";
 import {
@@ -14,7 +14,8 @@ import {
   nextAlignment, nextTextCase, num, str, textCaseOf, toggleBullets, withFont, withFontSize, withLineHeightRatio,
   type Alignment, type StyleBag,
 } from "@/lib/textStyle";
-import { colors, icon, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { icon, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type Element = Tables<"slide_elements">;
 
@@ -59,6 +60,8 @@ function clamp(value: number, min: number, max: number) {
  * ones that need more than a tap.
  */
 export function ElementToolbar({ element, swatches, panel, onPanel, onStyle, onContent, onElement, onReplaceImage, zRange }: Props) {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const style = bag(element.style);
   const content = bag(element.content);
   const isText = element.type === "text";
@@ -292,6 +295,8 @@ export function ElementToolbar({ element, swatches, panel, onPanel, onStyle, onC
 }
 
 function Tool({ icon: Icon, label, active = false, disabled = false, onPress }: { icon: LucideIcon; label: string; active?: boolean; disabled?: boolean; onPress: () => void }) {
+  const { colors } = useTheme();
+  const styles = useStyles();
   return (
     <Pressable accessibilityLabel={label} accessibilityState={{ selected: active, disabled }} disabled={disabled} onPress={onPress} style={[styles.tool, active && styles.toolActive, disabled && styles.toolDisabled]}>
       <Icon color={active ? colors.primary : colors.ink} size={icon.md} strokeWidth={active ? icon.strokeBold : icon.stroke} />
@@ -300,6 +305,8 @@ function Tool({ icon: Icon, label, active = false, disabled = false, onPress }: 
 }
 
 function Stepper({ onMinus, onPlus }: { onMinus: () => void; onPlus: () => void }) {
+  const { colors } = useTheme();
+  const styles = useStyles();
   return (
     <View style={styles.stepper}>
       <Pressable accessibilityLabel="Kamaytirish" hitSlop={6} onPress={onMinus} style={styles.sizeButton}>
@@ -313,6 +320,7 @@ function Stepper({ onMinus, onPlus }: { onMinus: () => void; onPlus: () => void 
 }
 
 function PanelRow({ label, value, children }: { label: string; value: string; children: React.ReactNode }) {
+  const styles = useStyles();
   return (
     <View style={styles.panelLine}>
       <Text style={styles.panelLabel}>{label}</Text>
@@ -323,6 +331,8 @@ function PanelRow({ label, value, children }: { label: string; value: string; ch
 }
 
 function LayerButton({ icon: Icon, label, onPress }: { icon: LucideIcon; label: string; onPress: () => void }) {
+  const { colors } = useTheme();
+  const styles = useStyles();
   return (
     <Pressable onPress={onPress} style={styles.chip}>
       <Icon color={colors.primary} size={icon.sm} strokeWidth={icon.stroke} />
@@ -333,6 +343,8 @@ function LayerButton({ icon: Icon, label, onPress }: { icon: LucideIcon; label: 
 
 /** Held locally while typing so every keystroke does not hit the server. */
 function TextPanel({ value, onChange, onDone }: { value: string; onChange: (next: string) => void; onDone: () => void }) {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const [draft, setDraft] = useState(value);
   return (
     <View style={styles.panelColumn}>
@@ -356,7 +368,7 @@ function TextPanel({ value, onChange, onDone }: { value: string; onChange: (next
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   dock: { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, overflow: "hidden", ...shadow },
   bar: { alignItems: "center", gap: spacing.xs, paddingHorizontal: spacing.sm, paddingVertical: spacing.sm },
   tool: { width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center" },
@@ -399,4 +411,4 @@ const styles = StyleSheet.create({
   textEditor: { ...typography.body, color: colors.ink, minHeight: 84, maxHeight: 160, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceMuted, padding: spacing.md },
   doneButton: { alignSelf: "flex-end", flexDirection: "row", alignItems: "center", gap: 6, height: 38, paddingHorizontal: spacing.lg, borderRadius: radius.pill, backgroundColor: colors.primary },
   doneText: { ...typography.caption, color: colors.onPrimary },
-});
+}));

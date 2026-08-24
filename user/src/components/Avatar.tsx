@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Image, StyleSheet, Text, View, type ViewStyle } from "react-native";
+import { Image, Text, View, type ViewStyle } from "react-native";
 
-import { colors, gradients } from "@/theme/tokens";
+import { brandInk, gradients } from "@/theme/tokens";
+import { makeStyles } from "@/theme/ThemeProvider";
 import { LinearGradient } from "expo-linear-gradient";
 
 type Props = {
@@ -22,6 +23,7 @@ type Props = {
  * that.
  */
 export function Avatar({ uri, initials, size = 48, style, ring = false }: Props) {
+  const styles = useStyles();
   const [failed, setFailed] = useState(false);
   const frame = { width: size, height: size, borderRadius: size / 2 };
   const showImage = Boolean(uri) && !failed;
@@ -46,9 +48,9 @@ export function Avatar({ uri, initials, size = 48, style, ring = false }: Props)
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   center: { alignItems: "center", justifyContent: "center" },
   image: { backgroundColor: colors.surfaceMuted },
   ring: { borderWidth: 2, borderColor: colors.primarySoft },
-  initials: { fontFamily: "Manrope_700Bold", color: colors.onPrimary, letterSpacing: 0.4 },
-});
+  initials: { fontFamily: "Manrope_700Bold", color: brandInk.strong, letterSpacing: 0.4 },
+}));

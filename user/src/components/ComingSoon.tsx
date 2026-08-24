@@ -1,8 +1,9 @@
 import type { LucideIcon } from "lucide-react-native";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 
 import { ScreenHeader } from "@/components/ScreenHeader";
-import { colors, radius, spacing, typography } from "@/theme/tokens";
+import { radius, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /**
  * A workflow that is being built, said plainly.
@@ -27,6 +28,8 @@ export function ComingSoon({
   steps: string[];
   Glyph: LucideIcon;
 }) {
+  const { colors } = useTheme();
+  const styles = useStyles();
   return (
     <View style={styles.screen}>
       <ScreenHeader title={title} />
@@ -53,7 +56,7 @@ export function ComingSoon({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
   content: { padding: spacing.xl, gap: spacing.lg, alignItems: "flex-start" },
   badge: { width: 64, height: 64, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: colors.primarySoft },
@@ -65,4 +68,4 @@ const styles = StyleSheet.create({
   stepNumberText: { ...typography.caption, fontWeight: "700", color: colors.onPrimary },
   stepText: { ...typography.body, flex: 1, color: colors.ink },
   note: { ...typography.caption, color: colors.inkSoft },
-});
+}));

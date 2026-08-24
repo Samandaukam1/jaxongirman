@@ -2,7 +2,7 @@ import { DATA_COLLECTION_MODULE } from "@jaxongirman/types";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { BookmarkPlus, Plus, Send } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
 import {
@@ -15,7 +15,8 @@ import { formatDate, useNow } from "@/lib/datetime";
 import { asErrorMessage } from "@/lib/format";
 import { moduleGate, useModuleAccess } from "@/lib/modules";
 import { supabase } from "@/lib/supabase";
-import { colors, icon, radius, spacing, typography } from "@/theme/tokens";
+import { icon, radius, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /** Deadlines people actually choose, plus a typed date for everything else. */
 const DEADLINE_PRESETS = [
@@ -50,6 +51,8 @@ function parseTypedDeadline(value: string): Date | null {
  * build leaves nothing behind either.
  */
 export default function SurveyBuilderScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string; templateId?: string }>();
   const formId = typeof params.id === "string" ? params.id : null;
@@ -456,7 +459,7 @@ export default function SurveyBuilderScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
   centered: { flex: 1, alignItems: "center", justifyContent: "center" },
   content: { paddingHorizontal: spacing.xl, paddingBottom: 60, gap: spacing.lg },
@@ -480,7 +483,7 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.sm },
   sectionTitle: { ...typography.heading, color: colors.ink },
   sectionCount: { ...typography.caption, color: colors.primary, backgroundColor: colors.primarySoft, paddingHorizontal: 9, paddingVertical: 3, borderRadius: radius.pill },
-  lockedNote: { ...typography.caption, color: colors.warning, lineHeight: 18, backgroundColor: "#FDF4E5", padding: spacing.md, borderRadius: radius.md },
+  lockedNote: { ...typography.caption, color: colors.warning, lineHeight: 18, backgroundColor: colors.warningSoft, padding: spacing.md, borderRadius: radius.md },
   lockedCard: { opacity: 0.6 },
 
   questionList: { gap: spacing.md },
@@ -495,4 +498,4 @@ const styles = StyleSheet.create({
   sheet: { alignSelf: "stretch", gap: spacing.md, padding: spacing.xl, borderRadius: radius.lg, backgroundColor: colors.surface },
   sheetTitle: { ...typography.heading, color: colors.ink },
   sheetCopy: { ...typography.caption, color: colors.inkMuted, lineHeight: 18 },
-});
+}));

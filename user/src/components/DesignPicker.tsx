@@ -1,10 +1,11 @@
 import { Check, Sparkles } from "lucide-react-native";
 import { useEffect, useMemo } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, ScrollView, Text, View } from "react-native";
 
 import { SlideCanvas } from "@/components/SlideCanvas";
 import { assetUrl, familiesOf, loadDesignFonts, previewToCanvas, type RemoteDesign } from "@/lib/jslayd-designs";
-import { colors, icon, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { icon, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 const MODEL_WIDTH = 1000;
 const MODEL_HEIGHT = 562.5;
@@ -25,6 +26,7 @@ const CARD_WIDTH = 232;
  * never blank and never lies about which face it is showing.
  */
 function DesignThumbnail({ design }: { design: RemoteDesign }) {
+  const styles = useStyles();
   const { slide, elements } = useMemo(() => previewToCanvas(design.row), [design.row]);
   const scale = CARD_WIDTH / MODEL_WIDTH;
 
@@ -74,6 +76,8 @@ export function DesignPicker({
   selected: string | null;
   onSelect: (slug: string | null) => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useStyles();
   if (designs.length === 0) return null;
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
@@ -113,7 +117,7 @@ export function DesignPicker({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   row: { gap: spacing.md, paddingVertical: spacing.xs, paddingRight: spacing.xl },
   card: { width: CARD_WIDTH + 2, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, overflow: "hidden", ...shadow },
   cardActive: { borderColor: colors.primary, borderWidth: 2 },
@@ -126,4 +130,4 @@ const styles = StyleSheet.create({
   premium: { position: "absolute", top: spacing.sm, left: spacing.sm, flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: colors.primary },
   premiumText: { ...typography.caption, color: colors.onPrimary, fontSize: 10 },
   check: { position: "absolute", top: spacing.sm, right: spacing.sm, width: 22, height: 22, borderRadius: 11, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
-});
+}));

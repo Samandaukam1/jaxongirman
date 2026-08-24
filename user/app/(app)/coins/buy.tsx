@@ -2,7 +2,7 @@ import type { Tables } from "@jaxongirman/types";
 import { useRouter } from "expo-router";
 import { CreditCard, Info, PackageOpen } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 
 import coinIcon from "../../../assets/coin/coin-icon.png";
 import { ScreenHeader } from "@/components/ScreenHeader";
@@ -13,7 +13,8 @@ import { createJcoinOrder } from "@/lib/orders";
 import { supabase } from "@/lib/supabase";
 import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
 import { useAccount } from "@/providers/AccountProvider";
-import { colors, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { radius, shadow, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type Package = Tables<"coin_packages">;
 type PaymentConfig = { provider: string | null; configured: boolean };
@@ -27,6 +28,8 @@ type PaymentConfig = { provider: string | null; configured: boolean };
  * be a lie about money, and the balance it implied would never arrive.
  */
 export default function BuyCoinsScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const { balance } = useAccount();
   const [packages, setPackages] = useState<Package[]>([]);
@@ -177,13 +180,13 @@ export default function BuyCoinsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
   content: { paddingHorizontal: spacing.xl, paddingBottom: 48, gap: spacing.lg },
 
   notice: { flexDirection: "row", gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg, borderWidth: 1 },
-  noticeReady: { backgroundColor: colors.successSoft, borderColor: "#BEE7DA" },
-  noticePending: { backgroundColor: "#FDF4E5", borderColor: "#F0DFC0" },
+  noticeReady: { backgroundColor: colors.successSoft, borderColor: colors.successBorder },
+  noticePending: { backgroundColor: colors.warningSoft, borderColor: colors.warningBorder },
   noticeCopy: { flex: 1, gap: 3 },
   noticeTitle: { ...typography.bodyMedium, color: colors.ink, fontSize: 14 },
   noticeBody: { ...typography.caption, color: colors.inkMuted, lineHeight: 18 },
@@ -209,4 +212,4 @@ const styles = StyleSheet.create({
   priceStateTextReady: { color: colors.success },
 
   footnote: { ...typography.caption, color: colors.inkSoft, textAlign: "center", lineHeight: 18 },
-});
+}));

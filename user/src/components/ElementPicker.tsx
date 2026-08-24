@@ -1,11 +1,10 @@
 import { Search, Shapes, X } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
-import {
-  ActivityIndicator, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
-} from "react-native";
+import { ActivityIndicator, Image, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { candidateImage, searchElements, type ElementCandidate } from "@/lib/jelement";
-import { colors, icon, radius, spacing, typography } from "@/theme/tokens";
+import { icon, radius, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /**
  * Choosing an object to put on a slide.
@@ -29,6 +28,8 @@ export function ElementPicker({
   onClose: () => void;
   onPick: (candidate: ElementCandidate) => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ElementCandidate[]>([]);
   const [searching, setSearching] = useState(false);
@@ -157,7 +158,7 @@ export function ElementPicker({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   sheet: { flex: 1, backgroundColor: colors.canvas },
   head: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
@@ -195,4 +196,4 @@ const styles = StyleSheet.create({
     width: 72, height: 72, borderRadius: radius.md, backgroundColor: colors.surfaceMuted,
   },
   cardName: { ...typography.caption, color: colors.ink, textAlign: "center" },
-});
+}));

@@ -15,7 +15,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "@/components/Avatar";
 import { profileInitials, useAccount } from "@/providers/AccountProvider";
-import { colors, spacing } from "@/theme/tokens";
+import { spacing } from "@/theme/tokens";
+import type { Palette } from "@/theme/palettes";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /**
  * Only the parts of the tab bar contract this bar actually uses. Typed here
@@ -77,9 +79,8 @@ const BLUR_LINKED = (() => {
  * Without one they close up and carry the surface alone — the same material,
  * one layer thinner.
  */
-const SHEEN: readonly [string, string, string] = BLUR_LINKED
-  ? ["rgba(255,255,255,0.86)", "rgba(255,255,255,0.62)", "rgba(240,233,252,0.66)"]
-  : ["rgba(255,255,255,0.99)", "rgba(252,251,254,0.97)", "rgba(240,233,252,0.96)"];
+const sheenOf = (colors: Palette): readonly [string, string, string] =>
+  (BLUR_LINKED ? colors.glassSheen : colors.glassSheenOpaque);
 
 /** One spring, so the indicator and every icon move as a single mechanism. */
 const SPRING = { damping: 20, stiffness: 210, mass: 0.6 } as const;
@@ -109,6 +110,8 @@ type ItemProps = {
  * selected.
  */
 function NavItem({ label, icon: Icon, active, isProfile, avatarUrl, initials, onPress }: ItemProps) {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const progress = useSharedValue(active ? 1 : 0);
 
   useEffect(() => {
@@ -150,6 +153,8 @@ function NavItem({ label, icon: Icon, active, isProfile, avatarUrl, initials, on
  * screen. That is what keeps it still while only the page behind it changes.
  */
 export function BottomNav({ state, navigation }: TabBarProps) {
+  const { colors, scheme } = useTheme();
+  const styles = useStyles();
   const { profile } = useAccount();
   const insets = useSafeAreaInsets();
   const [barWidth, setBarWidth] = useState(0);
@@ -184,13 +189,13 @@ export function BottomNav({ state, navigation }: TabBarProps) {
           {BLUR_LINKED ? (
             <BlurView
               intensity={Platform.OS === "ios" ? 60 : 30}
-              tint="light"
+              tint={scheme}
               experimentalBlurMethod="dimezisBlurView"
               style={StyleSheet.absoluteFill}
             />
           ) : null}
           <LinearGradient
-            colors={SHEEN}
+            colors={sheenOf(colors)}
             locations={[0, 0.5, 1]}
             start={{ x: 0.15, y: 0 }}
             end={{ x: 0.85, y: 1 }}
@@ -226,7 +231,7 @@ export function BottomNav({ state, navigation }: TabBarProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   // Absolute, so the navigator's tab-bar slot collapses to nothing and the bar
   // floats over the page instead of pushing it up. Equal inset on both sides.
   wrap: { position: "absolute", left: BAR_INSET, right: BAR_INSET },
@@ -245,7 +250,7 @@ const styles = StyleSheet.create({
     // A single hairline rim. Anything heavier stops reading as an edge of glass
     // and starts reading as a drawn outline.
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(216,206,236,0.9)",
+    borderColor: colors.glassRim,
   },
 
   // No padding on the row. Yoga positions an absolutely placed child against
@@ -273,4 +278,4 @@ const styles = StyleSheet.create({
   },
   avatar: { borderWidth: 1.5, borderColor: colors.border, borderRadius: ICON_SIZE / 2 },
   avatarActive: { borderWidth: 1.5, borderColor: colors.primary, borderRadius: ICON_SIZE / 2 },
-});
+}));

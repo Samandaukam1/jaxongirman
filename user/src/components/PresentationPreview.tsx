@@ -14,7 +14,7 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 
 import { SlideCanvas } from "@/components/SlideCanvas";
-import { colors, radius } from "@/theme/tokens";
+import { radius } from "@/theme/tokens";
 
 const NETWORK_EVERY_N_FRAMES = 3;
 
@@ -179,13 +179,19 @@ export const PresentationPreview = forwardRef<PresentationPreviewHandle, Props>(
   );
 });
 
+/**
+ * The mat around the slide stays dark in both themes. It is the surround of a
+ * projected image, and a light one would wash out the slide it frames.
+ */
+const MAT = "#150E24";
+
 const styles = StyleSheet.create({
   viewport: {
     width: "100%",
     aspectRatio: SLIDE_MODEL_WIDTH / SLIDE_MODEL_HEIGHT,
     overflow: "hidden",
     borderRadius: radius.lg,
-    backgroundColor: colors.ink,
+    backgroundColor: MAT,
   },
   model: {
     position: "absolute",

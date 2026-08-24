@@ -1,7 +1,7 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { FileText, FileUp, GraduationCap, Image as Image_, MonitorPlay, Search, Sparkles, X } from "lucide-react-native";
 import { useCallback, useMemo, useState } from "react";
-import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Image, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
 
 import coinIcon from "../../../assets/coin/coin-icon.png";
 import { BOTTOM_NAV_SPACE } from "@/components/BottomNav";
@@ -15,7 +15,8 @@ import { listProjects, searchProjects, type Project } from "@/lib/projects";
 import { supabase } from "@/lib/supabase";
 import { useAccount } from "@/providers/AccountProvider";
 import { useAuth } from "@/providers/AuthProvider";
-import { colors, icon, radius, spacing, typography } from "@/theme/tokens";
+import { icon, radius, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /**
  * Everything this account has made, in one place, with a way to find it.
@@ -27,6 +28,8 @@ import { colors, icon, radius, spacing, typography } from "@/theme/tokens";
  * is a scroll, and it only grows.
  */
 export default function ProjectsScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const { user } = useAuth();
   const { balance, refresh: refreshAccount } = useAccount();
@@ -186,7 +189,7 @@ export default function ProjectsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   safe: { flex: 1, backgroundColor: colors.canvas, paddingTop: 58 },
   content: { paddingHorizontal: spacing.xl, paddingBottom: BOTTOM_NAV_SPACE + spacing.xl },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm, marginBottom: spacing.xl },
@@ -253,4 +256,4 @@ const styles = StyleSheet.create({
   sectionTitle: { ...typography.heading, color: colors.ink },
   sectionCount: { ...typography.caption, color: colors.primary, backgroundColor: colors.primarySoft, paddingHorizontal: 9, paddingVertical: 3, borderRadius: radius.pill },
   list: { gap: spacing.md },
-});
+}));

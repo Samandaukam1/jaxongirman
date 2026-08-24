@@ -1,9 +1,10 @@
 import type { Json } from "@jaxongirman/types";
 import { Check, Plus, Trash2 } from "lucide-react-native";
 import { useMemo } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
-import { colors, icon, radius, spacing, typography } from "@/theme/tokens";
+import { icon, radius, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /**
  * Editing the numbers behind a chart and the cells of a table (§74, §75).
@@ -35,6 +36,8 @@ function valuesOf(content: Bag): number[] {
 }
 
 export function ChartDataEditor({ content, onChange }: { content: Bag; onChange: (next: Bag) => void }) {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const labels = labelsOf(content);
   const values = valuesOf(content);
   const rows = useMemo(
@@ -146,6 +149,8 @@ function gridOf(content: Bag): { columns: string[]; rows: string[][]; header: bo
 }
 
 export function TableDataEditor({ content, onChange }: { content: Bag; onChange: (next: Bag) => void }) {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const grid = useMemo(() => gridOf(content), [content]);
   const width = grid.columns.length;
 
@@ -255,7 +260,7 @@ export function TableDataEditor({ content, onChange }: { content: Bag; onChange:
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   panel: { gap: spacing.sm, maxHeight: 300 },
   kindRow: { flexDirection: "row", gap: spacing.xs, flexWrap: "wrap" },
   kindChip: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: spacing.md, paddingVertical: 7, borderRadius: radius.md, backgroundColor: colors.surfaceMuted },
@@ -276,4 +281,4 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.35 },
   addButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 9, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, borderStyle: "dashed" },
   addText: { ...typography.caption, color: colors.primary },
-});
+}));

@@ -4,10 +4,7 @@ import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Play, Plus, ShoppingBag, Sparkles, X } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Pressable,
-  ScrollView, StyleSheet, Text, TextInput, View,
-} from "react-native";
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { GameQuestionCard } from "@/components/GameQuestionCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -19,7 +16,8 @@ import {
   type Game, type GameQuestion,
 } from "@/lib/games";
 import { supabase } from "@/lib/supabase";
-import { colors, icon, radius, spacing, typography } from "@/theme/tokens";
+import { icon, radius, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 const GENERATING_POLL_MS = 2500;
 
@@ -55,6 +53,8 @@ function defaultConfig(type: GameQuestionType): Record<string, unknown> {
  * questions cannot be graded.
  */
 export default function GameEditorScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [game, setGame] = useState<Game | null>(null);
@@ -360,7 +360,7 @@ export default function GameEditorScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   safe: { flex: 1, backgroundColor: colors.canvas },
   center: { alignItems: "center", justifyContent: "center" },
   content: { padding: spacing.xl, gap: spacing.md, paddingBottom: spacing.xxxl },
@@ -392,4 +392,4 @@ const styles = StyleSheet.create({
   modalTitle: { ...typography.heading, color: colors.ink },
   typeRow: { backgroundColor: colors.surfaceMuted, borderRadius: radius.md, padding: spacing.lg },
   typeRowText: { ...typography.bodyMedium, color: colors.ink },
-});
+}));

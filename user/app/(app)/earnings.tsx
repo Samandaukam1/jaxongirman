@@ -2,7 +2,7 @@ import { SETTLEMENT_STATUS_LABELS, formatUzPhone, normalizeUzPhone } from "@jaxo
 import { useFocusEffect } from "expo-router";
 import { CheckCircle2, Clock, CreditCard, Phone, Wallet } from "lucide-react-native";
 import { useCallback, useState } from "react";
-import { Alert, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { PaymentUnavailable } from "@/components/PaymentUnavailable";
@@ -14,7 +14,8 @@ import { formatSom } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
 import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
 import { useAuth } from "@/providers/AuthProvider";
-import { colors, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { radius, shadow, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type Settlement = {
   id: string;
@@ -51,6 +52,8 @@ type Summary = {
  * status chip.
  */
 export default function EarningsScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const policy = usePaymentPolicy();
   const { user } = useAuth();
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -249,7 +252,7 @@ export default function EarningsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
   content: { paddingHorizontal: spacing.xl, paddingBottom: 60, gap: spacing.lg },
 
@@ -275,12 +278,12 @@ const styles = StyleSheet.create({
   sectionTitle: { ...typography.heading, color: colors.ink, marginTop: spacing.sm },
   list: { gap: spacing.md },
   settlement: { padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, gap: 6 },
-  settlementPaid: { borderColor: "#BEE7DA", backgroundColor: colors.successSoft },
+  settlementPaid: { borderColor: colors.successBorder, backgroundColor: colors.successSoft },
   settlementHead: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   settlementAmount: { ...typography.heading, color: colors.ink, flex: 1 },
   badge: { paddingHorizontal: spacing.md, paddingVertical: 4, borderRadius: radius.pill },
   badgePaid: { backgroundColor: colors.surface },
-  badgePending: { backgroundColor: "#FDF4E5" },
+  badgePending: { backgroundColor: colors.warningSoft },
   badgeText: { ...typography.caption, fontSize: 11 },
   badgeTextPaid: { color: colors.success },
   badgeTextPending: { color: colors.warning },
@@ -291,4 +294,4 @@ const styles = StyleSheet.create({
   reference: { ...typography.caption, fontSize: 11, color: colors.inkSoft },
   breakdown: { flexDirection: "row", gap: spacing.lg, marginTop: 4, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
   breakdownLine: { ...typography.caption, fontSize: 11, color: colors.inkSoft },
-});
+}));

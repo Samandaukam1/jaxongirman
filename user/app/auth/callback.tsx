@@ -1,15 +1,18 @@
 import { Redirect } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Text, View } from "react-native";
 
 import { useAuth } from "@/providers/AuthProvider";
-import { colors, spacing, typography } from "@/theme/tokens";
+import { spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /**
  * Landing screen for the email-confirmation deep link. AuthProvider consumes the
  * URL and creates the session; this screen only waits for that to land.
  */
 export default function AuthCallbackScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const { session, loading } = useAuth();
   const [timedOut, setTimedOut] = useState(false);
 
@@ -29,7 +32,7 @@ export default function AuthCallbackScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.canvas },
   label: { ...typography.body, color: colors.inkMuted, marginTop: spacing.lg },
-});
+}));

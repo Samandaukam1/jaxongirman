@@ -2,10 +2,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { Check, Download, Plus, Trash2, User as UserIcon } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView,
-  StyleSheet, Text, TextInput, View,
-} from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { asErrorMessage } from "@/lib/format";
@@ -13,7 +10,8 @@ import {
   FIELDS, RELATIVE_COLUMNS, objectiveFile, openObjective, saveObjective,
   type ObjectiveDoc, type RelativeRow, type WorkRow,
 } from "@/lib/objective";
-import { colors, icon, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { icon, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /**
  * Filling in an obyektivka.
@@ -31,6 +29,8 @@ const EMPTY_WORK: WorkRow = { period: "", detail: "" };
 const EMPTY_RELATIVE: RelativeRow = { relation: "", name: "", born: "", work: "", address: "" };
 
 export default function ObyektivkaScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const [doc, setDoc] = useState<ObjectiveDoc | null>(null);
   const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState(false);
@@ -306,6 +306,8 @@ function Section({ title, hint, onAdd, children }: {
   onAdd: () => void;
   children: React.ReactNode;
 }) {
+  const { colors } = useTheme();
+  const styles = useStyles();
   return (
     <View style={styles.section}>
       <View style={styles.sectionHead}>
@@ -322,7 +324,7 @@ function Section({ title, hint, onAdd, children }: {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl },
   content: { padding: spacing.xl, paddingBottom: spacing.xxxl, gap: spacing.lg },
@@ -367,4 +369,4 @@ const styles = StyleSheet.create({
   savedText: { ...typography.caption, color: colors.success },
   disabled: { opacity: 0.5 },
   error: { ...typography.caption, color: colors.danger },
-});
+}));

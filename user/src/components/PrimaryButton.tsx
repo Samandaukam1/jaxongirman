@@ -1,8 +1,16 @@
 import { LinearGradient } from "expo-linear-gradient";
 import type { LucideIcon } from "lucide-react-native";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View, type PressableProps } from "react-native";
+import {
+  ActivityIndicator, Pressable, Text, View,
+  type PressableProps, type PressableStateCallbackType,
+} from "react-native";
+import Animated from "react-native-reanimated";
 
-import { colors, gradients, icon, radius, shadowLifted, spacing, typography } from "@/theme/tokens";
+import { usePressScale } from "@/lib/motion";
+import { brandInk, gradients, icon, radius, shadowLifted, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 type Tone = "primary" | "secondary" | "ghost";
 type Props = PressableProps & { label: string; loading?: boolean; tone?: Tone; icon?: LucideIcon; trailingIcon?: LucideIcon };
@@ -17,8 +25,14 @@ export function PrimaryButton({
   style,
   ...props
 }: Props) {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const isDisabled = disabled || loading;
-  const contentColor = tone === "primary" ? colors.onPrimary : colors.primary;
+  const press = usePressScale(!isDisabled);
+  // A primary button is the brand gradient, which does not flip with the
+  // theme, so its label is brand ink. The other two tones are drawn on ordinary
+  // themed surfaces and take the themed accent.
+  const contentColor = tone === "primary" ? brandInk.strong : colors.primary;
 
   const content = (
     <>
@@ -29,15 +43,19 @@ export function PrimaryButton({
   );
 
   return (
-    <Pressable
+    <AnimatedPressable
       accessibilityRole="button"
       accessibilityState={{ disabled: !!isDisabled, busy: loading }}
       disabled={isDisabled}
-      style={(state) => [
+      {...press.handlers}
+      style={(state: PressableStateCallbackType) => [
         styles.wrapper,
         tone === "primary" && styles.primaryWrapper,
+        // The spring carries the give; `pressed` now only dims, so the two do
+        // not fight over the same transform.
         state.pressed && styles.pressed,
         isDisabled && styles.disabled,
+        press.style,
         typeof style === "function" ? style(state) : style,
       ]}
       {...props}
@@ -49,11 +67,11 @@ export function PrimaryButton({
       ) : (
         <View style={[styles.base, tone === "secondary" ? styles.secondary : styles.ghost]}>{content}</View>
       )}
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   wrapper: { borderRadius: radius.md, overflow: "hidden" },
   // The lift lives on the wrapper so the gradient can still clip to the radius.
   primaryWrapper: { overflow: "visible", ...shadowLifted },
@@ -69,7 +87,7 @@ const styles = StyleSheet.create({
   },
   secondary: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderStrong },
   ghost: { backgroundColor: colors.primarySoft },
-  pressed: { transform: [{ scale: 0.985 }], opacity: 0.92 },
+  pressed: { opacity: 0.92 },
   disabled: { opacity: 0.45 },
   label: { ...typography.bodyMedium, letterSpacing: 0.1 },
-});
+}));

@@ -2,7 +2,7 @@ import { DATA_COLLECTION_MODULE } from "@jaxongirman/types";
 import { useRouter } from "expo-router";
 import { CalendarClock, CircleCheck, CircleSlash, Info, ShieldCheck, Timer } from "lucide-react-native";
 import { useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, ScrollView, Text, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
@@ -13,7 +13,8 @@ import { useModuleAccess } from "@/lib/modules";
 import { formatPrice } from "@/lib/money";
 import { createModuleOrder } from "@/lib/orders";
 import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
-import { colors, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { radius, shadow, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /**
  * What access to this module actually is, right now, for this person.
@@ -24,6 +25,8 @@ import { colors, radius, shadow, spacing, typography } from "@/theme/tokens";
  * been granted, and nothing offers a purchase that cannot be completed.
  */
 export default function SurveyAccessScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const policy = usePaymentPolicy();
   const [opening, setOpening] = useState(false);
@@ -161,13 +164,13 @@ export default function SurveyAccessScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
   centered: { flex: 1, alignItems: "center", justifyContent: "center" },
   content: { paddingHorizontal: spacing.xl, paddingBottom: 60, gap: spacing.lg },
 
   statusCard: { alignItems: "center", gap: spacing.sm, padding: spacing.xl, borderRadius: radius.lg, borderWidth: 1, ...shadow },
-  statusActive: { backgroundColor: colors.successSoft, borderColor: "#BEE7DA" },
+  statusActive: { backgroundColor: colors.successSoft, borderColor: colors.successBorder },
   statusIdle: { backgroundColor: colors.primarySoft, borderColor: colors.border },
   statusTitle: { ...typography.heading, color: colors.ink, marginTop: spacing.sm },
   statusBody: { ...typography.caption, color: colors.inkMuted, textAlign: "center", lineHeight: 18, maxWidth: 300 },
@@ -179,10 +182,10 @@ const styles = StyleSheet.create({
   rowValue: { ...typography.caption, color: colors.ink, fontFamily: "Manrope_600SemiBold" },
 
   notice: { padding: spacing.lg, borderRadius: radius.lg, borderWidth: 1, gap: 4 },
-  noticeReady: { backgroundColor: colors.successSoft, borderColor: "#BEE7DA" },
-  noticePending: { backgroundColor: "#FDF4E5", borderColor: "#F0DFC0" },
+  noticeReady: { backgroundColor: colors.successSoft, borderColor: colors.successBorder },
+  noticePending: { backgroundColor: colors.warningSoft, borderColor: colors.warningBorder },
   noticeTitle: { ...typography.bodyMedium, color: colors.ink, fontSize: 14 },
   noticeBody: { ...typography.caption, color: colors.inkMuted, lineHeight: 18 },
 
   privacy: { ...typography.caption, color: colors.inkSoft, lineHeight: 18, textAlign: "center" },
-});
+}));

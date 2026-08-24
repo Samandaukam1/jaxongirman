@@ -8,7 +8,7 @@ import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { ArrowLeft, ChartColumnBig, Check, ChevronRight, Clock3, Crown, FileText, Gamepad2, Paperclip, Palette, Sparkles, Type, X, type LucideIcon } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, BackHandler, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, BackHandler, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { FormField } from "@/components/FormField";
@@ -19,7 +19,8 @@ import { familiesOf, loadRemoteDesigns, type RemoteDesign } from "@/lib/jslayd-d
 import { asFunctionErrorMessage } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
-import { colors, icon, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { icon, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type PickedAsset = DocumentPicker.DocumentPickerAsset;
 
@@ -37,6 +38,8 @@ const styleDetails: Record<PresentationStyle, StyleDetail> = {
 };
 
 export default function CreatePresentationScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const { user } = useAuth();
   const [topic, setTopic] = useState("");
@@ -404,7 +407,7 @@ export default function CreatePresentationScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   flex: { flex: 1, backgroundColor: colors.canvas },
   scroll: { flex: 1 },
   header: { paddingHorizontal: spacing.xl, paddingBottom: spacing.lg, flexDirection: "row", alignItems: "center", gap: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
@@ -502,4 +505,4 @@ const styles = StyleSheet.create({
   estimateMetaLabel: { ...typography.caption, color: colors.inkSoft },
   estimateMetaValue: { ...typography.bodyMedium, color: colors.ink, marginTop: 2 },
   footer: { paddingHorizontal: spacing.xl, paddingTop: spacing.lg, backgroundColor: colors.canvas, borderTopWidth: 1, borderTopColor: colors.border },
-});
+}));

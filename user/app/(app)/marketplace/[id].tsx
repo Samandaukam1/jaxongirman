@@ -3,7 +3,7 @@ import { GAME_DIFFICULTY_LABELS, GAME_TYPE_LABELS } from "@jaxongirman/types";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { BookOpenText, CheckCircle2, Flag, Gamepad2, Heart, Star, Store } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Image, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
@@ -18,7 +18,8 @@ import { refundPolicy, type RefundPolicy } from "@/lib/marketplace";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
 import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
-import { colors, icon, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { icon, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type Detail = {
   product: {
@@ -54,6 +55,8 @@ const REPORT_REASONS = [
  * this screen is open.
  */
 export default function ProductDetailScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const { user } = useAuth();
   const params = useLocalSearchParams<{ id?: string }>();
@@ -471,7 +474,7 @@ export default function ProductDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
   content: { paddingHorizontal: spacing.xl, paddingBottom: 60, gap: spacing.md },
   headerAction: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
@@ -523,7 +526,7 @@ const styles = StyleSheet.create({
   priceTotalLabel: { ...typography.bodyMedium, color: colors.ink },
   priceTotal: { ...typography.heading, color: colors.primaryDeep },
 
-  ownedCard: { flexDirection: "row", alignItems: "center", gap: spacing.sm, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.successSoft, borderWidth: 1, borderColor: "#BEE7DA" },
+  ownedCard: { flexDirection: "row", alignItems: "center", gap: spacing.sm, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.successSoft, borderWidth: 1, borderColor: colors.successBorder },
   ownedText: { ...typography.caption, color: colors.ink, flex: 1 },
   ownedLink: { ...typography.caption, color: colors.primary, fontFamily: "Manrope_600SemiBold" },
 
@@ -552,4 +555,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border,
     borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
   },
-});
+}));

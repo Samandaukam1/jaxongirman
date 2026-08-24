@@ -3,13 +3,14 @@ import { useLocalSearchParams } from "expo-router";
 import * as Sharing from "expo-sharing";
 import { ChevronLeft, ChevronRight, Download, RefreshCw, Sparkles } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, ScrollView, Text, View } from "react-native";
 
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { EmptyState, ErrorState } from "@/components/StateBlocks";
 import { defensePdf, defensePdfUrl, loadDefense, writeDefense, type Defense } from "@/lib/defense";
 import { asErrorMessage } from "@/lib/format";
-import { colors, icon, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { icon, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /**
  * What to say, one slide at a time.
@@ -24,6 +25,8 @@ import { colors, icon, radius, shadow, spacing, typography } from "@/theme/token
  * how somebody ends up reading "O‘tish:" out loud.
  */
 export default function DefenseScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [defense, setDefense] = useState<Defense | null>(null);
   const [loading, setLoading] = useState(true);
@@ -191,7 +194,7 @@ export default function DefenseScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.md },
   waiting: { ...typography.caption, color: colors.inkMuted },
@@ -221,4 +224,4 @@ const styles = StyleSheet.create({
   },
   pagerButton: { width: 56, height: 48, alignItems: "center", justifyContent: "center", borderRadius: radius.md, backgroundColor: colors.primarySoft },
   pagerLabel: { ...typography.caption, fontWeight: "700", color: colors.inkMuted },
-});
+}));

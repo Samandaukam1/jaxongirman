@@ -1,10 +1,13 @@
-import { StyleSheet, Text, TextInput, View, type TextInputProps } from "react-native";
+import { Text, TextInput, View, type TextInputProps } from "react-native";
 
-import { colors, radius, spacing, typography } from "@/theme/tokens";
+import { radius, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type Props = TextInputProps & { label: string; hint?: string; error?: string };
 
 export function FormField({ label, hint, error, multiline, style, ...props }: Props) {
+  const { colors } = useTheme();
+  const styles = useStyles();
   return (
     <View style={styles.group}>
       <View style={styles.labelRow}>
@@ -22,7 +25,7 @@ export function FormField({ label, hint, error, multiline, style, ...props }: Pr
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   group: { gap: spacing.sm },
   labelRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", gap: spacing.md },
   label: { ...typography.bodyMedium, color: colors.ink },
@@ -41,4 +44,4 @@ const styles = StyleSheet.create({
   multiline: { minHeight: 104, textAlignVertical: "top" },
   errorInput: { borderColor: colors.danger },
   error: { ...typography.caption, color: colors.danger },
-});
+}));

@@ -4,11 +4,9 @@ import {
 import { useFocusEffect, useRouter } from "expo-router";
 import { Heart, Plus, Search, SlidersHorizontal, Star, Store, X } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  ActivityIndicator, FlatList, Image, Modal, Pressable, RefreshControl,
-  ScrollView, StyleSheet, Text, TextInput, View,
-} from "react-native";
+import { ActivityIndicator, FlatList, Image, Modal, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
 
+import { Appear } from "@/components/Appear";
 import { BOTTOM_NAV_SPACE } from "@/components/BottomNav";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { EmptyState, ErrorState, SkeletonCard } from "@/components/StateBlocks";
@@ -20,7 +18,8 @@ import {
 import { formatNumber, formatSom } from "@/lib/money";
 import { useAuth } from "@/providers/AuthProvider";
 import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
-import { colors, icon, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { icon, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 const SORTS: MarketplaceSort[] = ["newest", "popular", "rating", "price_asc", "price_desc"];
 
@@ -33,6 +32,8 @@ const SORTS: MarketplaceSort[] = ["newest", "popular", "rating", "price_asc", "p
  * screen the same speed at ten products and at ten thousand.
  */
 export default function MarketplaceScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const { user } = useAuth();
   const { types } = useMaterialTypes();
@@ -261,8 +262,9 @@ export default function MarketplaceScreen() {
           ListFooterComponent={
             loadingMore ? <ActivityIndicator color={colors.primary} style={styles.footerLoader} /> : null
           }
-          renderItem={({ item }) => (
-            <Pressable
+          renderItem={({ item, index }) => (
+            <Appear index={index} style={styles.gridCell}>
+              <Pressable
               accessibilityRole="button"
               onPress={() => router.push({ pathname: "/(app)/marketplace/[id]", params: { id: item.id } })}
               style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
@@ -314,6 +316,7 @@ export default function MarketplaceScreen() {
 
               <Text style={styles.price}>{formatSom(item.base_price)}</Text>
             </Pressable>
+            </Appear>
           )}
         />
       )}
@@ -376,7 +379,7 @@ export default function MarketplaceScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   closedWrap: { flex: 1, justifyContent: "center", paddingHorizontal: spacing.xl, gap: spacing.lg },
   safe: { flex: 1, backgroundColor: colors.canvas, paddingTop: 58 },
   header: { paddingHorizontal: spacing.xl, gap: spacing.md },
@@ -406,6 +409,9 @@ const styles = StyleSheet.create({
   loadingList: { paddingHorizontal: spacing.xl, paddingTop: spacing.lg, gap: spacing.md },
   list: { paddingHorizontal: spacing.xl, paddingTop: spacing.lg, paddingBottom: BOTTOM_NAV_SPACE + spacing.xl, gap: spacing.md },
   column: { gap: spacing.md },
+  // The stagger wrapper is the flex child now, so it holds the column share
+  // and the card fills it — otherwise a two-column grid collapses to content width.
+  gridCell: { flex: 1 },
   resultCount: { ...typography.caption, color: colors.inkSoft, marginBottom: spacing.sm },
   footerLoader: { paddingVertical: spacing.xl },
 
@@ -442,4 +448,4 @@ const styles = StyleSheet.create({
   sheetSecondaryText: { ...typography.bodyMedium, color: colors.inkMuted, fontSize: 14 },
   sheetPrimary: { flex: 1, height: 52, borderRadius: radius.md, alignItems: "center", justifyContent: "center", backgroundColor: colors.primary },
   sheetPrimaryText: { ...typography.bodyMedium, color: colors.onPrimary, fontSize: 14 },
-});
+}));

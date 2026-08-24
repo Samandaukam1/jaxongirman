@@ -1,8 +1,9 @@
 import { Gift, Sparkles, X } from "lucide-react-native";
 import { useEffect, useState } from "react";
-import { Animated, Easing, Pressable, StyleSheet, Text, View } from "react-native";
+import { Animated, Easing, Pressable, Text, View } from "react-native";
 
-import { colors, radius, shadowLifted, spacing, typography } from "@/theme/tokens";
+import { radius, shadowLifted, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /** Where each spark flies, as a fraction of the burst radius. */
 const SPARKS = [
@@ -17,6 +18,8 @@ const BURST_RADIUS = 120;
  * thread, so the burst stays smooth while the list behind it re-renders.
  */
 export function CelebrationOverlay({ amount, message, onClose }: { amount: number; message: string; onClose: () => void }) {
+  const { colors } = useTheme();
+  const styles = useStyles();
   // Created once by the lazy initialiser: an animated value is a stable object
   // that must survive re-renders, and state gives that without touching a ref
   // during render.
@@ -78,7 +81,7 @@ export function CelebrationOverlay({ amount, message, onClose }: { amount: numbe
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   backdrop: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, zIndex: 50, alignItems: "center", justifyContent: "center", padding: spacing.xl, backgroundColor: "rgba(21,14,36,.62)" },
   card: { width: "100%", maxWidth: 360, alignItems: "center", padding: spacing.xxl, borderRadius: radius.xl, backgroundColor: colors.surface, ...shadowLifted },
   burstLayer: { position: "absolute", top: "42%", left: "50%", width: 0, height: 0, alignItems: "center", justifyContent: "center" },
@@ -89,4 +92,4 @@ const styles = StyleSheet.create({
   message: { ...typography.body, color: colors.inkMuted, textAlign: "center", marginTop: spacing.sm },
   button: { alignSelf: "stretch", height: 50, marginTop: spacing.xl, borderRadius: radius.md, alignItems: "center", justifyContent: "center", backgroundColor: colors.primary },
   buttonText: { ...typography.bodyMedium, color: colors.onPrimary },
-});
+}));

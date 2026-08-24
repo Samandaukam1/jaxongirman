@@ -15,7 +15,19 @@ import { Image, PanResponder, StyleSheet, Text, View, type LayoutChangeEvent, ty
 import { ChartElement, IconElement, MediaPlaceholder, PlayBadge, ShapeElement, TableElement } from "@/components/SlideElements";
 import { bag, decorationOf, verticalAlignOf } from "@/lib/textStyle";
 import { cornersOf, faceOf, gradientOf, textEffectOf } from "@/lib/slideStyle";
-import { colors } from "@/theme/tokens";
+
+/**
+ * A slide is paper, not app chrome, so it does not follow the app's theme.
+ *
+ * The deck carries its own colours and the person who made it chose them; a
+ * slide with no stated background is white in both themes, and text with no
+ * stated colour is dark on it. Letting the dark palette in here would render
+ * near-white body text onto a white slide — invisible on the phone and, worse,
+ * invisible on the projector.
+ */
+const PAPER = "#FFFFFF";
+const PAPER_INK = "#150E24";
+const PAPER_MUTED = "#F2F0F6";
 
 type Slide = RenderableSlide;
 type Element = RenderableSlideElement;
@@ -120,7 +132,7 @@ function ElementView(props: ElementViewProps) {
 
   let visual: React.ReactNode;
   if (element.type === "text") {
-    const color = string(style.color, colors.ink);
+    const color = string(style.color, PAPER_INK);
     const fontSize = number(style.fontSize, 30);
     const measure = props.onTextMeasure;
     // No line cap: a narrower box has to wrap onto another line rather than
@@ -171,13 +183,13 @@ function ElementView(props: ElementViewProps) {
   } else if (element.type === "icon") {
     visual = <IconElement style={style} content={content} width={element.width} height={element.height} />;
   } else if (element.type === "line") {
-    visual = <View style={{ marginTop: Math.max(1, element.height / 2), height: Math.max(1, number(style.strokeWidth, 2)), backgroundColor: string(style.color, colors.ink) }} />;
+    visual = <View style={{ marginTop: Math.max(1, element.height / 2), height: Math.max(1, number(style.strokeWidth, 2)), backgroundColor: string(style.color, PAPER_INK) }} />;
   } else if (element.type === "chart") {
     visual = <ChartElement style={style} content={content} width={element.width} height={element.height} />;
   } else if (element.type === "table") {
     visual = <TableElement style={style} content={content} width={element.width} height={element.height} />;
   } else {
-    visual = <View style={[StyleSheet.absoluteFill, { backgroundColor: string(style.fill, colors.surfaceMuted), borderRadius: 8 }]} />;
+    visual = <View style={[StyleSheet.absoluteFill, { backgroundColor: string(style.fill, PAPER_MUTED), borderRadius: 8 }]} />;
   }
 
   // The selection frame lives in SelectionOverlay, above the clipped canvas, so
@@ -215,7 +227,7 @@ export const SlideCanvas = forwardRef<View, Props>(function SlideCanvas(
       ref={ref}
       collapsable={false}
       onLayout={onLayout}
-      style={[styles.canvas, { backgroundColor: string(background.color, colors.canvas) }]}
+      style={[styles.canvas, { backgroundColor: string(background.color, PAPER) }]}
       onStartShouldSetResponder={interactive ? () => true : undefined}
       onResponderRelease={interactive ? () => onSelect?.(null) : undefined}
     >
@@ -251,5 +263,5 @@ const styles = StyleSheet.create({
   canvas: { width: MODEL_WIDTH, height: MODEL_HEIGHT, overflow: "hidden" },
   table: { flex: 1, borderWidth: 1, borderColor: "rgba(21,26,24,.18)" },
   tableRow: { flex: 1, flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "rgba(21,26,24,.12)" },
-  cell: { flex: 1, padding: 4, color: colors.ink, borderRightWidth: 1, borderRightColor: "rgba(21,26,24,.12)" },
+  cell: { flex: 1, padding: 4, color: PAPER_INK, borderRightWidth: 1, borderRightColor: "rgba(21,26,24,.12)" },
 });

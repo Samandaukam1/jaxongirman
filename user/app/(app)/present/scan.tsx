@@ -9,7 +9,8 @@ import { ScreenHeader } from "@/components/ScreenHeader";
 import { InlineError } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
-import { colors, radius, spacing, typography } from "@/theme/tokens";
+import { radius, spacing, typography } from "@/theme/tokens";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /** Pulls the token out of `jaxongirman://pair/<token>`, or accepts a bare token. */
 function extractToken(raw: string): string | null {
@@ -27,6 +28,8 @@ function extractToken(raw: string): string | null {
  * refuses a code that has already been used or has rotated away.
  */
 export default function ScanScreen() {
+  const { colors } = useTheme();
+  const styles = useStyles();
   const router = useRouter();
   const [permission, requestPermission] = useCameraPermissions();
   const [busy, setBusy] = useState(false);
@@ -127,7 +130,7 @@ export default function ScanScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
   centered: { flex: 1, alignItems: "center", justifyContent: "center" },
   permission: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.md, paddingHorizontal: spacing.xl },
@@ -144,4 +147,4 @@ const styles = StyleSheet.create({
   footer: { paddingHorizontal: spacing.xl, paddingBottom: 40, gap: spacing.md },
   hint: { ...typography.caption, color: colors.inkMuted, textAlign: "center", lineHeight: 18 },
   cancel: { ...typography.bodyMedium, color: colors.inkSoft, textAlign: "center" },
-});
+}));
