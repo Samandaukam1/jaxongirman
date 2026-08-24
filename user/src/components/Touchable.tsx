@@ -1,4 +1,4 @@
-import { Pressable, type PressableProps, type PressableStateCallbackType, type StyleProp, type ViewStyle } from "react-native";
+import { Pressable, type PressableProps, type StyleProp, type ViewStyle } from "react-native";
 import Animated from "react-native-reanimated";
 
 import { usePressScale } from "@/lib/motion";
@@ -12,28 +12,23 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
  * component and not a hook a screen calls once: three cards in a row rendered
  * from one `map` would otherwise share a single value and press together.
  *
- * `style` takes the same shapes `Pressable` does — an object, an array, or a
- * function of the press state — and the spring is appended to whatever comes
- * back, so a caller keeps its own pressed styling if it wants one.
+ * `style` is an object or an array and **never a function**. Pressable accepts
+ * a function so a caller can style the pressed state, but an animated component
+ * cannot: Reanimated spreads each style entry looking for animated ones, and
+ * spreading a function yields nothing at all, so the caller's style disappears
+ * without an error anywhere. The press state is the spring's job here, which
+ * removes the reason to reach for the function form.
  */
 export function Touchable({
   style,
   children,
   disabled,
   ...props
-}: PressableProps & { style?: StyleProp<ViewStyle> | ((state: PressableStateCallbackType) => StyleProp<ViewStyle>) }) {
+}: Omit<PressableProps, "style"> & { style?: StyleProp<ViewStyle> }) {
   const press = usePressScale(!disabled);
 
   return (
-    <AnimatedPressable
-      disabled={disabled}
-      {...press.handlers}
-      style={(state: PressableStateCallbackType) => [
-        typeof style === "function" ? style(state) : style,
-        press.style,
-      ]}
-      {...props}
-    >
+    <AnimatedPressable disabled={disabled} {...press.handlers} style={[style, press.style]} {...props}>
       {children}
     </AnimatedPressable>
   );

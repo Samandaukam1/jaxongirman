@@ -125,7 +125,7 @@ export default function GamesScreen() {
         </View>
 
         <Touchable
-          style={({ pressed }) => [styles.ctaShadow, pressed && styles.pressed]}
+          style={styles.ctaShadow}
           onPress={() => router.push("/oyingoh/create")}
           accessibilityRole="button"
         >
@@ -145,7 +145,7 @@ export default function GamesScreen() {
             somebody else's room, the other takes a projector over. */}
         <View style={styles.scanRow}>
           <Touchable
-            style={({ pressed }) => [styles.halfShadow, pressed && styles.pressed]}
+            style={styles.halfShadow}
             onPress={() => router.push("/oyingoh/join")}
             accessibilityRole="button"
           >
@@ -157,7 +157,7 @@ export default function GamesScreen() {
           </Touchable>
 
           <Touchable
-            style={({ pressed }) => [styles.halfShadow, pressed && styles.pressed]}
+            style={styles.halfShadow}
             onPress={() => router.push("/oyingoh/scan")}
             accessibilityRole="button"
           >
@@ -235,15 +235,15 @@ export default function GamesScreen() {
             <Text style={styles.sectionTitle}>Bepul o‘yinlar</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md }}>
               {freeGames.map((game) => (
-                <Pressable
+                <Touchable
                   key={game.id}
-                  style={({ pressed }) => [styles.freeCard, pressed && styles.pressed]}
+                  style={styles.freeCard}
                   onPress={() => router.push(`/oyingoh/${game.id}`)}
                 >
                   <View style={styles.freeBadge}><Text style={styles.freeBadgeText}>Bepul</Text></View>
                   <Text style={styles.freeTitle} numberOfLines={2}>{game.title}</Text>
                   <Text style={styles.gameMeta}>{game.question_count} savol</Text>
-                </Pressable>
+                </Touchable>
               ))}
             </ScrollView>
           </>
@@ -254,13 +254,13 @@ export default function GamesScreen() {
             <Text style={styles.sectionTitle}>Kategoriyalar</Text>
             <View style={styles.categoryGrid}>
               {categories.map((category) => (
-                <Pressable
+                <Touchable
                   key={category.id}
-                  style={({ pressed }) => [styles.categoryChip, pressed && styles.pressed]}
+                  style={styles.categoryChip}
                   onPress={() => router.push({ pathname: "/oyingoh/create", params: { categoryId: category.id, categoryLabel: category.label } })}
                 >
                   <Text style={styles.categoryText}>{category.label}</Text>
-                </Pressable>
+                </Touchable>
               ))}
             </View>
           </>
@@ -292,7 +292,7 @@ function GameRow({ game, onPress }: { game: Game; onPress: () => void }) {
   const styles = useStyles();
   const status = game.status as GameStatus;
   return (
-    <Touchable style={({ pressed }) => [styles.gameRow, pressed && styles.pressed]} onPress={onPress} accessibilityRole="button">
+    <Touchable style={styles.gameRow} onPress={onPress} accessibilityRole="button">
       <View style={styles.gameIcon}>
         <Gamepad2 color={colors.primary} size={icon.md} strokeWidth={icon.stroke} />
       </View>
@@ -349,7 +349,6 @@ const useStyles = makeStyles((colors) => ({
   },
   halfTitle: { ...typography.bodyMedium, color: brandInk.strong, fontSize: 15 },
   halfSubtitle: { ...typography.caption, color: brandInk.muted },
-  pressed: { opacity: 0.92 },
   statsRow: { flexDirection: "row", gap: spacing.sm },
   statCard: {
     flex: 1, alignItems: "center", gap: 2, backgroundColor: colors.surface,

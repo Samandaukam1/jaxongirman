@@ -67,7 +67,7 @@ const TOOLS: readonly Tool[] = [
   { key: "portrait", label: "3×4 rasm", detail: "Hujjatga", Glyph: IdCard, gradient: gradients.portrait, href: "/(app)/portrait" },
   { key: "objective", label: "Obyektivka", detail: "DOCX / PDF", Glyph: FileUser, gradient: gradients.objective, href: "/(app)/obyektivka" },
   { key: "academic", label: "Ilmiy ish", detail: "Maqola, referat", Glyph: GraduationCap, gradient: gradients.academic, href: "/(app)/ilmiy" },
-  { key: "import", label: "PowerPoint’dan", detail: "Yuklab tahrirlash", Glyph: FileUp, gradient: gradients.importDeck, href: "/(app)/import" },
+  { key: "import", label: "PowerPoint", detail: "Yuklab tahrirlash", Glyph: FileUp, gradient: gradients.importDeck, href: "/(app)/import" },
   { key: "present", label: "Taqdimot qilish", detail: "Katta ekranga", Glyph: Projector, gradient: gradients.present, href: "/(app)/present/scan" },
 ];
 
@@ -161,6 +161,7 @@ export default function ProjectsScreen() {
   return (
     <View style={styles.safe}>
       <Animated.ScrollView
+        style={styles.scroll}
         onScroll={onScroll}
         scrollEventThrottle={16}
         contentContainerStyle={[styles.content, { paddingTop: open + spacing.md }]}
@@ -327,6 +328,7 @@ function Tile({
 
 const useStyles = makeStyles((colors) => ({
   safe: { flex: 1, backgroundColor: colors.canvas },
+  scroll: { flex: 1 },
 
   /**
    * Over the shelf rather than above it.
@@ -392,12 +394,13 @@ const useStyles = makeStyles((colors) => ({
   tileLabel: { ...typography.bodyMedium, fontSize: 14, color: brandInk.strong },
   tileDetail: { ...typography.caption, fontSize: 11, color: brandInk.muted },
 
-  // Zero on three sides, not `spacing.xl`: an absolutely placed child is laid
-  // out against its parent's padding box, so the header's own padding already
-  // insets this row. Repeating the inset here would double it.
+  // Inset by hand. An absolutely placed child here is laid out against the
+  // header's border box, not its padding box, so it does not inherit the
+  // padding the flow children sit inside — left at zero it lands flush against
+  // the edge of the screen.
   narrow: {
     position: "absolute",
-    left: 0, right: 0, bottom: 0,
+    left: spacing.xl, right: spacing.xl, bottom: spacing.md,
     flexDirection: "row", gap: spacing.sm,
   },
   chipShadow: { flex: 1, borderRadius: radius.md, ...shadow },

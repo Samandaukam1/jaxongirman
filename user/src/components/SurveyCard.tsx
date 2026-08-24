@@ -1,9 +1,8 @@
 import { SURVEY_STATUS_LABELS, type SurveyStatus } from "@jaxongirman/types";
 import { CheckCircle2, Clock, Users } from "lucide-react-native";
-import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
-import Animated from "react-native-reanimated";
+import { Text, View } from "react-native";
 
-import { usePressScale } from "@/lib/motion";
+import { Touchable } from "@/components/Touchable";
 import { countdownTo, formatCountdown, formatShortDateTime, useNow } from "@/lib/datetime";
 import { radius, shadow, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
@@ -38,12 +37,9 @@ export function CountdownText({ deadline, style }: { deadline: string | null; st
   return <Text style={style}>{formatCountdown(countdownTo(deadline, now))}</Text>;
 }
 
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
 export function SurveyCard({ item, onPress }: { item: SurveySummary; onPress: () => void }) {
   const { colors } = useTheme();
   const styles = useStyles();
-  const press = usePressScale();
   // A minute is fine here: this only decides which badge the card wears, while
   // the countdown inside it keeps its own second-by-second clock.
   const now = useNow(item.status === "open", 60_000);
@@ -52,8 +48,7 @@ export function SurveyCard({ item, onPress }: { item: SurveySummary; onPress: ()
   const answered = item.my_status === "submitted";
 
   return (
-    <AnimatedPressable accessibilityRole="button" onPress={onPress} {...press.handlers}
-      style={({ pressed }: PressableStateCallbackType) => [styles.card, pressed && styles.pressed, press.style]}>
+    <Touchable accessibilityRole="button" onPress={onPress} style={styles.card}>
       <View style={styles.top}>
         <Text numberOfLines={2} style={styles.title}>{item.title}</Text>
         <View style={[styles.badge, live ? styles.badgeLive : expired ? styles.badgeDone : styles.badgeDraft]}>
@@ -92,7 +87,7 @@ export function SurveyCard({ item, onPress }: { item: SurveySummary; onPress: ()
         <View style={styles.spacer} />
         <Text style={styles.questions}>{item.question_count} savol</Text>
       </View>
-    </AnimatedPressable>
+    </Touchable>
   );
 }
 
@@ -106,7 +101,6 @@ const useStyles = makeStyles((colors) => ({
     backgroundColor: colors.surface,
     ...shadow,
   },
-  pressed: { opacity: 0.9 },
   top: { flexDirection: "row", alignItems: "flex-start", gap: spacing.md },
   title: { ...typography.bodyMedium, color: colors.ink, flex: 1, fontSize: 16 },
   badge: { paddingHorizontal: spacing.md, paddingVertical: 4, borderRadius: radius.pill },

@@ -1,19 +1,20 @@
 import { LinearGradient } from "expo-linear-gradient";
 import type { LucideIcon } from "lucide-react-native";
-import {
-  ActivityIndicator, Pressable, Text, View,
-  type PressableProps, type PressableStateCallbackType,
-} from "react-native";
-import Animated from "react-native-reanimated";
+import { ActivityIndicator, Text, View, type PressableProps, type StyleProp, type ViewStyle } from "react-native";
 
-import { usePressScale } from "@/lib/motion";
+import { Touchable } from "@/components/Touchable";
 import { brandInk, gradients, icon, radius, shadowLifted, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
 type Tone = "primary" | "secondary" | "ghost";
-type Props = PressableProps & { label: string; loading?: boolean; tone?: Tone; icon?: LucideIcon; trailingIcon?: LucideIcon };
+type Props = Omit<PressableProps, "style"> & {
+  label: string;
+  loading?: boolean;
+  tone?: Tone;
+  icon?: LucideIcon;
+  trailingIcon?: LucideIcon;
+  style?: StyleProp<ViewStyle>;
+};
 
 export function PrimaryButton({
   label,
@@ -28,7 +29,6 @@ export function PrimaryButton({
   const { colors } = useTheme();
   const styles = useStyles();
   const isDisabled = disabled || loading;
-  const press = usePressScale(!isDisabled);
   // A primary button is the brand gradient, which does not flip with the
   // theme, so its label is brand ink. The other two tones are drawn on ordinary
   // themed surfaces and take the themed accent.
@@ -43,20 +43,15 @@ export function PrimaryButton({
   );
 
   return (
-    <AnimatedPressable
+    <Touchable
       accessibilityRole="button"
       accessibilityState={{ disabled: !!isDisabled, busy: loading }}
       disabled={isDisabled}
-      {...press.handlers}
-      style={(state: PressableStateCallbackType) => [
+      style={[
         styles.wrapper,
         tone === "primary" && styles.primaryWrapper,
-        // The spring carries the give; `pressed` now only dims, so the two do
-        // not fight over the same transform.
-        state.pressed && styles.pressed,
         isDisabled && styles.disabled,
-        press.style,
-        typeof style === "function" ? style(state) : style,
+        style,
       ]}
       {...props}
     >
@@ -67,7 +62,7 @@ export function PrimaryButton({
       ) : (
         <View style={[styles.base, tone === "secondary" ? styles.secondary : styles.ghost]}>{content}</View>
       )}
-    </AnimatedPressable>
+    </Touchable>
   );
 }
 
@@ -87,7 +82,6 @@ const useStyles = makeStyles((colors) => ({
   },
   secondary: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderStrong },
   ghost: { backgroundColor: colors.primarySoft },
-  pressed: { opacity: 0.92 },
   disabled: { opacity: 0.45 },
   label: { ...typography.bodyMedium, letterSpacing: 0.1 },
 }));

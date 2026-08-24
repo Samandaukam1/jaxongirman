@@ -1,8 +1,7 @@
 import { FileText, GraduationCap, Image as ImageIcon, Presentation } from "lucide-react-native";
-import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
-import Animated from "react-native-reanimated";
+import { Text, View } from "react-native";
 
-import { usePressScale } from "@/lib/motion";
+import { Touchable } from "@/components/Touchable";
 import { KIND_LABEL, statusLabel, type Project, type ProjectKind } from "@/lib/projects";
 import { radius, shadow, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
@@ -37,23 +36,19 @@ function ago(iso: string): string {
   return days < 30 ? `${days} kun oldin` : new Date(iso).toLocaleDateString("uz");
 }
 
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
 export function ProjectRow({ project, onPress }: { project: Project; onPress: () => void }) {
   const { colors } = useTheme();
   const styles = useStyles();
-  const press = usePressScale();
   const Glyph = GLYPH[project.kind];
   const status = statusLabel(project.status);
   const loud = project.status ? LOUD.has(project.status) : false;
 
   return (
-    <AnimatedPressable
+    <Touchable
       accessibilityRole="button"
       accessibilityLabel={`${KIND_LABEL[project.kind]}: ${project.title}`}
       onPress={onPress}
-      {...press.handlers}
-      style={({ pressed }: PressableStateCallbackType) => [styles.row, pressed && styles.pressed, press.style]}
+      style={styles.row}
     >
       <View style={styles.glyph}><Glyph color={colors.primary} size={20} strokeWidth={1.9} /></View>
       <View style={styles.copy}>
@@ -72,7 +67,7 @@ export function ProjectRow({ project, onPress }: { project: Project; onPress: ()
       {status && loud
         ? <View style={styles.badge}><Text style={styles.badgeText}>{status}</Text></View>
         : <View style={styles.dot} />}
-    </AnimatedPressable>
+    </Touchable>
   );
 }
 
@@ -91,7 +86,6 @@ const useStyles = makeStyles((colors) => ({
     borderColor: colors.border,
     ...shadow,
   },
-  pressed: { opacity: 0.92 },
   glyph: {
     width: 42, height: 42, borderRadius: radius.md,
     alignItems: "center", justifyContent: "center",

@@ -1,10 +1,9 @@
 import type { Tables } from "@jaxongirman/types";
 import { LinearGradient } from "expo-linear-gradient";
 import { ChevronRight, Clock3, Layers3 } from "lucide-react-native";
-import { Pressable, Text, View, type PressableStateCallbackType } from "react-native";
-import Animated from "react-native-reanimated";
+import { Text, View } from "react-native";
 
-import { usePressScale } from "@/lib/motion";
+import { Touchable } from "@/components/Touchable";
 import { formatRelativeDate } from "@/lib/format";
 import { brandInk, icon, radius, shadow, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
@@ -34,16 +33,12 @@ const statusLabel: Record<Presentation["status"], string> = {
   archived: "Arxiv",
 };
 
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-
 export function PresentationCard({ item, onPress }: { item: Presentation; onPress: () => void }) {
   const { colors } = useTheme();
   const styles = useStyles();
-  const press = usePressScale();
   const isDark = item.style === "super_professional" || item.style === "great";
   return (
-    <AnimatedPressable onPress={onPress} {...press.handlers}
-      style={({ pressed }: PressableStateCallbackType) => [styles.card, pressed && styles.pressed, press.style]}>
+    <Touchable onPress={onPress} style={styles.card}>
       <LinearGradient colors={palette[item.style]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.preview}>
         <View style={[styles.previewLine, isDark && styles.previewLineDark]} />
         <Text numberOfLines={3} style={[styles.previewTitle, isDark && styles.previewTitleDark]}>{item.title}</Text>
@@ -65,13 +60,12 @@ export function PresentationCard({ item, onPress }: { item: Presentation; onPres
           </View>
         </View>
       </View>
-    </AnimatedPressable>
+    </Touchable>
   );
 }
 
 const useStyles = makeStyles((colors) => ({
   card: { flexDirection: "row", backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md, gap: spacing.lg, borderWidth: 1, borderColor: colors.border, ...shadow },
-  pressed: { opacity: 0.92 },
   preview: { width: 116, aspectRatio: 16 / 10, borderRadius: radius.md, padding: spacing.md, justifyContent: "center", overflow: "hidden" },
   previewLine: { position: "absolute", width: 90, height: 1, backgroundColor: "rgba(21,14,36,.16)", transform: [{ rotate: "-35deg" }], right: -18, top: 16 },
   previewLineDark: { backgroundColor: "rgba(255,255,255,.28)" },

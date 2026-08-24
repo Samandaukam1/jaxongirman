@@ -1,8 +1,10 @@
 import { useEffect, type ReactNode } from "react";
-import { AccessibilityInfo, type ViewStyle } from "react-native";
+import { type ViewStyle } from "react-native";
 import Animated, {
   Easing, useAnimatedStyle, useSharedValue, withDelay, withTiming,
 } from "react-native-reanimated";
+
+import { useReduceMotion } from "@/lib/motion";
 
 /**
  * The small movement that makes a list feel like it arrived rather than blinked.
@@ -23,6 +25,13 @@ import Animated, {
  *
  * **Off when asked.** A system set to reduce motion gets no movement at all,
  * not a shorter version of it.
+ *
+ * And one rule about failure. The reveal starts on mount and is *not* waited on
+ * anything: this used to ask the platform about reduced motion first and raise
+ * the opacity in the answer's callback, which meant a slow or dropped answer
+ * left every row at zero opacity — a list that is there, holds its space, and
+ * cannot be seen. Motion is assumed allowed until told otherwise, and being
+ * told otherwise only ever removes movement, never visibility.
  */
 
 const DURATION = 220;
@@ -38,23 +47,19 @@ export function Appear({
   index?: number;
   style?: ViewStyle;
 }) {
+  const reduced = useReduceMotion();
   const progress = useSharedValue(0);
 
   useEffect(() => {
-    let alive = true;
-    void AccessibilityInfo.isReduceMotionEnabled().then((reduced) => {
-      if (!alive) return;
-      if (reduced) {
-        progress.value = 1;
-        return;
-      }
-      progress.value = withDelay(
-        Math.min(index, MAX_STAGGERED) * STAGGER,
-        withTiming(1, { duration: DURATION, easing: Easing.out(Easing.cubic) }),
-      );
-    });
-    return () => { alive = false; };
-  }, [index, progress]);
+    if (reduced) {
+      progress.value = 1;
+      return;
+    }
+    progress.value = withDelay(
+      Math.min(index, MAX_STAGGERED) * STAGGER,
+      withTiming(1, { duration: DURATION, easing: Easing.out(Easing.cubic) }),
+    );
+  }, [index, progress, reduced]);
 
   const animation = useAnimatedStyle(() => ({
     opacity: progress.value,
