@@ -1,30 +1,34 @@
-import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
-import {
-  FileUp, GraduationCap, IdCard, FileUser, Projector, Search, Sparkles, X,
-  type LucideIcon,
-} from "lucide-react-native";
+import { Search, Sparkles, X } from "lucide-react-native";
 import { useCallback, useMemo, useState } from "react";
-import { Image, Pressable, RefreshControl, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { Image, Pressable, RefreshControl, Text, TextInput, View, type LayoutChangeEvent } from "react-native";
 import Animated, {
   Extrapolation, interpolate, runOnJS, useAnimatedReaction, useAnimatedScrollHandler,
-  useAnimatedStyle, useSharedValue,
+  useAnimatedStyle, useDerivedValue, useSharedValue,
 } from "react-native-reanimated";
 
 import coinIcon from "../../../assets/coin/coin-icon.png";
+import SlideCreateArt from "../../../assets/soft-ai/01_slide_create.svg";
+import PortraitArt from "../../../assets/soft-ai/02_portrait_3x4.svg";
+import ObjectiveArt from "../../../assets/soft-ai/03_objective_doc.svg";
+import ScientificArt from "../../../assets/soft-ai/04_scientific_work.svg";
+import PowerPointArt from "../../../assets/soft-ai/05_powerpoint_edit.svg";
+import PresentArt from "../../../assets/soft-ai/06_present_remote.svg";
 import { Appear } from "@/components/Appear";
 import { BOTTOM_NAV_SPACE } from "@/components/BottomNav";
-import { CreateDeckButton } from "@/components/CreateDeckButton";
+
 import { ProjectRow } from "@/components/ProjectRow";
 import { EmptyState, ErrorState, SkeletonCard } from "@/components/StateBlocks";
+import { HeroToolCard, ToolCard, type ToolArt } from "@/components/ToolCard";
 import { Touchable } from "@/components/Touchable";
 import { asErrorMessage } from "@/lib/format";
+import { useReduceMotion } from "@/lib/motion";
 import { formatNumber } from "@/lib/money";
 import { listProjects, searchProjects, type Project } from "@/lib/projects";
 import { supabase } from "@/lib/supabase";
 import { useAccount } from "@/providers/AccountProvider";
 import { useAuth } from "@/providers/AuthProvider";
-import { brandInk, gradients, icon, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { icon, radius, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /**
@@ -51,8 +55,7 @@ type Tool = {
   key: string;
   label: string;
   detail: string;
-  Glyph: LucideIcon;
-  gradient: readonly [string, string];
+  art: ToolArt;
   href: string;
 };
 
@@ -64,12 +67,21 @@ type Tool = {
  * the two ends of a deck that already exists, so they sit together at the end.
  */
 const TOOLS: readonly Tool[] = [
-  { key: "portrait", label: "3×4 rasm", detail: "Hujjatga", Glyph: IdCard, gradient: gradients.portrait, href: "/(app)/portrait" },
-  { key: "objective", label: "Obyektivka", detail: "DOCX / PDF", Glyph: FileUser, gradient: gradients.objective, href: "/(app)/obyektivka" },
-  { key: "academic", label: "Ilmiy ish", detail: "Maqola, referat", Glyph: GraduationCap, gradient: gradients.academic, href: "/(app)/ilmiy" },
-  { key: "import", label: "PowerPoint", detail: "Yuklab tahrirlash", Glyph: FileUp, gradient: gradients.importDeck, href: "/(app)/import" },
-  { key: "present", label: "Taqdimot qilish", detail: "Katta ekranga", Glyph: Projector, gradient: gradients.present, href: "/(app)/present/scan" },
+  { key: "portrait", label: "3×4 rasm", detail: "Hujjatga", art: PortraitArt, href: "/(app)/portrait" },
+  { key: "objective", label: "Obyektivka", detail: "DOCX / PDF", art: ObjectiveArt, href: "/(app)/obyektivka" },
+  { key: "academic", label: "Ilmiy ish", detail: "Maqola, referat", art: ScientificArt, href: "/(app)/ilmiy" },
+  { key: "import", label: "PowerPoint", detail: "Yuklab tahrirlash", art: PowerPointArt, href: "/(app)/import" },
+  { key: "present", label: "Taqdimot qilish", detail: "Katta ekranga", art: PresentArt, href: "/(app)/present/scan" },
 ];
+
+/**
+ * Artwork sizes, per row. Bigger where there is room for it and the action
+ * matters more, and never a size the drawing has to be stretched to reach.
+ */
+const HERO_ART = 80;
+const TILE_ART = 58;
+const WIDE_ART = 64;
+const CHIP_ART = 34;
 
 /**
  * The pieces the header is built from, named so the two heights it moves
@@ -80,12 +92,22 @@ const TITLE_ROW = 52;
 const SEARCH_ROW = 46;
 const CHIP_ROW = 48;
 
+/**
+ * What the open header is worth before it has been measured.
+ *
+ * The block is measured rather than assigned a share of the screen: art, a
+ * title and a line under it need the height they need, and forcing them into
+ * an exact half of every phone means clipping them on the short ones. This is
+ * only the first frame's guess — close enough that nothing jumps when the real
+ * number arrives one layout later.
+ */
+const ESTIMATED_CARDS = 354;
+
 export default function ProjectsScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
   const router = useRouter();
   const { user } = useAuth();
-  const { height } = useWindowDimensions();
   const { balance, refresh: refreshAccount } = useAccount();
   const [items, setItems] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -94,18 +116,19 @@ export default function ProjectsScreen() {
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState("");
   const [folded, setFolded] = useState(false);
+  const [cards, setCards] = useState(ESTIMATED_CARDS);
 
-  // Half the screen, whatever screen it is. Stated rather than arrived at, so
-  // the split is the same proportion on a small phone as on a large one.
-  const open = Math.round(height * 0.5);
+  const chrome = SAFE_TOP + TITLE_ROW + spacing.md + spacing.md + (searching ? SEARCH_ROW + spacing.md : 0);
+  const open = chrome + cards;
   const shut = SAFE_TOP + TITLE_ROW + spacing.md + CHIP_ROW + spacing.md;
   const range = Math.max(1, open - shut);
 
-  // The tiles get an exact height rather than a flex share, so the fold clips
-  // them instead of squashing them: a tile that compresses on the way out
-  // reads as a layout bug, not as an animation.
-  const chrome = SAFE_TOP + TITLE_ROW + spacing.md + spacing.md + (searching ? SEARCH_ROW + spacing.md : 0);
-  const tilesHeight = Math.max(CHIP_ROW, open - chrome);
+  // Measured once. The cards do not resize afterwards, and re-reading a layout
+  // that cannot change would only re-render the screen for nothing.
+  const measure = useCallback((event: LayoutChangeEvent) => {
+    const next = Math.round(event.nativeEvent.layout.height);
+    setCards((current) => (Math.abs(current - next) > 1 ? next : current));
+  }, []);
 
   const scrollY = useSharedValue(0);
   const onScroll = useAnimatedScrollHandler((event) => { scrollY.value = event.contentOffset.y; });
@@ -130,6 +153,23 @@ export default function ProjectsScreen() {
   const narrow = useAnimatedStyle(() => ({
     opacity: interpolate(scrollY.value, [range * 0.55, range], [0, 1], Extrapolation.CLAMP),
   }));
+
+  /**
+   * How far through its shrink the artwork is, as one value the six cards share.
+   *
+   * Derived here rather than computed inside each card: six subscriptions to
+   * the same scroll position, each running the same interpolation every frame,
+   * is five more than the screen needs. The cards take this and do nothing but
+   * read it.
+   *
+   * It leads the fold slightly — finished at 60% of the way through — so the
+   * drawings have settled at their small size by the time the cards behind them
+   * start fading out, rather than still moving as they go.
+   */
+  const reduced = useReduceMotion();
+  const artFold = useDerivedValue(() => (
+    reduced ? 0 : interpolate(scrollY.value, [0, range * 0.6], [0, 1], Extrapolation.CLAMP)
+  ));
 
   // A style cannot carry `pointerEvents`, and an invisible layer that still
   // takes taps is worse than no animation at all.
@@ -247,37 +287,55 @@ export default function ProjectsScreen() {
         ) : null}
 
         {/* Open: what a person came here to make. */}
-        <Animated.View
-          style={[styles.wide, { height: tilesHeight }, wide]}
-          pointerEvents={folded ? "none" : "auto"}
-        >
-          <CreateDeckButton onPress={() => go("/(app)/create")} />
+        <Animated.View style={[styles.wide, wide]} onLayout={measure} pointerEvents={folded ? "none" : "auto"}>
+          <HeroToolCard
+            art={SlideCreateArt}
+            size={HERO_ART}
+            title="Taqdimot yaratish"
+            detail="Jaxongir AI bilan yangi slayd"
+            onPress={() => go("/(app)/create")}
+            progress={artFold}
+          />
 
           {/* Three, then two. The rows share what the hero leaves, so the block
               lands on half the screen without any number being typed twice. */}
           <View style={styles.tileRow}>
             {TOOLS.slice(0, 3).map((tool) => (
-              <Tile key={tool.key} tool={tool} onPress={() => go(tool.href)} styles={styles} />
+              <ToolCard
+                key={tool.key}
+                art={tool.art}
+                size={TILE_ART}
+                title={tool.label}
+                detail={tool.detail}
+                onPress={() => go(tool.href)}
+                progress={artFold}
+              />
             ))}
           </View>
           <View style={styles.tileRow}>
             {TOOLS.slice(3).map((tool) => (
-              <Tile key={tool.key} tool={tool} onPress={() => go(tool.href)} styles={styles} />
+              <ToolCard
+                key={tool.key}
+                art={tool.art}
+                size={WIDE_ART}
+                title={tool.label}
+                detail={tool.detail}
+                onPress={() => go(tool.href)}
+                progress={artFold}
+              />
             ))}
           </View>
         </Animated.View>
 
-        {/* Folded: the same six, as glyphs, out of the way of the shelf. */}
+        {/* Folded: the same six drawings, small, out of the way of the shelf. */}
         <Animated.View style={[styles.narrow, narrow]} pointerEvents={folded ? "auto" : "none"}>
           <Touchable
             accessibilityRole="button"
             accessibilityLabel="Taqdimot yaratish"
             onPress={() => go("/(app)/create")}
-            style={styles.chipShadow}
+            style={styles.chip}
           >
-            <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.chip}>
-              <Sparkles color={brandInk.strong} size={icon.md} strokeWidth={2.1} />
-            </LinearGradient>
+            <SlideCreateArt width={CHIP_ART} height={CHIP_ART} />
           </Touchable>
           {TOOLS.map((tool) => (
             <Touchable
@@ -285,44 +343,14 @@ export default function ProjectsScreen() {
               accessibilityRole="button"
               accessibilityLabel={tool.label}
               onPress={() => go(tool.href)}
-              style={styles.chipShadow}
+              style={styles.chip}
             >
-              <LinearGradient colors={tool.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.chip}>
-                <tool.Glyph color={brandInk.strong} size={icon.md} strokeWidth={2.1} />
-              </LinearGradient>
+              <tool.art width={CHIP_ART} height={CHIP_ART} />
             </Touchable>
           ))}
         </Animated.View>
       </Animated.View>
     </View>
-  );
-}
-
-/** One tile. Its own component so each carries its own press spring. */
-function Tile({
-  tool,
-  onPress,
-  styles,
-}: {
-  tool: Tool;
-  onPress: () => void;
-  styles: ReturnType<typeof useStyles>;
-}) {
-  return (
-    <Touchable
-      accessibilityRole="button"
-      accessibilityLabel={tool.label}
-      onPress={onPress}
-      style={styles.tileShadow}
-    >
-      <LinearGradient colors={tool.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.tile}>
-        <tool.Glyph color={brandInk.strong} size={icon.lg} strokeWidth={1.9} />
-        <View style={styles.tileCopy}>
-          <Text numberOfLines={1} style={styles.tileLabel}>{tool.label}</Text>
-          <Text numberOfLines={1} style={styles.tileDetail}>{tool.detail}</Text>
-        </View>
-      </LinearGradient>
-    </Touchable>
   );
 }
 
@@ -380,19 +408,10 @@ const useStyles = makeStyles((colors) => ({
 
   wide: { gap: spacing.md },
 
-  // The rows take what the hero leaves, so the block fills its half exactly
-  // whatever the phone. `minHeight` keeps a tile from folding to nothing on a
-  // short screen before the fold animation ever runs.
-  tileRow: { flex: 1, flexDirection: "row", gap: spacing.md },
-  tileShadow: { flex: 1, borderRadius: radius.lg, ...shadow },
-  tile: {
-    flex: 1,
-    borderRadius: radius.lg, padding: spacing.md,
-    justifyContent: "space-between", gap: spacing.sm,
-  },
-  tileCopy: { gap: 1 },
-  tileLabel: { ...typography.bodyMedium, fontSize: 14, color: brandInk.strong },
-  tileDetail: { ...typography.caption, fontSize: 11, color: brandInk.muted },
+  // No flex on the row: it is as tall as its cards, and the cards are as tall
+  // as what is drawn and written on them. Stretch is the default across the
+  // row, so three cards of different copy still share one height.
+  tileRow: { flexDirection: "row", gap: spacing.md },
 
   // Inset by hand. An absolutely placed child here is laid out against the
   // header's border box, not its padding box, so it does not inherit the
@@ -403,10 +422,11 @@ const useStyles = makeStyles((colors) => ({
     left: spacing.xl, right: spacing.xl, bottom: spacing.md,
     flexDirection: "row", gap: spacing.sm,
   },
-  chipShadow: { flex: 1, borderRadius: radius.md, ...shadow },
   chip: {
     flex: 1, height: CHIP_ROW, borderRadius: radius.md,
     alignItems: "center", justifyContent: "center",
+    backgroundColor: colors.softCard,
+    borderWidth: 1, borderColor: colors.softCardBorder,
   },
 
   content: { paddingHorizontal: spacing.xl, paddingBottom: BOTTOM_NAV_SPACE + spacing.xl, gap: spacing.md },

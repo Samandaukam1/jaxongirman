@@ -58,6 +58,21 @@ export type Palette = {
   glassSheenOpaque: readonly [string, string, string];
   glassRim: string;
 
+  /**
+   * The soft surface, and why it is not `surface`.
+   *
+   * The tool cards on Loyihalar carry their own artwork, and artwork needs a
+   * quiet ground to read against. `surface` is pure white on a white canvas —
+   * a card that has to be found by its border alone. This is a shade cooler
+   * and a shade darker, so a card is a card without a line around it doing all
+   * the work, and its ink leans navy rather than violet for the same reason:
+   * nothing on the card should compete with what is drawn on it.
+   */
+  softCard: string;
+  softCardBorder: string;
+  softInk: string;
+  softInkMuted: string;
+
   /** The wash behind the sign-in screen, which the marks sit on. */
   authWash: readonly [string, string, string];
 
@@ -99,6 +114,11 @@ export const light: Palette = {
   glassSheen: ["rgba(255,255,255,0.86)", "rgba(255,255,255,0.62)", "rgba(240,233,252,0.66)"],
   glassSheenOpaque: ["rgba(255,255,255,0.99)", "rgba(252,251,254,0.97)", "rgba(240,233,252,0.96)"],
   glassRim: "rgba(216,206,236,0.9)",
+
+  softCard: "#F6F7FB",
+  softCardBorder: "#E8E9F2",
+  softInk: "#20263B",
+  softInkMuted: "#6F7487",
 
   authWash: ["#F4EDFE", "#FDF1F8", "#FFFFFF"],
 
@@ -148,6 +168,11 @@ export const dark: Palette = {
   glassSheen: ["rgba(46,35,66,0.86)", "rgba(36,26,53,0.72)", "rgba(26,19,39,0.72)"],
   glassSheenOpaque: ["rgba(42,32,60,0.99)", "rgba(33,24,49,0.98)", "rgba(26,19,39,0.98)"],
   glassRim: "rgba(90,74,120,0.9)",
+
+  softCard: "#1C1D24",
+  softCardBorder: "#2C2E38",
+  softInk: "#F4F4F7",
+  softInkMuted: "#A7AAB6",
 
   authWash: ["#1B1230", "#170F28", "#100A1B"],
 
