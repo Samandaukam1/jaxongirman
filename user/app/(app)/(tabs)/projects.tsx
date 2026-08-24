@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import { Image, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
 
 import coinIcon from "../../../assets/coin/coin-icon.png";
+import { Touchable } from "@/components/Touchable";
 import { BOTTOM_NAV_SPACE } from "@/components/BottomNav";
 import { CreateDeckButton } from "@/components/CreateDeckButton";
 import { Appear } from "@/components/Appear";
@@ -72,7 +73,7 @@ export default function ProjectsScreen() {
             <Text style={styles.eyebrow}>JAXONGIRMAN</Text>
             <Text style={styles.brand}>Loyihalar</Text>
           </View>
-          <Pressable
+          <Touchable
             accessibilityRole="button"
             accessibilityLabel={searching ? "Qidiruvni yopish" : "Qidirish"}
             onPress={() => { setSearching((open) => !open); if (searching) setQuery(""); }}
@@ -81,7 +82,7 @@ export default function ProjectsScreen() {
             {searching
               ? <X color={colors.primaryDeep} size={19} strokeWidth={2.2} />
               : <Search color={colors.primaryDeep} size={19} strokeWidth={2.2} />}
-          </Pressable>
+          </Touchable>
           <View style={styles.creditPill}>
             <Text style={styles.creditText}>{formatNumber(balance)}</Text>
             <Image source={coinIcon} resizeMode="contain" style={styles.coinIcon} />
@@ -124,7 +125,7 @@ export default function ProjectsScreen() {
             { key: "objective", label: "Obyektivka", detail: "DOCX / PDF", Glyph: FileText, href: "/(app)/obyektivka" as const },
             { key: "academic", label: "Ilmiy ish", detail: "Maqola, referat", Glyph: GraduationCap, href: "/(app)/ilmiy" as const },
           ].map((tool) => (
-            <Pressable
+            <Touchable
               key={tool.key}
               accessibilityRole="button"
               accessibilityLabel={tool.label}
@@ -134,29 +135,29 @@ export default function ProjectsScreen() {
               <View style={styles.toolIcon}><tool.Glyph color={colors.primary} size={20} strokeWidth={2} /></View>
               <Text style={styles.toolLabel} numberOfLines={1}>{tool.label}</Text>
               <Text style={styles.toolDetail} numberOfLines={1}>{tool.detail}</Text>
-            </Pressable>
+            </Touchable>
           ))}
         </View>
 
         {/* Second on purpose: generating is the product, importing is the door
             for people who already have a deck. */}
         <View style={styles.secondaryRow}>
-          <Pressable
+          <Touchable
             accessibilityRole="button"
             onPress={() => router.push("/(app)/import")}
             style={({ pressed }) => [styles.secondary, pressed && styles.toolPressed]}
           >
-            <FileUp color={colors.primary} size={icon.sm} strokeWidth={icon.stroke} />
+            <FileUp color={colors.primary} size={icon.md} strokeWidth={icon.stroke} />
             <Text style={styles.secondaryText}>PowerPoint’dan yuklash</Text>
-          </Pressable>
-          <Pressable
+          </Touchable>
+          <Touchable
             accessibilityRole="button"
             onPress={() => router.push("/(app)/present/scan")}
             style={({ pressed }) => [styles.secondary, pressed && styles.toolPressed]}
           >
-            <MonitorPlay color={colors.primary} size={icon.sm} strokeWidth={icon.stroke} />
+            <MonitorPlay color={colors.primary} size={icon.md} strokeWidth={icon.stroke} />
             <Text style={styles.secondaryText}>Taqdimot qilish</Text>
-          </Pressable>
+          </Touchable>
         </View>
 
         <View style={styles.sectionHeader}>
@@ -191,10 +192,10 @@ export default function ProjectsScreen() {
 
 const useStyles = makeStyles((colors) => ({
   safe: { flex: 1, backgroundColor: colors.canvas, paddingTop: 58 },
-  content: { paddingHorizontal: spacing.xl, paddingBottom: BOTTOM_NAV_SPACE + spacing.xl },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm, marginBottom: spacing.xl },
-  presentButton: { flexDirection: "row", alignItems: "center", gap: 6, height: 40, paddingHorizontal: spacing.md, borderRadius: radius.pill, backgroundColor: colors.primarySoft },
-  presentText: { ...typography.caption, color: colors.primary, fontFamily: "Manrope_600SemiBold" },
+  // One gap between blocks rather than a margin per block, so the rhythm is
+  // stated once and a new section cannot arrive at its own spacing.
+  content: { paddingHorizontal: spacing.xl, paddingBottom: BOTTOM_NAV_SPACE + spacing.xl, gap: spacing.md },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm, marginBottom: spacing.sm },
   eyebrow: { ...typography.caption, color: colors.accent, letterSpacing: 1.7 },
   brand: { ...typography.title, color: colors.ink, marginTop: 2 },
   creditPill: { flexDirection: "row", alignItems: "center", gap: 7, backgroundColor: colors.primarySoft, borderRadius: radius.pill, height: 40, paddingHorizontal: spacing.lg },
@@ -230,9 +231,11 @@ const useStyles = makeStyles((colors) => ({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  toolPressed: { opacity: 0.72 },
+  toolPressed: { opacity: 0.92 },
   toolIcon: {
-    width: 38, height: 38, borderRadius: 13,
+    // The chip's corner is the card's corner minus its padding, which is what
+    // makes the two look concentric rather than merely both rounded.
+    width: 38, height: 38, borderRadius: radius.md,
     alignItems: "center", justifyContent: "center",
     backgroundColor: colors.primarySoft,
     marginBottom: "auto",
@@ -240,19 +243,30 @@ const useStyles = makeStyles((colors) => ({
   toolLabel: { ...typography.caption, fontWeight: "700", color: colors.ink },
   toolDetail: { ...typography.caption, fontSize: 11, color: colors.inkSoft },
   secondaryRow: { flexDirection: "row", gap: spacing.sm },
+  /**
+   * The same material as the three cards above, one step quieter.
+   *
+   * These used to be grey pills with grey text and a violet icon, which made
+   * three different things out of one row: a pill next to cards, a muted label
+   * next to a saturated glyph. They are the same surface now, with the same
+   * hairline and the same ink — only shorter, which is the whole of what
+   * "secondary" should mean here.
+   */
   secondary: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    minHeight: 42,
-    paddingHorizontal: spacing.sm,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surfaceMuted,
+    gap: spacing.sm,
+    minHeight: 48,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  secondaryText: { ...typography.caption, fontSize: 12, fontWeight: "600", color: colors.inkMuted },
-  sectionHeader: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.xxl, marginBottom: spacing.lg },
+  secondaryText: { ...typography.caption, fontWeight: "700", color: colors.ink },
+  sectionHeader: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.lg, marginBottom: 0 },
   sectionTitle: { ...typography.heading, color: colors.ink },
   sectionCount: { ...typography.caption, color: colors.primary, backgroundColor: colors.primarySoft, paddingHorizontal: 9, paddingVertical: 3, borderRadius: radius.pill },
   list: { gap: spacing.md },
