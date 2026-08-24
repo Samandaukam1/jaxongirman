@@ -1,50 +1,48 @@
-import type { Tables } from "@jaxongirman/types";
 import { useFocusEffect, useRouter } from "expo-router";
-import { FileText, FileUp, GraduationCap, Image as Image_, MonitorPlay, Sparkles } from "lucide-react-native";
-import { useCallback, useState } from "react";
-import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { FileText, FileUp, GraduationCap, Image as Image_, MonitorPlay, Search, Sparkles, X } from "lucide-react-native";
+import { useCallback, useMemo, useState } from "react";
+import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import coinIcon from "../../../assets/coin/coin-icon.png";
 import { BOTTOM_NAV_SPACE } from "@/components/BottomNav";
 import { CreateDeckButton } from "@/components/CreateDeckButton";
-import { PresentationCard } from "@/components/PresentationCard";
+import { Appear } from "@/components/Appear";
+import { ProjectRow } from "@/components/ProjectRow";
 import { EmptyState, ErrorState, SkeletonCard } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
 import { formatNumber } from "@/lib/money";
+import { listProjects, searchProjects, type Project } from "@/lib/projects";
 import { supabase } from "@/lib/supabase";
 import { useAccount } from "@/providers/AccountProvider";
 import { useAuth } from "@/providers/AuthProvider";
 import { colors, icon, radius, spacing, typography } from "@/theme/tokens";
 
-type Presentation = Tables<"presentations">;
-
 /**
- * The presentation generator's home, unchanged in behaviour — it simply lives on
- * its own tab now that the app has a dashboard in front of it. The balance and
- * inbox that used to sit in this header belong to the home screen; what stays
- * here is the one number a person needs while deciding to generate a deck.
+ * Everything this account has made, in one place, with a way to find it.
+ *
+ * The list used to be presentations and nothing else, while a 3×4 sheet, an
+ * obyektivka and an academic work were each reachable only from the screen that
+ * created them — so last week's work existed and could not be got back to. And
+ * with everything in one list, a search stops being a nicety: twenty-three rows
+ * is a scroll, and it only grows.
  */
 export default function ProjectsScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { balance, refresh: refreshAccount } = useAccount();
-  const [items, setItems] = useState<Presentation[]>([]);
+  const [items, setItems] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [query, setQuery] = useState("");
 
   const load = useCallback(async (isRefresh = false) => {
     if (!user) return;
     if (isRefresh) setRefreshing(true); else setLoading(true);
     setError(null);
     try {
-      const { data, error: requestError } = await supabase
-        .from("presentations")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(30);
-      if (requestError) throw requestError;
-      setItems(data);
+      setItems(await listProjects());
       void supabase.from("profiles").update({ last_seen_at: new Date().toISOString() }).eq("id", user.id);
       if (isRefresh) void refreshAccount();
     } catch (nextError) {
@@ -57,10 +55,7 @@ export default function ProjectsScreen() {
 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
 
-  function openPresentation(item: Presentation) {
-    if (item.status === "ready") router.push({ pathname: "/(app)/presentation/[id]", params: { id: item.id } });
-    else router.push({ pathname: "/(app)/generation/[id]", params: { id: item.id } });
-  }
+  const shown = useMemo(() => searchProjects(items, query), [items, query]);
 
   return (
     <View style={styles.safe}>
@@ -70,15 +65,45 @@ export default function ProjectsScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={colors.primary} />}
       >
         <View style={styles.header}>
-          <View>
+          <View style={styles.headerCopy}>
             <Text style={styles.eyebrow}>JAXONGIRMAN</Text>
             <Text style={styles.brand}>Loyihalar</Text>
           </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={searching ? "Qidiruvni yopish" : "Qidirish"}
+            onPress={() => { setSearching((open) => !open); if (searching) setQuery(""); }}
+            style={styles.headerIcon}
+          >
+            {searching
+              ? <X color={colors.primaryDeep} size={19} strokeWidth={2.2} />
+              : <Search color={colors.primaryDeep} size={19} strokeWidth={2.2} />}
+          </Pressable>
           <View style={styles.creditPill}>
             <Text style={styles.creditText}>{formatNumber(balance)}</Text>
             <Image source={coinIcon} resizeMode="contain" style={styles.coinIcon} />
           </View>
         </View>
+
+        {searching ? (
+          <View style={styles.searchBox}>
+            <Search color={colors.inkSoft} size={17} strokeWidth={2} />
+            <TextInput
+              autoFocus
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Nomi yoki turi bo‘yicha qidiring"
+              placeholderTextColor={colors.inkSoft}
+              style={styles.searchInput}
+              returnKeyType="search"
+            />
+            {query ? (
+              <Pressable accessibilityLabel="Tozalash" onPress={() => setQuery("")} hitSlop={8}>
+                <X color={colors.inkSoft} size={16} strokeWidth={2.2} />
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
 
         <CreateDeckButton onPress={() => router.push("/(app)/create")} />
 
@@ -132,21 +157,29 @@ export default function ProjectsScreen() {
         </View>
 
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Oxirgi prezentatsiyalar</Text>
-          {items.length > 0 ? <Text style={styles.sectionCount}>{items.length}</Text> : null}
+          <Text style={styles.sectionTitle}>{query ? "Topilganlar" : "Oxirgi ishlaringiz"}</Text>
+          {shown.length > 0 ? <Text style={styles.sectionCount}>{shown.length}</Text> : null}
         </View>
 
         {loading ? <View style={styles.list}><SkeletonCard /><SkeletonCard /></View> : null}
         {error && !loading ? <ErrorState message={error} onRetry={() => void load()} /> : null}
-        {!loading && !error && items.length === 0 ? (
+
+        {!loading && !error && shown.length === 0 ? (
           <EmptyState
             icon={Sparkles}
-            title="Birinchi taqdimotingizni yarating"
-            message="Faqat mavzu kifoya — qolganini Jaxongir AI bajaradi."
+            title={query ? "Hech narsa topilmadi" : "Birinchi ishingizni yarating"}
+            message={query
+              ? "Boshqa so‘z bilan qidirib ko‘ring."
+              : "Taqdimot, 3×4 rasm, obyektivka yoki ilmiy ish — hammasi shu yerda saqlanadi."}
           />
         ) : null}
+
         <View style={styles.list}>
-          {items.map((item) => <PresentationCard item={item} key={item.id} onPress={() => openPresentation(item)} />)}
+          {shown.map((project, index) => (
+            <Appear key={`${project.kind}-${project.id}`} index={index}>
+              <ProjectRow project={project} onPress={() => router.push(project.href as never)} />
+            </Appear>
+          ))}
         </View>
       </ScrollView>
     </View>
@@ -165,6 +198,22 @@ const styles = StyleSheet.create({
   // The coin art is square, so a square box with `contain` keeps its proportions.
   coinIcon: { width: 28, height: 28 },
   creditText: { ...typography.bodyMedium, color: colors.primaryDeep },
+  headerCopy: { flex: 1 },
+  headerIcon: {
+    width: 40, height: 40, borderRadius: 20,
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: colors.primarySoft,
+  },
+  searchBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    minHeight: 46,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceMuted,
+  },
+  searchInput: { ...typography.body, flex: 1, color: colors.ink, paddingVertical: 0 },
   tools: { flexDirection: "row", gap: spacing.sm },
   tool: {
     flex: 1,
