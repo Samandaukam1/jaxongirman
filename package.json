@@ -43,7 +43,7 @@
     "test:rpc": "node --test supabase/tests/rpc-arguments.test.mjs",
     "test:cards": "node --test packages/types/tests/payment-cards.test.mjs web/tests/partial-card-checkout.test.mjs",
     "test:tariff": "node --test packages/tariff-card/tests/tariff-card.test.mjs",
-    "test:auth": "node --test user/tests/social-auth.test.mjs user/tests/jelement-rows.test.mjs user/tests/avatar.test.mjs",
+    "test:auth": "node --test user/tests/social-auth.test.mjs user/tests/jelement-rows.test.mjs user/tests/avatar.test.mjs user/tests/retry.test.mjs",
     "test:gemini": "node --test supabase/tests/gemini-schema.test.mjs supabase/tests/writer.test.mjs supabase/tests/layout-brief.test.mjs supabase/tests/layout-scenarios.test.mjs supabase/tests/photo-search.test.mjs supabase/tests/defense.test.mjs",
     "test:jelement": "node --test packages/jelement/tests/compile.test.mjs packages/jelement/tests/raster.test.mjs packages/jelement/tests/manifest.test.mjs packages/jelement/tests/render.test.mjs packages/jelement/tests/health.test.mjs packages/jelement/tests/duplicates.test.mjs",
     "test:jelement:smoke": "node supabase/tests/jelement-smoke.mjs",

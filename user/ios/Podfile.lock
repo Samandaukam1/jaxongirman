@@ -207,6 +207,8 @@ PODS:
     - ExpoModulesCore
   - ExpoCameraBarcodeScanning (57.0.3):
     - ExpoCamera
+  - ExpoClipboard (57.0.1):
+    - ExpoModulesCore
   - ExpoCrypto (57.0.1):
     - ExpoModulesCore
   - ExpoDocumentPicker (57.0.1):
@@ -2588,6 +2590,7 @@ DEPENDENCIES:
   - ExpoBlur (from `../../node_modules/expo-blur/ios`)
   - ExpoCamera (from `../../node_modules/expo-camera/ios/ExpoCamera.podspec`)
   - ExpoCameraBarcodeScanning (from `../../node_modules/expo-camera/ios/ExpoCameraBarcodeScanning.podspec`)
+  - ExpoClipboard (from `../../node_modules/expo-clipboard/ios`)
   - ExpoCrypto (from `../../node_modules/expo-crypto/ios`)
   - ExpoDocumentPicker (from `../../node_modules/expo-document-picker/ios`)
   - "ExpoDomWebView (from `../../node_modules/@expo/dom-webview/ios`)"
@@ -2739,6 +2742,8 @@ EXTERNAL SOURCES:
     :podspec: "../../node_modules/expo-camera/ios/ExpoCamera.podspec"
   ExpoCameraBarcodeScanning:
     :podspec: "../../node_modules/expo-camera/ios/ExpoCameraBarcodeScanning.podspec"
+  ExpoClipboard:
+    :path: "../../node_modules/expo-clipboard/ios"
   ExpoCrypto:
     :path: "../../node_modules/expo-crypto/ios"
   ExpoDocumentPicker:
@@ -2974,6 +2979,7 @@ SPEC CHECKSUMS:
   ExpoBlur: 69e67b4fbfed6f7325377af2aefa8aa4f00cd2af
   ExpoCamera: a5e9d9ce2fc06689eb2dd676f1f8d5f22f8aa292
   ExpoCameraBarcodeScanning: b869ac87ebe30bb99b26c55b0e0471301383c90b
+  ExpoClipboard: 95055b11758f339b61d4d8064dd799df1cf03b7f
   ExpoCrypto: 366380ffafeb22cc9795438cddcbfa299e1aaf42
   ExpoDocumentPicker: 6fb67a6f39ba9beb53a4b4a3f2949e0b5e9bc3bf
   ExpoDomWebView: beaec034e51bd028428b98bb1f2633ab79c6d095

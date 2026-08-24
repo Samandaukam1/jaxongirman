@@ -13,6 +13,7 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { InlineError } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
+import { isTransport, TRANSPORT_MESSAGE } from "@/lib/retry";
 import { joinGame, joinGameByCode } from "@/lib/games";
 import { useAccount } from "@/providers/AccountProvider";
 import { colors, icon, radius, spacing, typography } from "@/theme/tokens";
@@ -74,7 +75,14 @@ export default function JoinGameScreen() {
         : await joinGameByCode(code, nickname.trim(), avatarId);
       router.replace(`/oyingoh/play/${result.session_id}`);
     } catch (failure) {
-      setError(asErrorMessage(failure));
+      /**
+       * The scanned token is kept, so retrying does not mean scanning again.
+       *
+       * A join that failed on the network is the one case where the person is
+       * standing in front of a screen with everybody waiting; making them
+       * re-aim a camera is the worst possible answer to a lost packet.
+       */
+      setError(isTransport(failure) ? TRANSPORT_MESSAGE : asErrorMessage(failure));
       setBusy(false);
       claiming.current = false;
     }

@@ -51,7 +51,20 @@ class FontBook {
     let custom = false;
     try {
       pdf.registerFontkit(fontkit);
-      base = await pdf.embedFont(await fetchFont(bundledUrl(DEFAULT_FACE)!), { subset: true });
+  /**
+   * Fonts are embedded whole, never subset.
+   *
+   * `@pdf-lib/fontkit@1.1.1` builds a broken subset for some faces: the text
+   * layer is correct — a reader extracts every word — and most of the glyphs
+   * are simply not drawn. An obyektivka came out reading "'L" where it should
+   * have said "MA'LUMOTNOMA". Manrope survives it and Tinos does not, which is
+   * why it took a document to find.
+   *
+   * Not subsetting costs a few hundred kilobytes per file. Subsetting costs a
+   * document nobody can read, and there is no version of that trade worth
+   * making.
+   */
+      base = await pdf.embedFont(await fetchFont(bundledUrl(DEFAULT_FACE)!));
       custom = true;
     } catch {
       // No network, or a face that will not parse. Helvetica keeps the export
@@ -80,7 +93,7 @@ class FontBook {
       for (const url of [request.url, bundledUrl(request.fallback)]) {
         if (!url) continue;
         try {
-          const font = await this.pdf.embedFont(await fetchFont(url), { subset: true });
+          const font = await this.pdf.embedFont(await fetchFont(url));
           this.embedded.set(request.key, font);
           return;
         } catch (error) {

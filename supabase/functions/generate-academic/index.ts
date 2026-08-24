@@ -35,12 +35,24 @@ type Body = { workId?: string; action?: "plan" | "section" | "document"; format?
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /** Roughly how long each kind's sections run. Longer works, longer sections. */
+/**
+ * How long each kind's sections run.
+ *
+ * Doubled: twelve pages of a course paper were coming out as ten, because a
+ * section written to four hundred words is a page and a half and the structure
+ * assumes three. A page of Times New Roman 14 at one-and-a-half spacing holds
+ * roughly 300 words, so these are the counts that make the stated page range
+ * true rather than aspirational.
+ */
 const WORDS: Record<WorkKind, number> = {
-  article: 420, independent: 620, referat: 520, coursework: 750,
+  article: 840, independent: 1240, referat: 1040, coursework: 1500,
 };
 
 /** Short sections that are lists rather than prose. */
-const SHORT = new Set(["keywords", "plan", "abstract"]);
+/** Sections that are lists or fixed-length blocks rather than prose. */
+const SHORT = new Set(["keywords", "plan"]);
+/** Three languages of abstract is three times one abstract. */
+const ABSTRACT_WORDS = 600;
 
 function step(event: string, workId: string, extra: Record<string, unknown> = {}): void {
   console.log(JSON.stringify({ event, work_id: workId, ...extra }));
@@ -237,7 +249,9 @@ async function writeSection(service: SupabaseClient, workId: string, ownerId: st
       earlier,
       next: next ? (next.heading as string) : null,
       sources,
-      words: SHORT.has(pending.key as string) ? 160 : WORDS[work.kind as WorkKind],
+      words: SHORT.has(pending.key as string)
+        ? 160
+        : pending.key === "abstract" ? ABSTRACT_WORDS : WORDS[work.kind as WorkKind],
     });
 
     const answer = await writer.structured<unknown>({
@@ -245,7 +259,8 @@ async function writeSection(service: SupabaseClient, workId: string, ownerId: st
       system: SECTION_SYSTEM,
       schemaName: SECTION_SCHEMA_NAME,
       schema: sectionSchema(),
-      maxOutputTokens: 4_000,
+      // Fifteen hundred Uzbek words, with room to spare.
+      maxOutputTokens: 8_000,
       attempts: 2,
     });
 

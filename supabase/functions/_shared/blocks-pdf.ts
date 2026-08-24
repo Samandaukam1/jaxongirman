@@ -248,10 +248,25 @@ export async function renderBlocksPdf(input: {
   const regularBytes = await load(bundledUrl(serif ? SERIF_FACE : DEFAULT_FACE));
   const boldBytes = serif ? await load(bundledUrl(SERIF_BOLD_FACE)) : regularBytes;
 
-  const book: Book = regularBytes
+  /**
+   * Fonts are embedded whole, never subset.
+   *
+   * `@pdf-lib/fontkit@1.1.1` builds a broken subset for some faces: the text
+   * layer is correct — a reader extracts every word — and most of the glyphs
+   * are simply not drawn. An obyektivka came out reading "'L" where it should
+   * have said "MA'LUMOTNOMA". Manrope survives it and Tinos does not, which is
+   * why it took a document to find.
+   *
+   * Not subsetting costs a few hundred kilobytes per file. Subsetting costs a
+   * document nobody can read, and there is no version of that trade worth
+   * making.
+   */
+  const regular = regularBytes ? await pdf.embedFont(regularBytes) : null;
+  const book: Book = regular
     ? {
-      regular: await pdf.embedFont(regularBytes, { subset: true }),
-      bold: await pdf.embedFont(boldBytes ?? regularBytes, { subset: true }),
+      regular,
+      // The same object, not a second embed, when there is no separate bold.
+      bold: boldBytes ? await pdf.embedFont(boldBytes) : regular,
     }
     : { regular: await pdf.embedFont(StandardFonts.TimesRoman), bold: await pdf.embedFont(StandardFonts.TimesRomanBold) };
 

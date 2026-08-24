@@ -62,8 +62,16 @@ export type Plan = {
  * a study nobody ran is not a weaker article, it is a false one.
  */
 const ARTICLE_EMPIRICAL: PlannedSection[] = [
-  { key: "abstract", heading: "Annotatsiya", brief: "150–250 so‘z: muammo, usul, natija, xulosa" },
-  { key: "keywords", heading: "Kalit so‘zlar", brief: "5–8 ta atama, vergul bilan" },
+  /**
+   * Three languages, because a journal here asks for three.
+   *
+   * An Uzbek article carries its abstract and keywords in Uzbek, Russian and
+   * English — that is what the submission form has boxes for, and one language
+   * is a paper handed back. Written as one section each so the writer produces
+   * all three together and they say the same thing.
+   */
+  { key: "abstract", heading: "Annotatsiya", brief: "150–250 so‘z, uch tilda: o‘zbek, rus, ingliz" },
+  { key: "keywords", heading: "Kalit so‘zlar", brief: "5–8 ta atama, uch tilda: o‘zbek, rus, ingliz" },
   { key: "introduction", heading: "Kirish", brief: "Muammo, dolzarblik, tadqiqot maqsadi" },
   { key: "methods", heading: "Materiallar va usullar", brief: "Faqat manbalarda tasvirlangan usullar" },
   { key: "results", heading: "Natijalar", brief: "Faqat manbalardagi haqiqiy natijalar" },
@@ -72,8 +80,8 @@ const ARTICLE_EMPIRICAL: PlannedSection[] = [
 ];
 
 const ARTICLE_REVIEW: PlannedSection[] = [
-  { key: "abstract", heading: "Annotatsiya", brief: "150–250 so‘z: mavzu, ko‘rib chiqilgan yondashuvlar, xulosa" },
-  { key: "keywords", heading: "Kalit so‘zlar", brief: "5–8 ta atama, vergul bilan" },
+  { key: "abstract", heading: "Annotatsiya", brief: "150–250 so‘z, uch tilda: o‘zbek, rus, ingliz" },
+  { key: "keywords", heading: "Kalit so‘zlar", brief: "5–8 ta atama, uch tilda: o‘zbek, rus, ingliz" },
   { key: "introduction", heading: "Kirish", brief: "Muammo va uni ko‘rib chiqish zarurati" },
   { key: "review", heading: "Mavzuning o‘rganilganlik darajasi", brief: "Mavjud tadqiqotlar sharhi, manbalarga tayangan" },
   { key: "analysis", heading: "Tahlil", brief: "Yondashuvlarni qiyoslash, kuchli va zaif tomonlari" },
@@ -188,7 +196,7 @@ export function planPrompt(input: {
     "1. Faqat o‘zbek lotin tilida.",
     "2. \"empirical\" — bu mavzu bo‘yicha haqiqiy tajriba, so‘rovnoma yoki o‘lchov o‘tkazilgan tadqiqotlar mavjudmi? Agar mavzu nazariy bo‘lsa yoki manbalarda empirik natija bo‘lmasa, false qiling.",
     "3. Manbalar HAQIQIY bo‘lsin: real jurnal, kitob, universitet yoki davlat nashri. Muallif va yil aniq bo‘lsin.",
-    "4. Manba yo‘q bo‘lsa, uni O‘YLAB TOPMANG — ro‘yxatni qisqaroq qoldiring.",
+    "4. KAMIDA 9 TA, imkoni bo‘lsa 12 tagacha manba toping. Lekin manba yo‘q bo‘lsa, uni O‘YLAB TOPMANG — soni to‘lsin deb uydirilgan manba ro‘yxatni buzadi.",
     "5. \"page\" — faqat sahifa raqamini ishonch bilan bilsangiz yozing. Aks holda bo‘sh qoldiring.",
     "6. Tez eskiradigan mavzularda (texnologiya, iqtisodiyot, qonunchilik) yangi manbalarni afzal ko‘ring; tarixiy yoki barqaror mavzularda klassik manbalar ham mumkin.",
     "7. Bo‘limlar quyidagi tuzilmaga mos bo‘lsin, lekin sarlavhalarni mavzuga moslashtiring:",
@@ -305,6 +313,17 @@ export function sectionPrompt(input: {
     "5. \"Bugungi kunda\", \"Ma’lumki\", \"Muhim ahamiyatga ega\" kabi quruq iboralarni ishlatmang.",
     "6. Abzaslarni \\n\\n bilan ajrating. Har abzas bitta fikrni oxirigacha aytsin.",
     "7. Sarlavhani qaytadan yozmang — faqat bo‘lim matni.",
+    /**
+     * The abstract and the keywords are read back apart by the renderer, so
+     * their shape is stated rather than hoped for: one line per language,
+     * each opening with its own label.
+     */
+    input.heading.toLowerCase().startsWith("annotatsiya")
+      ? "8. AYNAN uchta abzas yozing va har biri shu yorliq bilan boshlansin: \"Annotatsiya:\", \"Аннотация:\", \"Abstract:\". Uchalasi bir xil mazmunni aytsin — o‘zbekcha, ruscha, inglizcha."
+      : null,
+    input.heading.toLowerCase().startsWith("kalit")
+      ? "8. AYNAN uchta qator yozing va har biri shu yorliq bilan boshlansin: \"Kalit so‘zlar:\", \"Ключевые слова:\", \"Keywords:\". Har qatorda 5–8 ta atama, vergul bilan ajratilgan."
+      : null,
   ].filter(Boolean).join("\n");
 }
 
@@ -387,18 +406,32 @@ export function documentBlocks(input: {
    * `Annotatsiya:` and `Kalit so‘zlar:` are bold labels with regular text after
    * them, on the same line — which is why they are runs rather than paragraphs.
    */
-  const LABELLED: Partial<Record<string, string>> = {
-    abstract: "Annotatsiya: ",
-    keywords: "Kalit so‘zlar: ",
-  };
+  /** Sections whose lines carry their own labels, one per language. */
+  const LABELLED = new Set(["abstract", "keywords"]);
 
   for (const section of input.sections) {
-    const label = LABELLED[section.key];
-    if (label) {
-      blocks.push(paragraph(
-        [{ text: label, bold: true }, { text: section.body.replace(/\s+/g, " ").trim() }],
-        { align: "both", lineSpacing: 1.5, spaceAfter: 6 },
-      ));
+    if (LABELLED.has(section.key)) {
+      /**
+       * One line per language, each with its own bold label.
+       *
+       * The writer is asked for exactly three, each opening with its own word —
+       * `Annotatsiya:`, `Аннотация:`, `Abstract:` — so the label is split off
+       * at the first colon and set bold, and the text after it is not. A body
+       * that arrives without labels is printed as it came rather than guessed
+       * at: a wrong label is worse than none.
+       */
+      for (const line of section.body.split(/\n+/)) {
+        const said = line.trim();
+        if (!said) continue;
+        const at = said.indexOf(":");
+        const looksLabelled = at > 0 && at <= 24;
+        blocks.push(paragraph(
+          looksLabelled
+            ? [{ text: `${said.slice(0, at + 1)} `, bold: true }, { text: said.slice(at + 1).trim() }]
+            : [{ text: said }],
+          { align: "both", lineSpacing: 1.5, spaceAfter: 4 },
+        ));
+      }
       continue;
     }
 

@@ -1,6 +1,7 @@
 import type { GameQuestionType, GameRewardPlan, GameSessionStatus, Json, Tables } from "@jaxongirman/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
+import { withNetworkRetry } from "./retry";
 import { supabase } from "./supabase";
 
 /**
@@ -88,10 +89,20 @@ export type PlayerState = {
   leaderboard?: LeaderboardPayload;
 };
 
+/**
+ * Every O‘yingoh call, with a dropped connection asked again.
+ *
+ * These are the calls made in a room full of people on one overloaded cell:
+ * joining, answering, advancing. A lost packet used to end the attempt and
+ * show a Swift stack trace; now the question is simply asked again, and only a
+ * server that actually answered is treated as final.
+ */
 async function rpc<T>(name: string, args: Record<string, unknown>): Promise<T> {
-  const { data, error } = await supabase.rpc(name as never, args as never);
-  if (error) throw error;
-  return data as T;
+  return withNetworkRetry(async () => {
+    const { data, error } = await supabase.rpc(name as never, args as never);
+    if (error) throw error;
+    return data as T;
+  });
 }
 
 // ---------------------------------------------------------------- sessions --
@@ -173,7 +184,10 @@ export type GenerateGameInput = {
 };
 
 export async function generateGame(input: GenerateGameInput): Promise<{ gameId: string; status: string }> {
-  const { data, error } = await supabase.functions.invoke("generate-game", { body: input });
+  // Creating a game is one request that starts a background job; a request that
+  // never arrived started nothing, so asking again is free.
+  const { data, error } = await withNetworkRetry(() =>
+    supabase.functions.invoke("generate-game", { body: input }));
   if (error) {
     // The function wraps its refusals in a JSON body worth surfacing verbatim —
     // but `context` is only sometimes a `Response`, and calling `.json()` on

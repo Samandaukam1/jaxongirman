@@ -35,8 +35,13 @@ test("the PDF exporter pins the font versions the apps actually ship", () => {
 
   for (const [name, version] of pinned) {
     if (DOCUMENT_ONLY.has(name)) {
+      /**
+       * Looked for as a face id — `Tinos_400Regular` — rather than as a word.
+       * The family's name appears in a comment in `pdf-export.ts` explaining
+       * why it is not used there, and a substring search called that usage.
+       */
       const family = name.replace(/(^|-)([a-z])/g, (_, dash, letter) => letter.toUpperCase());
-      assert.ok(!slideExporters.includes(family),
+      assert.ok(!new RegExp(`${family}_\\w`).test(slideExporters),
         `${name} is exempt as document-only, but a slide exporter uses it`);
       continue;
     }

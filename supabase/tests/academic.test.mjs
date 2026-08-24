@@ -144,20 +144,45 @@ test("the title is capitals, bold, centred and larger than the body", () => {
   assert.ok(title.runs[0].size >= 16);
 });
 
-test("the abstract's label is bold and its text is not", () => {
+test("the abstract carries one labelled line per language", () => {
+  /**
+   * A journal here asks for the abstract and the keywords in Uzbek, Russian and
+   * English, and the submission form has a box for each. One language is a
+   * paper handed back.
+   */
   const blocks = documentBlocks({
     kind: "article", topic: "T", field: "", authorName: null, organization: null,
-    sections: [{ key: "abstract", heading: "Annotatsiya", body: "Qisqacha mazmun." }],
+    sections: [{
+      key: "abstract",
+      heading: "Annotatsiya",
+      body: "Annotatsiya: Qisqacha mazmun.\nАннотация: Краткое содержание.\nAbstract: A short summary.",
+    }],
+    sources: [],
+  });
+
+  const labelled = blocks.filter((block) => block.kind === "paragraph" && block.runs.length === 2);
+  assert.equal(labelled.length, 3, "uch til uchun uchta qator");
+  assert.deepEqual(labelled.map((block) => block.runs[0].text.trim()),
+    ["Annotatsiya:", "Аннотация:", "Abstract:"]);
+
+  for (const line of labelled) {
+    assert.equal(line.runs[0].bold, true, "yorliq qalin bo‘lsin");
+    assert.equal(line.runs[1].bold, undefined, "matn qalin bo‘lmasin");
+  }
+  assert.equal(labelled[0].runs[1].text, "Qisqacha mazmun.");
+});
+
+test("a body that arrives without labels is printed as it came", () => {
+  // A wrong label is worse than none, so nothing is guessed at.
+  const blocks = documentBlocks({
+    kind: "article", topic: "T", field: "", authorName: null, organization: null,
+    sections: [{ key: "keywords", heading: "Kalit so‘zlar", body: "jurnalistika, matbuot" }],
     sources: [],
   });
   const line = blocks.find((block) => block.kind === "paragraph"
-    && block.runs.some((run) => run.text.startsWith("Annotatsiya:")));
-  assert.ok(line, "annotatsiya yorlig‘i topilmadi");
-  assert.equal(line.runs[0].bold, true);
-  assert.equal(line.runs[1].bold, undefined);
-  assert.equal(line.runs[1].text, "Qisqacha mazmun.");
-  // On one line, so it is runs rather than two paragraphs.
-  assert.equal(line.runs.length, 2);
+    && block.runs.some((run) => run.text.includes("jurnalistika")));
+  assert.ok(line);
+  assert.equal(line.runs.length, 1);
 });
 
 test("an article's bibliography follows on; a bound work's starts a page", () => {

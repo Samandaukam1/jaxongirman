@@ -107,10 +107,12 @@ export async function renderDefensePdf(input: {
 
   const bytes = await face(bundledUrl(DEFAULT_FACE));
   const book: Book = bytes
-    ? {
-      regular: await pdf.embedFont(bytes, { subset: true }),
-      bold: await pdf.embedFont(bytes, { subset: true }),
-    }
+    ? await (async () => {
+      // One embed, reused: the same bytes embedded twice is a second way to
+      // produce the same broken subset.
+      const face = await pdf.embedFont(bytes);
+      return { regular: face, bold: face };
+    })()
     : {
       regular: await pdf.embedFont(StandardFonts.Helvetica),
       bold: await pdf.embedFont(StandardFonts.HelveticaBold),

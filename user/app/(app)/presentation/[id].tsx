@@ -119,18 +119,24 @@ export default function PresentationEditorScreen() {
    */
   const [zoom, setZoom] = useState(1);
   const liveZoom = useSharedValue(1);
+  /** Where the magnified slide is, in screen pixels, committed after a drag. */
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const livePanX = useSharedValue(0);
+  const livePanY = useSharedValue(0);
 
   const canvasWidth = baseWidth * zoom;
   const displayScale = canvasWidth / MODEL_WIDTH;
   const canvasHeight = MODEL_HEIGHT * displayScale;
 
   /**
-   * Built each render rather than memoised.
+   * Two fingers zoom; two fingers also move.
    *
-   * A `useMemo` callback is a pure function as far as the compiler is
-   * concerned, so writing a shared value from a gesture created inside one is
-   * flagged — correctly, in the general case. `GestureDetector` diffs the
-   * gesture it is given, so constructing it here costs nothing.
+   * A magnifier you cannot aim is not a magnifier — every photo editor pairs
+   * the pinch with a two-finger drag, and without it the only part of a slide
+   * you can work on is whatever happened to be under the middle of the screen.
+   * `minPointers(2)` is what keeps it out of the way of the one-finger drag
+   * that moves an element, and `Simultaneous` lets a pinch and a pan happen in
+   * the same gesture, which is what hands actually do.
    */
   const pinch = Gesture.Pinch()
     .onUpdate((event) => {
@@ -142,18 +148,46 @@ export default function PresentationEditorScreen() {
       runOnJS(setZoom)(liveZoom.value);
     });
 
-  /** Back to life size. The shared value is written where shared values live. */
-  const resetZoom = useCallback(() => {
+  const drag = Gesture.Pan()
+    .minPointers(2)
+    .onUpdate((event) => {
+      "worklet";
+      livePanX.value = pan.x + event.translationX;
+      livePanY.value = pan.y + event.translationY;
+    })
+    .onEnd(() => {
+      "worklet";
+      runOnJS(setPan)({ x: livePanX.value, y: livePanY.value });
+    });
+
+  const stageGesture = Gesture.Simultaneous(pinch, drag);
+
+  /**
+   * Back to life size, centred.
+   *
+   * Not memoised: a callback that writes shared values is not a pure function,
+   * and wrapping it in `useCallback` tells the compiler otherwise. It is a
+   * button handler — there is nothing to save.
+   */
+  function resetZoom() {
     runOnUI(() => {
       "worklet";
       liveZoom.value = 1;
+      livePanX.value = 0;
+      livePanY.value = 0;
     })();
     setZoom(1);
-  }, [liveZoom]);
+    setPan({ x: 0, y: 0 });
+  }
 
-  const pinchStyle = useAnimatedStyle(() => ({
-    // Once committed the two agree and this is exactly 1.
-    transform: [{ scale: liveZoom.value / zoom }],
+  const stageStyle = useAnimatedStyle(() => ({
+    // Translate first, then scale: the committed zoom is already in the
+    // stage's own size, so this only carries what the fingers are doing now.
+    transform: [
+      { translateX: livePanX.value },
+      { translateY: livePanY.value },
+      { scale: liveZoom.value / zoom },
+    ],
   }), [zoom]);
   const currentSlide = slides.find((slide) => slide.id === currentSlideId) ?? null;
   const currentElements = useMemo(() => elements.filter((element) => element.slide_id === currentSlideId).sort((a, b) => a.z_index - b.z_index), [currentSlideId, elements]);
@@ -690,8 +724,8 @@ export default function PresentationEditorScreen() {
 
       <ScrollView contentContainerStyle={[styles.editorScroll, { paddingBottom: dockHeight + spacing.xl }]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {/* The stage is unclipped so selection handles can sit outside the slide. */}
-        <GestureDetector gesture={pinch}>
-        <Animated.View style={[{ width: canvasWidth, height: canvasHeight }, pinchStyle]}>
+        <GestureDetector gesture={stageGesture}>
+        <Animated.View style={[{ width: canvasWidth, height: canvasHeight }, stageStyle]}>
           <View style={[styles.canvasFrame, StyleSheet.absoluteFill]}>
             <View style={{ width: MODEL_WIDTH, height: MODEL_HEIGHT, transform: [{ scale: displayScale }], transformOrigin: "top left" }}>
               <SlideCanvas
@@ -736,12 +770,12 @@ export default function PresentationEditorScreen() {
 
         {/* Only while it is doing something: a control that undoes nothing is
             a control to read past. */}
-        {zoom > 1 ? (
+        {zoom > 1 || pan.x !== 0 || pan.y !== 0 ? (
           <Pressable accessibilityRole="button" onPress={resetZoom} style={styles.zoomReset}>
             <Text style={styles.zoomResetText}>{Math.round(zoom * 100)}% · asliga qaytarish</Text>
           </Pressable>
         ) : (
-          <Text style={styles.zoomHint}>Kattalashtirish uchun ikki barmoq bilan suring</Text>
+          <Text style={styles.zoomHint}>Ikki barmoq bilan kattalashtiring va suring</Text>
         )}
 
         <View style={styles.historyBar}>
