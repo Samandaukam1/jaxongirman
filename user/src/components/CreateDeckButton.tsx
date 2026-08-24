@@ -1,11 +1,12 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { ArrowUpRight, Sparkles } from "lucide-react-native";
 import { useEffect, useState } from "react";
-import { AccessibilityInfo, Platform, Pressable, Text, View } from "react-native";
+import { AccessibilityInfo, Platform, Text, View } from "react-native";
 import Animated, {
   Easing, cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withTiming,
 } from "react-native-reanimated";
 
+import { Touchable } from "@/components/Touchable";
 import { brandInk, gradients, icon, radius, spacing, typography } from "@/theme/tokens";
 import { makeStyles } from "@/theme/ThemeProvider";
 
@@ -67,11 +68,11 @@ export function CreateDeckButton({ onPress }: { onPress: () => void }) {
   }));
 
   return (
-    <Pressable
+    <Touchable
       accessibilityRole="button"
       accessibilityLabel="Taqdimot yaratish"
       onPress={onPress}
-      style={({ pressed }) => [styles.wrap, pressed && styles.pressed]}
+      style={styles.wrap}
     >
       <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.body}>
         {still ? null : <Animated.View pointerEvents="none" style={[styles.sweep, sweep]} />}
@@ -85,13 +86,13 @@ export function CreateDeckButton({ onPress }: { onPress: () => void }) {
         </View>
         <ArrowUpRight color={brandInk.strong} size={icon.md} strokeWidth={icon.stroke} />
       </LinearGradient>
-    </Pressable>
+    </Touchable>
   );
 }
 
 const useStyles = makeStyles((colors) => ({
   wrap: {
-    borderRadius: radius.xl,
+    borderRadius: radius.lg,
     // The lift is static. An animated shadow is a re-rasterisation every frame.
     ...Platform.select({
       ios: { shadowColor: colors.primary, shadowOpacity: 0.32, shadowRadius: 22, shadowOffset: { width: 0, height: 12 } },
@@ -99,14 +100,13 @@ const useStyles = makeStyles((colors) => ({
       default: {},
     }),
   },
-  pressed: { transform: [{ scale: 0.985 }] },
   body: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
     paddingVertical: spacing.md + 2,
     paddingHorizontal: spacing.lg,
-    borderRadius: radius.xl,
+    borderRadius: radius.lg,
     overflow: "hidden",
   },
   sweep: {

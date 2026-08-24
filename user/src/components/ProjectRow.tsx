@@ -4,7 +4,7 @@ import Animated from "react-native-reanimated";
 
 import { usePressScale } from "@/lib/motion";
 import { KIND_LABEL, statusLabel, type Project, type ProjectKind } from "@/lib/projects";
-import { radius, spacing, typography } from "@/theme/tokens";
+import { radius, shadow, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /**
@@ -62,27 +62,38 @@ export function ProjectRow({ project, onPress }: { project: Project; onPress: ()
           {KIND_LABEL[project.kind]} · {project.detail} · {ago(project.updatedAt)}
         </Text>
       </View>
-      {status && loud ? (
-        <View style={styles.badge}><Text style={styles.badgeText}>{status}</Text></View>
-      ) : null}
+      {/**
+        * A finished thing gets a dot; an unfinished one gets the word.
+        *
+        * O‘yingoh's rows end in a status dot and these should read as the same
+        * furniture, but a dot cannot say "Yozilmoqda" — and a half-written
+        * academic work is exactly the row a person is scanning for.
+        */}
+      {status && loud
+        ? <View style={styles.badge}><Text style={styles.badgeText}>{status}</Text></View>
+        : <View style={styles.dot} />}
     </AnimatedPressable>
   );
 }
 
 const useStyles = makeStyles((colors) => ({
+  // Geometry copied from O‘yingoh's rows on purpose: one padding, one corner,
+  // one chip size, so a person moving between the two tabs sees one list style
+  // rather than two that nearly agree.
   row: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
-    padding: spacing.md,
+    padding: spacing.lg,
     borderRadius: radius.lg,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
+    ...shadow,
   },
-  pressed: { opacity: 0.7 },
+  pressed: { opacity: 0.92 },
   glyph: {
-    width: 44, height: 44, borderRadius: 15,
+    width: 42, height: 42, borderRadius: radius.md,
     alignItems: "center", justifyContent: "center",
     backgroundColor: colors.primarySoft,
   },
@@ -91,4 +102,5 @@ const useStyles = makeStyles((colors) => ({
   meta: { ...typography.caption, color: colors.inkSoft },
   badge: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: radius.sm, backgroundColor: colors.primarySoft },
   badgeText: { ...typography.caption, fontWeight: "700", color: colors.primaryDeep },
+  dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.success },
 }));

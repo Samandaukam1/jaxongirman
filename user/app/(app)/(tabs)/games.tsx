@@ -9,6 +9,7 @@ import { Image, Pressable, RefreshControl, ScrollView, Text, View } from "react-
 
 import coinIcon from "../../../assets/coin/coin-icon.png";
 import { Appear } from "@/components/Appear";
+import { Touchable } from "@/components/Touchable";
 import { BOTTOM_NAV_SPACE } from "@/components/BottomNav";
 import { EmptyState, InlineError, SkeletonCard } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
@@ -113,7 +114,7 @@ export default function GamesScreen() {
           </View>
           <View style={styles.headerActions}>
             <Pressable style={styles.coinPill} onPress={() => router.push("/coins/buy")} accessibilityLabel="J Coin balans">
-              <Image source={coinIcon} style={styles.coinIcon} />
+              <Image source={coinIcon} resizeMode="contain" style={styles.coinIcon} />
               <Text style={styles.coinText}>{formatNumber(balance)}</Text>
             </Pressable>
             <Pressable style={styles.iconButton} onPress={() => router.push("/notifications")} accessibilityLabel="Bildirishnomalar">
@@ -123,7 +124,7 @@ export default function GamesScreen() {
           </View>
         </View>
 
-        <Pressable
+        <Touchable
           style={({ pressed }) => [styles.ctaShadow, pressed && styles.pressed]}
           onPress={() => router.push("/oyingoh/create")}
           accessibilityRole="button"
@@ -138,12 +139,12 @@ export default function GamesScreen() {
             </View>
             <Sparkles color={brandInk.muted} size={icon.lg} strokeWidth={icon.stroke} />
           </LinearGradient>
-        </Pressable>
+        </Touchable>
 
         {/* Two ways into a match, side by side because they are peers: one joins
             somebody else's room, the other takes a projector over. */}
         <View style={styles.scanRow}>
-          <Pressable
+          <Touchable
             style={({ pressed }) => [styles.halfShadow, pressed && styles.pressed]}
             onPress={() => router.push("/oyingoh/join")}
             accessibilityRole="button"
@@ -153,9 +154,9 @@ export default function GamesScreen() {
               <Text style={styles.halfTitle}>O‘yinga qo‘shilish</Text>
               <Text style={styles.halfSubtitle}>QR yoki kod</Text>
             </LinearGradient>
-          </Pressable>
+          </Touchable>
 
-          <Pressable
+          <Touchable
             style={({ pressed }) => [styles.halfShadow, pressed && styles.pressed]}
             onPress={() => router.push("/oyingoh/scan")}
             accessibilityRole="button"
@@ -165,7 +166,7 @@ export default function GamesScreen() {
               <Text style={styles.halfTitle}>Mezbon bo‘lish</Text>
               <Text style={styles.halfSubtitle}>Katta ekranni ulash</Text>
             </LinearGradient>
-          </Pressable>
+          </Touchable>
         </View>
 
         {error ? <InlineError message={error} /> : null}
@@ -291,7 +292,7 @@ function GameRow({ game, onPress }: { game: Game; onPress: () => void }) {
   const styles = useStyles();
   const status = game.status as GameStatus;
   return (
-    <Pressable style={({ pressed }) => [styles.gameRow, pressed && styles.pressed]} onPress={onPress}>
+    <Touchable style={({ pressed }) => [styles.gameRow, pressed && styles.pressed]} onPress={onPress} accessibilityRole="button">
       <View style={styles.gameIcon}>
         <Gamepad2 color={colors.primary} size={icon.md} strokeWidth={icon.stroke} />
       </View>
@@ -302,7 +303,7 @@ function GameRow({ game, onPress }: { game: Game; onPress: () => void }) {
         </Text>
       </View>
       <View style={[styles.statusDot, status === "ready" ? styles.statusReady : status === "generating" ? styles.statusBusy : styles.statusDraft]} />
-    </Pressable>
+    </Touchable>
   );
 }
 
@@ -314,12 +315,14 @@ const useStyles = makeStyles((colors) => ({
   title: { ...typography.title, color: colors.ink },
   subtitle: { ...typography.body, color: colors.inkMuted },
   headerActions: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  // The same pill as Loyihalar, to the point. Two tabs a person switches
+  // between with one tap cannot each have their own balance chip.
   coinPill: {
     flexDirection: "row", alignItems: "center", gap: 6,
-    backgroundColor: colors.primarySoft, borderRadius: radius.pill,
-    paddingHorizontal: spacing.md, paddingVertical: 8,
+    height: 40, paddingHorizontal: spacing.md,
+    borderRadius: radius.pill, backgroundColor: colors.primarySoft,
   },
-  coinIcon: { width: 18, height: 18 },
+  coinIcon: { width: 22, height: 22 },
   coinText: { ...typography.bodyMedium, color: colors.primaryDeep },
   iconButton: {
     width: 40, height: 40, borderRadius: radius.pill, backgroundColor: colors.surfaceMuted,
@@ -346,7 +349,7 @@ const useStyles = makeStyles((colors) => ({
   },
   halfTitle: { ...typography.bodyMedium, color: brandInk.strong, fontSize: 15 },
   halfSubtitle: { ...typography.caption, color: brandInk.muted },
-  pressed: { transform: [{ scale: 0.98 }], opacity: 0.92 },
+  pressed: { opacity: 0.92 },
   statsRow: { flexDirection: "row", gap: spacing.sm },
   statCard: {
     flex: 1, alignItems: "center", gap: 2, backgroundColor: colors.surface,

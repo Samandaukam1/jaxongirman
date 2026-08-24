@@ -30,6 +30,21 @@ export const gradients = {
   create: ["#9A5CF5", "#5B21B6"] as const,
   join: ["#11A2B8", "#0A6E86"] as const,
   host: ["#CE8310", "#C2610C"] as const,
+
+  /**
+   * Loyihalar borrows O‘yingoh's shape and not its palette.
+   *
+   * The two screens are siblings — the same hero, the same tiles under it — so
+   * repeating teal and amber here would make them look like one screen shown
+   * twice. These are jewel tones a step away from the brand violet, one per
+   * tool, so a person learns the tile by its colour before they read it. Every
+   * stop clears 3:1 against white; the amber lesson above applies here too.
+   */
+  portrait: ["#D14D75", "#8E2247"] as const,
+  objective: ["#5566DE", "#2B349B"] as const,
+  academic: ["#12A276", "#07684A"] as const,
+  importDeck: ["#DB6A3A", "#9B3714"] as const,
+  present: ["#B04ACB", "#6E2385"] as const,
 } as const;
 
 /**
