@@ -4,6 +4,7 @@ import { CreditCard, ShieldCheck, Trash2 } from "lucide-react-native";
 import { useCallback, useState } from "react";
 import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 
+import { Appear } from "@/components/Appear";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { EmptyState, ErrorState, SkeletonCard } from "@/components/StateBlocks";
 import { formatShortDateTime } from "@/lib/datetime";
@@ -94,27 +95,29 @@ export default function CardsScreen() {
         ) : null}
 
         <View style={styles.list}>
-          {cards.map((card) => (
-            <View key={card.id} style={styles.card}>
-              <CreditCard color={colors.primary} size={20} strokeWidth={2} />
-              <View style={styles.cardCopy}>
-                <Text style={styles.pan}>{formatCardPan(card.display_pan)}</Text>
-                <Text style={styles.meta}>
-                  {formatStoredCardExpiry(card.expiry_month, card.expiry_year)}
-                  {card.last_used_at ? ` · oxirgi: ${formatShortDateTime(card.last_used_at)}` : ""}
-                </Text>
+          {cards.map((card, index) => (
+            <Appear key={card.id} index={index}>
+              <View key={card.id} style={styles.card}>
+                <CreditCard color={colors.primary} size={20} strokeWidth={2} />
+                <View style={styles.cardCopy}>
+                  <Text style={styles.pan}>{formatCardPan(card.display_pan)}</Text>
+                  <Text style={styles.meta}>
+                    {formatStoredCardExpiry(card.expiry_month, card.expiry_year)}
+                    {card.last_used_at ? ` · oxirgi: ${formatShortDateTime(card.last_used_at)}` : ""}
+                  </Text>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Kartani o‘chirish"
+                  disabled={busyId === card.id}
+                  onPress={() => remove(card)}
+                  style={styles.remove}
+                >
+                  <Trash2 color={colors.danger} size={16} strokeWidth={2} />
+                </Pressable>
               </View>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Kartani o‘chirish"
-                disabled={busyId === card.id}
-                onPress={() => remove(card)}
-                style={styles.remove}
-              >
-                <Trash2 color={colors.danger} size={16} strokeWidth={2} />
-              </Pressable>
-            </View>
-          ))}
+
+            </Appear>          ))}
         </View>
       </ScrollView>
     </View>

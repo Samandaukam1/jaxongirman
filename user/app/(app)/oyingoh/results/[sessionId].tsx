@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, ScrollView, Text, View } from "react-native";
 
+import { Appear } from "@/components/Appear";
 import { GameLeaderboardList } from "@/components/GameAnswerInput";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { ErrorState } from "@/components/StateBlocks";
@@ -150,25 +151,27 @@ export default function GameResultsScreen() {
         ) : null}
 
         <Text style={styles.sectionTitle}>Savollar bo‘yicha</Text>
-        {questions.map((question) => (
-          <View key={question.id} style={styles.questionCard}>
-            <View style={styles.questionHead}>
-              <Text style={styles.questionIndex}>{question.position + 1}</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.questionType}>{GAME_TYPE_LABELS[question.type]}</Text>
-                <Text style={styles.questionPrompt} numberOfLines={2}>{question.prompt}</Text>
+        {questions.map((question, index) => (
+          <Appear key={question.id} index={index}>
+            <View key={question.id} style={styles.questionCard}>
+              <View style={styles.questionHead}>
+                <Text style={styles.questionIndex}>{question.position + 1}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.questionType}>{GAME_TYPE_LABELS[question.type]}</Text>
+                  <Text style={styles.questionPrompt} numberOfLines={2}>{question.prompt}</Text>
+                </View>
               </View>
+              <View style={styles.bar}>
+                <View style={[styles.barFill, { flex: question.correct || 0.001 }]} />
+                <View style={[styles.barRest, { flex: Math.max(question.answers - question.correct, 0) || 0.001 }]} />
+              </View>
+              <Text style={styles.questionMeta}>
+                {question.answers} javob · {question.correct} to‘g‘ri
+                {question.averageMs > 0 ? ` · o‘rtacha ${(question.averageMs / 1000).toFixed(1)}s` : ""}
+              </Text>
             </View>
-            <View style={styles.bar}>
-              <View style={[styles.barFill, { flex: question.correct || 0.001 }]} />
-              <View style={[styles.barRest, { flex: Math.max(question.answers - question.correct, 0) || 0.001 }]} />
-            </View>
-            <Text style={styles.questionMeta}>
-              {question.answers} javob · {question.correct} to‘g‘ri
-              {question.averageMs > 0 ? ` · o‘rtacha ${(question.averageMs / 1000).toFixed(1)}s` : ""}
-            </Text>
-          </View>
-        ))}
+
+          </Appear>        ))}
       </ScrollView>
     </View>
   );

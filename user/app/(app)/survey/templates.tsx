@@ -4,6 +4,7 @@ import { BookmarkCheck, Copy, FilePlus2, Pencil, Trash2 } from "lucide-react-nat
 import { useCallback, useState } from "react";
 import { Alert, Modal, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
 
+import { Appear } from "@/components/Appear";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { EmptyState, ErrorState, InlineError, SkeletonCard } from "@/components/StateBlocks";
@@ -138,50 +139,52 @@ export default function SurveyTemplatesScreen() {
         ) : null}
 
         <View style={styles.list}>
-          {templates.map((template) => (
-            <View key={template.id} style={styles.card}>
-              <View style={styles.cardHead}>
-                <View style={styles.cardCopy}>
-                  <Text numberOfLines={1} style={styles.cardTitle}>{template.name}</Text>
-                  <Text style={styles.cardMeta}>
-                    {template.questions.length} savol · {template.use_count} marta ishlatilgan · {formatShortDateTime(template.updated_at)}
-                  </Text>
-                </View>
-                <Pressable accessibilityLabel="Nomini o‘zgartirish" onPress={() => { setRenaming(template); setDraftName(template.name); }} style={styles.iconButton}>
-                  <Pencil color={colors.ink} size={15} strokeWidth={2} />
-                </Pressable>
-                <Pressable accessibilityLabel="O‘chirish" onPress={() => remove(template)} style={[styles.iconButton, styles.iconDanger]}>
-                  <Trash2 color={colors.danger} size={15} strokeWidth={2} />
-                </Pressable>
-              </View>
-
-              <View style={styles.questionList}>
-                {template.questions.slice(0, 5).map((question) => (
-                  <View key={question.id} style={styles.questionRow}>
-                    <View style={styles.dot} />
-                    <Text numberOfLines={1} style={styles.questionLabel}>{question.label}</Text>
-                    <Text style={styles.questionType}>{SURVEY_QUESTION_LABELS[question.type]}</Text>
+          {templates.map((template, index) => (
+            <Appear key={template.id} index={index}>
+              <View key={template.id} style={styles.card}>
+                <View style={styles.cardHead}>
+                  <View style={styles.cardCopy}>
+                    <Text numberOfLines={1} style={styles.cardTitle}>{template.name}</Text>
+                    <Text style={styles.cardMeta}>
+                      {template.questions.length} savol · {template.use_count} marta ishlatilgan · {formatShortDateTime(template.updated_at)}
+                    </Text>
                   </View>
-                ))}
-                {template.questions.length > 5 ? (
-                  <Text style={styles.more}>+{template.questions.length - 5} ta savol</Text>
-                ) : null}
+                  <Pressable accessibilityLabel="Nomini o‘zgartirish" onPress={() => { setRenaming(template); setDraftName(template.name); }} style={styles.iconButton}>
+                    <Pencil color={colors.ink} size={15} strokeWidth={2} />
+                  </Pressable>
+                  <Pressable accessibilityLabel="O‘chirish" onPress={() => remove(template)} style={[styles.iconButton, styles.iconDanger]}>
+                    <Trash2 color={colors.danger} size={15} strokeWidth={2} />
+                  </Pressable>
+                </View>
+
+                <View style={styles.questionList}>
+                  {template.questions.slice(0, 5).map((question) => (
+                    <View key={question.id} style={styles.questionRow}>
+                      <View style={styles.dot} />
+                      <Text numberOfLines={1} style={styles.questionLabel}>{question.label}</Text>
+                      <Text style={styles.questionType}>{SURVEY_QUESTION_LABELS[question.type]}</Text>
+                    </View>
+                  ))}
+                  {template.questions.length > 5 ? (
+                    <Text style={styles.more}>+{template.questions.length - 5} ta savol</Text>
+                  ) : null}
+                </View>
+
+                <View style={styles.cardActions}>
+                  <Pressable accessibilityRole="button" onPress={() => duplicate(template)} style={styles.secondaryAction}>
+                    <Copy color={colors.primary} size={icon.xs} strokeWidth={2.2} />
+                    <Text style={styles.secondaryText}>Nusxadan tuzish</Text>
+                  </Pressable>
+                  <PrimaryButton
+                    label="So‘rovnoma yaratish"
+                    loading={busy === template.id}
+                    onPress={() => void startFromTemplate(template)}
+                    style={styles.primaryAction}
+                  />
+                </View>
               </View>
 
-              <View style={styles.cardActions}>
-                <Pressable accessibilityRole="button" onPress={() => duplicate(template)} style={styles.secondaryAction}>
-                  <Copy color={colors.primary} size={icon.xs} strokeWidth={2.2} />
-                  <Text style={styles.secondaryText}>Nusxadan tuzish</Text>
-                </Pressable>
-                <PrimaryButton
-                  label="So‘rovnoma yaratish"
-                  loading={busy === template.id}
-                  onPress={() => void startFromTemplate(template)}
-                  style={styles.primaryAction}
-                />
-              </View>
-            </View>
-          ))}
+            </Appear>          ))}
         </View>
       </ScrollView>
 

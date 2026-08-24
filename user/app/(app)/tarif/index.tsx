@@ -8,6 +8,7 @@ import { Check, Crown, Info, RotateCcw, Sparkles, X } from "lucide-react-native"
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Alert, Modal, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 
+import { Appear } from "@/components/Appear";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { ErrorState, SkeletonCard } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
@@ -214,11 +215,12 @@ export default function TariffScreen() {
           </View>
         ) : null}
 
-        {plans.map((plan) => {
+        {plans.map((plan, index) => {
           const price = priceLine(plan);
           const owned = membership?.planCode === plan.code;
           return (
-            <View key={plan.code} style={[styles.card, plan.isFeatured && styles.cardFeatured]}>
+            <Appear key={plan.code} index={index}>
+            <View style={[styles.card, plan.isFeatured && styles.cardFeatured]}>
               {plan.badge ? (
                 <View style={styles.cardBadge}>
                   <Sparkles color={colors.primary} size={icon.xs} strokeWidth={icon.strokeBold} />
@@ -272,6 +274,7 @@ export default function TariffScreen() {
                 <Text style={styles.detailLinkText}>Barcha imkoniyatlar</Text>
               </Pressable>
             </View>
+            </Appear>
           );
         })}
 

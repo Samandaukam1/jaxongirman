@@ -7,6 +7,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, Platform, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 
+import { Appear } from "@/components/Appear";
 import { CelebrationOverlay } from "@/components/CelebrationOverlay";
 import { asErrorMessage } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
@@ -224,10 +225,11 @@ export default function NotificationsScreen() {
               <Text style={styles.emptyCopy}>Tanga, so‘rovnoma va tizim xabarlari shu yerda ko‘rinadi.</Text>
             </View>
           }
-          renderItem={({ item }) => {
+          renderItem={({ item, index }) => {
             const gift = CELEBRATED.includes(item.kind);
             const Glyph = KIND_ICONS[item.kind] ?? Sparkles;
             return (
+              <Appear index={index}>
               <Pressable onPress={() => void open(item)} style={[styles.row, !item.read_at && styles.rowUnread]}>
                 <View style={styles.rowCopy}>
                   <View style={styles.rowTop}>
@@ -241,6 +243,7 @@ export default function NotificationsScreen() {
                   <Glyph color={gift ? colors.onPrimary : colors.primary} size={22} strokeWidth={1.9} />
                 </View>
               </Pressable>
+              </Appear>
             );
           }}
         />

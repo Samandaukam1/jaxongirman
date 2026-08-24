@@ -4,6 +4,7 @@ import { Package, Plus, Wallet } from "lucide-react-native";
 import { useCallback, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 
+import { Appear } from "@/components/Appear";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { PaymentUnavailable } from "@/components/PaymentUnavailable";
 import { ScreenHeader } from "@/components/ScreenHeader";
@@ -125,27 +126,28 @@ export default function SellerDashboardScreen() {
         ) : null}
 
         <View style={styles.list}>
-          {products.map((product) => (
-            <Pressable
-              key={product.id}
-              accessibilityRole="button"
-              onPress={() => router.push({ pathname: "/(app)/marketplace/[id]", params: { id: product.id } })}
-              style={styles.card}
-            >
-              <View style={styles.cardHead}>
-                <Text numberOfLines={2} style={styles.cardTitle}>{product.title}</Text>
-                <View style={[styles.badge, styles[`badge_${product.status}`] ?? styles.badge_draft]}>
-                  <Text style={styles.badgeText}>{MARKETPLACE_STATUS_LABELS[product.status]}</Text>
+          {products.map((product, index) => (
+            <Appear key={product.id} index={index}>
+              <Pressable
+                                accessibilityRole="button"
+                onPress={() => router.push({ pathname: "/(app)/marketplace/[id]", params: { id: product.id } })}
+                style={styles.card}
+              >
+                <View style={styles.cardHead}>
+                  <Text numberOfLines={2} style={styles.cardTitle}>{product.title}</Text>
+                  <View style={[styles.badge, styles[`badge_${product.status}`] ?? styles.badge_draft]}>
+                    <Text style={styles.badgeText}>{MARKETPLACE_STATUS_LABELS[product.status]}</Text>
+                  </View>
                 </View>
-              </View>
-              <Text style={styles.cardMeta}>
-                {formatSom(product.base_price)} · {product.sales_count} sotuv · {formatShortDateTime(product.created_at)}
-              </Text>
-              {product.status === "rejected" && product.rejection_reason ? (
-                <Text style={styles.rejection}>Sabab: {product.rejection_reason}</Text>
-              ) : null}
-            </Pressable>
-          ))}
+                <Text style={styles.cardMeta}>
+                  {formatSom(product.base_price)} · {product.sales_count} sotuv · {formatShortDateTime(product.created_at)}
+                </Text>
+                {product.status === "rejected" && product.rejection_reason ? (
+                  <Text style={styles.rejection}>Sabab: {product.rejection_reason}</Text>
+                ) : null}
+              </Pressable>
+
+            </Appear>          ))}
         </View>
       </ScrollView>
     </View>

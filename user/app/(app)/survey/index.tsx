@@ -4,6 +4,7 @@ import { BookmarkCheck, ClipboardList, Plus, ShieldCheck } from "lucide-react-na
 import { useCallback, useMemo, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 
+import { Appear } from "@/components/Appear";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { SurveyCard, type SurveySummary } from "@/components/SurveyCard";
@@ -171,17 +172,18 @@ export default function SurveyModuleScreen() {
         ) : null}
 
         <View style={styles.list}>
-          {visible.map((item) => (
-            <SurveyCard
-              key={item.id}
-              item={item}
-              onPress={() => router.push(
-                item.is_owner
-                  ? { pathname: "/(app)/survey/results/[id]", params: { id: item.id } }
-                  : { pathname: "/(app)/survey/[id]", params: { id: item.id } },
-              )}
-            />
-          ))}
+          {visible.map((item, index) => (
+            <Appear key={item.id} index={index}>
+              <SurveyCard
+                                item={item}
+                onPress={() => router.push(
+                  item.is_owner
+                    ? { pathname: "/(app)/survey/results/[id]", params: { id: item.id } }
+                    : { pathname: "/(app)/survey/[id]", params: { id: item.id } },
+                )}
+              />
+
+            </Appear>          ))}
         </View>
       </ScrollView>
     </View>

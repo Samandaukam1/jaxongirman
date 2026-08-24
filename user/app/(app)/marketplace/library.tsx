@@ -3,6 +3,7 @@ import { BookOpenText, Download, Library } from "lucide-react-native";
 import { useCallback, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 
+import { Appear } from "@/components/Appear";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { EmptyState, ErrorState, SkeletonCard } from "@/components/StateBlocks";
 import { formatShortDateTime } from "@/lib/datetime";
@@ -87,50 +88,52 @@ export default function LibraryScreen() {
         ) : null}
 
         <View style={styles.list}>
-          {purchases.map((purchase) => (
-            <View key={purchase.id} style={styles.card}>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => router.push({ pathname: "/(app)/marketplace/[id]", params: { id: purchase.product_id } })}
-                style={styles.cardCopy}
-              >
-                <Text numberOfLines={2} style={styles.cardTitle}>
-                  {purchase.marketplace_products?.title ?? "Material"}
-                </Text>
-                <Text style={styles.cardMeta}>
-                  {formatSom(purchase.buyer_total)} · {formatShortDateTime(purchase.purchased_at)}
-                  {purchase.marketplace_products?.file_format ? ` · ${purchase.marketplace_products.file_format.toUpperCase()}` : ""}
-                </Text>
-              </Pressable>
-
-              <View style={styles.actions}>
+          {purchases.map((purchase, index) => (
+            <Appear key={purchase.id} index={index}>
+              <View key={purchase.id} style={styles.card}>
                 <Pressable
                   accessibilityRole="button"
-                  disabled={busyId !== null}
-                  onPress={() => void download(purchase.product_id, "main")}
-                  style={styles.action}
+                  onPress={() => router.push({ pathname: "/(app)/marketplace/[id]", params: { id: purchase.product_id } })}
+                  style={styles.cardCopy}
                 >
-                  {busyId === `${purchase.product_id}:main`
-                    ? <ActivityIndicator color={colors.primary} size="small" />
-                    : <Download color={colors.primary} size={16} strokeWidth={2} />}
-                  <Text style={styles.actionText}>Yuklab olish</Text>
+                  <Text numberOfLines={2} style={styles.cardTitle}>
+                    {purchase.marketplace_products?.title ?? "Material"}
+                  </Text>
+                  <Text style={styles.cardMeta}>
+                    {formatSom(purchase.buyer_total)} · {formatShortDateTime(purchase.purchased_at)}
+                    {purchase.marketplace_products?.file_format ? ` · ${purchase.marketplace_products.file_format.toUpperCase()}` : ""}
+                  </Text>
                 </Pressable>
-                {purchase.marketplace_products?.has_study_guide ? (
+
+                <View style={styles.actions}>
                   <Pressable
                     accessibilityRole="button"
                     disabled={busyId !== null}
-                    onPress={() => void download(purchase.product_id, "study_guide")}
+                    onPress={() => void download(purchase.product_id, "main")}
                     style={styles.action}
                   >
-                    {busyId === `${purchase.product_id}:study_guide`
+                    {busyId === `${purchase.product_id}:main`
                       ? <ActivityIndicator color={colors.primary} size="small" />
-                      : <BookOpenText color={colors.primary} size={16} strokeWidth={2} />}
-                    <Text style={styles.actionText}>Study guide</Text>
+                      : <Download color={colors.primary} size={16} strokeWidth={2} />}
+                    <Text style={styles.actionText}>Yuklab olish</Text>
                   </Pressable>
-                ) : null}
+                  {purchase.marketplace_products?.has_study_guide ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      disabled={busyId !== null}
+                      onPress={() => void download(purchase.product_id, "study_guide")}
+                      style={styles.action}
+                    >
+                      {busyId === `${purchase.product_id}:study_guide`
+                        ? <ActivityIndicator color={colors.primary} size="small" />
+                        : <BookOpenText color={colors.primary} size={16} strokeWidth={2} />}
+                      <Text style={styles.actionText}>Study guide</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
               </View>
-            </View>
-          ))}
+
+            </Appear>          ))}
         </View>
       </ScrollView>
     </View>

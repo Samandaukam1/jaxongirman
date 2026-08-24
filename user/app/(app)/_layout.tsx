@@ -19,19 +19,25 @@ export default function AppLayout() {
             screenOptions={{
               headerShown: false,
               contentStyle: { backgroundColor: colors.canvas },
+              // Named rather than left to the platform default, so a push feels
+              // the same on both. 260ms is the far edge of "instant" — long
+              // enough to see where the screen came from, short enough that
+              // nobody waits through it twice.
+              animation: "slide_from_right",
+              animationDuration: 260,
             }}
           >
             <Stack.Screen name="(tabs)" />
             <Stack.Screen
               name="notifications"
-              options={{ presentation: "modal" }}
+              options={{ presentation: "modal", animation: "slide_from_bottom" }}
             />
             {/* A full screen rather than a sheet, and no swipe-to-dismiss: a
               half-filled form should only be abandoned on purpose, through the
               button in its own header. */}
             <Stack.Screen
               name="create"
-              options={{ presentation: "fullScreenModal", gestureEnabled: false }}
+              options={{ presentation: "fullScreenModal", animation: "slide_from_bottom", gestureEnabled: false }}
             />
             <Stack.Screen
               name="generation/[id]"
@@ -46,7 +52,7 @@ export default function AppLayout() {
               in-progress state lives only in memory — the same rule as `create`. */}
             <Stack.Screen
               name="survey/create"
-              options={{ presentation: "fullScreenModal", gestureEnabled: false }}
+              options={{ presentation: "fullScreenModal", animation: "slide_from_bottom", gestureEnabled: false }}
             />
             <Stack.Screen name="survey/templates" />
             <Stack.Screen name="survey/access" />
@@ -59,17 +65,17 @@ export default function AppLayout() {
             {/* A viewer, not a document: full screen, and left on purpose. */}
             <Stack.Screen
               name="marketplace/preview/[id]"
-              options={{ presentation: "fullScreenModal", gestureEnabled: false }}
+              options={{ presentation: "fullScreenModal", animation: "slide_from_bottom", gestureEnabled: false }}
             />
             {/* Checkout and the seller form are both flows a person should leave on
               purpose, through their own header button, rather than by swiping. */}
             <Stack.Screen
               name="marketplace/checkout"
-              options={{ presentation: "fullScreenModal", gestureEnabled: false }}
+              options={{ presentation: "fullScreenModal", animation: "slide_from_bottom", gestureEnabled: false }}
             />
             <Stack.Screen
               name="marketplace/sell"
-              options={{ presentation: "fullScreenModal", gestureEnabled: false }}
+              options={{ presentation: "fullScreenModal", animation: "slide_from_bottom", gestureEnabled: false }}
             />
             <Stack.Screen name="marketplace/seller" />
             <Stack.Screen name="marketplace/library" />
@@ -78,7 +84,7 @@ export default function AppLayout() {
             {/* The scanner is a camera surface; leaving it should be deliberate. */}
             <Stack.Screen
               name="present/scan"
-              options={{ presentation: "fullScreenModal", gestureEnabled: false }}
+              options={{ presentation: "fullScreenModal", animation: "slide_from_bottom", gestureEnabled: false }}
             />
             <Stack.Screen
               name="present/[sessionId]"

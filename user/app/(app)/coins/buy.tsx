@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 
 import coinIcon from "../../../assets/coin/coin-icon.png";
+import { Appear } from "@/components/Appear";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { EmptyState, ErrorState, SkeletonCard } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
@@ -134,40 +135,42 @@ export default function BuyCoinsScreen() {
         ) : null}
 
         <View style={styles.list}>
-          {(policy.paymentsEnabled ? packages : []).map((item) => (
-            <Pressable
-              key={item.id}
-              // Pressable only where a purchase is actually possible: an inert
-              // row that highlights on touch promises something it cannot do.
-              disabled={!payments.configured || opening !== null}
-              onPress={() => void buy(item.id)}
-              style={({ pressed }) => [styles.package, pressed && payments.configured && styles.packagePressed]}
-              accessibilityRole={payments.configured ? "button" : undefined}
-            >
-              <Image source={coinIcon} resizeMode="contain" style={styles.packageCoin} />
-              <View style={styles.packageCopy}>
-                <Text style={styles.packageLabel}>{item.label}</Text>
-                <Text style={styles.packageCoins}>
-                  {formatCoins(item.coins)}
-                  {item.bonus_coins > 0 ? <Text style={styles.packageBonus}>  +{formatNumber(item.bonus_coins)} bonus</Text> : null}
-                </Text>
-                {item.description ? <Text style={styles.packageDescription}>{item.description}</Text> : null}
-              </View>
-              <View style={styles.packagePrice}>
-                <Text style={styles.priceValue}>{formatPrice(Number(item.price_amount), item.currency)}</Text>
-                <View style={[styles.priceState, payments.configured ? styles.priceStateReady : styles.priceStateLocked]}>
-                  {opening === item.id ? (
-                    <ActivityIndicator color={colors.success} size="small" />
-                  ) : (
-                    <CreditCard color={payments.configured ? colors.success : colors.inkSoft} size={13} strokeWidth={2} />
-                  )}
-                  <Text style={[styles.priceStateText, payments.configured ? styles.priceStateTextReady : null]}>
-                    {opening === item.id ? "Ochilmoqda…" : payments.configured ? "Sotib olish" : "Kutilmoqda"}
+          {(policy.paymentsEnabled ? packages : []).map((item, index) => (
+            <Appear key={item.id} index={index}>
+              <Pressable
+                key={item.id}
+                // Pressable only where a purchase is actually possible: an inert
+                // row that highlights on touch promises something it cannot do.
+                disabled={!payments.configured || opening !== null}
+                onPress={() => void buy(item.id)}
+                style={({ pressed }) => [styles.package, pressed && payments.configured && styles.packagePressed]}
+                accessibilityRole={payments.configured ? "button" : undefined}
+              >
+                <Image source={coinIcon} resizeMode="contain" style={styles.packageCoin} />
+                <View style={styles.packageCopy}>
+                  <Text style={styles.packageLabel}>{item.label}</Text>
+                  <Text style={styles.packageCoins}>
+                    {formatCoins(item.coins)}
+                    {item.bonus_coins > 0 ? <Text style={styles.packageBonus}>  +{formatNumber(item.bonus_coins)} bonus</Text> : null}
                   </Text>
+                  {item.description ? <Text style={styles.packageDescription}>{item.description}</Text> : null}
                 </View>
-              </View>
-            </Pressable>
-          ))}
+                <View style={styles.packagePrice}>
+                  <Text style={styles.priceValue}>{formatPrice(Number(item.price_amount), item.currency)}</Text>
+                  <View style={[styles.priceState, payments.configured ? styles.priceStateReady : styles.priceStateLocked]}>
+                    {opening === item.id ? (
+                      <ActivityIndicator color={colors.success} size="small" />
+                    ) : (
+                      <CreditCard color={payments.configured ? colors.success : colors.inkSoft} size={13} strokeWidth={2} />
+                    )}
+                    <Text style={[styles.priceStateText, payments.configured ? styles.priceStateTextReady : null]}>
+                      {opening === item.id ? "Ochilmoqda…" : payments.configured ? "Sotib olish" : "Kutilmoqda"}
+                    </Text>
+                  </View>
+                </View>
+              </Pressable>
+
+            </Appear>          ))}
         </View>
 
         {!loading && packages.length > 0 && !payments.configured ? (

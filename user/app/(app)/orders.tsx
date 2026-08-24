@@ -3,6 +3,7 @@ import { Receipt } from "lucide-react-native";
 import { useCallback, useState } from "react";
 import { RefreshControl, ScrollView, Text, View } from "react-native";
 
+import { Appear } from "@/components/Appear";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { EmptyState, ErrorState, SkeletonCard } from "@/components/StateBlocks";
 import { formatShortDateTime } from "@/lib/datetime";
@@ -87,35 +88,37 @@ export default function OrdersScreen() {
           />
         ) : null}
 
-        {rows.map((row) => (
-          <View key={row.order_number} style={styles.row}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.title} numberOfLines={1}>{row.title || PURPOSE_LABELS[row.purpose] || "Xarid"}</Text>
-              <Text style={styles.meta}>
-                {PURPOSE_LABELS[row.purpose] ?? row.purpose} · {row.order_number}
-              </Text>
-              <Text style={styles.meta}>{formatShortDateTime(row.paid_at ?? row.created_at)}</Text>
-            </View>
-            <View style={styles.right}>
-              <Text style={styles.amount}>{formatSom(row.total_amount)}</Text>
-              <View style={[
-                styles.badge,
-                row.status === "paid" ? styles.badgePaid
-                  : ["failed", "cancelled", "expired"].includes(row.status) ? styles.badgeFailed
-                  : styles.badgePending,
-              ]}>
-                <Text style={[
-                  styles.badgeText,
-                  row.status === "paid" ? styles.badgeTextPaid
-                    : ["failed", "cancelled", "expired"].includes(row.status) ? styles.badgeTextFailed
-                    : styles.badgeTextPending,
-                ]}>
-                  {STATUS_LABELS[row.status] ?? row.status}
+        {rows.map((row, index) => (
+          <Appear key={row.order_number} index={index}>
+            <View style={styles.row}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.title} numberOfLines={1}>{row.title || PURPOSE_LABELS[row.purpose] || "Xarid"}</Text>
+                <Text style={styles.meta}>
+                  {PURPOSE_LABELS[row.purpose] ?? row.purpose} · {row.order_number}
                 </Text>
+                <Text style={styles.meta}>{formatShortDateTime(row.paid_at ?? row.created_at)}</Text>
+              </View>
+              <View style={styles.right}>
+                <Text style={styles.amount}>{formatSom(row.total_amount)}</Text>
+                <View style={[
+                  styles.badge,
+                  row.status === "paid" ? styles.badgePaid
+                    : ["failed", "cancelled", "expired"].includes(row.status) ? styles.badgeFailed
+                    : styles.badgePending,
+                ]}>
+                  <Text style={[
+                    styles.badgeText,
+                    row.status === "paid" ? styles.badgeTextPaid
+                      : ["failed", "cancelled", "expired"].includes(row.status) ? styles.badgeTextFailed
+                      : styles.badgeTextPending,
+                  ]}>
+                    {STATUS_LABELS[row.status] ?? row.status}
+                  </Text>
+                </View>
               </View>
             </View>
-          </View>
-        ))}
+
+          </Appear>        ))}
       </ScrollView>
     </View>
   );
