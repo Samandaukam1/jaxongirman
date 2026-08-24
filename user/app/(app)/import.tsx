@@ -8,6 +8,7 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { InlineError } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
+import { uploadLocalFile } from "@/lib/upload";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
 import { radius, spacing, typography } from "@/theme/tokens";
@@ -93,12 +94,15 @@ export default function ImportScreen() {
     try {
       setStep("Fayl yuklanmoqda…");
       const storagePath = `${user.id}/imports/${crypto.randomUUID()}.pptx`;
-      const blob = await (await fetch(file.uri)).blob();
-      const uploaded = await supabase.storage.from("user-uploads").upload(storagePath, blob, {
+      const uploaded = await uploadLocalFile({
+        bucket: "user-uploads",
+        path: storagePath,
+        uri: file.uri,
         contentType: PPTX_MIME,
-        upsert: false,
+        maxBytes: MAX_BYTES,
+        tooLargeMessage: "Fayl 50 MB dan katta. Rasmlarni siqib, qaytadan urinib ko‘ring.",
       });
-      if (uploaded.error) throw uploaded.error;
+      if (!uploaded.ok) throw new Error(uploaded.message);
 
       setStep("Slaydlar o‘qilmoqda…");
       const { data, error: importError } = await supabase.functions.invoke("import-pptx", {

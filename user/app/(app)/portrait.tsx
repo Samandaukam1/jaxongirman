@@ -1,4 +1,5 @@
 import * as Clipboard from "expo-clipboard";
+import { useLocalSearchParams } from "expo-router";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import * as Sharing from "expo-sharing";
@@ -8,7 +9,7 @@ import { ActivityIndicator, Image, Linking, Platform, Pressable, ScrollView, Sha
 
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { asErrorMessage } from "@/lib/format";
-import { buildPortraitSheet, portraitPrompt, sheetUrl, uploadPortrait, type PortraitSheet } from "@/lib/portrait";
+import { buildPortraitSheet, portraitById, portraitPrompt, sheetUrl, uploadPortrait, type PortraitSheet } from "@/lib/portrait";
 import { useAuth } from "@/providers/AuthProvider";
 import { icon, radius, shadow, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
@@ -33,6 +34,7 @@ export default function PortraitScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
   const { user } = useAuth();
+  const { sheetId } = useLocalSearchParams<{ sheetId?: string }>();
   const [step, setStep] = useState(0);
   const [prompt, setPrompt] = useState("");
   const [copied, setCopied] = useState(false);
@@ -46,6 +48,28 @@ export default function PortraitScreen() {
     try { setPrompt(await portraitPrompt()); } catch { /* the copy button simply has nothing to give */ }
   }, []);
   useEffect(() => { void load(); }, [load]);
+
+  /**
+   * Arriving from Loyihalar opens that sheet, finished, at the last step.
+   *
+   * Nobody comes back to a 3×4 to read the prompt again — they come back
+   * because they need the print sheet a second time, so that is the step this
+   * lands on with the download already in hand.
+   */
+  useEffect(() => {
+    if (!sheetId) return;
+    let alive = true;
+    void portraitById(sheetId)
+      .then((saved) => {
+        if (!alive || !saved) return;
+        setSourcePath(saved.sourcePath);
+        setSheet({ id: saved.id, sheetPath: saved.sheetPath, warnings: [] });
+        setPreview(saved.sourceUrl);
+        setStep(3);
+      })
+      .catch((failure) => { if (alive) setError(asErrorMessage(failure)); });
+    return () => { alive = false; };
+  }, [sheetId]);
 
   async function pick() {
     if (!user) return;

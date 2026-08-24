@@ -48,13 +48,31 @@ export function asErrorMessage(error: unknown): string {
  * `{ error, code }`, so read that instead of showing the useless generic message.
  */
 export async function asFunctionErrorMessage(error: unknown): Promise<string> {
-  const response = (error as { context?: unknown })?.context;
-  if (response instanceof Response) {
+  /**
+   * Duck-typed, not `instanceof Response`.
+   *
+   * React Native's fetch is a polyfill, and the object supabase-js hands back
+   * as `error.context` did not pass `instanceof Response` against the global
+   * one. So this branch never ran on a phone: the server would answer 400 with
+   * `{"error":"ready presentation not found"}` and the person was shown "Edge
+   * Function returned a non-2xx status code", which describes the transport and
+   * says nothing about what happened. Every function failure in the app looked
+   * like the same nameless failure for that reason.
+   */
+  const response = (error as { context?: unknown })?.context as
+    | { clone?: unknown; json?: unknown; text?: unknown }
+    | undefined;
+  if (response && (typeof response.json === "function" || typeof response.text === "function")) {
     try {
-      const body = (await response.clone().json()) as { error?: unknown };
+      const source = typeof response.clone === "function"
+        ? (response.clone as () => NonNullable<typeof response>)()
+        : response;
+      const body = typeof source.json === "function"
+        ? await (source.json as () => Promise<{ error?: unknown }>)()
+        : JSON.parse(await (source.text as () => Promise<string>)()) as { error?: unknown };
       if (typeof body.error === "string" && body.error) return body.error;
     } catch {
-      // Not JSON — fall back to the generic message below.
+      // Not JSON, or already consumed — fall back to the generic message.
     }
   }
   return asErrorMessage(error);

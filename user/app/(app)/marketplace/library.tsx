@@ -3,6 +3,7 @@ import { BookOpenText, Download, Library } from "lucide-react-native";
 import { useCallback, useState } from "react";
 import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 
+import { useAuth } from "@/providers/AuthProvider";
 import { Appear } from "@/components/Appear";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { EmptyState, ErrorState, SkeletonCard } from "@/components/StateBlocks";
@@ -31,6 +32,7 @@ type Purchase = {
  * action rather than a URL.
  */
 export default function LibraryScreen() {
+  const { user } = useAuth();
   const { colors } = useTheme();
   const styles = useStyles();
   const router = useRouter();
@@ -41,16 +43,19 @@ export default function LibraryScreen() {
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(async (isRefresh = false) => {
+    if (!user) return;
     if (isRefresh) setRefreshing(true); else setLoading(true);
     const { data, error: requestError } = await supabase
       .from("marketplace_purchases")
       .select("id,product_id,buyer_total,purchased_at,marketplace_products(title,material_type,file_format,has_study_guide)")
+      // Mine, stated. The policy also lets an admin read every purchase.
+      .eq("buyer_id", user.id)
       .order("purchased_at", { ascending: false });
     if (requestError) setError(asErrorMessage(requestError));
     else { setPurchases((data ?? []) as unknown as Purchase[]); setError(null); }
     setLoading(false);
     setRefreshing(false);
-  }, []);
+  }, [user]);
 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
 

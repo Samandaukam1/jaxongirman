@@ -4,6 +4,7 @@ import { CreditCard, ShieldCheck, Trash2 } from "lucide-react-native";
 import { useCallback, useState } from "react";
 import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 
+import { useAuth } from "@/providers/AuthProvider";
 import { Appear } from "@/components/Appear";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { EmptyState, ErrorState, SkeletonCard } from "@/components/StateBlocks";
@@ -24,6 +25,7 @@ type PartialCard = Tables<"partial_cards">;
  * simply appears the next time one is used.
  */
 export default function CardsScreen() {
+  const { user } = useAuth();
   const { colors } = useTheme();
   const styles = useStyles();
   const [cards, setCards] = useState<PartialCard[]>([]);
@@ -33,15 +35,18 @@ export default function CardsScreen() {
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(async (isRefresh = false) => {
+    if (!user) return;
     if (isRefresh) setRefreshing(true); else setLoading(true);
     const { data, error: requestError } = await supabase
-      .from("partial_cards").select("*").eq("is_active", true)
+      // Mine, stated. Without this an administrator opening their own wallet
+      // is shown every saved card in the product.
+      .from("partial_cards").select("*").eq("user_id", user.id).eq("is_active", true)
       .order("last_used_at", { ascending: false, nullsFirst: false });
     if (requestError) setError(asErrorMessage(requestError));
     else { setCards(data ?? []); setError(null); }
     setLoading(false);
     setRefreshing(false);
-  }, []);
+  }, [user]);
 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
 

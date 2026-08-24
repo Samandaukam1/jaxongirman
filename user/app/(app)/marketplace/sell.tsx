@@ -15,6 +15,7 @@ import { asErrorMessage } from "@/lib/format";
 import { useMaterialTypes, useQuote } from "@/lib/marketplace";
 import { formatBytes, formatSom } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
+import { uploadLocalFile } from "@/lib/upload";
 import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
 import { useAuth } from "@/providers/AuthProvider";
 import { radius, shadow, spacing, typography } from "@/theme/tokens";
@@ -126,12 +127,10 @@ export default function SellScreen() {
   }
 
   async function upload(bucket: string, path: string, file: PickedFile): Promise<void> {
-    const blob = await (await fetch(file.uri)).blob();
-    const { error: uploadError } = await supabase.storage.from(bucket).upload(path, blob, {
-      contentType: file.mimeType,
-      upsert: true,
+    const result = await uploadLocalFile({
+      bucket, path, uri: file.uri, contentType: file.mimeType, upsert: true,
     });
-    if (uploadError) throw uploadError;
+    if (!result.ok) throw new Error(result.message);
   }
 
   async function publish() {

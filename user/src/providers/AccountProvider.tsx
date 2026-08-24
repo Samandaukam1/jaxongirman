@@ -49,9 +49,10 @@ export function AccountProvider({ children }: PropsWithChildren) {
       const [profileResult, walletResult, unreadResult, entitlementResult] = await Promise.all([
         supabase.from("profiles").select("id,full_name,first_name,last_name,username,avatar_url").eq("id", user.id).single(),
         supabase.from("credit_wallets").select("balance,reserved").eq("user_id", user.id).single(),
-        supabase.from("notifications").select("id", { count: "exact", head: true }).is("read_at", null),
+        supabase.from("notifications").select("id", { count: "exact", head: true }).eq("user_id", user.id).is("read_at", null),
         supabase.from("module_entitlements")
           .select("module_code,expires_at,starts_at,status")
+          .eq("user_id", user.id)
           .eq("status", "active")
           .gt("expires_at", new Date().toISOString())
           .order("expires_at", { ascending: true }),

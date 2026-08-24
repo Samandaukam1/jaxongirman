@@ -4,9 +4,9 @@ import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ArrowLeft, Check, Download, LoaderCircle, MessageSquareQuote, Redo2, Send, Sparkles, Undo2 } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Alert, FlatList, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { runOnJS, runOnUI, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
+import Animated, { runOnJS, runOnUI, useAnimatedKeyboard, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 
 import { AddElementBar, type AddKind } from "@/components/AddElementBar";
 import { ElementPicker } from "@/components/ElementPicker";
@@ -90,6 +90,23 @@ export default function PresentationEditorScreen() {
   const [addOpen, setAddOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [dockHeight, setDockHeight] = useState(120);
+
+  /**
+   * The dock rides the keyboard.
+   *
+   * It floats over the canvas, which means it is absolutely placed — and an
+   * absolutely placed child is laid out against its parent's border box, so the
+   * padding a `KeyboardAvoidingView` adds never reached it. The wrapper dutifully
+   * shrank and the bar stayed exactly where it was, behind the keyboard, with
+   * the field the person was typing into. On Android the wrapper did nothing at
+   * all, so it was worse there.
+   *
+   * Reading the keyboard's own height and lifting by it is both the fix and one
+   * fewer thing in the tree: the value is on the UI thread, so the bar tracks
+   * the keyboard frame by frame instead of jumping when it has finished.
+   */
+  const keyboard = useAnimatedKeyboard();
+  const dockLift = useAnimatedStyle(() => ({ transform: [{ translateY: -keyboard.height.value }] }));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [aiCommand, setAiCommand] = useState("");
@@ -709,7 +726,7 @@ export default function PresentationEditorScreen() {
   if (loading || !presentation || !currentSlide) return <View style={styles.loading}><ActivityIndicator color={colors.primary} size="large" /></View>;
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.screen} keyboardVerticalOffset={8}>
+    <View style={styles.screen}>
       <View style={styles.header}>
         <Pressable onPress={() => router.replace("/(app)/(tabs)/projects")} style={styles.iconButton}><ArrowLeft color={colors.ink} size={icon.md} strokeWidth={icon.stroke} /></Pressable>
         <View style={styles.headerCenter}><Text numberOfLines={1} style={styles.title}>{presentation.title}</Text><View style={styles.saveRow}>{saving ? <LoaderCircle color={colors.inkSoft} size={12} strokeWidth={icon.stroke} /> : <Check color={colors.success} size={12} strokeWidth={icon.strokeBold} />}<Text style={styles.saved}>{saving ? "Saqlanmoqda" : "Saqlandi"}</Text></View></View>
@@ -810,7 +827,10 @@ export default function PresentationEditorScreen() {
         />
       </ScrollView>
 
-      <View onLayout={(event) => setDockHeight(event.nativeEvent.layout.height)} style={styles.dockArea}>
+      <Animated.View
+        onLayout={(event) => setDockHeight(event.nativeEvent.layout.height)}
+        style={[styles.dockArea, dockLift]}
+      >
         {selected ? (
           <ElementToolbar
             element={selected}
@@ -838,7 +858,7 @@ export default function PresentationEditorScreen() {
           <TextInput value={aiCommand} onChangeText={setAiCommand} placeholder="Jaxongir AI ga o‘zgartirishni ayting…" placeholderTextColor={colors.inkSoft} style={styles.aiInput} onSubmitEditing={() => void runAiEdit()} />
           <Pressable disabled={aiLoading || !aiCommand.trim()} onPress={() => void runAiEdit()} style={[styles.sendButton, (!aiCommand.trim() || aiLoading) && styles.disabled]}>{aiLoading ? <ActivityIndicator color={colors.onPrimary} size="small" /> : <Send color={colors.onPrimary} size={icon.sm} strokeWidth={icon.stroke} />}</Pressable>
         </View>
-      </View>
+      </Animated.View>
       <ElementPicker
         visible={pickerOpen}
         onClose={() => setPickerOpen(false)}
@@ -851,7 +871,7 @@ export default function PresentationEditorScreen() {
         presentationTitle={presentation.title}
         onClose={() => setExportOpen(false)}
       />
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 

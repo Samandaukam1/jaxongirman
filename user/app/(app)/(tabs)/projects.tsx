@@ -31,13 +31,14 @@ import { EmptyState, ErrorState, SkeletonCard } from "@/components/StateBlocks";
 import { HeroToolCard, ToolCard, type ToolArt } from "@/components/ToolCard";
 import { Touchable } from "@/components/Touchable";
 import { asErrorMessage } from "@/lib/format";
+import { blend, withAlpha } from "@/theme/color";
 import { useReduceMotion } from "@/lib/motion";
 import { formatNumber } from "@/lib/money";
 import { listProjects, searchProjects, type Project } from "@/lib/projects";
 import { supabase } from "@/lib/supabase";
 import { useAccount } from "@/providers/AccountProvider";
 import { useAuth } from "@/providers/AuthProvider";
-import { icon, radius, spacing, typography } from "@/theme/tokens";
+import { icon, radius, spacing, toolTint, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /**
@@ -65,6 +66,8 @@ type Tool = {
   label: string;
   detail: string;
   art: ToolArt;
+  /** The hue its own drawing is lit by — see `toolTint`. */
+  tint: string;
   href: string;
 };
 
@@ -76,11 +79,11 @@ type Tool = {
  * the two ends of a deck that already exists, so they sit together at the end.
  */
 const TOOLS: readonly Tool[] = [
-  { key: "portrait", label: "3×4 rasm", detail: "Hujjatga", art: PortraitArt, href: "/(app)/portrait" },
-  { key: "objective", label: "Obyektivka", detail: "DOCX / PDF", art: ObjectiveArt, href: "/(app)/obyektivka" },
-  { key: "academic", label: "Ilmiy ish", detail: "Maqola, referat", art: ScientificArt, href: "/(app)/ilmiy" },
-  { key: "import", label: "PowerPoint", detail: "Yuklab tahrirlash", art: PowerPointArt, href: "/(app)/import" },
-  { key: "present", label: "Taqdimot qilish", detail: "Katta ekranga", art: PresentArt, href: "/(app)/present/scan" },
+  { key: "portrait", label: "3×4 rasm", detail: "Hujjatga", art: PortraitArt, tint: toolTint.portrait, href: "/(app)/portrait" },
+  { key: "objective", label: "Obyektivka", detail: "DOCX / PDF", art: ObjectiveArt, tint: toolTint.objective, href: "/(app)/obyektivka" },
+  { key: "academic", label: "Ilmiy ish", detail: "Maqola, referat", art: ScientificArt, tint: toolTint.academic, href: "/(app)/ilmiy" },
+  { key: "import", label: "PowerPoint", detail: "Yuklab tahrirlash", art: PowerPointArt, tint: toolTint.importDeck, href: "/(app)/import" },
+  { key: "present", label: "Taqdimot qilish", detail: "Katta ekranga", art: PresentArt, tint: toolTint.present, href: "/(app)/present/scan" },
 ];
 
 /**
@@ -115,7 +118,7 @@ const CHIP_ROW = 48;
 const ESTIMATED_CARDS = 332;
 
 export default function ProjectsScreen() {
-  const { colors } = useTheme();
+  const { colors, scheme } = useTheme();
   const styles = useStyles();
   const router = useRouter();
   const { user } = useAuth();
@@ -193,7 +196,7 @@ export default function ProjectsScreen() {
     if (isRefresh) setRefreshing(true); else setLoading(true);
     setError(null);
     try {
-      setItems(await listProjects());
+      setItems(await listProjects(user.id));
       void supabase.from("profiles").update({ last_seen_at: new Date().toISOString() }).eq("id", user.id);
       if (isRefresh) void refreshAccount();
     } catch (nextError) {
@@ -205,6 +208,17 @@ export default function ProjectsScreen() {
   }, [refreshAccount, user]);
 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
+
+  /**
+   * The folded row's chips, each carrying a trace of its own card's colour, so
+   * that folding the header changes the size of the six tools and nothing else
+   * about them. Opaque rather than a wash: a chip is its own background, and
+   * there is nothing behind one to show through (see `blend`).
+   */
+  const chipSkin = useCallback((tint: string) => ({
+    backgroundColor: blend(colors.softCard, tint, scheme === "dark" ? 0.18 : 0.1),
+    borderColor: withAlpha(tint, scheme === "dark" ? 0.32 : 0.24),
+  }), [colors.softCard, scheme]);
 
   const shown = useMemo(() => searchProjects(items, query), [items, query]);
   const go = (href: string) => router.push(href as never);
@@ -304,6 +318,7 @@ export default function ProjectsScreen() {
             size={HERO_ART}
             title="Taqdimot yaratish"
             detail="Jaxongir AI bilan yangi slayd"
+            tint={toolTint.slideCreate}
             onPress={() => go("/(app)/create")}
             progress={artFold}
           />
@@ -318,6 +333,7 @@ export default function ProjectsScreen() {
                 size={TILE_ART}
                 title={tool.label}
                 detail={tool.detail}
+                tint={tool.tint}
                 onPress={() => go(tool.href)}
                 progress={artFold}
               />
@@ -331,6 +347,7 @@ export default function ProjectsScreen() {
                 size={WIDE_ART}
                 title={tool.label}
                 detail={tool.detail}
+                tint={tool.tint}
                 onPress={() => go(tool.href)}
                 progress={artFold}
               />
@@ -344,7 +361,7 @@ export default function ProjectsScreen() {
             accessibilityRole="button"
             accessibilityLabel="Taqdimot yaratish"
             onPress={() => go("/(app)/create")}
-            style={styles.chip}
+            style={[styles.chip, chipSkin(toolTint.slideCreate)]}
           >
             <SlideCreateArt width={CHIP_ART} height={CHIP_ART} />
           </Touchable>
@@ -354,7 +371,7 @@ export default function ProjectsScreen() {
               accessibilityRole="button"
               accessibilityLabel={tool.label}
               onPress={() => go(tool.href)}
-              style={styles.chip}
+              style={[styles.chip, chipSkin(tool.tint)]}
             >
               <tool.art width={CHIP_ART} height={CHIP_ART} />
             </Touchable>
@@ -436,8 +453,7 @@ const useStyles = makeStyles((colors) => ({
   chip: {
     flex: 1, height: CHIP_ROW, borderRadius: radius.md,
     alignItems: "center", justifyContent: "center",
-    backgroundColor: colors.softCard,
-    borderWidth: 1, borderColor: colors.softCardBorder,
+    borderWidth: 1,
   },
 
   content: { paddingHorizontal: spacing.xl, paddingBottom: BOTTOM_NAV_SPACE + spacing.xl, gap: spacing.md },

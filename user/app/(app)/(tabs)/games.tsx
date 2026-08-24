@@ -20,6 +20,7 @@ import {
 import { formatNumber } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
 import { useAccount } from "@/providers/AccountProvider";
+import { useAuth } from "@/providers/AuthProvider";
 import { brandInk, gradients, icon, radius, shadow, shadowLifted, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
@@ -46,6 +47,7 @@ export default function GamesScreen() {
   const styles = useStyles();
   const router = useRouter();
   const { balance, unreadCount } = useAccount();
+  const { user } = useAuth();
   const [shelf, setShelf] = useState<Shelf>("all");
   const [games, setGames] = useState<Game[]>([]);
   const [boughtIds, setBoughtIds] = useState<Set<string>>(new Set());
@@ -58,10 +60,11 @@ export default function GamesScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    if (!user) return;
     try {
       setError(null);
       const [mine, free, cats, played, myStats, entitled] = await Promise.all([
-        listMyGames(),
+        listMyGames(user.id),
         listFreeGames(),
         listCategories(),
         listMyMatches(),
@@ -87,7 +90,7 @@ export default function GamesScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [user]);
 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
 

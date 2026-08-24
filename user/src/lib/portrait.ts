@@ -72,6 +72,42 @@ export async function sheetUrl(sheetPath: string): Promise<string> {
   return data.signedUrl;
 }
 
+/**
+ * One sheet this person made earlier, so it can be opened again.
+ *
+ * The row was always written; nothing could ever reach it. A 3×4 sheet showed
+ * up in Loyihalar and the link went to the empty screen, which meant the work
+ * was recorded and lost in the same breath.
+ */
+export async function portraitById(id: string): Promise<{
+  id: string;
+  sourcePath: string | null;
+  sheetPath: string;
+  sourceUrl: string | null;
+} | null> {
+  const { data, error } = await supabase
+    .from("portrait_sheets")
+    .select("id, source_path, sheet_path")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  // No row, or a row whose sheet never finished: either way there is nothing
+  // to reopen, and the screen should start where it always did.
+  if (!data?.sheet_path) return null;
+
+  // The preview is nice to have and not worth failing the screen over: the
+  // sheet is downloadable whether or not the original still previews.
+  const signed = data.source_path
+    ? await supabase.storage.from("user-uploads").createSignedUrl(data.source_path, 300)
+    : null;
+  return {
+    id: data.id,
+    sourcePath: data.source_path,
+    sheetPath: data.sheet_path,
+    sourceUrl: signed?.data?.signedUrl ?? null,
+  };
+}
+
 /** The sheets this person has already made — what the obyektivka picker reads. */
 export async function myPortraits(limit = 12) {
   const { data, error } = await supabase

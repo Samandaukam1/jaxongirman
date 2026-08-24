@@ -230,10 +230,19 @@ export const listCategories = async (): Promise<GameCategory[]> => {
   return data ?? [];
 };
 
-export const listMyGames = async (): Promise<Game[]> => {
+/**
+ * Filtered by owner, always.
+ *
+ * These tables' select policies end in `or is_admin()`, which the admin console
+ * needs and which applies just as well to an administrator using the ordinary
+ * app — so an unfiltered "my things" query hands them everybody's things. The
+ * app states whose list it is asking for; the policy is the floor, not the plan.
+ */
+export const listMyGames = async (ownerId: string): Promise<Game[]> => {
   const { data, error } = await supabase
     .from("games")
     .select("*")
+    .eq("owner_id", ownerId)
     .order("updated_at", { ascending: false })
     .limit(100);
   if (error) throw error;

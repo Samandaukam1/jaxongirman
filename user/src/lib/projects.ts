@@ -65,18 +65,34 @@ const when = (value: unknown): string => String(value ?? new Date(0).toISOString
  * One failing table does not empty the list: a person whose academic works
  * cannot be read should still see their presentations, because the alternative
  * is a screen that says they have made nothing.
+ *
+ * Every read is filtered by owner, and the id is a required argument rather
+ * than something read from the session in here — so a caller cannot forget it
+ * and quietly get somebody else's work.
+ *
+ * That is not belt and braces. These tables' select policies read
+ * `owner_id = auth.uid() or is_admin()`, which is meant for the admin console
+ * and applies just as well to an administrator using the ordinary app: this
+ * list showed them every deck, sheet, obyektivka and paper in the database,
+ * mixed in with their own and sorted by date. It is also why exporting from
+ * here failed — `request_export` checks ownership properly, so a PDF of the
+ * deck at the top of the list was refused as "not found".
  */
-export async function listProjects(): Promise<Project[]> {
+export async function listProjects(ownerId: string): Promise<Project[]> {
   const [decks, portraits, objectives, works] = await Promise.allSettled([
     supabase.from("presentations")
       .select("id, title, status, generated_slide_count, updated_at, created_at")
+      .eq("owner_id", ownerId)
       .order("created_at", { ascending: false }).limit(50),
     supabase.from("portrait_sheets")
-      .select("id, created_at").order("created_at", { ascending: false }).limit(20),
+      .select("id, created_at").eq("owner_id", ownerId)
+      .order("created_at", { ascending: false }).limit(20),
     supabase.from("objective_documents")
-      .select("id, full_name, updated_at").order("updated_at", { ascending: false }).limit(20),
+      .select("id, full_name, updated_at").eq("owner_id", ownerId)
+      .order("updated_at", { ascending: false }).limit(20),
     supabase.from("academic_works")
-      .select("id, kind, topic, status, updated_at").order("updated_at", { ascending: false }).limit(20),
+      .select("id, kind, topic, status, updated_at").eq("owner_id", ownerId)
+      .order("updated_at", { ascending: false }).limit(20),
   ]);
 
   const out: Project[] = [];
@@ -104,7 +120,7 @@ export async function listProjects(): Promise<Project[]> {
         detail: "A6 chop etish varag‘i",
         status: "ready",
         updatedAt: when(row.created_at),
-        href: "/(app)/portrait",
+        href: `/(app)/portrait?sheetId=${row.id}`,
       });
     }
   }

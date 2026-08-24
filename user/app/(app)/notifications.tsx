@@ -85,6 +85,10 @@ export default function NotificationsScreen() {
     const { data, error: requestError } = await supabase
       .from("notifications")
       .select("*")
+      // Stated here as well as in the policy. An inbox that is only your own
+      // because a policy says so is one policy edit away from being everyone's,
+      // and that is exactly how this screen came to show other people's post.
+      .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(200);
     if (requestError) setError(asErrorMessage(requestError));

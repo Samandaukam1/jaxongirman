@@ -15,6 +15,7 @@ import { formatShortDateTime, useNow } from "@/lib/datetime";
 import { asErrorMessage } from "@/lib/format";
 import { formatBytes } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
+import { uploadLocalFile } from "@/lib/upload";
 import { useAuth } from "@/providers/AuthProvider";
 import { radius, shadow, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
@@ -205,10 +206,13 @@ export default function SurveyRespondScreen() {
           // Uploaded here, at the last possible moment, so a form that is
           // abandoned before this point leaves no object in the bucket.
           const path = `${user.id}/${form.id}/${Crypto.randomUUID()}.${value.image.extension}`;
-          const response = await fetch(value.image.uri);
-          const blob = await response.blob();
-          const { error: uploadError } = await supabase.storage.from("survey-uploads").upload(path, blob, { contentType: value.image.mimeType, upsert: false });
-          if (uploadError) throw uploadError;
+          const stored = await uploadLocalFile({
+            bucket: "survey-uploads",
+            path,
+            uri: value.image.uri,
+            contentType: value.image.mimeType,
+          });
+          if (!stored.ok) throw new Error(stored.message);
           uploaded.push(path);
           items.push({ question_id: question.id, files: [{ path, mime_type: value.image.mimeType, size_bytes: value.image.sizeBytes }] });
         } else if (question.type === "phone") {
