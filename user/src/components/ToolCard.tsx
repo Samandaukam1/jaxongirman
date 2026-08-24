@@ -1,8 +1,8 @@
 import * as Haptics from "expo-haptics";
-import { memo } from "react";
-import { Image, Platform, Text, View, type ImageSourcePropType, type StyleProp, type ViewStyle } from "react-native";
+import { memo, type FC } from "react";
+import { Platform, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import Animated, { useAnimatedStyle, type SharedValue } from "react-native-reanimated";
-import Svg, { Path } from "react-native-svg";
+import Svg, { Path, type SvgProps } from "react-native-svg";
 
 import { Touchable } from "@/components/Touchable";
 import { radius, spacing, typography } from "@/theme/tokens";
@@ -17,13 +17,13 @@ import { makeStyles, useTheme } from "@/theme/ThemeProvider";
  * row reads as one system, and what tells the tools apart is the drawing rather
  * than the background it sits on.
  *
- * `art` is one of the Liquid Glass tiles, each of which already carries its own
- * glass plate. The card under it is deliberately quieter than the tile on it —
- * a cool near-white ground and a hairline — so the two read as one object
- * rather than as a picture pasted onto a button.
+ * `art` is one of the icons in `assets/icons`, compiled from its SVG. The card
+ * under it is deliberately quieter than the artwork on it — a cool near-white
+ * ground and a hairline — so the two read as one object rather than as a
+ * picture pasted onto a button.
  */
 
-export type ToolArt = ImageSourcePropType;
+export type ToolArt = FC<SvgProps>;
 
 /**
  * How far the artwork shrinks as the page scrolls, as a fraction of the way
@@ -86,7 +86,7 @@ type CardProps = {
  * The wide one at the top: artwork left, words in the middle, arrow at the end.
  */
 export const HeroToolCard = memo(function HeroToolCard({
-  art, size, title, detail, onPress, progress, style,
+  art: Art, size, title, detail, onPress, progress, style,
 }: CardProps) {
   const { colors } = useTheme();
   const styles = useStyles();
@@ -102,9 +102,10 @@ export const HeroToolCard = memo(function HeroToolCard({
     >
       {/* The artwork never takes the touch — the whole card is the target. */}
       <Animated.View pointerEvents="none" style={artStyle}>
-        {/* `contain` and a square box: the tiles are 512×512 and must not be
-            cropped or stretched to fit whatever the layout hands them. */}
-        <Image source={art} resizeMode="contain" style={{ width: size, height: size }} />
+        {/* A square box against a square viewBox, and the artwork's own
+            `preserveAspectRatio="xMidYMid meet"` does the rest: centred, whole,
+            and never stretched to fill. */}
+        <Art width={size} height={size} />
       </Animated.View>
       <View style={styles.heroCopy}>
         <Text numberOfLines={1} style={styles.heroTitle}>{title}</Text>
@@ -123,7 +124,7 @@ export const HeroToolCard = memo(function HeroToolCard({
  * have no width to put words beside a drawing.
  */
 export const ToolCard = memo(function ToolCard({
-  art, size, title, detail, onPress, progress, style,
+  art: Art, size, title, detail, onPress, progress, style,
 }: CardProps) {
   const styles = useStyles();
   const artStyle = useArtStyle(progress);
@@ -136,7 +137,7 @@ export const ToolCard = memo(function ToolCard({
       style={[styles.card, styles.tile, style]}
     >
       <Animated.View pointerEvents="none" style={artStyle}>
-        <Image source={art} resizeMode="contain" style={{ width: size, height: size }} />
+        <Art width={size} height={size} />
       </Animated.View>
       <View style={styles.tileCopy}>
         <Text numberOfLines={1} style={styles.title}>{title}</Text>

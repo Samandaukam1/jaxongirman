@@ -8,12 +8,21 @@ import Animated, {
 } from "react-native-reanimated";
 
 import coinIcon from "../../../assets/coin/coin-icon.png";
-import SlideCreateArt from "../../../assets/liquid-glass/01_slayd_yaratish.png";
-import PortraitArt from "../../../assets/liquid-glass/02_3x4_rasm_yaratish.png";
-import ObjectiveArt from "../../../assets/liquid-glass/03_obyektivka_yaratish.png";
-import ScientificArt from "../../../assets/liquid-glass/04_ilmiy_ish_yaratish.png";
-import PowerPointArt from "../../../assets/liquid-glass/05_powerpoint.png";
-import PresentArt from "../../../assets/liquid-glass/06_taqdimot_qilish.png";
+/**
+ * The icons, named for what each one draws rather than for its file.
+ *
+ * The six files are one sheet of six icons, each cropping out a different
+ * region of it, and the file numbers do not run in the order the sheet was
+ * laid out. `1.svg` is the photo, `4.svg` is the slide stack — so the names
+ * here come from the picture, not the digit, and anyone changing a mapping
+ * later has something to check it against.
+ */
+import PortraitArt from "../../../assets/icons/1.svg";
+import ObjectiveArt from "../../../assets/icons/2.svg";
+import ScientificArt from "../../../assets/icons/3.svg";
+import SlideCreateArt from "../../../assets/icons/4.svg";
+import PowerPointArt from "../../../assets/icons/5.svg";
+import PresentArt from "../../../assets/icons/6.svg";
 import { Appear } from "@/components/Appear";
 import { BOTTOM_NAV_SPACE } from "@/components/BottomNav";
 
@@ -337,7 +346,7 @@ export default function ProjectsScreen() {
             onPress={() => go("/(app)/create")}
             style={styles.chip}
           >
-            <Image source={SlideCreateArt} resizeMode="contain" style={{ width: CHIP_ART, height: CHIP_ART }} />
+            <SlideCreateArt width={CHIP_ART} height={CHIP_ART} />
           </Touchable>
           {TOOLS.map((tool) => (
             <Touchable
@@ -347,7 +356,7 @@ export default function ProjectsScreen() {
               onPress={() => go(tool.href)}
               style={styles.chip}
             >
-              <Image source={tool.art} resizeMode="contain" style={{ width: CHIP_ART, height: CHIP_ART }} />
+              <tool.art width={CHIP_ART} height={CHIP_ART} />
             </Touchable>
           ))}
         </Animated.View>
