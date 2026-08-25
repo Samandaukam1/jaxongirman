@@ -5161,6 +5161,15 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      admin_reclaim_credits: {
+        Args: {
+          p_amount: number
+          p_idempotency_key?: string
+          p_reason: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
       admin_record_finance_entry: {
         Args: {
           p_amount_usd: number
