@@ -1,9 +1,16 @@
-import { FileText, GraduationCap, Image as ImageIcon, Presentation } from "lucide-react-native";
-import { Text, View } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { memo, useMemo, type FC } from "react";
+import { StyleSheet, Text, View } from "react-native";
+import type { SvgProps } from "react-native-svg";
 
+import PortraitArt from "../../assets/icons/1.svg";
+import ObjectiveArt from "../../assets/icons/2.svg";
+import ScientificArt from "../../assets/icons/3.svg";
+import SlideCreateArt from "../../assets/icons/4.svg";
 import { Touchable } from "@/components/Touchable";
 import { KIND_LABEL, statusLabel, type Project, type ProjectKind } from "@/lib/projects";
-import { radius, shadow, spacing, typography } from "@/theme/tokens";
+import { withAlpha } from "@/theme/color";
+import { radius, shadow, spacing, toolTint, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /**
@@ -12,16 +19,46 @@ import { makeStyles, useTheme } from "@/theme/ThemeProvider";
  * The same row for all four, because from the reader's side they are the same
  * object: something with a name, a date, and a place it opens. A different card
  * per kind would say the opposite — that these are four apps sharing a screen.
- * The only thing that varies is the glyph, which is how you tell them apart at
- * a glance without reading anything.
+ *
+ * What varies is the mark, and it is the same mark the tool above it carries —
+ * the drawing that made the thing, on a plate in that tool's own colour. Four
+ * identical violet glyphs told you nothing until you read the line under the
+ * title; a green cap and a blue document are read before the words are.
  */
 
-const GLYPH: Record<ProjectKind, typeof Presentation> = {
-  presentation: Presentation,
-  portrait: ImageIcon,
-  objective: FileText,
-  academic: GraduationCap,
+type Mark = { art: FC<SvgProps>; tint: string };
+
+const MARK: Record<ProjectKind, Mark> = {
+  presentation: { art: SlideCreateArt, tint: toolTint.slideCreate },
+  portrait: { art: PortraitArt, tint: toolTint.portrait },
+  objective: { art: ObjectiveArt, tint: toolTint.objective },
+  academic: { art: ScientificArt, tint: toolTint.academic },
 };
+
+const ART = 26;
+
+/**
+ * The plate under the mark, in that tool's colour.
+ *
+ * The same construction as the cards on the shelf above — the hue at a wash,
+ * never at strength — so the two read as one system rather than as a list that
+ * happens to be colourful. Dark mode leans on it a little harder because a
+ * fifth of an alpha that is felt on white disappears on near-black.
+ */
+const Plate = memo(function Plate({ tint, night }: { tint: string; night: boolean }) {
+  const stops = useMemo<readonly [string, string]>(() => (night
+    ? [withAlpha(tint, 0.34), withAlpha(tint, 0.1)]
+    : [withAlpha(tint, 0.22), withAlpha(tint, 0.05)]), [night, tint]);
+
+  return (
+    <LinearGradient
+      colors={stops}
+      start={{ x: 0.2, y: 0 }}
+      end={{ x: 0.8, y: 1 }}
+      style={StyleSheet.absoluteFill}
+    />
+  );
+});
 
 /** Anything not finished says so; a finished thing says nothing. */
 const LOUD = new Set(["writing", "planning", "paused", "failed", "generating", "draft"]);
@@ -37,9 +74,9 @@ function ago(iso: string): string {
 }
 
 export function ProjectRow({ project, onPress }: { project: Project; onPress: () => void }) {
-  const { colors } = useTheme();
+  const { scheme } = useTheme();
   const styles = useStyles();
-  const Glyph = GLYPH[project.kind];
+  const { art: Art, tint } = MARK[project.kind];
   const status = statusLabel(project.status);
   const loud = project.status ? LOUD.has(project.status) : false;
 
@@ -50,7 +87,10 @@ export function ProjectRow({ project, onPress }: { project: Project; onPress: ()
       onPress={onPress}
       style={styles.row}
     >
-      <View style={styles.glyph}><Glyph color={colors.primary} size={20} strokeWidth={1.9} /></View>
+      <View style={[styles.glyph, { borderColor: withAlpha(tint, scheme === "dark" ? 0.3 : 0.2) }]}>
+        <Plate tint={tint} night={scheme === "dark"} />
+        <Art width={ART} height={ART} />
+      </View>
       <View style={styles.copy}>
         <Text numberOfLines={2} style={styles.title}>{project.title}</Text>
         <Text numberOfLines={1} style={styles.meta}>
@@ -89,7 +129,10 @@ const useStyles = makeStyles((colors) => ({
   glyph: {
     width: 42, height: 42, borderRadius: radius.md,
     alignItems: "center", justifyContent: "center",
-    backgroundColor: colors.primarySoft,
+    // The plate is a gradient behind the mark, so the box clips rather than
+    // fills, and the rim is set per row from the tool's own hue.
+    overflow: "hidden",
+    borderWidth: 1,
   },
   copy: { flex: 1, gap: 2 },
   title: { ...typography.body, fontWeight: "700", color: colors.ink },

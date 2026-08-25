@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(18);
+select plan(20);
 
 select has_function(
   'public', 'admin_reclaim_credits', array['uuid', 'integer', 'text', 'text'],
@@ -87,6 +87,26 @@ select is(
   (select count(*)::int from public.notifications
     where user_id = '10000000-0000-0000-0000-000000000001'),
   0, 'an admin cannot read somebody else''s inbox through an ordinary query'
+);
+
+-- The same rule on the tables the app lists. An administrator's own app should
+-- show their own work, and `request_export` refusing a deck they can see but do
+-- not own is what made this visible.
+set local role postgres;
+insert into public.presentations (id, owner_id, title, status, style)
+values ('aaaaaaaa-0000-0000-0000-00000000000a', '10000000-0000-0000-0000-000000000001',
+        'Boshqa odamning taqdimoti', 'ready', 'professional');
+set local role authenticated;
+
+select is(
+  (select count(*)::int from public.presentations
+    where id = 'aaaaaaaa-0000-0000-0000-00000000000a'),
+  0, 'an admin does not see somebody else''s deck in an ordinary query'
+);
+select is(
+  (select count(*)::int from public.credit_wallets
+    where user_id = '10000000-0000-0000-0000-000000000001'),
+  0, 'nor somebody else''s wallet'
 );
 
 -- ------------------------------------------------------------- the same press
