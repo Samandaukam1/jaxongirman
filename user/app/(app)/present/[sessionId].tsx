@@ -19,6 +19,7 @@ import { asErrorMessage } from "@/lib/format";
 import { launchPresentationGame, presentationHasGame } from "@/lib/games";
 import { loadDefense, type Defense } from "@/lib/defense";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/providers/AuthProvider";
 import { radius, shadow, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
@@ -103,6 +104,7 @@ async function hydrateImages(rows: Element[]): Promise<Element[]> {
 
 /** The phone renders and manipulates the same deck that the projector follows. */
 export default function RemoteScreen() {
+  const { user } = useAuth();
   const { colors } = useTheme();
   const styles = useStyles();
   const router = useRouter();
@@ -133,11 +135,15 @@ export default function RemoteScreen() {
   useEffect(() => { sessionRef.current = session; }, [session]);
 
   const load = useCallback(async () => {
-    if (!sessionId) return;
+    if (!sessionId || !user) return;
     setLoading(true);
     const [sessionResult, deckResult] = await Promise.all([
       supabase.from("presentation_sessions").select("*").eq("id", sessionId).maybeSingle(),
-      supabase.from("presentations").select("id,title,slides(count)").eq("status", "ready").order("created_at", { ascending: false }).limit(30),
+      // Mine, stated. Choosing what to project should offer this account's
+      // decks and no one else's, whatever the policy happens to allow.
+      supabase.from("presentations").select("id,title,slides(count)")
+        .eq("owner_id", user.id).eq("status", "ready")
+        .order("created_at", { ascending: false }).limit(30),
     ]);
     if (sessionResult.error || !sessionResult.data) {
       setError(sessionResult.error ? asErrorMessage(sessionResult.error) : "Sessiya topilmadi.");
@@ -153,7 +159,7 @@ export default function RemoteScreen() {
       slide_count: (row.slides as unknown as { count: number }[])?.[0]?.count ?? 0,
     })));
     setLoading(false);
-  }, [sessionId]);
+  }, [sessionId, user]);
 
   /**
    * The spoken script, beside the slide it belongs to.

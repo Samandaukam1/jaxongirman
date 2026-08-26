@@ -4,15 +4,18 @@ import {
   Minus, Plus, Sheet, SquareRoundCorner, Strikethrough, TextAlignCenter, TextAlignEnd, TextAlignJustify, TextAlignStart, Type,
   Underline, WandSparkles, type LucideIcon,
 } from "lucide-react-native";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { ChartDataEditor, TableDataEditor } from "@/components/DataEditor";
+import { FontPicker, type PickedFont } from "@/components/FontPicker";
+import { slugOfFaceId } from "@/lib/fontLibrary";
+import { rememberFont, recentFonts } from "@/lib/recentFonts";
 import {
   BASE_SWATCHES, DEFAULT_FONT_SIZE, FONTS, TEXT_EFFECTS, alignmentOf, bag, effectOf, effectTextStyle,
   fontOptionOf, formatSize, hasBullets, isBoldStyle, isItalic, isStrikethrough, isUnderline, lineHeightRatio,
   nextAlignment, nextTextCase, num, str, textCaseOf, toggleBullets, withFont, withFontSize, withLineHeightRatio,
-  type Alignment, type StyleBag,
+  type Alignment, type StyleBag, fontNameOf,
 } from "@/lib/textStyle";
 import { icon, radius, shadow, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
@@ -60,6 +63,9 @@ function clamp(value: number, min: number, max: number) {
  * ones that need more than a tap.
  */
 export function ElementToolbar({ element, swatches, panel, onPanel, onStyle, onContent, onElement, onReplaceImage, zRange }: Props) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [recent, setRecent] = useState<string[]>([]);
+  useEffect(() => { if (pickerOpen) void recentFonts().then(setRecent); }, [pickerOpen]);
   const { colors } = useTheme();
   const styles = useStyles();
   const style = bag(element.style);
@@ -106,6 +112,17 @@ export function ElementToolbar({ element, swatches, panel, onPanel, onStyle, onC
 
           {panel === "font" ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.panelRow}>
+              {/* The library first: four bundled faces are what this deck can
+                  draw without a download, and everything else is behind here. */}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Barcha shriftlar"
+                onPress={() => setPickerOpen(true)}
+                style={[styles.fontCard, styles.fontCardLibrary]}
+              >
+                <Type color={colors.primary} size={20} strokeWidth={2} />
+                <Text numberOfLines={1} style={styles.fontName}>Kutubxona</Text>
+              </Pressable>
               {FONTS.map((option) => {
                 const active = option.key === fontOption.key;
                 return (
@@ -290,6 +307,37 @@ export function ElementToolbar({ element, swatches, panel, onPanel, onStyle, onC
         ) : null}
         <Tool icon={Layers} label="Qatlam" active={panel === "layer"} onPress={() => toggle("layer")} />
       </ScrollView>
+
+      {/**
+        * A whole sheet rather than another row of chips: choosing out of a
+        * library is a different act from switching between four faces, and
+        * every row in it is a font that has to be fetched before it can be read.
+        */}
+      <FontPicker
+        visible={pickerOpen}
+        current={slugOfFaceId(fontNameOf(style))}
+        weight={bold ? 700 : 400}
+        italic={isItalic(style)}
+        recent={recent}
+        onClose={() => setPickerOpen(false)}
+        onPick={(picked: PickedFont) => {
+          setPickerOpen(false);
+          // No registered name means the face never arrived; leaving the style
+          // alone is better than pointing it at something that cannot draw.
+          if (!picked.faceName) return;
+          void rememberFont(picked.slug).then(setRecent);
+          patch({
+            ...style,
+            fontFamily: picked.faceName,
+            // The family as a person would write it, kept beside the runtime
+            // name so the exporter writes "Montserrat" into the PPTX rather
+            // than the identifier this app registered the file under.
+            fontDisplayName: picked.family,
+            fontWeight: String(picked.weight),
+            fontStyle: picked.italic ? "italic" : "normal",
+          });
+        }}
+      />
     </View>
   );
 }
@@ -365,6 +413,7 @@ function TextPanel({ value, onChange, onDone }: { value: string; onChange: (next
         <Text style={styles.doneText}>Tayyor</Text>
       </Pressable>
     </View>
+
   );
 }
 
@@ -399,6 +448,7 @@ const useStyles = makeStyles((colors) => ({
   panelLabel: { ...typography.caption, color: colors.inkMuted, flex: 1 },
   panelValue: { ...typography.caption, color: colors.ink, minWidth: 44, textAlign: "right" },
 
+  fontCardLibrary: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
   fontCard: { minWidth: 86, alignItems: "center", gap: 2, paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
   fontCardActive: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
   fontSample: { fontSize: 22, color: colors.ink },

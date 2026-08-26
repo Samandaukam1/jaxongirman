@@ -818,6 +818,7 @@ export type Database = {
           format: string
           id: string
           italic: boolean
+          style_name: string
           storage_path: string
           weight: number
         }
@@ -829,6 +830,7 @@ export type Database = {
           format?: string
           id?: string
           italic?: boolean
+          style_name: string
           storage_path: string
           weight?: number
         }
@@ -840,6 +842,7 @@ export type Database = {
           format?: string
           id?: string
           italic?: boolean
+          style_name?: string
           storage_path?: string
           weight?: number
         }
@@ -856,27 +859,42 @@ export type Database = {
       font_families: {
         Row: {
           canonical_name: string
+          category: string
           created_at: string
           id: string
+          is_active: boolean
+          is_featured: boolean
+          is_variable: boolean
           license_metadata: Json
           normalized_name: string
           source: string
+          updated_at: string
         }
         Insert: {
           canonical_name: string
+          category?: string
           created_at?: string
           id?: string
+          is_active?: boolean
+          is_featured?: boolean
+          is_variable?: boolean
           license_metadata?: Json
           normalized_name: string
           source?: string
+          updated_at?: string
         }
         Update: {
           canonical_name?: string
+          category?: string
           created_at?: string
           id?: string
+          is_active?: boolean
+          is_featured?: boolean
+          is_variable?: boolean
           license_metadata?: Json
           normalized_name?: string
           source?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -5406,6 +5424,15 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      admin_set_font_family: {
+        Args: {
+          p_category?: string
+          p_family_id: string
+          p_is_active?: boolean
+          p_is_featured?: boolean
+        }
+        Returns: undefined
       }
       admin_set_ios_payment_policy: {
         Args: { p_copy?: Json; p_reason?: string; p_review_mode: boolean }

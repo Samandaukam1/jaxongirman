@@ -8,6 +8,7 @@ import { AuditPage } from "@/pages/AuditPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { FinancePage } from "@/pages/FinancePage";
 import { GamesPage } from "@/pages/GamesPage";
+import { FontsPage } from "@/pages/FontsPage";
 import { GiftsPage } from "@/pages/GiftsPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { JElementFamilyPage } from "@/pages/JElementFamilyPage";
@@ -40,6 +41,7 @@ const pages: Record<string, ReactNode> = {
   "/usage": <UsagePage />,
   "/pricing": <PricingPage />,
   "/audit": <AuditPage />,
+  "/fonts": <FontsPage />,
   "/gifts": <GiftsPage />,
   "/finance": <FinancePage />,
   "/modules": <ModulesPage />,

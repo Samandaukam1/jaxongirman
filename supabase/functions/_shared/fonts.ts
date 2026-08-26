@@ -138,6 +138,21 @@ function nearestBundled(style: JsonObject): string {
  */
 export function pptxFace(style: unknown): string {
   const bag = object(style);
+
+  /**
+   * The design's own family first.
+   *
+   * `fontDisplayName` is set by the renderer whenever a row resolved to a real
+   * face — "Montserrat", "Playfair Display" — and it was being thrown away
+   * here, so a deck set in Montserrat SemiBold opened in PowerPoint as Manrope.
+   * That is the substitution this function exists to prevent. The fallback
+   * chain is now: the family the design actually uses, then the bundled face it
+   * nominated, then the default — and the first step is skipped only when there
+   * was no real face to begin with.
+   */
+  const declared = string(bag.fontDisplayName).trim();
+  if (declared) return declared;
+
   const nominated = string(bag.fontFallback) || string(bag.fontFamily);
   for (const entry of DISPLAY_NAME) {
     if (nominated.startsWith(entry.prefix)) return entry.name;

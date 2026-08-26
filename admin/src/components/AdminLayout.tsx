@@ -1,6 +1,6 @@
 import {
   BadgeCheck,
-  MonitorPlay, Blocks, ClipboardList, FileStack, Coins, Cpu, Gamepad2, Gift, LayoutDashboard, LogOut, Menu, Palette, Presentation, Receipt, ScrollText, Shapes, Smartphone, Store, TrendingUp, Users, Wallet, X } from "lucide-react";
+  MonitorPlay, Blocks, ClipboardList, FileStack, Coins, Cpu, Gamepad2, Gift, LayoutDashboard, LogOut, Menu, Palette, Presentation, Receipt, ScrollText, Shapes, Smartphone, Store, TrendingUp, Type, Users, Wallet, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { AppLink } from "@/lib/router";
@@ -24,6 +24,7 @@ const navigation = [
   { to: "/marketplace-finance", label: "Do‘kon moliyasi", icon: TrendingUp },
   { to: "/orders", label: "Buyurtmalar", icon: Receipt },
   { to: "/app-store", label: "iOS to‘lov siyosati", icon: Smartphone },
+  { to: "/fonts", label: "Shriftlar", icon: Type },
   { to: "/gifts", label: "Sovg‘alar", icon: Gift },
   { to: "/audit", label: "Audit jurnali", icon: ScrollText },
   { to: "/finance", label: "Kirim-chiqim", icon: Wallet },

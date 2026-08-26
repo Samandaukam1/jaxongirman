@@ -15,6 +15,7 @@ import { ExportSheet } from "@/components/ExportSheet";
 import { IconChip } from "@/components/IconChip";
 import { SelectionOverlay } from "@/components/SelectionOverlay";
 import { MODEL_HEIGHT, MODEL_WIDTH, SlideCanvas } from "@/components/SlideCanvas";
+import { loadFontsUsedBy } from "@/lib/fontCache";
 import { asErrorMessage, asFunctionErrorMessage } from "@/lib/format";
 import {
   initialPlacement, placementOf, resolveElement, rowsFor,
@@ -311,6 +312,10 @@ export default function PresentationEditorScreen() {
       setPresentation(presentationResult.data);
       setSlides(slideResult.data);
       setElements(hydrated);
+      // Registered faces do not survive a relaunch, so a reopened deck asks for
+      // the ones its text is already set in. Not awaited: the deck draws in its
+      // fallback and swaps when the files land.
+      void loadFontsUsedBy(hydrated.map((row) => bag(row.style)));
       setCurrentSlideId((current) => current && slideResult.data.some((slide) => slide.id === current) ? current : slideResult.data[0]?.id ?? null);
       setSelectedId(null);
     } catch (error) {

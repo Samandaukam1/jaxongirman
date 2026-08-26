@@ -19,3 +19,9 @@ supabase/.temp/
 # `../packages`. Its build vendors a copy into `admin/packages/`; here that copy
 # is an artefact, and `packages/` is the source.
 admin/packages/
+
+# The Google Fonts checkout the importer reads: 2.8 GB of upstream repository,
+# and not ours to carry. Clone it here, run
+# `node supabase/scripts/import-google-fonts.mjs`, and the shelf is in Supabase
+# where the app can reach it.
+font-library/
