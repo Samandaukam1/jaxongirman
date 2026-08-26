@@ -40,7 +40,9 @@ writeFileSync(join(out, "jslayd-stub.ts"), [
   + " orientation?: string; required?: boolean; queryFrom?: readonly string[];"
   + " stylePreference?: string | null; overlayOpacity?: number };",
   "export type Archetype = { id: string; elements: JslaydElement[] };",
-  "export type JslaydDocument = { archetypes: Archetype[] };",
+  "export type ColorFamily = Record<string, string>;",
+  "export type NamedColorFamily = { code: string; name: string; colors: ColorFamily; chartPalette: readonly string[] };",
+  "export type JslaydDocument = { archetypes: Archetype[]; colorFamilies?: readonly NamedColorFamily[]; chartPalette?: readonly string[] };",
 ].join("\n"));
 
 const config = join(out, "tsconfig.json");
@@ -75,6 +77,7 @@ const {
   DEFAULT_BORDER, DEFAULT_SHADOW, MAX_SHADOWS, addShadow, cornersAreEven, evenCorners,
   patchBorder, patchShadow, removeShadow, setBorder, setCorners, setImageRules, setShadows,
   takesBorder, takesCorners, takesShadow, boundingBox, nudgeElements,
+  applyTheme, removeTheme, themeCode,
 } = studio;
 
 const element = (id, x, y, width, height) => ({
@@ -564,4 +567,47 @@ test("a nudge that changes nothing returns the same document", () => {
   // Already at the wall and pushed further into it.
   assert.equal(nudgeElements(before, "a1", ["a"], -50, 0), before);
   assert.equal(nudgeElements(before, "a1", [], 40, 40), before);
+});
+
+/* --------------------------------------------------------------- themes */
+
+const palette = (primary) => ({ background: "#FFF", surface: "#FFF", primary, text: "#000" });
+
+test("applying the same theme twice replaces it rather than collecting copies", () => {
+  const before = { ...doc(element("t1", 0, 0, 100, 100)), chartPalette: ["#111", "#222"] };
+  const code = themeCode("medical", "clinical");
+
+  const once = applyTheme(before, code, "Tibbiyot · Klinik", palette("#0B5CA8"));
+  const twice = applyTheme(once, code, "Tibbiyot · Klinik", palette("#123456"));
+
+  assert.equal(twice.colorFamilies.length, 1, "a second apply must not add a second copy");
+  assert.equal(twice.colorFamilies[0].colors.primary, "#123456", "the newer palette wins");
+  assert.equal(twice.colorFamilies[0].code, code);
+});
+
+test("a theme keeps the design's own chart colours", () => {
+  // A palette declares five colours and a chart needs a series; inventing the
+  // rest would draw a bar chart in shades nobody chose.
+  const before = { ...doc(element("t1", 0, 0, 100, 100)), chartPalette: ["#111", "#222", "#333"] };
+  const after = applyTheme(before, "theme_a_b", "A · B", palette("#0B5CA8"));
+  assert.deepEqual(after.colorFamilies[0].chartPalette, ["#111", "#222", "#333"]);
+});
+
+test("a design that had families keeps them when one is added or removed", () => {
+  const mine = { code: "own", name: "O‘zimniki", colors: palette("#FF0000"), chartPalette: [] };
+  const before = { ...doc(element("t1", 0, 0, 100, 100)), colorFamilies: [mine], chartPalette: [] };
+
+  const added = applyTheme(before, "theme_a_b", "A · B", palette("#00FF00"));
+  assert.deepEqual(added.colorFamilies.map((entry) => entry.code), ["own", "theme_a_b"]);
+
+  const removed = removeTheme(added, "theme_a_b");
+  assert.deepEqual(removed.colorFamilies, [mine]);
+
+  // Removing something that is not there changes nothing anybody can see.
+  assert.deepEqual(removeTheme(removed, "nope").colorFamilies, [mine]);
+});
+
+test("the theme code is stable, which is what makes replacing possible", () => {
+  assert.equal(themeCode("medical", "clinical"), "theme_medical_clinical");
+  assert.notEqual(themeCode("medical", "navy"), themeCode("medical", "clinical"));
 });

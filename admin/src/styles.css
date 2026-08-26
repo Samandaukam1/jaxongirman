@@ -1127,3 +1127,20 @@ td small { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; 
 .studio-layer.dragging { opacity: .45; cursor: grabbing; }
 /* The line lands where the row will land, above the row it is over. */
 .studio-layer.over { box-shadow: inset 0 2px 0 0 var(--brand); }
+
+.studio-themes { display: flex; flex-direction: column; gap: 12px; padding: 12px; }
+.studio-theme-pickers { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.studio-theme-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* Named, not just shown: a row of unlabelled squares tells you a palette has
+   six colours and nothing about which one is the text. */
+.studio-swatches { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.studio-swatches span {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 10px; color: var(--ink-soft);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.studio-swatches i {
+  flex: none; width: 18px; height: 18px; border-radius: 6px;
+  border: 1px solid var(--border);
+}

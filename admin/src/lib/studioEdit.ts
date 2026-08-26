@@ -1,7 +1,7 @@
 import {
   CANVAS_HEIGHT, CANVAS_WIDTH,
-  type Archetype, type Border, type ColorValue, type Corners, type Gradient, type GradientStop,
-  type JslaydDocument, type JslaydElement, type Shadow,
+  type Archetype, type Border, type ColorFamily, type ColorValue, type Corners, type Gradient,
+  type GradientStop, type JslaydDocument, type JslaydElement, type NamedColorFamily, type Shadow,
 } from "@jaxongirman/jslayd";
 
 /**
@@ -730,3 +730,50 @@ export function nudgeElements(
     })),
   };
 }
+
+/* ------------------------------------------------------------------ themes */
+
+/**
+ * Giving a design a ready-made palette.
+ *
+ * A theme is not a preview setting: the renderer draws whichever named family
+ * the caller asks for, and it can only ask for one the document carries. So
+ * applying a theme writes it into the document, where it saves, publishes and
+ * reaches the user app — rather than tinting the canvas in a way that vanishes
+ * on reload and never existed for anybody else.
+ *
+ * The code is `theme_<family>_<variant>`, which is stable: applying the same
+ * theme twice replaces it rather than accumulating a second copy under a
+ * different name.
+ */
+export function applyTheme(
+  document: JslaydDocument, code: string, name: string, colors: ColorFamily,
+): JslaydDocument {
+  const family: NamedColorFamily = {
+    code,
+    name,
+    colors,
+    // Series colours are the design's own unless it has none: a chart is
+    // several colours and a palette declares five, so inventing the rest here
+    // would produce a bar chart in shades nobody chose.
+    chartPalette: document.chartPalette ?? [],
+  };
+
+  const existing = document.colorFamilies ?? [];
+  const at = existing.findIndex((entry) => entry.code === code);
+  return {
+    ...document,
+    colorFamilies: at === -1
+      ? [...existing, family]
+      : existing.map((entry, index) => (index === at ? family : entry)),
+  };
+}
+
+export function removeTheme(document: JslaydDocument, code: string): JslaydDocument {
+  return {
+    ...document,
+    colorFamilies: (document.colorFamilies ?? []).filter((entry) => entry.code !== code),
+  };
+}
+
+export const themeCode = (familyId: string, variantId: string): string => `theme_${familyId}_${variantId}`;

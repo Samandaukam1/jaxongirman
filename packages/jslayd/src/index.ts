@@ -74,6 +74,7 @@ export type {
   FontDeclaration,
   Geometry,
   Gradient,
+  NamedColorFamily,
   GradientStop,
   GroupElement,
   IconElement,

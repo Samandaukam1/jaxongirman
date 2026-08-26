@@ -8,6 +8,7 @@ const { compile } = await import(`${dir}/compile.js`);
 const { decompile } = await import(`${dir}/decompile.js`);
 const { SAMPLE_PROMPT } = await import(`${dir}/standard.js`);
 const { renderPreview } = await import(`${dir}/render.js`);
+const { themePalette } = await import(`${dir}/themes.js`);
 
 /**
  * CODE → DOCUMENT → VISUAL EDIT → SERIALIZE → COMPILE.
@@ -272,4 +273,33 @@ test("image rules written by the inspector survive the round trip", () => {
   assert.equal(landed.required, true);
   assert.deepEqual(landed.overlay, { role: "contrast" });
   assert.equal(landed.overlayOpacity, 0.4);
+});
+
+test("a theme applied in the studio survives the round trip", () => {
+  /**
+   * The renderer draws whichever named family the document carries, so applying
+   * a theme is a change to the document rather than a preview setting. If
+   * `decompile` did not write `colorFamilies`, the palette would appear on the
+   * canvas, save without complaint, and be gone the next time the design was
+   * opened.
+   */
+  const start = compile(SAMPLE_PROMPT).document;
+  const colors = themePalette("medical", "clinical");
+  assert.ok(colors, "the theme engine offers a medical palette");
+
+  const themed = {
+    ...start,
+    colorFamilies: [
+      ...(start.colorFamilies ?? []),
+      { code: "theme_medical_clinical", name: "Tibbiyot · Klinik ko‘k", colors, chartPalette: start.chartPalette ?? [] },
+    ],
+  };
+
+  const after = roundTrip(themed);
+  const landed = (after.colorFamilies ?? []).find((entry) => entry.code === "theme_medical_clinical");
+  assert.ok(landed, "the applied theme did not survive being written out");
+  assert.equal(landed.name, "Tibbiyot · Klinik ko‘k");
+  for (const role of ["background", "surface", "primary", "secondary", "accent", "text"]) {
+    assert.equal(landed.colors[role], colors[role], `${role} changed on the way through`);
+  }
 });

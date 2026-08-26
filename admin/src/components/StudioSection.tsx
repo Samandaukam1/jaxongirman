@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { StudioCanvas } from "@/components/StudioCanvas";
 import { StudioInspector } from "@/components/StudioInspector";
 import { StudioLayers, type LayerFlags } from "@/components/StudioLayers";
+import { StudioThemes } from "@/components/StudioThemes";
 import { errorMessage } from "@/lib/format";
 import { anotherPhoto, withPhoto, writeSample, type SampleReport } from "@/lib/sampleSlide";
 import {
@@ -40,6 +41,7 @@ export function StudioSection({
   designId,
   family,
   onChange,
+  onFamily,
 }: {
   document: JslaydDocument;
   /** Null until the design has been saved; the writer needs a row to read. */
@@ -47,6 +49,8 @@ export function StudioSection({
   family: string | null;
   /** The edited design, and the source it was written back as. */
   onChange: (next: JslaydDocument, source: string) => void;
+  /** Switches which colour family the preview above draws in, too. */
+  onFamily: (code: string | null) => void;
 }) {
   const [history, setHistory] = useState<History>(() => startHistory(compiled));
   const [selectedIds, setSelectedIds] = useState<readonly string[]>([]);
@@ -60,6 +64,7 @@ export function StudioSection({
   const [problem, setProblem] = useState<string | null>(null);
   /** How far into the search results the current photograph is. */
   const [photoAt, setPhotoAt] = useState(0);
+  const [tab, setTab] = useState<"layers" | "themes">("layers");
 
   /**
    * The compiled document replaces the studio's, unless the studio wrote it.
@@ -269,6 +274,23 @@ export function StudioSection({
 
       <div className="studio-shell">
         <div className="studio-pane">
+          <div className="studio-tabs">
+            <button type="button" className={tab === "layers" ? "on" : undefined} onClick={() => setTab("layers")}>
+              Qatlamlar
+            </button>
+            <button type="button" className={tab === "themes" ? "on" : undefined} onClick={() => setTab("themes")}>
+              Ranglar
+            </button>
+          </div>
+          {tab === "themes" ? (
+            <StudioThemes
+              document={design}
+              family={family}
+              photoUrl={sample?.photo?.url ?? null}
+              onFamily={onFamily}
+              onChange={change}
+            />
+          ) : (
           <StudioLayers
             document={design}
             archetype={archetype}
@@ -278,6 +300,7 @@ export function StudioSection({
             onChange={change}
             onFlags={setFlags}
           />
+          )}
         </div>
 
         <StudioCanvas
