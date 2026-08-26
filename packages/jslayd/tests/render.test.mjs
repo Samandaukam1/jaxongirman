@@ -484,3 +484,42 @@ test("a picture reaches the slide through the slot the renderer reads", () => {
   assert.ok(!JSON.stringify(missed).includes("example.test"),
     "binding by element id must not accidentally work, or this test proves nothing");
 });
+
+test("a picture the deck found replaces the template's, unless it is furniture", () => {
+  /**
+   * A template's photography is a stock cover chosen for somebody else's
+   * subject. The whole point of finding one is to put it there — and until now
+   * the design's own artwork always won, so a deck showed the template's
+   * picture in the app and the found one only in the exported file.
+   *
+   * The same element type carries logos and ornaments, though, and a
+   * photograph of the topic where the company mark was is worse than the stock
+   * cover. A tenth of the canvas is the line between the two.
+   */
+  const withArt = DESIGN.archetypes.find((entry) =>
+    entry.elements.some((element) => (element.type === "image" || element.type === "frame") && element.source?.asset));
+  if (!withArt) return; // The sample design ships no artwork of its own.
+
+  const art = withArt.elements.find((element) => element.source?.asset);
+  const slide = {
+    ...fullSlide(withArt.purpose),
+    images: { [art.slot]: { url: "https://example.test/found.jpg" } },
+  };
+
+  const drawn = JSON.stringify(renderArchetype(DESIGN, withArt, slide));
+  const big = art.geometry.width * art.geometry.height >= (1920 * 1080) / 10;
+  if (big) assert.ok(drawn.includes("example.test"), "the found picture must win a content-sized slot");
+  else assert.ok(!drawn.includes("example.test"), "a logo-sized slot keeps the design's own mark");
+});
+
+test("a slot the deck supplied nothing for still shows the design's own artwork", () => {
+  // The promise the original comment made, and it must survive: a template's
+  // picture does not disappear because the deck found nothing.
+  const withArt = DESIGN.archetypes.find((entry) =>
+    entry.elements.some((element) => (element.type === "image" || element.type === "frame") && element.source?.asset));
+  if (!withArt) return;
+
+  const art = withArt.elements.find((element) => element.source?.asset);
+  const drawn = JSON.stringify(renderArchetype(DESIGN, withArt, { ...fullSlide(withArt.purpose), images: {} }));
+  assert.ok(drawn.includes(art.source.asset), "the design's own artwork was dropped");
+});

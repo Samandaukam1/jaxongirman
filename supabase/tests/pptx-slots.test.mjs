@@ -5,7 +5,7 @@ import { buildEdgeModules } from "../scripts/build-edge.mjs";
 
 const edge = buildEdgeModules();
 const { dealAcrossBoxes, readTemplateSlots } = await import(`${edge}/pptx-slots.js`);
-const { asksFor, bindingsFromSlots, readTemplateAnswer } = await import(`${edge}/pptx-writer.js`);
+const { asksFor, bindingsFromSlots, readTemplateAnswer, templatePrompt } = await import(`${edge}/pptx-writer.js`);
 
 /**
  * Reading a template slide as a set of boxes to write into.
@@ -301,4 +301,72 @@ test("a short repeat is left alone — a year is the right answer twice", () => 
   const fill = readTemplateAnswer({ boxes: [{ id: "2", text: "2026" }] }, slots, { title: "S" });
   assert.equal(fill.texts.get("2"), "2026");
   assert.deepEqual(fill.filled, []);
+});
+
+/* ------------------------------------------------------- trimming to fit */
+
+test("a box too small for the answer never shows half a word", () => {
+  /**
+   * The regression a real deck exposed. A nine-character box turned
+   * "Korrupsiyani qabul qilish indeksi" into "Korrupsiy" — the old rule kept a
+   * mid-word cut whenever the last space fell in the first 60% of the limit,
+   * which is exactly what a small box produces.
+   *
+   * A box showing one true word is a design decision. A box showing two thirds
+   * of a word is a bug the reader can see.
+   */
+  const slots = [slotOf({ shapeId: "2", role: "title", characters: 20, characterCapacity: 20 })];
+  const fill = readTemplateAnswer(
+    { boxes: [{ id: "2", text: "Korrupsiyani qabul qilish indeksi" }] },
+    slots, { title: "Sarlavha" },
+  );
+
+  const written = fill.texts.get("2");
+  assert.ok(written.length <= 20);
+  // The old rule kept a mid-word cut whenever the last space fell in the first
+  // 60% of the limit — "Korrupsiyani qabul q" — which reads as a broken program
+  // rather than as an edit.
+  for (const word of written.split(/\s+/).filter(Boolean)) {
+    assert.ok("Korrupsiyani qabul qilish indeksi".split(/\s+/).includes(word), `"${word}" is not a whole word from the answer`);
+  }
+  assert.ok(fill.trimmed.includes("2"), "a trimmed box is reported as trimmed");
+});
+
+test("an answer that fits is left exactly as written", () => {
+  const slots = [slotOf({ shapeId: "2", role: "title", characters: 40, characterCapacity: 40 })];
+  const fill = readTemplateAnswer({ boxes: [{ id: "2", text: "Korrupsiya" }] }, slots, { title: "Sarlavha" });
+  assert.equal(fill.texts.get("2"), "Korrupsiya");
+  assert.deepEqual(fill.trimmed, []);
+});
+
+test("a box no whole word fits shows nothing rather than a fragment", () => {
+  /**
+   * These boxes exist. A nine-character plate built around the brand name
+   * "Rimberio" was asked to carry a word about corruption, and a real deck
+   * showed its author "Korrupsiy".
+   *
+   * The template's own English is refused elsewhere and rightly. Between a
+   * fragment and an empty plate, the empty one reads as part of the design.
+   */
+  const slots = [slotOf({ shapeId: "2", role: "label", characters: 9, characterCapacity: 9 })];
+  const fill = readTemplateAnswer({ boxes: [{ id: "2", text: "Korrupsiyani qabul qilish" }] }, slots, { title: "Sarlavha" });
+
+  assert.equal(fill.texts.get("2"), "");
+  assert.ok(fill.trimmed.includes("2"), "and it is still reported, so the design can be fixed");
+});
+
+test("the writer is told to shorten a title rather than clip the topic", () => {
+  /**
+   * The instruction the failing deck needed. A cover box built for the word
+   * "Architecture" holds twelve characters; the model's honest attempt at
+   * twelve was the topic's first word, "Karrupsiyaga", which names nothing.
+   * What a small title box wants is a short title, not a short prefix.
+   */
+  const prompt = templatePrompt({
+    topic: "Karrupsiyaga qarshi kurashishda dunyo tajribasi",
+    index: 0, title: "Muqova", purpose: "cover", previous: null, researchBrief: "",
+    asks: asksFor([slotOf({ shapeId: "2", role: "display", characters: 12, characterCapacity: 11 })]),
+  });
+  assert.match(prompt, /boshini kesib olmang/);
+  assert.match(prompt, /Korrupsiya/);
 });

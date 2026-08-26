@@ -36,7 +36,10 @@ import type {
   TextSource,
   TextStyle,
 } from "./document.ts";
-import { CHART_FALLBACKS, DESIGN_ASSET_BUCKET, MIN_FONT_SIZE, MIN_RENDER_FONT_SIZE, RENDER_SCALE } from "./spec.ts";
+import {
+  CANVAS_HEIGHT, CANVAS_WIDTH, CHART_FALLBACKS, DESIGN_ASSET_BUCKET,
+  MIN_FONT_SIZE, MIN_RENDER_FONT_SIZE, RENDER_SCALE,
+} from "./spec.ts";
 
 /**
  * The JSLAYD render engine.
@@ -738,7 +741,22 @@ function renderImage(element: ImageElement, box: Box, geometry: Geometry, contex
   const owned = element.source && "asset" in element.source
     ? { bucket: DESIGN_ASSET_BUCKET, path: `${context.slug}/${element.source.asset}` }
     : null;
-  const picture = owned ?? context.slide.images[element.slot] ?? null;
+
+  /**
+   * A picture the deck found beats the one the template shipped — if it is big
+   * enough to be the page's picture rather than its furniture.
+   *
+   * A template's photography is a stock cover chosen for somebody else's
+   * subject, and the whole point of finding one is to put it there. But the
+   * same element type carries logos, badges and ornaments, and a photograph of
+   * the topic where the company mark was is worse than the stock cover.
+   *
+   * A tenth of the canvas is the line. Below it nothing is the content of a
+   * page; above it nothing is a logo.
+   */
+  const supplied = context.slide.images[element.slot] ?? null;
+  const roomy = (box.width * box.height) >= (CANVAS_WIDTH * CANVAS_HEIGHT) / 10;
+  const picture = (supplied && (roomy || !owned)) ? supplied : owned ?? supplied ?? null;
   // A slot with no picture still draws when the design says the image is
   // required: the renderer shows a placeholder, which is a composition with a
   // hole in it rather than a composition that silently lost a quarter of itself.

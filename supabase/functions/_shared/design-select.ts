@@ -83,6 +83,16 @@ export function matchTopics(text: string, taxonomy: readonly Topic[]): Map<strin
 /* --------------------------------------------------------------- families */
 
 export type DesignCandidate = {
+  /**
+   * Characters the design's opening page can show as a title, where known.
+   *
+   * Undefined for a written design, whose type resizes to what it is given. A
+   * template's box is a fixed rectangle built around a word in another
+   * language, and that is the case this exists for.
+   */
+  coverRoom?: number;
+  /** How long the title actually is, so the shortfall can be judged. */
+  titleLength?: number;
   id: string;
   slug: string;
   /** `{keyword, score}` as the column stores them. */
@@ -129,6 +139,26 @@ export function rankDesigns(
       // a story a family of four has to repeat itself through.
       score += candidate.pages > 0 ? Math.min(6, candidate.pages / 4) : 3;
       if (candidate.featured) score += 1;
+
+      /**
+       * A cover that cannot say what the deck is about.
+       *
+       * An architecture template's cover word is "Architecture" — a box that
+       * holds twelve characters. Handed a real topic four times that long, the
+       * writer's honest best is the topic's first word cut where the box ends,
+       * and the customer opens a deck whose cover says "Karrupsiyaga".
+       *
+       * Scored rather than excluded: a short cover is a legitimate design, and
+       * a good short title can be written for one. But between two designs that
+       * match the subject equally, the one that can show the title is the one
+       * to send. The penalty is capped so a strong subject match still wins —
+       * a relevant template with a tight cover beats an irrelevant one with a
+       * roomy cover, which is the trade a reader would make too.
+       */
+      if (candidate.coverRoom !== undefined && candidate.titleLength !== undefined && candidate.coverRoom > 0) {
+        const shortfall = candidate.titleLength - candidate.coverRoom;
+        if (shortfall > 0) score -= Math.min(5, shortfall / candidate.titleLength * 8);
+      }
       return { id: candidate.id, score: Math.round(score * 100) / 100, matched };
     })
     .sort((first, second) =>

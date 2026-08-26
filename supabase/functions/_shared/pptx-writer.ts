@@ -230,6 +230,16 @@ export function templatePrompt(input: {
     "3. \"belgi\" — mo‘ljallangan belgi soni. Shu atrofda yozing. \"chegara\" dan OSHMANG.",
     "4. \"abzas\" nechta bo‘lsa, shuncha qator yozing — qatorlarni \\n bilan ajrating. Bittadan ortiq abzas so‘ralmagan bo‘lsa, bitta qator yozing.",
     "5. Matn sig‘masa: qisqaroq qayta yozing, ortiqcha so‘zni oling, jumlani soddalashtiring. Qutini kattalashtirish mumkin emas.",
+    /**
+     * The instruction this deck needed and did not have.
+     *
+     * A cover box built for the word "Architecture" holds twelve characters. A
+     * real topic is four times that, and the model's honest attempt at twelve
+     * characters was the topic's first word cut where the box ended —
+     * "Karrupsiyaga" — which names nothing and looks like a failure. What a
+     * small title box wants is a short *title*, not a short *prefix*.
+     */
+    "5a. Sarlavha qutisi kichik bo‘lsa, mavzuning boshini kesib olmang. Mavzuni nomlaydigan qisqa so‘z yoki iborani tanlang: «Karrupsiyaga qarshi kurashishda dunyo tajribasi» uchun «Korrupsiya» yozing, «Karrupsiyaga» emas.",
     "6. \"harflab yozilgan bitta so‘z\" uchun faqat BITTA so‘z yozing — u harflarga bo‘lib joylashtiriladi.",
     "7. \"raqam yoki sana\" uchun faqat raqam yoki sana yozing.",
     "8. Har bir id uchun aniq bitta javob bering. Hech bir idni tashlab ketmang.",
@@ -248,12 +258,39 @@ export type SlotFill = {
   trimmed: string[];
 };
 
-/** Cuts at a word boundary where there is one nearby, so nothing ends mid-word. */
+/**
+ * Cuts at a word boundary. Never mid-word.
+ *
+ * The old rule kept a mid-word cut when the last space was in the first 60% of
+ * the limit, which is exactly the case a small box produces: a nine-character
+ * box turned "Korrupsiyani qabul qilish indeksi" into "Korrupsiy", and a
+ * fragment like that reads as a broken program rather than as an edit.
+ *
+ * Whole words only, even when that leaves the box emptier than it could be. A
+ * box showing one true word is a design decision; a box showing two thirds of a
+ * word is a bug the reader can see.
+ */
 function trimTo(text: string, limit: number): string {
-  if (text.length <= limit) return text;
-  const cut = text.slice(0, limit);
+  const tidy = text.trim();
+  if (tidy.length <= limit) return tidy;
+
+  const cut = tidy.slice(0, limit + 1);
   const space = cut.lastIndexOf(" ");
-  return (space > limit * 0.6 ? cut.slice(0, space) : cut).trimEnd();
+  if (space > 0) return tidy.slice(0, space).trimEnd();
+
+  /**
+   * Not one whole word fits. Show nothing.
+   *
+   * These boxes exist: a nine-character plate built around the brand name
+   * "Rimberio", asked to carry a word about corruption. There is no honest
+   * shortening — the box was built for a shorter word in another language — and
+   * the three answers are the template's own English, a fragment, or nothing.
+   *
+   * English is refused elsewhere and rightly. Between the other two, an empty
+   * plate reads as part of the design and "Korrupsiy" reads as a broken
+   * program, which is what a real deck showed its author.
+   */
+  return "";
 }
 
 /**

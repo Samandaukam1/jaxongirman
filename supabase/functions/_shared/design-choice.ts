@@ -59,6 +59,41 @@ export async function chooseDesign(
     synonyms: termsByTopic.get(row.id as string) ?? [],
   }));
 
+  /**
+   * How much of a title each template's opening page can actually show.
+   *
+   * One query for the tier rather than one per design, and only the opening
+   * pages: a template's cover box is a fixed rectangle built around a word in
+   * another language, and a deck whose cover cannot name its own subject is the
+   * failure a reader notices first.
+   *
+   * A design with no profiles is a written one, whose type resizes to what it
+   * is given. It is left unmeasured rather than scored as if it were tight.
+   */
+  const coverRoom = new Map<string, number>();
+  const ids = (designs.data ?? []).map((row) => row.id as string);
+  if (ids.length > 0) {
+    const profiles = await service
+      .from("design_slide_profiles")
+      .select("design_id, source_index, text_map")
+      .in("design_id", ids)
+      .lte("source_index", 0);
+
+    for (const profile of profiles.data ?? []) {
+      const slots = (profile.text_map as { slots?: unknown[] } | null)?.slots
+        ?? (Array.isArray(profile.text_map) ? profile.text_map : []);
+      let biggest = 0;
+      for (const entry of (slots ?? []) as { role?: unknown; characterCapacity?: unknown; characters?: unknown }[]) {
+        const role = String(entry?.role ?? "");
+        if (role !== "display" && role !== "title" && role !== "heading") continue;
+        const room = Math.max(Number(entry?.characterCapacity) || 0, Number(entry?.characters) || 0);
+        if (room > biggest) biggest = room;
+      }
+      if (biggest > 0) coverRoom.set(profile.design_id as string, biggest);
+    }
+  }
+
+  const titleLength = input.topic.trim().length;
   const candidates: DesignCandidate[] = (designs.data ?? []).map((row) => ({
     id: row.slug as string,
     slug: row.slug as string,
@@ -67,6 +102,7 @@ export async function chooseDesign(
     // them; unknown is scored as the middle of the range instead.
     pages: 0,
     featured: Boolean(row.is_featured),
+    ...(coverRoom.has(row.id as string) ? { coverRoom: coverRoom.get(row.id as string), titleLength } : {}),
   }));
 
   const wanted = matchTopics(input.topic, taxonomy);

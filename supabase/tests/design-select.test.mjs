@@ -564,3 +564,58 @@ test("a closing page is still held back for the last slide", () => {
   assert.equal(choices[2].archetypeId, "end");
   assert.ok(!choices.slice(0, 2).some((choice) => choice.archetypeId === "end"));
 });
+
+/* ------------------------------------------- a cover that can say the topic */
+
+const claiming = (slug, keyword, score, over = {}) => ({
+  id: slug, slug, keywords: [{ keyword, score }], pages: 10, featured: false, ...over,
+});
+
+test("between equal matches, the design that can show the title wins", () => {
+  /**
+   * The failure a real deck exposed. An architecture template's cover word is
+   * "Architecture" — twelve characters — and handed a forty-six character topic
+   * the writer's honest best is the topic's first word cut where the box ends.
+   * The customer opens a deck whose cover says "Karrupsiyaga".
+   */
+  const wanted = new Map([["huquq", 3]]);
+  const ranked = rankDesigns([
+    claiming("tight", "huquq", 80, { coverRoom: 12, titleLength: 46 }),
+    claiming("roomy", "huquq", 80, { coverRoom: 60, titleLength: 46 }),
+  ], wanted);
+
+  assert.equal(ranked[0].id, "roomy");
+});
+
+test("a relevant template with a tight cover still beats an irrelevant roomy one", () => {
+  // The penalty is capped on purpose: a reader would rather have the right
+  // subject in a short title than the wrong subject in a long one.
+  const wanted = new Map([["tibbiyot", 3]]);
+  const ranked = rankDesigns([
+    claiming("medical", "tibbiyot", 90, { coverRoom: 12, titleLength: 46 }),
+    claiming("unrelated", "sport", 90, { coverRoom: 80, titleLength: 46 }),
+  ], wanted);
+
+  assert.equal(ranked[0].id, "medical");
+});
+
+test("a design whose cover room is unknown is not treated as tight", () => {
+  // A written design's type resizes to what it is given; there is no fixed box
+  // to measure, so measuring it as zero would penalise every one of them.
+  const wanted = new Map([["huquq", 3]]);
+  const ranked = rankDesigns([
+    claiming("written", "huquq", 80),
+    claiming("template", "huquq", 80, { coverRoom: 12, titleLength: 46 }),
+  ], wanted);
+
+  assert.equal(ranked[0].id, "written");
+});
+
+test("a short topic is not a shortfall", () => {
+  const wanted = new Map([["huquq", 3]]);
+  const [first, second] = rankDesigns([
+    claiming("tight", "huquq", 80, { coverRoom: 12, titleLength: 9 }),
+    claiming("roomy", "huquq", 80, { coverRoom: 60, titleLength: 9 }),
+  ], wanted);
+  assert.equal(first.score, second.score, "nothing to penalise when the title fits");
+});
