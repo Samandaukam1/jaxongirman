@@ -11,10 +11,31 @@ const { previewSlide } = await import(`${dir}/content.js`);
 const { SAMPLE_PROMPT } = await import(`${dir}/standard.js`);
 const { RENDER_SCALE, RENDER_WIDTH, RENDER_HEIGHT, CANVAS_WIDTH } = await import(`${dir}/spec.js`);
 
+/**
+ * The sample design, plus one font file.
+ *
+ * The standard's example names Google families and ships no `face:` lines,
+ * because the library supplies the files — which is what a design should do and
+ * what the fonts section now says. Tests about file paths, legacy shapes and
+ * uploaded assets have to supply their own file rather than borrow one from an
+ * example that no longer has any.
+ */
+const withFace = (prompt) => {
+  const at = prompt.indexOf("[FONTS]");
+  if (at === -1) throw new Error("the standard has no [FONTS] block");
+  const head = prompt.slice(0, at);
+  const tail = prompt.slice(at).replace(/^(\s*)role: (.*)$/m, "$1role: $2\n$1face: sample-display.ttf 400");
+  return `${head}${tail}`;
+};
+
+
 const { document: DESIGN, diagnostics } = compile(SAMPLE_PROMPT);
 assert.deepEqual(diagnostics.errors, [], "the sample must compile before rendering can be tested");
 
 const archetypeBy = (id) => DESIGN.archetypes.find((entry) => entry.id === id);
+
+/** The same design with one font file attached, for the tests that need one. */
+const { document: DESIGN_WITH_FACE } = compile(withFace(SAMPLE_PROMPT));
 const elementsOf = (slide, type) => slide.elements.filter((element) => element.type === type);
 
 /** A slide carrying everything a design can ask for. */
@@ -74,7 +95,8 @@ test("a three-stop gradient renders in full and keeps a two-stop fallback", () =
 /* ------------------------------------------------------------------ fonts */
 
 test("a font with an uploaded asset renders under its namespaced family", () => {
-  const slide = renderArchetype(DESIGN, archetypeBy("cover_01"), fullSlide("cover"));
+  const archetype = DESIGN_WITH_FACE.archetypes.find((entry) => entry.id === "cover_01");
+  const slide = renderArchetype(DESIGN_WITH_FACE, archetype, fullSlide("cover"));
   const title = slide.elements.find((element) => element.content.text?.startsWith("G'oyangizni"));
   assert.equal(title.style.fontFamily, "jslayd_apelsen_futuristik_font_1");
   // The design's own declared fallback rides along for PPTX and for the moment

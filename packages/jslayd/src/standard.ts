@@ -91,17 +91,15 @@ muted: #6B6B6B
 colors: #FF6A00, #111111, #FFD166, #6C63FF
 
 [FONTS]
+# Google Fonts oilalari. Fayl yozilmagan — kutubxonadan o'zi biriktiriladi.
 font_1:
-  name: Apelsen Display
+  name: Space Grotesk
   role: display, heading
-  face: apelsen-display.ttf 400
-  face: apelsen-display-700.ttf 700
   fallback: League Spartan
-  weight: 800
+  weight: 700
 font_2:
-  name: Apelsen Text
+  name: Manrope
   role: body, caption, subheading
-  face: apelsen-text.ttf 400
   fallback: Manrope
   weight: 400
 
@@ -427,7 +425,7 @@ Ma'lumot palitradan ko'p bo'lsa, ranglar deterministik ravishda kengaytiriladi
 Har bir shrift \`font_1:\` … \`font_4:\` marker bilan boshlanadi. \`font_1\` majburiy.
 Xossalar markerdan keyin yoki chekintirilgan holda yozilishi mumkin.
 
-name      ixtiyoriy  ko'rinadigan nom
+name      MAJBURIY   Google Fonts oilasining aynan nomi (pastga qarang)
 role      majburiy   ${list(FONT_ROLES)}  (vergul bilan bir nechta)
 face      ixtiyoriy  bitta fayl: \`face: <fayl> <qalinlik> [italic]\`
                      takrorlanadi — bitta paketga 10 tagacha fayl kiradi,
@@ -439,6 +437,42 @@ weight    ixtiyoriy  100–900
 italic    ixtiyoriy  true / false
 fallback  ixtiyoriy  ilova bilan keladigan shrift: Manrope, League Spartan,
                      Arimo, Pinyon Script, Inter, Caveat Brush
+
+FAQAT GOOGLE FONTS
+------------------
+\`name\` — Google Fonts oilasining aynan nomi bo'lishi shart: "Montserrat",
+"Playfair Display", "Space Grotesk". Kutubxonada 2000 dan ortiq oila bor va
+nom to'g'ri yozilgan bo'lsa, shrift dizaynga o'zi biriktiriladi — hech kim
+fayl yuklamaydi.
+
+O'ylab topilgan nom yozmang. "Apelsen Display" degan oila yo'q, shuning uchun
+u hech qachon topilmaydi va dizayn zaxira shrift bilan chiziladi — ya'ni siz
+tanlagan tipografika umuman ko'rinmaydi. Xato jimgina bo'ladi: dizayn ishlaydi,
+faqat boshqa shriftda.
+
+Google Fonts'da yo'q shriftni ko'zlagan bo'lsangiz, eng yaqin muqobilini oling:
+
+  Helvetica, Helvetica Neue, Arial, SF Pro  →  Inter, Manrope, Archivo
+  Segoe UI                                  →  Open Sans
+  Calibri                                   →  Carlito       (o'lchamlari bir xil)
+  Cambria                                   →  Caladea       (o'lchamlari bir xil)
+  Times New Roman                           →  Tinos         (o'lchamlari bir xil)
+  Futura                                    →  Jost, Poppins
+  Avenir                                    →  Nunito Sans
+  Gotham, Proxima Nova                      →  Montserrat
+  Frutiger                                  →  Source Sans 3
+  Garamond                                  →  EB Garamond
+  Didot, Bodoni                             →  Playfair Display, Bodoni Moda
+  Courier, monospace                        →  Roboto Mono, JetBrains Mono
+  Siqilgan sans                             →  Archivo Narrow, Oswald
+
+\`face:\` qatorini faqat kutubxonada yo'q shrift uchun yozing. Google oilasi
+uchun \`face:\` yozish shart emas — fayllar kutubxonadan keladi.
+
+\`fallback\` boshqa narsa: u ilova bilan birga keladigan oltita shriftdan biri
+bo'lishi kerak (Manrope, League Spartan, Arimo, Pinyon Script, Inter,
+Caveat Brush), chunki fayllar yuklanguncha shu chiziladi. Google oilasining
+nomini u yerga yozmang.
 
 Eslatma: WOFF2 qo'llab-quvvatlanmaydi — PDF eksporti uni joylay olmaydi.
 PPTX eksportida maxsus shrift ochuvchining kompyuterida almashtirilishi mumkin;

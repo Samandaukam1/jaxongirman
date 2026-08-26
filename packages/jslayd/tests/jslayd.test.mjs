@@ -12,6 +12,24 @@ const { readDocument, serialize, contentHash } = await import(`${dir}/serialize.
 const { SAMPLE_PROMPT, PROMPT_STANDARD } = await import(`${dir}/standard.js`);
 const { deriveColorFamily, extendChartPalette, contrastRatio } = await import(`${dir}/colors.js`);
 
+/**
+ * The sample design, plus one font file.
+ *
+ * The standard's example names Google families and ships no `face:` lines,
+ * because the library supplies the files — which is what a design should do and
+ * what the fonts section now says. Tests about file paths, legacy shapes and
+ * uploaded assets have to supply their own file rather than borrow one from an
+ * example that no longer has any.
+ */
+const withFace = (prompt) => {
+  const at = prompt.indexOf("[FONTS]");
+  if (at === -1) throw new Error("the standard has no [FONTS] block");
+  const head = prompt.slice(0, at);
+  const tail = prompt.slice(at).replace(/^(\s*)role: (.*)$/m, "$1role: $2\n$1face: sample-display.ttf 400");
+  return `${head}${tail}`;
+};
+
+
 /** Every error the compiler reported, as `code` strings. */
 const codes = (diagnostics) => diagnostics.errors.map((item) => item.code);
 
@@ -283,7 +301,10 @@ test("readDocument refuses a future version by name rather than guessing", () =>
 });
 
 test("readDocument refuses an imported font asset that escapes its prefix", () => {
-  const { document } = compile(SAMPLE_PROMPT);
+  // Built here rather than taken from the sample: the standard's example names
+  // Google families and ships no files, because that is what a design should
+  // do. A test about file paths has to supply its own file.
+  const { document } = compile(withFace(SAMPLE_PROMPT));
   const tampered = JSON.parse(serialize(document));
   tampered.fonts[0].faces[0].asset = "../../secret.ttf";
   const { document: read, diagnostics } = readDocument(JSON.stringify(tampered));
@@ -298,7 +319,7 @@ test("readDocument refuses an imported font asset that escapes its prefix", () =
  * opening, and a model change becomes a day when nothing renders (§69).
  */
 test("a design saved before font packages existed still reads", () => {
-  const { document } = compile(SAMPLE_PROMPT);
+  const { document } = compile(withFace(SAMPLE_PROMPT));
   const legacy = JSON.parse(serialize(document));
   for (const font of legacy.fonts) {
     const [face] = font.faces;

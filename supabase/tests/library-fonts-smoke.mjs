@@ -41,6 +41,22 @@ const check = (ok, what) => {
   if (!ok) failures += 1;
 };
 
+/**
+ * Point the sample's first font at the family under test, whatever it is called.
+ *
+ * Anchored to the `[FONTS]` block rather than to a font name, so the standard
+ * can change its example without this quietly testing something else.
+ */
+function rename(prompt) {
+  const at = prompt.indexOf("[FONTS]");
+  if (at === -1) throw new Error("the standard has no [FONTS] block");
+  const head = prompt.slice(0, at);
+  const tail = prompt.slice(at).replace(/^(\s*)name: .*$/m, `$1name: ${NORMALIZED}`);
+  return `${head}${tail}`
+    .replace(/^name: .*$/m, "name: Library font smoke")
+    .replace(/^slug: .*$/m, `slug: ${slug}`);
+}
+
 /** A family the import brought in, named in a case no design would use. */
 const FAMILY = "Montserrat";
 const NORMALIZED = "montserrat";
@@ -77,14 +93,21 @@ try {
    * The family is named in lower case on purpose: that is the spelling that
    * used to rename the library's copy for every screen that reads it.
    */
-  const { document, diagnostics } = compile(
-    SAMPLE_PROMPT
-      .replace(/^name: .*$/m, "name: Library font smoke")
-      .replace(/^slug: .*$/m, `slug: ${slug}`)
-      // Indented, inside the [FONTS] block — not a top-level `name:`.
-      .replace(/^(\s*)name: Apelsen Display$/m, `$1name: ${NORMALIZED}`),
-  );
+  const { document, diagnostics } = compile(rename(SAMPLE_PROMPT));
   if (!document) throw new Error(`prompt did not compile: ${diagnostics.errors.map((e) => e.message).join(" | ")}`);
+
+  /**
+   * The rename has to have happened, or this test proves nothing.
+   *
+   * It used to match the sample's font by its literal name. When the standard's
+   * example changed font, the replace silently stopped matching, the design
+   * resolved a family nobody was testing, and every check still passed —
+   * including the one about not renaming Montserrat, which by then never went
+   * near Montserrat.
+   */
+  if (document.fonts[0]?.name !== NORMALIZED) {
+    throw new Error(`the fixture did not rename font_1 (got "${document.fonts[0]?.name}")`);
+  }
 
   const made = await service.from("presentation_designs")
     .insert({ slug, name: "Library font smoke", tier: "simple", status: "draft", compiled_config: document, created_by: userId })
@@ -121,6 +144,25 @@ try {
     `the library still calls it "${before.data.canonical_name}" (now "${after.data?.canonical_name}")`);
   check(after.data?.source === before.data.source,
     `the library's source is unchanged (${before.data.source} → ${after.data?.source})`);
+
+  /**
+   * The standard's own example resolves, unchanged.
+   *
+   * Every new design starts from this text, so a font named in it that the
+   * library does not hold means the default experience is a design drawn in
+   * the fallback — working, and in nobody's chosen typeface. The sample used
+   * to name "Apelsen Display", which exists nowhere.
+   */
+  const sample = compile(SAMPLE_PROMPT).document;
+  const names = sample.fonts.map((font) => font.name);
+  const normalized = names.map((name) => name.toLowerCase().replace(/[^a-z0-9]/g, ""));
+  const held = await service.from("font_families")
+    .select("normalized_name").in("normalized_name", normalized);
+  const have = new Set((held.data ?? []).map((row) => row.normalized_name));
+
+  for (const [at, name] of names.entries()) {
+    check(have.has(normalized[at]), `the standard's example font "${name}" is in the library`);
+  }
 } finally {
   if (designId) {
     await service.from("presentation_design_fonts").delete().eq("design_id", designId);
