@@ -5,7 +5,10 @@ import {
 } from "lucide-react";
 import { useMemo } from "react";
 
-import { COLOR_ROLES, GRADIENT_PRESETS, type ColorValue } from "@jaxongirman/jslayd";
+import {
+  BINDINGS, COLOR_ROLES, CONDITIONS, GRADIENT_PRESETS, buildWritingBrief,
+  type ColorValue,
+} from "@jaxongirman/jslayd";
 
 import {
   DEFAULT_BORDER, MAX_SHADOWS, addShadow, addStop, alignElements, cornersAreEven, distribute,
@@ -69,6 +72,28 @@ export function StudioInspector({ document: design, archetype, selectedIds, font
     [archetype, selectedIds],
   );
 
+  /**
+   * How much each text box actually holds, measured rather than declared.
+   *
+   * The same arithmetic the writer is briefed with, so the number shown here is
+   * the number a real slide is written against. Recomputed per slide rather
+   * than per keystroke: it depends on the geometry and the type, both of which
+   * change while an author is dragging.
+   */
+  const capacity = useMemo(() => {
+    const slots = new Map<string, ReturnType<typeof buildWritingBrief>["slots"][number]>();
+    if (!archetype) return slots;
+    try {
+      for (const slot of buildWritingBrief(design, archetype).slots) {
+        if (!slots.has(slot.elementId)) slots.set(slot.elementId, slot);
+      }
+    } catch {
+      // A design mid-edit is routinely unmeasurable; the panel says nothing
+      // rather than showing a number it cannot stand behind.
+    }
+    return slots;
+  }, [archetype, design]);
+
   if (!archetype) return <p className="studio-empty">Slayd tanlanmagan.</p>;
 
   /**
@@ -127,6 +152,78 @@ export function StudioInspector({ document: design, archetype, selectedIds, font
           Qiymatlar 1920 × 1080 muallif kanvasida. Ekran o‘lchami hujjatga ta’sir qilmaydi.
         </p>
       </section>
+
+      {/**
+        * What fills this box, and when it is drawn.
+        *
+        * The most consequential field on a text element and the one the panel
+        * could not reach: a box bound to `subtitle` draws a subtitle, and a box
+        * bound to nothing draws nothing at all. The measured capacity is shown
+        * beside it because that is the number an author actually needs — the
+        * box is 620 wide, but what decides whether a real title fits is that it
+        * holds about twenty characters at this size.
+        */}
+      {element.type === "text" || element.type === "quote" || element.type === "number" || element.type === "badge" ? (() => {
+        const source = (element as { source?: { bind?: string; literal?: string } }).source ?? {};
+        const bound = typeof source.bind === "string";
+        const budget = capacity.get(element.id);
+        return (
+          <section>
+            <h4>Kontent</h4>
+            <label className="studio-field">
+              <span>Manba</span>
+              <select
+                value={bound ? source.bind : "__literal"}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  onChange(withElement(design, archetype.id, element.id, (current) => ({
+                    ...current,
+                    source: value === "__literal" ? { literal: source.literal ?? "" } : { bind: value },
+                  } as typeof current)));
+                }}
+              >
+                <option value="__literal">Doimiy matn</option>
+                {BINDINGS.map((binding) => <option key={binding} value={binding}>{binding}</option>)}
+              </select>
+            </label>
+
+            {bound ? (
+              budget ? (
+                <p className="studio-note">
+                  Bu quti taxminan <strong>{budget.budget.maximumCharacters}</strong> belgi
+                  ({budget.budget.maximumWords} so‘z) sig‘diradi — {budget.budget.estimatedLines} qatorda.
+                  Namunaviy slayd shu chegaraga qarab yoziladi.
+                </p>
+              ) : null
+            ) : (
+              <Field
+                label="Matn"
+                value={source.literal ?? ""}
+                onCommit={(raw) => onChange(withElement(design, archetype.id, element.id, (current) => ({
+                  ...current, source: { literal: raw },
+                } as typeof current)))}
+              />
+            )}
+
+            <label className="studio-field">
+              <span>Qachon chiziladi</span>
+              <select
+                value={String(element.when ?? "always")}
+                onChange={(event) => onChange(withElement(design, archetype.id, element.id, (current) => ({
+                  ...current, when: event.target.value as typeof current.when,
+                })))}
+              >
+                {CONDITIONS.map((condition) => <option key={condition} value={condition}>{condition}</option>)}
+              </select>
+            </label>
+            {element.when && element.when !== "always" ? (
+              <p className="studio-note">
+                Slaydda bu ma’lumot bo‘lmasa, element umuman chizilmaydi.
+              </p>
+            ) : null}
+          </section>
+        );
+      })() : null}
 
       {text && (
         <section>
