@@ -985,3 +985,50 @@ td small { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; 
   border: 1px solid var(--border);
   pointer-events: none;
 }
+
+/* Panels. Both are lists of controls at one rhythm, so the studio reads as one
+   workspace rather than as three tools that happen to share a window. */
+.studio-empty { padding: 24px 16px; margin: 0; font-size: 13px; color: var(--ink-muted); }
+
+.studio-layers { display: flex; flex-direction: column; gap: 2px; padding: 8px; }
+.studio-layer {
+  display: flex; align-items: center; gap: 4px;
+  padding: 4px 6px; border-radius: 9px;
+  border: 1px solid transparent;
+}
+.studio-layer:hover { background: var(--surface-muted); }
+.studio-layer.selected { border-color: var(--brand); background: var(--surface-muted); }
+.studio-layer-name {
+  flex: 1; min-width: 0;
+  display: flex; align-items: baseline; gap: 7px;
+  padding: 2px 0; border: 0; background: none;
+  font-size: 12px; color: var(--ink); text-align: left;
+}
+.studio-layer-name input { padding: 3px 6px; font-size: 12px; }
+.studio-layer-name > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.studio-layer-type { flex: none; font-size: 10px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .06em; }
+.studio-layer-dim { color: var(--ink-soft); text-decoration: line-through; }
+.studio-layer-actions { display: flex; gap: 1px; flex: none; }
+.studio-layer-actions button {
+  width: 24px; height: 24px; display: grid; place-items: center;
+  border: 0; border-radius: 7px; background: transparent; color: var(--ink-muted);
+}
+.studio-layer-actions button:hover:not(:disabled) { color: var(--brand); background: var(--field); }
+.studio-layer-actions button:disabled { opacity: .3; cursor: default; }
+.studio-layer-error { margin: 6px; font-size: 12px; color: var(--bad-ink); }
+
+.studio-inspector { display: flex; flex-direction: column; gap: 18px; padding: 14px; }
+.studio-inspector header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.studio-inspector header strong { font-size: 14px; color: var(--ink); }
+.studio-inspector header small { font-size: 11px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .06em; }
+.studio-inspector section { display: flex; flex-direction: column; gap: 8px; }
+.studio-inspector h4 {
+  margin: 0; font-size: 11px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--ink-soft);
+}
+.studio-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.studio-field { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--ink-muted); }
+.studio-field > span { display: flex; justify-content: space-between; }
+.studio-field em { font-style: normal; color: var(--ink-soft); }
+.studio-field input, .studio-field select { padding: 7px 9px; font-size: 12px; border-radius: 9px; }
+.studio-note { margin: 2px 0 0; font-size: 11px; color: var(--ink-soft); }

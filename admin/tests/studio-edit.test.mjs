@@ -59,7 +59,8 @@ writeFileSync(emitted, readFileSync(emitted, "utf8")
 const studio = await import(emitted);
 const {
   CANVAS, HANDLES, alignElements, beginGesture, canRedo, canUndo, clampBox, commit,
-  distribute, endGesture, moveElement, preview, redo, resizeBox, setGeometry, snap,
+  distribute, duplicateElement, endGesture, freeId, moveElement, preview, redo,
+  removeElement, renameElement, reorder, resizeBox, setGeometry, snap, stackingOrder,
   startHistory, undo,
 } = studio;
 
@@ -245,4 +246,81 @@ test("distribute evens the gaps and leaves the outer two alone", () => {
 test("distribute needs three elements to mean anything", () => {
   const before = doc(element("a", 0, 0, 100, 50), element("b", 200, 0, 100, 50));
   assert.equal(distribute(before, "a1", ["a", "b"], "x"), before);
+});
+
+/* ---------------------------------------------------------------- layers */
+
+const zed = (id, z) => ({
+  id, type: "text",
+  geometry: { x: 0, y: 0, width: 100, height: 50, rotation: 0, zIndex: z, anchor: "top-left" },
+});
+
+test("the panel reorders a list; the numbers are this function's problem", () => {
+  const before = { archetypes: [{ id: "a1", elements: [zed("a", 5), zed("b", 5), zed("c", 9)] }] };
+  const after = reorder(before, "a1", ["c", "a", "b"]);
+  const z = (id) => after.archetypes[0].elements.find((e) => e.id === id).geometry.zIndex;
+
+  assert.deepEqual([z("c"), z("a"), z("b")], [1, 2, 3]);
+  // No two elements share a number afterwards, which was the point.
+  assert.equal(new Set([z("a"), z("b"), z("c")]).size, 3);
+});
+
+test("stacking order is bottom-first, and a tie does not flap", () => {
+  const archetype = { id: "a1", elements: [zed("a", 3), zed("b", 1), zed("c", 3)] };
+  const once = stackingOrder(archetype).map((e) => e.id);
+  const twice = stackingOrder(archetype).map((e) => e.id);
+  assert.deepEqual(once, ["b", "a", "c"]);
+  assert.deepEqual(once, twice, "two elements sharing a z swapped between renders");
+});
+
+test("a duplicate is visibly a copy, not hidden under the original", () => {
+  const before = doc(element("title", 100, 100, 400, 80));
+  const { document: after, id } = duplicateElement(before, "a1", "title");
+
+  assert.equal(id, "title_copy");
+  assert.equal(after.archetypes[0].elements.length, 2);
+  const copy = boxOf(after, "title_copy");
+  assert.ok(copy.x > 100 && copy.y > 100, "the copy landed exactly on top of the original");
+  assert.ok(copy.zIndex > boxOf(after, "title").zIndex);
+});
+
+test("duplicating twice does not produce two elements with one id", () => {
+  let document = doc(element("title", 100, 100, 400, 80));
+  document = duplicateElement(document, "a1", "title").document;
+  document = duplicateElement(document, "a1", "title").document;
+  const ids = document.archetypes[0].elements.map((e) => e.id);
+  assert.equal(new Set(ids).size, ids.length, `duplicate ids: ${ids.join(", ")}`);
+});
+
+test("a copy of a copy does not stack the suffix forever", () => {
+  const archetype = { id: "a1", elements: [zed("title", 1), zed("title_copy", 2)] };
+  assert.equal(freeId(archetype, "title_copy"), "title_copy2");
+});
+
+test("deleting removes one element and nothing else", () => {
+  const before = doc(element("a", 0, 0, 100, 50), element("b", 0, 100, 100, 50));
+  const after = removeElement(before, "a1", "a");
+  assert.deepEqual(after.archetypes[0].elements.map((e) => e.id), ["b"]);
+});
+
+test("a rename is refused rather than allowed to collide", () => {
+  const before = doc(element("a", 0, 0, 100, 50), element("b", 0, 100, 100, 50));
+
+  const taken = renameElement(before, "a1", "a", "b");
+  assert.equal(taken.document, before, "a colliding rename went through");
+  assert.match(taken.error, /band/);
+
+  const bad = renameElement(before, "a1", "a", "2 words");
+  assert.equal(bad.document, before);
+  assert.ok(bad.error);
+
+  const good = renameElement(before, "a1", "a", "headline");
+  assert.equal(good.error, null);
+  assert.deepEqual(good.document.archetypes[0].elements.map((e) => e.id), ["headline", "b"]);
+});
+
+test("renaming an element to its own name is allowed", () => {
+  const before = doc(element("a", 0, 0, 100, 50));
+  const same = renameElement(before, "a1", "a", "a");
+  assert.equal(same.error, null);
 });

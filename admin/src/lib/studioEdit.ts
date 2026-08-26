@@ -87,6 +87,132 @@ export function setGeometry(
   });
 }
 
+/* ------------------------------------------------------------------ layers */
+
+/**
+ * The stacking order, as a list rather than as a pile of numbers.
+ *
+ * A layers panel that edits `zIndex` directly makes the author do the
+ * arithmetic — move this above that, discover they now share a number, pick a
+ * gap. The panel reorders a list; this turns the list back into indices, spaced
+ * one apart from the bottom, so the numbers stay small and no two elements
+ * collide.
+ */
+export function reorder(
+  document: JslaydDocument, archetypeId: string, orderedIds: readonly string[],
+): JslaydDocument {
+  const archetype = archetypeOf(document, archetypeId);
+  if (!archetype) return document;
+
+  const rank = new Map(orderedIds.map((id, index) => [id, index + 1]));
+  return {
+    ...document,
+    archetypes: document.archetypes.map((entry) => (entry.id !== archetypeId ? entry : {
+      ...entry,
+      elements: entry.elements.map((element) => {
+        const zIndex = rank.get(element.id);
+        return zIndex === undefined || zIndex === element.geometry.zIndex
+          ? element
+          : { ...element, geometry: { ...element.geometry, zIndex } };
+      }),
+    })),
+  };
+}
+
+/** Bottom-first, which is the order a layers panel reads from the bottom up. */
+export function stackingOrder(archetype: Archetype | null): JslaydElement[] {
+  if (!archetype) return [];
+  return archetype.elements.slice().sort((a, b) => (
+    a.geometry.zIndex - b.geometry.zIndex
+    // A stable tie-break, so two elements sharing a z do not swap on every render.
+    || archetype.elements.indexOf(a) - archetype.elements.indexOf(b)
+  ));
+}
+
+/** An id nothing in the slide is using, derived from the one being copied. */
+export function freeId(archetype: Archetype, base: string): string {
+  const taken = new Set(archetype.elements.map((element) => element.id));
+  const root = base.replace(/_copy\d*$/, "");
+  // `title_copy`, then `title_copy2`, `title_copy3` — counting from the first
+  // suffixed name rather than from the number, so nothing is skipped.
+  for (let n = 1; n < 500; n += 1) {
+    const candidate = n === 1 ? `${root}_copy` : `${root}_copy${n}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+  return `${root}_${Date.now()}`;
+}
+
+/** A copy, offset so it is visibly a copy rather than hidden under the original. */
+export function duplicateElement(
+  document: JslaydDocument, archetypeId: string, elementId: string,
+): { document: JslaydDocument; id: string | null } {
+  const archetype = archetypeOf(document, archetypeId);
+  const element = elementOf(archetype, elementId);
+  if (!archetype || !element) return { document, id: null };
+
+  const id = freeId(archetype, element.id);
+  const copy: JslaydElement = {
+    ...element,
+    id,
+    geometry: {
+      ...element.geometry,
+      ...clampBox({
+        x: element.geometry.x + 24, y: element.geometry.y + 24,
+        width: element.geometry.width, height: element.geometry.height,
+      }),
+      zIndex: element.geometry.zIndex + 1,
+    },
+  };
+
+  return {
+    id,
+    document: {
+      ...document,
+      archetypes: document.archetypes.map((entry) => (entry.id !== archetypeId ? entry : {
+        ...entry,
+        elements: [...entry.elements, copy],
+      })),
+    },
+  };
+}
+
+export function removeElement(
+  document: JslaydDocument, archetypeId: string, elementId: string,
+): JslaydDocument {
+  return {
+    ...document,
+    archetypes: document.archetypes.map((entry) => (entry.id !== archetypeId ? entry : {
+      ...entry,
+      elements: entry.elements.filter((element) => element.id !== elementId),
+    })),
+  };
+}
+
+/**
+ * Renaming an element is renaming its id, which is what the language calls it.
+ *
+ * Refused when the name is taken: two elements with one id is a design that
+ * compiles to something other than what is on screen.
+ */
+export function renameElement(
+  document: JslaydDocument, archetypeId: string, elementId: string, next: string,
+): { document: JslaydDocument; error: string | null } {
+  const archetype = archetypeOf(document, archetypeId);
+  if (!archetype) return { document, error: null };
+
+  const clean = next.trim();
+  if (!/^[a-z][a-z0-9_]*$/i.test(clean)) {
+    return { document, error: "Nom harf bilan boshlanib, faqat harf, raqam va _ dan iborat bo‘lsin." };
+  }
+  if (clean !== elementId && archetype.elements.some((element) => element.id === clean)) {
+    return { document, error: "Bu nom band." };
+  }
+  return {
+    error: null,
+    document: withElement(document, archetypeId, elementId, (element) => ({ ...element, id: clean })),
+  };
+}
+
 /* ------------------------------------------------------------------ resize */
 
 export type Handle = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
