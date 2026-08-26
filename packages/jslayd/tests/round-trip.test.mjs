@@ -7,6 +7,7 @@ const dir = buildJslayd();
 const { compile } = await import(`${dir}/compile.js`);
 const { decompile } = await import(`${dir}/decompile.js`);
 const { SAMPLE_PROMPT } = await import(`${dir}/standard.js`);
+const { renderPreview } = await import(`${dir}/render.js`);
 
 /**
  * CODE → DOCUMENT → VISUAL EDIT → SERIALIZE → COMPILE.
@@ -146,3 +147,37 @@ test("a document the editor produced still passes the compiler's own checks", ()
   const complaints = [...result.diagnostics.errors, ...result.diagnostics.warnings];
   assert.ok(complaints.length > 0, "an element at x=5000 drew no complaint at all");
 });
+
+test("a rendered row can be traced back to the element that drew it", () => {
+  /**
+   * What makes a studio canvas both real and editable: the preview is the
+   * engine's own output, and a click on any part of it still knows which
+   * authoring element to select.
+   */
+  const document = compile(SAMPLE_PROMPT).document;
+  const rendered = renderPreview(document);
+
+  assert.ok(rendered.elements.length > 0);
+  const orphans = rendered.elements.filter((row) => !row.origin);
+  assert.deepEqual(orphans.map((row) => row.type), [], "rows with no origin cannot be selected");
+
+  // Every origin names an element that is actually in the design.
+  const ids = new Set(document.archetypes.flatMap((a) => collect(a.elements)));
+  for (const row of rendered.elements) {
+    assert.ok(ids.has(row.origin), `origin ${row.origin} is not an element of the design`);
+  }
+});
+
+test("one element that draws several rows gives them all the same origin", () => {
+  // A stat is a value and a label; clicking either has to select the stat.
+  const document = compile(SAMPLE_PROMPT).document;
+  const rendered = renderPreview(document);
+  const counts = new Map();
+  for (const row of rendered.elements) counts.set(row.origin, (counts.get(row.origin) ?? 0) + 1);
+  assert.ok([...counts.values()].some((n) => n >= 1));
+  assert.equal([...counts.keys()].filter((id) => !id).length, 0);
+});
+
+function collect(elements) {
+  return elements.flatMap((element) => [element.id, ...(element.children ? collect(element.children) : [])]);
+}

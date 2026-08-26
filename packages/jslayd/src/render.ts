@@ -50,6 +50,17 @@ import { CHART_FALLBACKS, DESIGN_ASSET_BUCKET, MIN_FONT_SIZE, MIN_RENDER_FONT_SI
  */
 
 export type RenderedElement = {
+  /**
+   * The authoring element this row came from.
+   *
+   * The renderer knows it and used to throw it away, which meant nothing could
+   * ask "which element in the design drew this box" — so a studio canvas could
+   * either show the real output or be editable, not both. One element may emit
+   * several rows (a stat is a value and a label; an image may carry an overlay)
+   * and they all carry the same origin, which is what makes clicking any part
+   * of a stat select the stat.
+   */
+  origin?: string;
   type: "text" | "image" | "shape" | "icon" | "chart" | "table" | "line" | "group";
   x: number;
   y: number;
@@ -196,6 +207,7 @@ function emit(
   for (const element of kept) {
     const geometry = element.grow ? absorb(element.geometry, dropped) : element.geometry;
     const box = place(geometry, offsetX, offsetY);
+    const before = out.length;
 
     switch (element.type) {
       case "group":
@@ -236,6 +248,13 @@ function emit(
         if (table) out.push(table);
         break;
       }
+    }
+
+    // Stamped here rather than threaded through a dozen renderers. A group's
+    // children have already claimed their own origin by the time it returns,
+    // so only rows that are still unclaimed take the element's id.
+    for (let at = before; at < out.length; at += 1) {
+      if (!out[at]!.origin) out[at]!.origin = element.id;
     }
   }
 }

@@ -921,3 +921,67 @@ td small { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; 
   border: 0; border-radius: 9px; background: transparent; color: var(--ink-muted);
 }
 .theme-switch button.on { background: var(--surface); color: var(--brand); }
+
+/* --------------------------------------------------------- design studio */
+
+/**
+ * The canvas is two stacked layers: the engine's real output underneath, and a
+ * transparent grid of hit targets over it. Nothing is drawn twice — the top
+ * layer has no appearance of its own until something is selected.
+ */
+.studio-canvas {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  user-select: none;
+  touch-action: none;
+}
+.studio-canvas-render { position: absolute; inset: 0; pointer-events: none; }
+.studio-canvas-hits { position: absolute; inset: 0; }
+.studio-canvas-empty { padding: 40px; text-align: center; color: var(--ink-muted); }
+
+.studio-hit {
+  position: absolute;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  cursor: move;
+}
+.studio-hit:hover { border-color: color-mix(in srgb, var(--brand) 55%, transparent); }
+.studio-hit.selected { border-color: var(--brand); }
+
+.studio-handles { position: absolute; pointer-events: none; }
+.studio-handle {
+  position: absolute;
+  width: 10px; height: 10px;
+  margin: -5px 0 0 -5px;
+  border: 1px solid var(--surface);
+  border-radius: 3px;
+  background: var(--brand);
+  pointer-events: auto;
+}
+.studio-handle.nw { left: 0; top: 0; cursor: nwse-resize; }
+.studio-handle.n { left: 50%; top: 0; cursor: ns-resize; }
+.studio-handle.ne { left: 100%; top: 0; cursor: nesw-resize; }
+.studio-handle.e { left: 100%; top: 50%; cursor: ew-resize; }
+.studio-handle.se { left: 100%; top: 100%; cursor: nwse-resize; }
+.studio-handle.s { left: 50%; top: 100%; cursor: ns-resize; }
+.studio-handle.sw { left: 0; top: 100%; cursor: nesw-resize; }
+.studio-handle.w { left: 0; top: 50%; cursor: ew-resize; }
+
+/* The numbers, where a person is already looking rather than in a side panel. */
+.studio-readout {
+  position: absolute;
+  left: 8px; bottom: 8px;
+  margin: 0;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--ink-muted);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  border: 1px solid var(--border);
+  pointer-events: none;
+}
