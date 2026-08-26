@@ -5,12 +5,14 @@ import {
   decompile,
   readDocument,
   renderAllPreviews,
+  renderArchetype,
   renderPreview,
   serializePretty,
   type Diagnostics,
   type HealthReport,
   type JslaydDocument,
   type RenderedSlide,
+  type SlideData,
   type Tier,
 } from "@jaxongirman/jslayd";
 import type { Database } from "@jaxongirman/types";
@@ -46,8 +48,30 @@ export async function compilePrompt(source: string): Promise<CompileOutcome> {
   return { document, diagnostics, health: analyze(document), hash: await contentHash(document) };
 }
 
-export function previewOf(document: JslaydDocument, family?: string | null): RenderedSlide {
-  return renderPreview(document, undefined, family);
+/**
+ * One slide, drawn.
+ *
+ * `archetypeId` is not optional in practice even though it reads that way: the
+ * studio's canvas passed a selected blueprint and got the cover back, because
+ * `renderPreview` falls to the cover when told nothing. The editor then drew
+ * the cover's elements under the selected blueprint's hit targets, which looks
+ * like the drag handles have come loose from the artwork.
+ *
+ * `slide` is the other half. Without it every design in the console is judged
+ * on placeholder text, which is the one kind of content a layout cannot fail
+ * on — always short, always the same length in every slot.
+ */
+export function previewOf(
+  document: JslaydDocument,
+  family?: string | null,
+  archetypeId?: string | null,
+  slide?: SlideData | null,
+): RenderedSlide {
+  if (!slide) return renderPreview(document, archetypeId ?? undefined, family);
+
+  const archetype = document.archetypes.find((entry) => entry.id === archetypeId) ?? document.archetypes[0];
+  if (!archetype) return renderPreview(document, undefined, family);
+  return renderArchetype(document, archetype, slide, family);
 }
 
 /**

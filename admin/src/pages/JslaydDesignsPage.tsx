@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState, ErrorState, PageHeader, StatusBadge, TableSkeleton } from "@/components/AdminUI";
 import { DiagnosticList, JslaydEditor } from "@/components/JslaydEditor";
 import { JslaydStandardCard } from "@/components/JslaydStandard";
+import { StudioSection } from "@/components/StudioSection";
 import { archive, duplicate, publish, remove, restore } from "@/lib/design-actions";
 import { dateTime, errorMessage } from "@/lib/format";
 import { useDismissable } from "@/lib/router";
@@ -723,6 +724,20 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
             </div>
           ) : null}
         </section>
+      ) : null}
+
+      {/**
+        * The visual editor writes back as source, through the same compiler the
+        * prompt goes through. One direction, one truth: there is no second copy
+        * of the design here that could drift from the text above.
+        */}
+      {outcome?.document ? (
+        <StudioSection
+          document={outcome.document}
+          designId={form.id}
+          family={family}
+          onChange={(next) => { set("source", decompile(next)); setSaved(false); }}
+        />
       ) : null}
     </div>
   );

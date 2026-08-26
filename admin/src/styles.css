@@ -1048,3 +1048,45 @@ td small { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; 
   background: var(--field); color: var(--ink-muted);
 }
 .studio-stop button:disabled { opacity: .4; cursor: default; }
+
+/* The visual studio, laid out as three columns around the slide.
+   Layers and inspector are fixed and narrow because they are lists; the canvas
+   takes what is left, which is what the eye is actually on. */
+.studio-shell {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr) 260px;
+  gap: 12px;
+  align-items: start;
+  margin-top: 12px;
+}
+.studio-pane {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  overflow: hidden;
+  max-height: 560px;
+  overflow-y: auto;
+}
+.studio-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.studio-bar select { min-width: 220px; padding: 8px 10px; font-size: 13px; border-radius: 10px; }
+.studio-bar-actions { display: flex; gap: 4px; margin-left: auto; }
+
+.studio-sample { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+.studio-sample input { flex: 1 1 260px; min-width: 0; padding: 9px 11px; font-size: 13px; border-radius: 10px; }
+.studio-sample select { padding: 9px 10px; font-size: 13px; border-radius: 10px; }
+
+/* A slot that overflowed is a finding, not an error: the writer did its job and
+   the box is too small for what it is for. Warning colours, not failure ones. */
+.studio-fit-report {
+  margin-top: 10px; padding: 10px 12px;
+  border: 1px solid var(--warn-rim); border-radius: 12px;
+  background: var(--warn-soft); color: var(--warn-ink);
+  font-size: 12px;
+}
+.studio-fit-report ul { margin: 6px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }
+.studio-fit-report code { font-size: 11px; }
+
+@media (max-width: 1100px) {
+  .studio-shell { grid-template-columns: minmax(0, 1fr); }
+  .studio-pane { max-height: 320px; }
+}

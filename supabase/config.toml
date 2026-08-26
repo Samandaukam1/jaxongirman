@@ -419,6 +419,11 @@ verify_jwt = false
 [functions.ai-diagnose]
 verify_jwt = false
 
+# Writes a sample slide for a design an administrator is judging. Admin-only,
+# checked in SQL, same as the rest.
+[functions.sample-slide]
+verify_jwt = false
+
 # The sweep authenticates against the service-role key or SURVEY_PURGE_SECRET
 # itself; gateway JWT parsing would reject the scheduler's own credential.
 [functions.purge-survey-responses]

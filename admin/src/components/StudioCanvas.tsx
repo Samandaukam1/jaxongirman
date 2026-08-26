@@ -1,4 +1,4 @@
-import type { JslaydDocument } from "@jaxongirman/jslayd";
+import type { JslaydDocument, SlideData } from "@jaxongirman/jslayd";
 import { ScaledSlide } from "@jaxongirman/slide-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -39,6 +39,8 @@ export function StudioCanvas({
   archetypeId,
   selectedId,
   width = 880,
+  family = null,
+  slide = null,
   onSelect,
   onPreview,
   onGestureStart,
@@ -48,6 +50,10 @@ export function StudioCanvas({
   archetypeId: string;
   selectedId: string | null;
   width?: number;
+  /** The colour family to draw in; null is the design's own. */
+  family?: string | null;
+  /** Real content, when a sample has been written. Null draws placeholders. */
+  slide?: SlideData | null;
   onSelect: (id: string | null) => void;
   /** Every frame of a drag. Local state only — nothing is persisted here. */
   onPreview: (next: JslaydDocument) => void;
@@ -70,11 +76,11 @@ export function StudioCanvas({
    */
   const rendered = useMemo(() => {
     try {
-      return previewOf(design, null);
+      return previewOf(design, family, archetypeId, slide);
     } catch {
       return null;
     }
-  }, [design]);
+  }, [design, family, archetypeId, slide]);
 
   const boxOf = useCallback((id: string): Box | null => {
     const element = elementOf(archetype, id);
