@@ -24,8 +24,7 @@ import { geminiWriter } from "../_shared/gemini.ts";
 import { bodyJson, errorResponse, HttpError, json } from "../_shared/http.ts";
 import { readDocument } from "../_shared/jslayd/serialize.ts";
 import { readSample, sampleBrief, samplePrompt, sampleSchema, type SampleAnswer } from "../_shared/jslayd/sample.ts";
-import { searchUnsplash, unsplashConfigured } from "../_shared/providers/unsplash.ts";
-import { queryLadder } from "../_shared/unsplash-results.ts";
+import { searchStock } from "../_shared/providers/photo.ts";
 import { ProviderUnavailable, userFacingFailure } from "../_shared/writer.ts";
 
 type Body = {
@@ -69,12 +68,9 @@ Deno.serve(async (request) => {
     // Only the picture: no design to read, no model call, no words to replace.
     if (rerollQuery) {
       if (rerollQuery.length > 120) throw new HttpError(400, "So‘rov juda uzun.", "query_too_long");
-      if (!unsplashConfigured()) {
-        throw new HttpError(503, "UNSPLASH_ACCESS_KEY sozlanmagan.", "unsplash_not_configured");
-      }
       const skip = Math.max(0, Math.min(20, Number(body.photoOffset) || 0));
-      const photo = await searchUnsplash(rerollQuery, "landscape", skip);
-      return json({ photo, imageQuery: rerollQuery });
+      const found = await searchStock({ query: rerollQuery, orientation: "landscape", skip });
+      return json({ photo: found?.hit ?? null, source: found?.source ?? null, imageQuery: rerollQuery });
     }
 
     if (!topic) throw new HttpError(400, "Mavzu yozilmadi.", "missing_topic");
@@ -120,27 +116,31 @@ Deno.serve(async (request) => {
     const result = readSample(answer.data, document, archetype, { language });
 
     /**
-     * The picture, when the design has somewhere to put one.
+     * The picture, through the generator's own search.
      *
-     * Searched here rather than in the browser because the key is a server
-     * secret, and because the ladder — the query, then something broader, then
-     * the theme's own subject — is the generator's, not a second implementation
-     * that finds different photographs for the same deck.
+     * The same call a customer's deck makes — same provider order, same ladder,
+     * same licence rules — because a sample found some other way is not a
+     * sample of what the design will do. Searched on the server because the key
+     * is a server secret.
      */
-    let photo = null;
-    if (result.imageQuery && unsplashConfigured()) {
-      for (const query of queryLadder(result.imageQuery)) {
-        photo = await searchUnsplash(query, "landscape");
-        if (photo) break;
-      }
-    }
+    const slot = archetype.elements.find((element) => element.type === "image" || element.type === "frame");
+    const found = result.imageQuery
+      ? await searchStock({
+        query: result.imageQuery,
+        orientation: (slot as { orientation?: "landscape" | "portrait" | "square" | "any" })?.orientation ?? "landscape",
+        theme: (slot as { stylePreference?: string | null })?.stylePreference ?? null,
+      })
+      : null;
 
     return json({
       archetypeId: archetype.id,
       slide: result.slide,
       outcomes: result.outcomes,
       imageQuery: result.imageQuery,
-      photo,
+      photo: found?.hit ?? null,
+      // Which index answered, so the console can say so rather than imply the
+      // better one always did.
+      photoSource: found?.source ?? null,
       empty: false,
       // What it cost and who wrote it, so the console can say so rather than
       // present a model's paragraph as the design's own.

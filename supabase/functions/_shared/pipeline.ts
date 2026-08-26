@@ -1308,12 +1308,27 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
 
       const results: GeneratedImage[] = [];
       for (const target of targets) {
+        /**
+         * What the design asked for, where the design said.
+         *
+         * A slot declares the shape it wants a picture to be and the register
+         * it wants it in; searching without them returns a landscape photograph
+         * for a portrait hole and a stock-looking one for an editorial page.
+         * The archetype chosen for this slide is already known here, so there
+         * is nothing to guess.
+         */
+        const slot = archetypesInOrder[target.index]?.elements
+          .find((element) => element.type === "image" || element.type === "frame") as
+          { orientation?: "landscape" | "portrait" | "square" | "any"; stylePreference?: string | null } | undefined;
+
         const photo = await findPhoto(input.service, {
           ownerId: input.ownerId,
           presentationId: input.presentationId,
           slideIndex: target.index,
           direction: target.slide.visualPrompt ?? plan.visualDna.imageDirection,
           topic: prepared.presentation.topic,
+          orientation: slot?.orientation ?? "landscape",
+          stylePreference: slot?.stylePreference ?? null,
         });
         // No photograph is a slide on the palette ground, which several designs
         // treat as a deliberate composition. It is never a reason to stop.
@@ -1321,27 +1336,56 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
 
         results.push({
           slideIndex: photo.slideIndex, bucket: photo.bucket, path: photo.path,
-          provider: photo.attribution.provider, costUsd: 0,
+          // Which index answered, not which site hosts the file. Openverse
+          // reports the upstream host — "flickr", "wikimedia" — so recording
+          // that alone leaves no way to tell the two searches apart.
+          provider: photo.source, costUsd: 0,
         });
 
-        // The licence and the author travel with the file. An openly licensed
-        // photograph usually has to be credited, and provenance that was not
-        // stored cannot be recovered later.
-        await input.service.from("presentation_assets").insert({
+        /**
+         * The licence and the author travel with the file.
+         *
+         * An openly licensed photograph has to be credited and provenance that
+         * was not stored cannot be recovered from the file later. The result is
+         * read rather than discarded: this insert failed for a year against an
+         * enum with no `stock` in it, and because nothing looked, every deck
+         * kept its pictures and lost every credit line silently.
+         */
+        const credited = await input.service.from("presentation_assets").insert({
           presentation_id: input.presentationId,
           owner_id: input.ownerId,
           kind: "stock",
           storage_bucket: photo.bucket,
           storage_path: photo.path,
           mime_type: "image/jpeg",
-          provider: photo.attribution.provider,
-          metadata: { slide_index: target.index, attribution: photo.attribution },
+          provider: photo.source,
+          metadata: {
+            slide_index: target.index,
+            source: photo.source,
+            attribution: photo.attribution,
+            // Kept so a credit can be checked against the place it came from,
+            // and so a deck's pictures can be audited long after the search.
+            query: { orientation: slot?.orientation ?? "landscape", stylePreference: slot?.stylePreference ?? null },
+          },
         });
+        // Loud, and not fatal: the deck keeps the picture, and the operator
+        // learns the credit is missing while there is still something to fix.
+        if (credited.error) {
+          console.error("stock attribution not stored", input.presentationId, target.index, credited.error.message);
+        }
       }
       return results;
-    }, (value) => value.length
-      ? `${value.length} ta litsenziyalangan foto topildi`
-      : "Ushbu dizayn uchun foto talab qilinmadi");
+    }, (value) => {
+      if (!value.length) return "Ushbu dizayn uchun foto talab qilinmadi";
+      // Named in the progress line, because "8 photos found" does not say
+      // whether the better index answered or the fallback carried the deck.
+      const counted = value.reduce<Record<string, number>>((tally, image) => {
+        tally[image.provider] = (tally[image.provider] ?? 0) + 1;
+        return tally;
+      }, {});
+      const where = Object.entries(counted).map(([name, count]) => `${name}: ${count}`).join(", ");
+      return `${value.length} ta litsenziyalangan foto topildi (${where})`;
+    });
 
     const built = await runStage(input.service, input, "building_slides", async () => {
       const shared = {

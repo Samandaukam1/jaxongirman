@@ -156,7 +156,21 @@ try {
   const leaked = JSON.stringify(data.slide ?? {}).match(/"(x|y|width|height|fontSize|zIndex)":/);
   check(!leaked, "the answer carries no geometry");
 
-  if (data.imageQuery) console.log(`  · image query: ${data.imageQuery}${data.photo ? " → found" : " → no photo"}`);
+  if (data.imageQuery) {
+    console.log(`  · image query: ${data.imageQuery}${data.photo ? ` → ${data.photoSource}` : " → no photo"}`);
+    if (data.photo) {
+      /**
+       * Which index answered, through the shared search.
+       *
+       * This is the same `searchStock` a customer's deck calls, so a photograph
+       * arriving here from Unsplash is the whole provider order working
+       * server-side: the key read, the ladder walked, the credit kept.
+       */
+      check(["unsplash", "openverse"].includes(data.photoSource), `the provider is named (${data.photoSource})`);
+      check(Boolean(data.photo.attribution?.creator), `the photographer is recorded (${data.photo.attribution?.creator})`);
+      check(/^https?:\/\//.test(data.photo.attribution?.sourceUrl ?? ""), "a link back is recorded");
+    }
+  }
 
   const denied = await service.from("user_roles").delete().eq("user_id", userId);
   if (denied.error) throw denied.error;

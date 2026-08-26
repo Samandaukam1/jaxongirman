@@ -3,25 +3,38 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js";
 /**
  * Photographs, found rather than generated.
  *
- * Openverse indexes openly licensed images across Flickr, Wikimedia and others,
- * and needs no API key. That last part matters less than the first: every
- * result carries a licence, and a deck a student presents in a lecture hall or
- * a company shows to a client is a public use. A picture with unknown
- * provenance is one nobody can safely publish, so the search asks only for
- * work that may be used commercially and modified, and keeps the author and
- * the licence with the file.
+ * Two indexes, one pipeline. Unsplash is better curated and is asked first;
+ * Openverse indexes openly licensed work across Flickr, Wikimedia and others,
+ * needs no key, and answers when Unsplash cannot — no result, an error, or a
+ * rate limit, which on a free Unsplash key is a matter of when rather than if.
+ *
+ * Which one replies is decided by whether a key is configured, never by a flag
+ * somebody has to remember, and the fallback is not optional: an install with
+ * no Unsplash key must keep working exactly as it did.
+ *
+ * Every result carries a licence and an author, from either provider, because a
+ * deck a student presents in a lecture hall or a company shows to a client is a
+ * public use, and a picture with unknown provenance is one nobody can safely
+ * publish. Provenance that was not stored cannot be recovered later.
  *
  * Nothing here calls an image model. That is the point.
  */
 
 import { photoQuery } from "../photo-query.ts";
+import { firstUsableOpenverse, type OpenversePhoto } from "../openverse-results.ts";
+import { queryLadder, type PhotoHit } from "../unsplash-results.ts";
+import { searchUnsplash, unsplashConfigured } from "./unsplash.ts";
 
 const ENDPOINT = "https://api.openverse.org/v1/images/";
+
+/** Which index answered. Reported, stored, and asserted by the smoke test. */
+export type PhotoSource = "unsplash" | "openverse";
 
 export type StockPhoto = {
   slideIndex: number;
   bucket: string;
   path: string;
+  source: PhotoSource;
   /** What has to be shown for the licence to be honoured. */
   attribution: {
     title: string;
@@ -33,21 +46,48 @@ export type StockPhoto = {
   };
 };
 
-type OpenverseResult = {
-  id?: string;
-  title?: string;
-  creator?: string;
-  license?: string;
-  license_version?: string;
-  license_url?: string;
-  foreign_landing_url?: string;
-  url?: string;
-  provider?: string;
-  width?: number;
-  height?: number;
-};
+/**
+ * The one place a photograph is looked for.
+ *
+ * Both the deck generator and the studio's sample slide call this, so there is
+ * one ladder, one provider order and one set of licence rules rather than two
+ * that drift. The sample an administrator judges a design by has to be found
+ * the same way a customer's picture is, or it is not a sample of anything.
+ *
+ * Unsplash is tried across the whole ladder before Openverse gets a turn.
+ * Alternating per rung would trade a good Unsplash match for a vague Openverse
+ * one, which is the opposite of preferring Unsplash.
+ */
+export async function searchStock(input: {
+  query: string;
+  orientation?: Orientation;
+  /** The design's `stylePreference`, used only to widen a failing search. */
+  theme?: string | null;
+  /** Usable results to pass over, for "another photograph, same subject". */
+  skip?: number;
+}): Promise<{ hit: PhotoHit; source: PhotoSource } | null> {
+  const orientation = input.orientation ?? "landscape";
+  const ladder = queryLadder(input.query, input.theme ?? undefined);
 
-async function search(query: string, orientation: "landscape" | "portrait" | "square" | "any"): Promise<OpenverseResult | null> {
+  if (unsplashConfigured()) {
+    for (const rung of ladder) {
+      // `searchUnsplash` answers null for an error and for a rate limit alike,
+      // which is what makes the fallback below cover both without asking why.
+      const hit = await searchUnsplash(rung, orientation, input.skip ?? 0);
+      if (hit) return { hit, source: "unsplash" };
+    }
+  }
+
+  for (const rung of ladder) {
+    const hit = await searchOpenverse(rung, orientation, input.skip ?? 0);
+    if (hit) return { hit, source: "openverse" };
+  }
+  return null;
+}
+
+type Orientation = "landscape" | "portrait" | "square" | "any";
+
+async function searchOpenverse(query: string, orientation: Orientation, skip = 0): Promise<PhotoHit | null> {
   const parameters = new URLSearchParams({
     q: query,
     // Only work that may be reused commercially and modified. A presentation is
@@ -57,31 +97,22 @@ async function search(query: string, orientation: "landscape" | "portrait" | "sq
     mature: "false",
     page_size: "8",
   });
-  if (orientation !== "any") parameters.set("aspect_ratio", orientation === "square" ? "square" : orientation === "portrait" ? "tall" : "wide");
+  if (orientation !== "any") {
+    parameters.set("aspect_ratio", orientation === "square" ? "square" : orientation === "portrait" ? "tall" : "wide");
+  }
 
-  const response = await fetch(`${ENDPOINT}?${parameters}`, {
-    headers: { "User-Agent": "Jaxongirman/1.0 (presentation generator)" },
-  });
-  if (!response.ok) return null;
-
-  const payload = await response.json() as { results?: OpenverseResult[] };
-  // The first result that actually has a file and an author to credit. A
-  // result missing either is one that cannot be used honestly.
-  return (payload.results ?? []).find((entry) => entry.url && (entry.creator || entry.provider)) ?? null;
+  try {
+    const response = await fetch(`${ENDPOINT}?${parameters}`, {
+      headers: { "User-Agent": "Jaxongirman/1.0 (presentation generator)" },
+    });
+    if (!response.ok) return null;
+    const payload = await response.json() as { results?: OpenversePhoto[] };
+    return firstUsableOpenverse(payload.results ?? [], skip);
+  } catch {
+    return null;
+  }
 }
 
-/**
- * Finds a photograph for a slide and stores it beside the deck.
- *
- * Downloaded rather than linked: a deck that referenced a third-party URL would
- * lose its pictures whenever that host moved them, and an export has to work
- * offline.
- *
- * Returns null rather than throwing. No picture is a composition on the
- * palette ground, which several designs treat as deliberate; a failed
- * generation used to be the thing that stopped a deck, and a photo search
- * should not inherit that.
- */
 export async function findPhoto(
   service: SupabaseClient,
   input: {
@@ -90,17 +121,23 @@ export async function findPhoto(
     slideIndex: number;
     direction: string;
     topic: string;
-    orientation?: "landscape" | "portrait" | "square" | "any";
+    orientation?: Orientation;
+    /** The design's own `stylePreference`, when the slot declares one. */
+    stylePreference?: string | null;
   },
 ): Promise<StockPhoto | null> {
   try {
     const query = photoQuery(input.direction, input.topic);
     if (!query) return null;
 
-    const found = await search(query, input.orientation ?? "landscape");
-    if (!found?.url) return null;
+    const found = await searchStock({
+      query,
+      orientation: input.orientation ?? "landscape",
+      theme: input.stylePreference ?? null,
+    });
+    if (!found) return null;
 
-    const image = await fetch(found.url);
+    const image = await fetch(found.hit.url);
     if (!image.ok) return null;
     const bytes = new Uint8Array(await image.arrayBuffer());
     if (bytes.byteLength === 0) return null;
@@ -115,22 +152,14 @@ export async function findPhoto(
     });
     if (error) return null;
 
-    const license = found.license
-      ? `${found.license.toUpperCase()}${found.license_version ? ` ${found.license_version}` : ""}`
-      : "unknown";
-
     return {
       slideIndex: input.slideIndex,
       bucket: "stock-images",
       path,
-      attribution: {
-        title: found.title ?? query,
-        creator: found.creator ?? found.provider ?? "noma'lum",
-        license,
-        licenseUrl: found.license_url ?? "",
-        sourceUrl: found.foreign_landing_url ?? found.url,
-        provider: found.provider ?? "openverse",
-      },
+      source: found.source,
+      // Whatever the provider said, unchanged: a credit line rewritten by the
+      // system is a credit line nobody can check against the source.
+      attribution: found.hit.attribution,
     };
   } catch {
     // A search that fails costs the deck a picture, never the deck.

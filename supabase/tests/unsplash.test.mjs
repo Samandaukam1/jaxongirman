@@ -5,6 +5,7 @@ import { buildEdgeModules } from "../scripts/build-edge.mjs";
 
 const edge = buildEdgeModules();
 const { firstUsable, queryLadder } = await import(`${edge}/unsplash-results.js`);
+const { firstUsableOpenverse } = await import(`${edge}/openverse-results.js`);
 
 /**
  * A picture that cannot be credited cannot be published, and a search that
@@ -104,4 +105,53 @@ test("stepping to another photo counts the ones that could be used", () => {
   assert.equal(firstUsable(results, 1).url, "c.jpg");
   // Past the end is nothing, not the first one handed back as though it were new.
   assert.equal(firstUsable(results, 2), null);
+});
+
+/* -------------------------------------------------------- openverse results */
+
+test("an Openverse result becomes the same shape an Unsplash one does", () => {
+  /**
+   * Both providers answer in one shape, which is what lets there be one photo
+   * pipeline instead of two. If these drifted, the caller would have to know
+   * which index replied in order to read the answer — and knowing that is
+   * exactly what the unified search exists to avoid.
+   */
+  const [hit] = [firstUsableOpenverse([{
+    title: "Bridge at dawn",
+    creator: "Ann",
+    license: "cc-by",
+    license_version: "4.0",
+    license_url: "https://creativecommons.org/licenses/by/4.0/",
+    foreign_landing_url: "https://flickr.com/photo/1",
+    url: "https://live.staticflickr.com/1.jpg",
+    provider: "flickr",
+    width: 1600,
+    height: 900,
+  }])];
+
+  assert.equal(hit.url, "https://live.staticflickr.com/1.jpg");
+  assert.equal(hit.attribution.creator, "Ann");
+  // Shown to a reader on a credits slide, not matched against anything.
+  assert.equal(hit.attribution.license, "CC-BY 4.0");
+  assert.equal(hit.attribution.sourceUrl, "https://flickr.com/photo/1");
+  assert.equal(hit.attribution.provider, "flickr");
+  assert.deepEqual(Object.keys(hit).sort(), ["attribution", "height", "url", "width"]);
+});
+
+test("an Openverse result nobody can be credited for is skipped", () => {
+  const usable = { url: "b.jpg", creator: "Bo", provider: "wikimedia" };
+  assert.equal(firstUsableOpenverse([{ creator: "Ann" }, usable]).url, "b.jpg", "a result with no file is not a photo");
+  assert.equal(firstUsableOpenverse([{ url: "a.jpg" }, usable]).url, "b.jpg", "a result with nobody to credit cannot be published");
+  assert.equal(firstUsableOpenverse([]), null);
+});
+
+test("stepping past a result works the same on both providers", () => {
+  const results = [
+    { url: "a.jpg", creator: "Ann", provider: "flickr" },
+    { url: "b.jpg", provider: "" },
+    { url: "c.jpg", creator: "Cy", provider: "flickr" },
+  ];
+  assert.equal(firstUsableOpenverse(results, 0).url, "a.jpg");
+  assert.equal(firstUsableOpenverse(results, 1).url, "c.jpg");
+  assert.equal(firstUsableOpenverse(results, 2), null);
 });
