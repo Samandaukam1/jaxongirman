@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { facesOf, normaliseFamily, parseMetadata, readFamilies, styleName }
+import { facesOf, normaliseFamily, parseMetadata, readFamilies, safeKey, styleName }
   from "../scripts/import-google-fonts.mjs";
 
 /**
@@ -136,4 +136,16 @@ test("the real checkout parses, and the families it finds are whole", () => {
     !family.name || !family.category || facesOf(family).length === 0
   ));
   assert.deepEqual(broken.map((family) => family.name), []);
+});
+
+test("an object key survives a variable font's file name", () => {
+  /**
+   * Storage refuses square brackets, and every variable font in the library is
+   * named with them — so this was seventeen families out of the first forty
+   * failing after the bytes had already gone over the wire.
+   */
+  assert.equal(safeKey("Montserrat[wght].ttf"), "Montserrat_wght_.ttf");
+  assert.equal(safeKey("Alegreya-Italic[wght].ttf"), "Alegreya-Italic_wght_.ttf");
+  // A name that was already fine is left exactly as it was.
+  assert.equal(safeKey("PlayfairDisplay-Bold.ttf"), "PlayfairDisplay-Bold.ttf");
 });

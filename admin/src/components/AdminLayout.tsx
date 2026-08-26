@@ -1,10 +1,11 @@
 import {
   BadgeCheck,
-  MonitorPlay, Blocks, ClipboardList, FileStack, Coins, Cpu, Gamepad2, Gift, LayoutDashboard, LogOut, Menu, Palette, Presentation, Receipt, ScrollText, Shapes, Smartphone, Store, TrendingUp, Type, Users, Wallet, X } from "lucide-react";
+  Monitor, Moon, MonitorPlay, Blocks, ClipboardList, FileStack, Coins, Cpu, Gamepad2, Gift, LayoutDashboard, LogOut, Menu, Palette, Presentation, Receipt, ScrollText, Shapes, Smartphone, Store, Sun, TrendingUp, Type, Users, Wallet, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { AppLink } from "@/lib/router";
 import { useAuth } from "@/providers/AuthProvider";
+import { useTheme } from "@/providers/ThemeProvider";
 
 const navigation = [
   { to: "/", label: "Boshqaruv", icon: LayoutDashboard, end: true },
@@ -32,6 +33,7 @@ const navigation = [
 
 export function AdminLayout({ pathname, children }: { pathname: string; children: ReactNode }) {
   const { session, signOut } = useAuth();
+  const { mode, setMode } = useTheme();
   const [open, setOpen] = useState(false);
 
   return (
@@ -53,6 +55,26 @@ export function AdminLayout({ pathname, children }: { pathname: string; children
             </AppLink>
           ))}
         </nav>
+        {/* Above the account, because it is a preference about the window
+            rather than about who is signed in. */}
+        <div className="theme-switch" role="group" aria-label="Ko‘rinish">
+          {([
+            { key: "system", label: "Tizim", Glyph: Monitor },
+            { key: "light", label: "Yorug‘", Glyph: Sun },
+            { key: "dark", label: "Qorong‘i", Glyph: Moon },
+          ] as const).map((option) => (
+            <button
+              key={option.key}
+              className={mode === option.key ? "on" : undefined}
+              type="button"
+              title={option.label}
+              aria-pressed={mode === option.key}
+              onClick={() => setMode(option.key)}
+            >
+              <option.Glyph size={15} />
+            </button>
+          ))}
+        </div>
         <div className="sidebar-account">
           <div className="account-avatar">{session?.user.email?.[0]?.toUpperCase() ?? "A"}</div>
           <div className="account-copy"><strong>Administrator</strong><span>{session?.user.email}</span></div>

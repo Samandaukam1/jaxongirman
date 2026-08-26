@@ -175,6 +175,22 @@ export function readFamilies(root = LIBRARY) {
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
+/**
+ * A file name Supabase Storage will accept as an object key.
+ *
+ * Variable fonts are named `Montserrat[wght].ttf`, and storage refuses a key
+ * containing square brackets — "Invalid key", after the upload has already been
+ * sent. Seventeen of the first forty families failed on exactly that, and every
+ * one of them was a variable font, which is to say the modern half of the
+ * library.
+ *
+ * Only the key is rewritten. The bytes are untouched, the family and the weight
+ * live in the database rather than in the path, and the original name is still
+ * on disk in the checkout — so nothing is lost by calling the object
+ * `Montserrat_wght_.ttf`.
+ */
+export const safeKey = (fileName) => fileName.replace(/[^A-Za-z0-9._-]/g, "_");
+
 async function main() {
   const argv = process.argv.slice(2);
   const flag = (name) => {
@@ -257,7 +273,7 @@ async function main() {
       if (already.data) { totals.skipped += 1; continue; }
 
       const format = path.extname(face.filename).slice(1).toLowerCase();
-      const objectPath = `${PREFIX}/${normalized}/${face.filename}`;
+      const objectPath = `${PREFIX}/${normalized}/${safeKey(face.filename)}`;
       const stored = await db.storage.from(BUCKET).upload(objectPath, bytes, {
         contentType: format === "otf" ? "font/otf" : "font/ttf",
         upsert: true,
