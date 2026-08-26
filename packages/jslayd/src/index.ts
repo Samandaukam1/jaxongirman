@@ -167,3 +167,6 @@ export {
   linesThatFit,
   GLYPH_RATIO,
 } from "./text-metrics.ts";
+
+export { inspectBatch, readBatch, summarise } from "./batch.ts";
+export type { BatchEntry, BatchInput, BatchReport } from "./batch.ts";
