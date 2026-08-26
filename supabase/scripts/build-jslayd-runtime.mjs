@@ -54,6 +54,10 @@ const MODULES = [
   // second copy on the server.
   "text-metrics.ts",
   "budget.ts",
+  // Filling a blueprint with words. The generator runs on the server and the
+  // studio's sample runs through the same path, so the rules about what fits
+  // live here rather than in a second copy that drifts.
+  "sample.ts",
   // Not the compiler — the other direction. A design imported from a template
   // is a document with no source text behind it, and the admin editor reads
   // source text: without this the editor opens an imported design and reports
@@ -83,6 +87,7 @@ export * from "./select.ts";
 export * from "./serialize.ts";
 export * from "./text-metrics.ts";
 export * from "./budget.ts";
+export * from "./sample.ts";
 export * from "./decompile.ts";
 `;
 
