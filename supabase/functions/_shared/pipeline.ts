@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js";
-import { elementSlotsFor, fillElementSlots, slidesWithElements } from "./jelement-visuals.ts";
+import { elementSlotsFor, fillElementSlots, findIllustration, slidesWithElements } from "./jelement-visuals.ts";
 import { familyOf } from "./jslayd/index.ts";
 import {
   applyRewrite, briefForPrompt, findSlotProblems, planDeckLayout, reseatOverflowing,
@@ -1356,14 +1356,19 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
     const generatedImages = await runStage(input.service, input, "generating_images", async () => {
       if (prepared.presentation.style !== "super_professional" || mode === "mock") return [] as GeneratedImage[];
       /**
-       * A template deck brings its own photographs.
+       * A template deck used to bring its own photographs and nothing else.
        *
-       * The exported file is the original slide cloned, so a picture fetched
-       * here could never appear in it — it would be found, stored, credited and
-       * charged for, and then dropped on the way out. Nothing to put it in is
-       * the reason, not a preference.
+       * That was true while the exporter could only replace text: a picture
+       * fetched here would have been found, stored, credited and charged for,
+       * and then dropped on the way out. The cloner can swap the bytes behind a
+       * picture now, so the same stock cover no longer appears on every
+       * customer's deck about a different subject.
+       *
+       * The picture the template ships stays where nothing better is found, and
+       * a page whose only pictures are logos is left alone entirely — those
+       * decisions are the exporter's, because it is the one holding the package
+       * and can see how big each picture is and what shape.
        */
-      if (isTemplate) return [] as GeneratedImage[];
       /**
        * How much photography a design wants, read from the design.
        *
@@ -1371,7 +1376,19 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
        * one. A design whose slides are all type gets no pictures rather than
        * pictures it will drop.
        */
-      const imageArchetypes = jslayd.document.archetypes.filter((archetype) => archetype.selection.supportsImage).length;
+      /**
+       * How much photography a design wants, read from the design.
+       *
+       * For a written design that is `supportsImage`: an archetype with a hole
+       * in it. For a template it cannot be — a template's pictures are its own,
+       * so every slot is marked filled and the flag is false on almost every
+       * page. What counts there is whether the page draws a picture at all,
+       * because that picture is now the thing that can be replaced.
+       */
+      const imageArchetypes = isTemplate
+        ? jslayd.document.archetypes.filter((archetype) =>
+          archetype.elements.some((element) => element.type === "image" || element.type === "frame")).length
+        : jslayd.document.archetypes.filter((archetype) => archetype.selection.supportsImage).length;
       const policy = imageArchetypes === 0
         ? "none"
         : imageArchetypes <= 2
@@ -1385,7 +1402,27 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
         .map((slide, index) => ({ slide, index }))
         .filter(({ index }) => !elementCovered.has(index));
 
-      const targets = policy === "cover"
+      /**
+       * A template page is chosen by whether it draws a picture, not by whether
+       * the writer described one.
+       *
+       * The other policies require a `visualPrompt`, which is written for a
+       * design that has an empty hole to fill. A template has no hole — it has
+       * a photograph already — so nothing asks the model to describe one, and
+       * requiring it here meant no template page was ever a candidate. What
+       * decides instead is the page itself: if it draws a picture, that picture
+       * can be replaced, and the slide's own title says what with.
+       *
+       * The cover is included, because a template's cover carries the most
+       * generic stock photograph in the deck and is the one worth replacing
+       * most.
+       */
+      const targets = isTemplate
+        ? indexed
+          .filter(({ index }) => (archetypesInOrder[index]?.elements ?? [])
+            .some((element) => element.type === "image" || element.type === "frame"))
+          .slice(0, Math.ceil(plan.slides.length * 0.6))
+        : policy === "cover"
         ? indexed.filter(({ index }) => index === 0)
         // `contextual` always dresses the opening slide and always leaves the
         // second one on the palette ground, so the deck opens with contrast.
@@ -1407,6 +1444,51 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
         const slot = archetypesInOrder[target.index]?.elements
           .find((element) => element.type === "image" || element.type === "frame") as
           { orientation?: "landscape" | "portrait" | "square" | "any"; stylePreference?: string | null } | undefined;
+
+        /**
+         * An illustration where the library has one, a photograph otherwise.
+         *
+         * Which is right depends on the subject rather than on the design: a
+         * metro station wants a photograph and "strategiya" wants a diagram,
+         * and no photo index has a good answer for the second. The library is
+         * asked first and its answer settles it — it either holds something for
+         * this subject or it does not, which is a fact rather than a guess.
+         *
+         * Only for template pages. A written design already decides this for
+         * itself: its slots say `strategy: jelement` where an object belongs,
+         * and those slides are excluded from this loop entirely.
+         */
+        if (isTemplate) {
+          const drawn = await findIllustration(input.service, {
+            query: (target.slide.visualPrompt ?? target.slide.title ?? "").trim(),
+            slideRole: archetypesInOrder[target.index]?.purpose ?? "title_content",
+          });
+          if (drawn) {
+            results.push({
+              slideIndex: target.index, bucket: drawn.bucket, path: drawn.path,
+              provider: "jelement", costUsd: 0,
+            });
+            const noted = await input.service.from("presentation_assets").insert({
+              presentation_id: input.presentationId,
+              owner_id: input.ownerId,
+              kind: "stock",
+              storage_bucket: drawn.bucket,
+              storage_path: drawn.path,
+              mime_type: "image/png",
+              provider: "jelement",
+              metadata: {
+                slide_index: target.index,
+                source: "jelement",
+                // The library's own object, so there is no third party to
+                // credit — but what was used is still recorded, because a deck
+                // nobody can explain later is a deck nobody can fix.
+                attribution: { title: drawn.name, creator: "JAXONGIR AI", license: "internal", licenseUrl: "", sourceUrl: "", provider: "jelement" },
+              },
+            });
+            if (noted.error) console.error("illustration not recorded", input.presentationId, target.index, noted.error.message);
+            continue;
+          }
+        }
 
         const photo = await findPhoto(input.service, {
           ownerId: input.ownerId,
@@ -1450,6 +1532,10 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
             slide_index: target.index,
             source: photo.source,
             attribution: photo.attribution,
+            // The picture's own shape, so the exporter can choose which frame
+            // it belongs in without downloading it twice to find out.
+            width: photo.width,
+            height: photo.height,
             // Kept so a credit can be checked against the place it came from,
             // and so a deck's pictures can be audited long after the search.
             query: { orientation: slot?.orientation ?? "landscape", stylePreference: slot?.stylePreference ?? null },

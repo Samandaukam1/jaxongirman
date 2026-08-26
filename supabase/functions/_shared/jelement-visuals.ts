@@ -231,3 +231,45 @@ export function slidesWithElements(document: JslaydDocument, archetypes: readonl
 
   return covered;
 }
+
+/**
+ * A library illustration for a template page, when the library has one.
+ *
+ * A template's picture can be replaced with a photograph or with a drawn
+ * object, and which is right depends on the subject: "Toshkent metrosi" wants a
+ * photograph, "strategiya" wants a diagram, and no photo index has a good
+ * answer for the second. Rather than invent a rule for which subjects are
+ * photographable, this asks the element library and takes its answer — the
+ * library either has something for this subject or it does not, and that is a
+ * fact rather than a guess.
+ *
+ * Only an element that resolves to a stored asset is offered. A drawn element
+ * is vector geometry, and a PowerPoint picture is a file: putting one where the
+ * other belongs is not a substitution, it is a different feature.
+ */
+export async function findIllustration(
+  service: SupabaseClient,
+  input: { query: string; slideRole: string },
+): Promise<{ bucket: string; path: string; name: string } | null> {
+  const trimmed = input.query.trim();
+  if (!trimmed) return null;
+
+  const { data: candidates } = await service.rpc("jelement_search", {
+    p_query: trimmed,
+    p_slide_role: input.slideRole,
+    p_limit: 4,
+  });
+
+  for (const candidate of ((candidates ?? []) as Candidate[]).slice(0, 4)) {
+    const { data } = await service.rpc("jelement_resolve", { p_element_id: candidate.id });
+    const row = (data as { element?: Record<string, unknown> } | null)?.element;
+    const assetPath = typeof row?.asset_path === "string" ? row.asset_path : null;
+    if (!assetPath) continue;
+    return {
+      bucket: ASSET_BUCKET,
+      path: assetPath,
+      name: typeof row?.name === "string" ? row.name : candidate.id,
+    };
+  }
+  return null;
+}

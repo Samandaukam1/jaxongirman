@@ -16,10 +16,18 @@
  * outcome this mode exists to prevent.
  */
 
-import { clonePresentation, type CloneReport, type SlidePlan } from "./pptx-clone.ts";
+import { clonePresentation, type CloneReport, type MediaEdit, type SlidePlan } from "./pptx-clone.ts";
+import { orientationOf, readSlidePictures, replaceablePictures, type SlidePicture } from "./pptx-pictures.ts";
 import type { TextEdit } from "./pptx-text.ts";
 import { unzip } from "./unzip.ts";
 import { zip } from "./zip.ts";
+
+/** Bytes to put on a page, and the shape they are. */
+export type PictureFill = {
+  bytes: Uint8Array;
+  /** Width over height of the fetched image, for choosing which hole it fits. */
+  aspect: number;
+};
 
 /** Shaped like the rows, so this file can be tested without a database. */
 export type SlideRow = {
@@ -175,12 +183,23 @@ export async function exportByCloning(
   slides: readonly SlideRow[],
   elements: readonly ElementRow[],
   profiles: readonly PageProfileRow[],
+  /**
+   * A picture per slide, already fetched, to put where the template had one.
+   *
+   * Optional and empty by default, so every existing export keeps producing the
+   * file it produced before. Keyed by slide position, because that is what the
+   * generator recorded and what the plan is ordered by.
+   */
+  pictures: ReadonlyMap<number, PictureFill> = new Map(),
 ): Promise<CloneExport> {
   const planned = planClone(slides, elements, profiles);
   if (!planned.ok) return { ok: false, reason: planned.reason };
 
   const entries = await unzip(packageBytes);
-  const { files, report } = clonePresentation(entries, planned.plan);
+  const withPictures = pictures.size > 0
+    ? placePictures(entries, planned.plan, pictures)
+    : planned.plan;
+  const { files, report } = clonePresentation(entries, withPictures);
 
   const blocking = report.problems.filter((problem) => problem.code !== "template_text_remains");
   if (files.length === 0 || blocking.length > 0) {
@@ -196,3 +215,91 @@ export async function exportByCloning(
 
   return { ok: true, bytes: await zip(files), report };
 }
+
+/**
+ * Decide which picture on each page to replace, and with which bytes.
+ *
+ * The choice is made here rather than by the generator because only the export
+ * is holding the package: how big each picture is, what shape it is, and how
+ * many pages share it are all facts about the file, and guessing them from a
+ * profile row written at import time is how a logo gets replaced with a
+ * photograph of a bridge.
+ *
+ * A page with nothing suitable keeps the template's own picture. That is a
+ * normal outcome, not a failure — a template's photography is often the reason
+ * somebody chose it.
+ */
+export function placePictures(
+  entries: ZipEntries,
+  plan: readonly SlidePlan[],
+  pictures: ReadonlyMap<number, PictureFill>,
+): SlidePlan[] {
+  const decoder = new TextDecoder();
+  const read = (part: string): string | null => {
+    const bytes = entries.get(part);
+    return bytes ? decoder.decode(bytes) : null;
+  };
+  const relsFor = (part: string): string => {
+    const cut = part.lastIndexOf("/");
+    return `${part.slice(0, cut)}/_rels/${part.slice(cut + 1)}.rels`;
+  };
+
+  /**
+   * How many *different* source pages draw each media part.
+   *
+   * Counted per distinct page rather than per plan entry, because a deck
+   * routinely uses one source page twice and that is not sharing — it is the
+   * same page appearing twice, and it already shows the same picture in both
+   * places. Counting occurrences instead made every repeated page look
+   * contested and blocked the replacement it was asking for.
+   *
+   * Two genuinely different pages sharing one part is still left alone: the
+   * bytes are one file, and changing them for the page that asked would change
+   * the page that did not.
+   */
+  const pagePictures = new Map<string, SlidePicture[]>();
+  for (const entry of plan) {
+    if (pagePictures.has(entry.sourcePart)) continue;
+    const markup = read(entry.sourcePart);
+    const rels = read(relsFor(entry.sourcePart));
+    pagePictures.set(entry.sourcePart, markup && rels ? readSlidePictures(entry.sourcePart, markup, rels) : []);
+  }
+
+  const useCount = new Map<string, number>();
+  for (const found of pagePictures.values()) {
+    for (const part of new Set(found.map((picture) => picture.mediaPart))) {
+      useCount.set(part, (useCount.get(part) ?? 0) + 1);
+    }
+  }
+
+  const perPage: SlidePicture[][] = plan.map((entry) => pagePictures.get(entry.sourcePart) ?? []);
+
+  return plan.map((entry, index) => {
+    const fill = pictures.get(index);
+    if (!fill) return entry;
+
+    const { usable } = replaceablePictures(perPage[index] ?? [], useCount);
+    if (usable.length === 0) return entry;
+
+    /**
+     * The hole the picture fits best, not simply the biggest one.
+     *
+     * A landscape photograph in a portrait frame is a face cropped to its ear.
+     * When the aspects are equally wrong the sort has already put the largest
+     * first, so the composition wins the tie.
+     */
+    const chosen = fill.aspect > 0
+      ? usable.reduce((best, candidate) => (
+        Math.abs((candidate.aspect || 1) - fill.aspect) < Math.abs((best.aspect || 1) - fill.aspect) ? candidate : best
+      ), usable[0]!)
+      : usable[0]!;
+
+    const media: MediaEdit[] = [...(entry.media ?? []), { part: chosen.mediaPart, bytes: fill.bytes }];
+    return { ...entry, media };
+  });
+}
+
+/** What `unzip` returns, named so this file does not import it for a type. */
+type ZipEntries = Map<string, Uint8Array>;
+
+export { orientationOf };

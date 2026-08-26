@@ -450,3 +450,139 @@ test("copy that merely resembles a short original is left alone", () => {
   assert.ok(planned.ok);
   assert.deepEqual(planned.plan[0].edits[0].paragraphs, ["2026"]);
 });
+
+/* ------------------------------------------------------ replacing pictures */
+
+const bytesOf = (files, name) => files.find((file) => file.name === name)?.bytes;
+
+test("a picture's bytes are replaced without touching the slide", () => {
+  /**
+   * The whole reason to swap the media part rather than rewrite the markup: the
+   * crop, the frame, the shadow and every effect the designer set are in the
+   * slide, and they survive untouched because nothing in the slide changes.
+   */
+  const fresh = new TextEncoder().encode("a new photograph");
+  const { files, report } = clonePresentation(deck(), [{
+    sourcePart: "ppt/slides/slide1.xml",
+    edits: uzbek("JURNALISTIKA", "Talabalar tahririyati"),
+    media: [{ part: "ppt/media/photographer.png", bytes: fresh }],
+  }]);
+
+  assert.deepEqual(bytesOf(files, "ppt/media/photographer.png"), fresh);
+  assert.deepEqual(report.pictureReplacements, ["ppt/media/photographer.png"]);
+
+  // The slide still points where it always did, and still says what it said.
+  const slide = decoder.decode(bytesOf(files, "ppt/slides/slide1.xml"));
+  assert.match(slide, /r:embed="rId2"/);
+  assert.match(slide, /JURNALISTIKA/);
+});
+
+test("a picture nobody asked about keeps the template's own bytes", () => {
+  const before = deck().get("ppt/media/newsprint.png");
+  const { files } = clonePresentation(deck(), [{
+    sourcePart: "ppt/slides/slide1.xml",
+    edits: [],
+    media: [{ part: "ppt/media/photographer.png", bytes: new TextEncoder().encode("x") }],
+  }]);
+  assert.deepEqual(bytesOf(files, "ppt/media/newsprint.png"), before);
+});
+
+test("two pages asking for different pictures in one part get neither", () => {
+  /**
+   * A media part is one file however many slides point at it. Letting the last
+   * writer win would change a page nobody asked about, so the template's own
+   * picture stays and the contradiction is reported rather than resolved.
+   */
+  const { files, report } = clonePresentation(deck(), [
+    { sourcePart: "ppt/slides/slide1.xml", edits: [], media: [{ part: "ppt/media/photographer.png", bytes: new TextEncoder().encode("first") }] },
+    { sourcePart: "ppt/slides/slide3.xml", edits: [], media: [{ part: "ppt/media/photographer.png", bytes: new TextEncoder().encode("second") }] },
+  ]);
+
+  assert.deepEqual(bytesOf(files, "ppt/media/photographer.png"), deck().get("ppt/media/photographer.png"));
+  assert.deepEqual(report.pictureReplacements, []);
+  assert.ok(report.problems.some((problem) => problem.code === "picture_contested"));
+});
+
+test("a replacement for a part no chosen slide draws is not shipped", () => {
+  // Otherwise the package grows a file nothing points at, and the deck carries
+  // a photograph nobody will ever see.
+  const { files } = clonePresentation(deck(), [{
+    sourcePart: "ppt/slides/slide1.xml",
+    edits: [],
+    media: [{ part: "ppt/media/logo.png", bytes: new TextEncoder().encode("unused") }],
+  }]);
+  assert.equal(bytesOf(files, "ppt/media/logo.png"), undefined);
+});
+
+test("a deck with no picture replacements is byte-for-byte what it was", () => {
+  // The feature must be invisible when it is not used: every existing template
+  // export has to keep producing exactly the file it produced before.
+  const plain = clonePresentation(deck(), [{ sourcePart: "ppt/slides/slide1.xml", edits: [] }]);
+  const withEmpty = clonePresentation(deck(), [{ sourcePart: "ppt/slides/slide1.xml", edits: [], media: [] }]);
+
+  assert.deepEqual(plain.files.map((file) => file.name), withEmpty.files.map((file) => file.name));
+  for (const file of plain.files) {
+    assert.deepEqual(bytesOf(withEmpty.files, file.name), file.bytes, `${file.name} changed`);
+  }
+});
+
+/* ------------------------------------------- choosing which hole to fill */
+
+const { placePictures } = await import(`${edge}/pptx-clone-export.js`);
+
+test("the photograph goes in the picture whose shape it fits", () => {
+  /**
+   * Not simply the biggest. A landscape photograph dropped into a portrait
+   * frame is a face cropped to its ear, and a template that offers both holes
+   * is offering a choice the export is the only part able to make — it is the
+   * one holding the package and can see how big each picture is.
+   */
+  const plan = [{ sourcePart: "ppt/slides/slide1.xml", edits: [] }];
+  const wide = { bytes: new TextEncoder().encode("wide"), aspect: 16 / 9 };
+
+  const [placed] = placePictures(deck(), plan, new Map([[0, wide]]));
+  assert.equal(placed.media.length, 1);
+  assert.equal(placed.media[0].part, "ppt/media/photographer.png");
+  assert.deepEqual(placed.media[0].bytes, wide.bytes);
+});
+
+test("a page with no picture asked for is returned untouched", () => {
+  const plan = [{ sourcePart: "ppt/slides/slide1.xml", edits: [] }];
+  const [same] = placePictures(deck(), plan, new Map());
+  assert.equal(same.media, undefined, "an untouched page must not grow an empty edit list");
+});
+
+test("one source page used twice is not a shared picture", () => {
+  /**
+   * A deck routinely uses one page twice, and that is not sharing — it is the
+   * same page appearing twice, already showing the same picture in both places.
+   * Counting occurrences rather than distinct pages made every repeated page
+   * look contested and blocked the replacement it was asking for, which is
+   * exactly what happened on the first real template this ran against.
+   */
+  const plan = [
+    { sourcePart: "ppt/slides/slide1.xml", edits: [] },
+    { sourcePart: "ppt/slides/slide1.xml", edits: [] },
+  ];
+  const placed = placePictures(deck(), plan, new Map([[0, { bytes: new TextEncoder().encode("x"), aspect: 1.5 }]]));
+  assert.equal(placed[0].media?.[0]?.part, "ppt/media/photographer.png");
+});
+
+test("two different pages drawing one picture leave it alone", () => {
+  // The bytes are one file: changing them for the page that asked would change
+  // the page that did not.
+  const shared = new Map(deck());
+  // Point slide3 at the same photograph slide1 draws.
+  shared.set("ppt/slides/_rels/slide3.xml.rels", new TextEncoder().encode(
+    '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+    + '<Relationship Id="rId1" Type="t/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>'
+    + '<Relationship Id="rId2" Type="t/image" Target="../media/photographer.png"/></Relationships>',
+  ));
+
+  const placed = placePictures(shared, [
+    { sourcePart: "ppt/slides/slide1.xml", edits: [] },
+    { sourcePart: "ppt/slides/slide3.xml", edits: [] },
+  ], new Map([[0, { bytes: new TextEncoder().encode("x"), aspect: 1.5 }]]));
+
+  assert.equal(placed[0].media, undefined);
+});

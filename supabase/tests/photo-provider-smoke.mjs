@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 
 import { createClient } from "@supabase/supabase-js";
 
+import { buildEdgeModules } from "../scripts/build-edge.mjs";
+
 /**
  * Which index a real deck's photographs actually came from.
  *
@@ -32,6 +34,8 @@ if (!url || !serviceKey || !anonKey) {
   console.error("SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and an anon key are required.");
   process.exit(1);
 }
+
+const { unzip } = await import(`${buildEdgeModules()}/unzip.js`);
 
 const service = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
 
@@ -149,6 +153,8 @@ try {
   console.log(`\nRasmlar: ${photos.length}`);
   check(photos.length > 0, "the deck carries photographs");
 
+  // A template deck may legitimately answer with a library illustration where
+  // the subject is not something a photo index has, so the report names both.
   const byProvider = photos.reduce((tally, row) => {
     tally[row.provider ?? "?"] = (tally[row.provider ?? "?"] ?? 0) + 1;
     return tally;
@@ -162,14 +168,79 @@ try {
    * before. The provider recorded on the row is what a credits slide reads and
    * what an audit reads, so it is what proves which index answered.
    */
-  check(Boolean(byProvider.unsplash), "at least one photograph came from Unsplash");
+  if (process.env.EXPECT_PROVIDER === "any") {
+    check(photos.length > 0, `a picture was found (${Object.keys(byProvider).join(", ")})`);
+  } else {
+    check(Boolean(byProvider.unsplash), "at least one photograph came from Unsplash");
+  }
 
   for (const row of photos) {
     const credit = row.metadata?.attribution ?? {};
+    if (row.provider === "jelement") {
+      // The library's own object: nobody outside to credit, but what was used
+      // is still recorded, because a deck nobody can explain cannot be fixed.
+      check(Boolean(credit.title), `${row.provider}: the element is named (${credit.title ?? "—"})`);
+      check(row.metadata?.source === row.provider, `${row.provider}: metadata and column agree on the source`);
+      continue;
+    }
     check(Boolean(credit.creator), `${row.provider}: the photographer is recorded (${credit.creator ?? "—"})`);
     check(/^https?:\/\//.test(credit.sourceUrl ?? ""), `${row.provider}: a link back is recorded`);
     check(Boolean(credit.license), `${row.provider}: the licence is recorded (${credit.license ?? "—"})`);
     check(row.metadata?.source === row.provider, `${row.provider}: metadata and column agree on the source`);
+  }
+
+  /**
+   * And the picture is in the file somebody downloads.
+   *
+   * Everything above proves a photograph was found, stored and credited. For a
+   * deck built from a PowerPoint template that is only half the claim: the
+   * export clones the original slide, so a picture that never reaches the media
+   * part is a picture the customer never sees. The bytes in the package are the
+   * only proof that matters.
+   */
+  if (process.env.CHECK_EXPORT === "1" && photos.length > 0) {
+    const exported = await user.functions.invoke("export-presentation", {
+      body: { presentationId, format: "pptx" },
+    });
+    if (exported.error) {
+      const detail = typeof exported.error.context?.json === "function" ? await exported.error.context.json() : null;
+      check(false, `the deck exported: ${detail?.error ?? exported.error.message}`);
+    } else {
+      // The export is a job too: the call returns an id and the file appears
+      // when the work is done.
+      const jobId = exported.data?.jobId ?? exported.data?.job_id ?? null;
+      let path = null;
+      let exportError = null;
+      for (let attempt = 0; attempt < 45 && jobId; attempt += 1) {
+        const row = await service.from("export_jobs")
+          .select("status, storage_path, error_message").eq("id", jobId).maybeSingle();
+        if (row.data?.storage_path) { path = row.data.storage_path; break; }
+        if (row.data?.status === "failed") { exportError = row.data.error_message; break; }
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+      }
+      check(Boolean(path), `the export produced a file${exportError ? `: ${exportError}` : ""}`);
+
+      if (path) {
+        const download = await service.storage.from("exports").download(path);
+        check(!download.error, "the exported file downloads");
+        if (!download.error) {
+          const bytes = new Uint8Array(await download.data.arrayBuffer());
+          const stored = await service.storage.from(photos[0].storage_bucket).download(photos[0].storage_path);
+          const wanted = new Uint8Array(await stored.data.arrayBuffer());
+
+          // Unzipped rather than searched raw: a package stores its parts
+          // compressed, so the photograph's bytes are not in the file as bytes.
+          const entries = await unzip(bytes);
+          const media = [...entries.entries()].filter(([name]) => /^ppt\/media\//.test(name));
+          const match = media.find(([, part]) =>
+            part.byteLength === wanted.byteLength && Buffer.from(part).equals(Buffer.from(wanted)));
+
+          check(Boolean(match),
+            `the found picture is a media part of the exported deck (${media.length} ta media, ${wanted.byteLength} bayt izlandi)`);
+          if (match) console.log(`  · almashtirilgan qism: ${match[0]}`);
+        }
+      }
+    }
   }
 
   // The file is really in the bucket, not just a row claiming it is.
@@ -181,6 +252,9 @@ try {
     check((listed.data ?? []).some((object) => object.name === name), "the image file is in storage");
   }
 } finally {
+  if (process.env.KEEP === "1") {
+    console.log(`\nKEEP=1 — qoldirildi: presentation ${presentationId}, user ${userId}`);
+  } else {
   /**
    * Release before deleting.
    *
@@ -200,6 +274,7 @@ try {
   await service.from("presentations").delete().eq("id", presentationId);
   await service.from("credit_wallets").delete().eq("user_id", userId);
   await service.auth.admin.deleteUser(userId);
+  }
 }
 
 console.log(failures ? `\n${failures} check(s) failed.` : "\nAll checks passed.");

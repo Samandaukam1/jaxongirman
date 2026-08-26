@@ -35,6 +35,8 @@ export type StockPhoto = {
   bucket: string;
   path: string;
   source: PhotoSource;
+  width: number;
+  height: number;
   /** What has to be shown for the licence to be honoured. */
   attribution: {
     title: string;
@@ -143,6 +145,10 @@ export async function findPhoto(
       bucket: "stock-images",
       path,
       source: found.source,
+      // Carried so the exporter can pick the hole this actually fits: a
+      // landscape photograph in a portrait frame is a face cropped to its ear.
+      width: found.hit.width,
+      height: found.hit.height,
       // Whatever the provider said, unchanged: a credit line rewritten by the
       // system is a credit line nobody can check against the source.
       attribution: found.hit.attribution,

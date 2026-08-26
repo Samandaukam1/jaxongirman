@@ -36,6 +36,21 @@ export type SlidePlan = {
   /** `ppt/slides/slide4.xml` — the page the selector chose. */
   sourcePart: string;
   edits: readonly TextEdit[];
+  /**
+   * Pictures to swap, by the media part the slide points at.
+   *
+   * The slide's own markup is not touched. Replacing the bytes behind a
+   * relationship keeps the crop, the frame, the shadow and every effect the
+   * designer set; rewriting the XML to point somewhere else would mean
+   * recreating all of that, and getting it slightly wrong on every template.
+   */
+  media?: readonly MediaEdit[];
+};
+
+export type MediaEdit = {
+  /** `ppt/media/image7.jpeg`, as the slide's relationships resolve it. */
+  part: string;
+  bytes: Uint8Array;
 };
 
 export type CloneProblem = { code: string; message: string; part?: string };
@@ -63,6 +78,8 @@ export type CloneReport = {
   /** Every part carried over, so a structural check can count them. */
   parts: string[];
   mediaParts: string[];
+  /** Media parts whose bytes were replaced, so the caller can report it. */
+  pictureReplacements: string[];
   /** Template copy that survived the rewrite. Non-empty means do not ship. */
   leftoverText: string[];
   problems: CloneProblem[];
@@ -239,7 +256,7 @@ function rewriteContentTypes(markup: string, parts: ReadonlySet<string>, copies:
 export function clonePresentation(entries: ZipEntries, plan: readonly SlidePlan[]): CloneResult {
   const problems: CloneProblem[] = [];
   const report: CloneReport = {
-    slides: [], parts: [], mediaParts: [], leftoverText: [], problems,
+    slides: [], parts: [], mediaParts: [], pictureReplacements: [], leftoverText: [], problems,
     structuralFidelityPassed: true,
   };
   if (plan.length === 0) {
@@ -252,6 +269,33 @@ export function clonePresentation(entries: ZipEntries, plan: readonly SlidePlan[
   const used = new Map<string, number>();
   const copies: { from: string; to: string }[] = [];
   const outputs: { source: string; output: string; relId: string; edits: readonly TextEdit[] }[] = [];
+
+  /**
+   * Every replacement asked for, by part.
+   *
+   * Collected across the whole plan before anything is written, because a media
+   * part is one file however many slides point at it: two pages asking for
+   * different pictures in the same part is a contradiction, and the honest
+   * answer is to keep the template's own picture rather than let the last
+   * writer win.
+   */
+  const replacements = new Map<string, Uint8Array>();
+  const contested = new Set<string>();
+  for (const entry of plan) {
+    for (const edit of entry.media ?? []) {
+      const seen = replacements.get(edit.part);
+      if (seen && seen !== edit.bytes) contested.add(edit.part);
+      else replacements.set(edit.part, edit.bytes);
+    }
+  }
+  for (const part of contested) {
+    replacements.delete(part);
+    problems.push({
+      code: "picture_contested",
+      message: "Bu rasm bir nechta sahifada ishlatilgan, shuning uchun almashtirilmadi.",
+      part,
+    });
+  }
 
   plan.forEach((entry, index) => {
     if (!entries.has(entry.sourcePart)) {
@@ -341,12 +385,18 @@ export function clonePresentation(entries: ZipEntries, plan: readonly SlidePlan[
     if (written.has(part)) continue;
     const bytes = entries.get(part);
     if (!bytes) continue;
-    push(part, bytes);
+    // The replacement, where one was asked for and the part is really in the
+    // package. A part that is not kept is one no chosen slide points at, so a
+    // replacement for it would ship bytes nothing draws.
+    const swapped = replacements.get(part);
+    push(part, swapped ?? bytes);
+    if (swapped) report.pictureReplacements.push(part);
     if (/^ppt\/media\//.test(part)) report.mediaParts.push(part);
   }
 
   report.parts = files.map((file) => file.name).sort();
   report.mediaParts.sort();
+  report.pictureReplacements.sort();
 
   /**
    * Every picture, layout and theme a chosen slide points at, present in what

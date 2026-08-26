@@ -255,11 +255,52 @@ async function cloneIfTemplate(service: SupabaseClient, presentationId: string) 
   }
 
   const ordered = [...(slides.data ?? [])].sort((first, second) => first.position - second.position);
+
+  /**
+   * The photographs the generator found for this deck, fetched for the export.
+   *
+   * A template used to ship with whatever pictures it was built around, so the
+   * same stock cover appeared on every customer's deck about a different
+   * subject. The generator now searches for each page that draws one; this
+   * brings the bytes, and the cloner puts them behind the picture the page
+   * already draws — leaving the crop, the frame and every effect untouched.
+   *
+   * Everything here is best-effort. A picture that will not download leaves the
+   * template's own in place, which is the outcome that has always shipped.
+   */
+  const pictures = new Map<number, { bytes: Uint8Array; aspect: number }>();
+  const stock = await service
+    .from("presentation_assets")
+    .select("storage_bucket, storage_path, metadata")
+    .eq("presentation_id", presentationId)
+    .eq("kind", "stock");
+
+  for (const asset of stock.data ?? []) {
+    const at = Number((asset.metadata as { slide_index?: unknown } | null)?.slide_index);
+    if (!Number.isInteger(at)) continue;
+    const position = ordered.findIndex((slide) => slide.position === at);
+    if (position === -1) continue;
+
+    const download = await service.storage.from(asset.storage_bucket as string).download(asset.storage_path as string);
+    if (download.error || !download.data) continue;
+    const bytes = new Uint8Array(await download.data.arrayBuffer());
+    if (bytes.byteLength === 0) continue;
+
+    const shape = (asset.metadata as { width?: unknown; height?: unknown } | null) ?? {};
+    const width = Number(shape.width);
+    const height = Number(shape.height);
+    pictures.set(position, {
+      bytes,
+      aspect: Number.isFinite(width) && Number.isFinite(height) && height > 0 ? width / height : 0,
+    });
+  }
+
   const cloned = await exportByCloning(
     new Uint8Array(await file.data.arrayBuffer()),
     ordered as never,
     (elements.data ?? []) as never,
     (profiles.data ?? []) as never,
+    pictures,
   );
 
   /**
