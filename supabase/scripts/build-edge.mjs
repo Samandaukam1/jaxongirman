@@ -60,6 +60,7 @@ export function buildEdgeModules() {
       path.join(shared, "font-source.ts"),
       path.join(shared, "layout-brief.ts"),
       path.join(shared, "photo-query.ts"),
+      path.join(shared, "unsplash-results.ts"),
       path.join(shared, "export-model.ts"),
       path.join(shared, "fonts.ts"),
       path.join(shared, "layout.ts"),
