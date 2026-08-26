@@ -417,3 +417,98 @@ test("no schema the pipeline sends contains an array of arrays", async () => {
     assert.deepEqual(nested(toGeminiSchema(schema)), [], `${name} nests an array inside an array`);
   }
 });
+
+/* ------------------------------------------------------------- timeouts */
+
+test("a request that never answers is abandoned, not waited on for ever", async () => {
+  /**
+   * The regression this whole exercise came from.
+   *
+   * `fetch` had no signal, so a connection that never replied blocked the call,
+   * which blocked `mapWithConcurrency`, which blocked the stage — and the job
+   * sat at `writing_content` with the author's credits reserved and nothing on
+   * screen ever changing. A deck that fails is recoverable. One that hangs is
+   * not: nothing releases the reservation and nothing tells the author.
+   *
+   * The fake never resolves on its own; only the abort ends it, so if the
+   * signal were dropped this test would hang rather than fail — which is the
+   * honest shape for a test about hanging.
+   */
+  let aborted = false;
+  const hang = async (_url, init) => {
+    await new Promise((_resolve, reject) => {
+      init.signal.addEventListener("abort", () => {
+        aborted = true;
+        reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+      }, { once: true });
+    });
+  };
+
+  const writer = new GeminiWriter({
+    apiKey: "test-key-long-enough",
+    researchModel: "m", writingModel: "m",
+    fetchImpl: hang,
+    sleep: async () => {},
+    timeoutMs: 40,
+  });
+
+  const started = Date.now();
+  await assert.rejects(
+    () => writer.structured({ prompt: "x", schemaName: "s", schema: { type: "object", properties: {} }, attempts: 1 }),
+    (error) => {
+      // Reported as a timeout with the limit named, not as a generic network
+      // fault: one is worth investigating and the other is worth retrying.
+      assert.equal(error.reason, "timeout");
+      assert.match(error.message, /40s|0s/);
+      return true;
+    },
+  );
+  assert.ok(aborted, "the request was never actually aborted");
+  assert.ok(Date.now() - started < 5000, "it waited far longer than the timeout");
+});
+
+test("a timeout is retried, and the retries are bounded", async () => {
+  let calls = 0;
+  const hang = async (_url, init) => {
+    calls += 1;
+    await new Promise((_resolve, reject) => {
+      init.signal.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })), { once: true });
+    });
+  };
+
+  const writer = new GeminiWriter({
+    apiKey: "test-key-long-enough",
+    researchModel: "m", writingModel: "m",
+    fetchImpl: hang,
+    sleep: async () => {},
+    timeoutMs: 20,
+  });
+
+  await assert.rejects(() => writer.structured({
+    prompt: "x", schemaName: "s", schema: { type: "object", properties: {} }, attempts: 3,
+  }));
+  // Three, not four and not for ever. An unbounded retry over a provider that
+  // is not answering is the same hang wearing a different hat.
+  assert.equal(calls, 3);
+});
+
+test("a slow answer that arrives inside the limit is kept", async () => {
+  const late = async (_url, _init) => {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    return { ok: true, status: 200, json: async () => ({
+      candidates: [{ content: { parts: [{ text: JSON.stringify({ ok: true }) }] } }],
+      usageMetadata: {},
+    }) };
+  };
+
+  const writer = new GeminiWriter({
+    apiKey: "test-key-long-enough",
+    researchModel: "m", writingModel: "m",
+    fetchImpl: late,
+    sleep: async () => {},
+    timeoutMs: 3000,
+  });
+
+  const answer = await writer.structured({ prompt: "x", schemaName: "s", schema: { type: "object", properties: {} } });
+  assert.deepEqual(answer.data, { ok: true });
+});

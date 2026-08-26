@@ -72,6 +72,9 @@ export class ProviderUnavailable extends Error {
  * the person waiting on it is watching a progress bar.
  */
 export function retryable(reason: string): boolean {
+  // A request that never answered is worth asking again — once or twice, not
+  // for ever: `withRetries` caps the attempts and the caller caps the wait.
+  if (reason === "timeout") return true;
   if (reason === "rate_limited" || reason === "network") return true;
   if (reason === "empty_response" || reason === "malformed_json") return true;
   // 5xx is the provider's problem and usually brief. 4xx is ours and is not.
@@ -156,6 +159,16 @@ export type WriterOptions = {
   writingModel: string;
   /** Injected so the retry rules can be tested without a network or a wait. */
   fetchImpl?: typeof fetch;
+  /**
+   * How long one request may take before it is abandoned.
+   *
+   * There was no limit, and that is how a deck hung for ever: `fetch` waits on
+   * a connection that never answers, `mapWithConcurrency` waits on that fetch,
+   * the stage waits on the map, and the job sits at `writing_content` with the
+   * author's credits reserved and nothing on screen ever changing. A bounded
+   * failure is recoverable; an unbounded wait is not.
+   */
+  timeoutMs?: number;
   sleep?: (milliseconds: number) => Promise<void>;
 };
 
@@ -164,6 +177,7 @@ export class GeminiWriter {
   readonly researchModel: string;
   readonly writingModel: string;
   private readonly fetchImpl: typeof fetch;
+  private readonly timeoutMs: number;
   private readonly sleep: (milliseconds: number) => Promise<void>;
 
   constructor(options: WriterOptions) {
@@ -171,6 +185,10 @@ export class GeminiWriter {
     this.researchModel = options.researchModel;
     this.writingModel = options.writingModel;
     this.fetchImpl = options.fetchImpl ?? fetch;
+    // Generous enough that a slow but working answer still lands, short enough
+    // that three attempts plus their backoff stay well inside the time an edge
+    // function is allowed to run.
+    this.timeoutMs = options.timeoutMs ?? 75_000;
     this.sleep = options.sleep ?? ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
   }
 
@@ -181,16 +199,35 @@ export class GeminiWriter {
     return `${ENDPOINT}/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(this.key)}`;
   }
 
-  private async call(model: string, body: Record<string, unknown>): Promise<GeminiResponse> {
+  private async call(model: string, body: Record<string, unknown>, timeoutMs = this.timeoutMs): Promise<GeminiResponse> {
     let response: Response;
+    /**
+     * Aborted rather than awaited for ever.
+     *
+     * `AbortSignal.timeout` is used through a controller so the reason is ours:
+     * the abort has to be told apart from a network fault, because one is worth
+     * retrying immediately and the other is worth reporting as a timeout with
+     * the limit named.
+     */
+    const clock = new AbortController();
+    const alarm = setTimeout(() => clock.abort(), timeoutMs);
+    let timedOut = false;
+    clock.signal.addEventListener("abort", () => { timedOut = true; }, { once: true });
+
     try {
       response = await this.fetchImpl(this.url(model), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
+        signal: clock.signal,
       });
     } catch (failure) {
+      if (timedOut) {
+        throw new ProviderUnavailable("timeout", `no answer within ${Math.round(timeoutMs / 1000)}s`);
+      }
       throw new ProviderUnavailable("network", failure instanceof Error ? failure.message : "network error");
+    } finally {
+      clearTimeout(alarm);
     }
 
     let payload: GeminiResponse;
@@ -436,6 +473,16 @@ export function userFacingFailure(error: unknown): { code: string; message: stri
       return {
         code: "provider_not_configured",
         message: "AI xizmati hozircha sozlanmagan. Iltimos, qo‘llab-quvvatlash xizmatiga murojaat qiling.",
+      };
+    }
+    // A timeout said as itself. "Temporarily unavailable" is true of a rate
+    // limit and of a provider that answered nothing at all, and an operator
+    // reading a week of failures needs those apart — one is our pacing, the
+    // other is a request that vanished.
+    if (error.reason === "timeout") {
+      return {
+        code: "provider_timeout",
+        message: "AI xizmati belgilangan vaqtda javob bermadi. Iltimos, qayta urinib ko‘ring.",
       };
     }
     return {

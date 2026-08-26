@@ -122,6 +122,28 @@ Deno.serve(async (request) => {
       }
     }
 
+    /**
+     * Sweep the jobs nothing is working on any more.
+     *
+     * Done here rather than on a schedule because this is the one moment the
+     * system is guaranteed to be awake, and because a stranded reservation is
+     * most likely to matter to the person who is standing here about to spend
+     * credits again. It costs one indexed query, never blocks the generation it
+     * runs beside, and is safe to call as often as it is reached: the function
+     * refuses a job that has already ended.
+     */
+    context.serviceClient.rpc("fail_stale_generations", { p_stale_minutes: 8 })
+      .then(async ({ data, error }) => {
+        if (error) { console.error("stale sweep failed", error.message); return; }
+        if (data) console.log(JSON.stringify({ event: "stale_jobs_failed", count: data }));
+        // And the holds whose job row is gone entirely, which the sweep above
+        // cannot see because it walks jobs.
+        const { data: freed, error: reconcileError } = await context.serviceClient.rpc("reconcile_credit_reservations");
+        if (reconcileError) console.error("reservation reconcile failed", reconcileError.message);
+        else if (freed) console.log(JSON.stringify({ event: "reservations_released", wallets: freed }));
+      })
+      .catch(() => {});
+
     if (!job?.job_id) throw new Error("Generation job was not created");
     const pipeline = runGenerationPipeline({ jobId: job.job_id, presentationId: body.presentationId, ownerId: context.user.id, service: context.serviceClient });
     if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(pipeline);

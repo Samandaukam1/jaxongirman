@@ -124,6 +124,22 @@ try {
   console.log(`\nGeneratsiya: ${job?.status ?? "yo‘q"}/${job?.stage ?? "-"} · ${((Date.now() - started) / 1000).toFixed(0)}s`);
   check(job?.status === "succeeded", `the deck was generated${job?.error_message ? `: ${job.error_message}` : ` (stopped at ${job?.stage ?? "?"})`}`);
 
+  /**
+   * What each stage cost, read back from the row rather than from the clock
+   * here. A duration the test measures proves the test can measure; a duration
+   * the pipeline stored proves the pipeline recorded it.
+   */
+  const steps = await service.from("generation_steps")
+    .select("sequence, key, status, duration_ms, error_code")
+    .eq("presentation_id", presentationId).order("sequence");
+  const timed = (steps.data ?? []).filter((step) => step.duration_ms !== null);
+  console.log("\nBosqichlar:");
+  for (const step of timed) {
+    console.log(`  ${step.key.padEnd(20)} ${String(step.duration_ms).padStart(6)}ms  ${step.status}${step.error_code ? ` ${step.error_code}` : ""}`);
+  }
+  check(timed.length > 0, "every finished stage recorded how long it took");
+  check(timed.every((step) => step.status !== "running"), "no stage is left saying it is still running");
+
   const assets = await service.from("presentation_assets")
     .select("provider, storage_bucket, storage_path, metadata")
     .eq("presentation_id", presentationId).eq("kind", "stock");
@@ -165,6 +181,21 @@ try {
     check((listed.data ?? []).some((object) => object.name === name), "the image file is in storage");
   }
 } finally {
+  /**
+   * Release before deleting.
+   *
+   * Deleting a job row that still holds a reservation strands the credits: the
+   * watchdog sweeps jobs, and a job that no longer exists cannot be swept. The
+   * test that checks nothing is left behind must not leave something behind.
+   */
+  const open = await service.from("generation_jobs")
+    .select("id").eq("presentation_id", presentationId).in("status", ["running", "queued"]);
+  for (const job of open.data ?? []) {
+    await service.rpc("fail_generation", {
+      p_job_id: job.id, p_error_code: "test_cleanup", p_error_message: "smoke test finished",
+    });
+  }
+
   await service.from("presentation_assets").delete().eq("presentation_id", presentationId);
   await service.from("presentations").delete().eq("id", presentationId);
   await service.from("credit_wallets").delete().eq("user_id", userId);

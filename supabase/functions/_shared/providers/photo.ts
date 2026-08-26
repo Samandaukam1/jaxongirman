@@ -22,13 +22,13 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js";
 
 import { photoQuery } from "../photo-query.ts";
 import { firstUsableOpenverse, type OpenversePhoto } from "../openverse-results.ts";
-import { queryLadder, type PhotoHit } from "../unsplash-results.ts";
+import { findFromProviders, type Orientation, type PhotoSource } from "../photo-order.ts";
+import type { PhotoHit } from "../unsplash-results.ts";
 import { searchUnsplash, unsplashConfigured } from "./unsplash.ts";
 
 const ENDPOINT = "https://api.openverse.org/v1/images/";
 
-/** Which index answered. Reported, stored, and asserted by the smoke test. */
-export type PhotoSource = "unsplash" | "openverse";
+export type { PhotoSource };
 
 export type StockPhoto = {
   slideIndex: number;
@@ -58,7 +58,7 @@ export type StockPhoto = {
  * Alternating per rung would trade a good Unsplash match for a vague Openverse
  * one, which is the opposite of preferring Unsplash.
  */
-export async function searchStock(input: {
+export function searchStock(input: {
   query: string;
   orientation?: Orientation;
   /** The design's `stylePreference`, used only to widen a failing search. */
@@ -66,26 +66,12 @@ export async function searchStock(input: {
   /** Usable results to pass over, for "another photograph, same subject". */
   skip?: number;
 }): Promise<{ hit: PhotoHit; source: PhotoSource } | null> {
-  const orientation = input.orientation ?? "landscape";
-  const ladder = queryLadder(input.query, input.theme ?? undefined);
-
-  if (unsplashConfigured()) {
-    for (const rung of ladder) {
-      // `searchUnsplash` answers null for an error and for a rate limit alike,
-      // which is what makes the fallback below cover both without asking why.
-      const hit = await searchUnsplash(rung, orientation, input.skip ?? 0);
-      if (hit) return { hit, source: "unsplash" };
-    }
-  }
-
-  for (const rung of ladder) {
-    const hit = await searchOpenverse(rung, orientation, input.skip ?? 0);
-    if (hit) return { hit, source: "openverse" };
-  }
-  return null;
+  return findFromProviders({
+    unsplashConfigured,
+    unsplash: searchUnsplash,
+    openverse: searchOpenverse,
+  }, input);
 }
-
-type Orientation = "landscape" | "portrait" | "square" | "any";
 
 async function searchOpenverse(query: string, orientation: Orientation, skip = 0): Promise<PhotoHit | null> {
   const parameters = new URLSearchParams({

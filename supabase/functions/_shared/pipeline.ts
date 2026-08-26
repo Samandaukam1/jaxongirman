@@ -237,20 +237,47 @@ async function initializeSteps(service: SupabaseClient, input: PipelineInput) {
 async function runStage<T>(service: SupabaseClient, input: PipelineInput, key: typeof stages[number][0], action: () => Promise<T>, successMessage?: (value: T) => string): Promise<T> {
   const stage = stages.find(([stageKey]) => stageKey === key)!;
   const now = new Date().toISOString();
+  const began = Date.now();
   await Promise.all([
     service.from("generation_jobs").update({ status: "running", stage: key, progress: stage[2], heartbeat_at: now, started_at: key === "preparing" ? now : undefined }).eq("id", input.jobId),
     service.from("generation_steps").update({ status: "running", progress: 5, started_at: now }).eq("job_id", input.jobId).eq("key", key),
   ]);
   try {
     const value = await action();
-    await service.from("generation_steps").update({ status: "succeeded", progress: 100, completed_at: new Date().toISOString(), message: successMessage?.(value) ?? null }).eq("job_id", input.jobId).eq("key", key);
+    const took = Date.now() - began;
+    const recorded = await service.from("generation_steps").update({
+      status: "succeeded", progress: 100, completed_at: new Date().toISOString(),
+      duration_ms: took,
+      message: successMessage?.(value) ?? null,
+    }).eq("job_id", input.jobId).eq("key", key);
+    // Read, not discarded. A column added minutes ago is missing from the API's
+    // schema cache for a while, and an unchecked write in that window drops the
+    // measurement silently — which is exactly how the photo credits went
+    // missing for a year.
+    if (recorded.error) console.error("stage metrics not stored", key, recorded.error.message);
+    /**
+     * One line per stage, in the log the platform already keeps.
+     *
+     * A stage that fails is easy to find; a stage that is *slowly getting
+     * worse* is only visible if every run leaves its duration behind. This is
+     * what turns "it feels slower lately" into a number.
+     */
+    console.log(JSON.stringify({ event: "stage_done", job_id: input.jobId, stage: key, duration_ms: took }));
     return value;
   } catch (error) {
     // The step list is on the author's screen while they wait, so it is subject
     // to the same rule as the failure itself: a provider's sentence about our
     // account never reaches it.
-    const { message } = userFacingFailure(error);
-    await service.from("generation_steps").update({ status: "failed", message: message.slice(0, 500), completed_at: new Date().toISOString() }).eq("job_id", input.jobId).eq("key", key);
+    const { code, message } = userFacingFailure(error);
+    const took = Date.now() - began;
+    await service.from("generation_steps").update({
+      status: "failed", message: message.slice(0, 500), completed_at: new Date().toISOString(),
+      duration_ms: took,
+      // The stable code beside the sentence: a message is for a person, a code
+      // is what a query groups by when one stage starts failing across decks.
+      error_code: code,
+    }).eq("job_id", input.jobId).eq("key", key);
+    console.error(JSON.stringify({ event: "stage_failed", job_id: input.jobId, stage: key, duration_ms: took, error_code: code }));
     throw error;
   }
 }
@@ -382,6 +409,33 @@ function flattenTableRows<T extends { table?: unknown }>(slide: T): T {
  * another they take ten times as long as they need to. Three is enough to hide
  * the latency and few enough that Gemini never objects.
  */
+/**
+ * A ceiling on how long a stage may take, whatever it is waiting on.
+ *
+ * Per-call timeouts bound one request; they do not bound a stage that makes
+ * many, and three retries of a slow provider across several slides can outlast
+ * the wall clock an edge function is given. When that happens the worker is
+ * killed mid-stage, no code runs, and the job sits at `running` for ever.
+ *
+ * A stage that gives up on its own terms leaves a failed job, a released
+ * reservation and a sentence for the author. That is strictly better than being
+ * killed, so the deadline is set below the platform's rather than above it.
+ */
+async function withDeadline<T>(work: Promise<T>, ms: number, stage: string): Promise<T> {
+  let alarm: number | undefined;
+  const limit = new Promise<never>((_resolve, reject) => {
+    alarm = setTimeout(
+      () => reject(new ProviderUnavailable("timeout", `${stage} did not finish within ${Math.round(ms / 1000)}s`)),
+      ms,
+    );
+  });
+  try {
+    return await Promise.race([work, limit]);
+  } finally {
+    if (alarm !== undefined) clearTimeout(alarm);
+  }
+}
+
 async function mapWithConcurrency<T, R>(
   items: readonly T[],
   limit: number,
@@ -888,7 +942,16 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
     /** What each deck slide's boxes will say, by shape id. */
     const templateText = new Map<number, Record<string, string>>();
 
-    const contentResult = await runStage(input.service, input, "writing_content", async () => {
+    /**
+     * The stage that used to hang, now with a floor under it.
+     *
+     * Writing is many requests, and the slowest healthy run observed finished
+     * the whole deck in about a hundred seconds. Two hundred is generous for
+     * the stage alone and still short of the wall clock the worker is given, so
+     * a stage that goes wrong fails in our own words instead of being killed
+     * without any.
+     */
+    const contentResult = await withDeadline(runStage(input.service, input, "writing_content", async () => {
       if (mode === "mock") {
         return {
           slides: mockContent(outlineResult.data).slides,
@@ -897,6 +960,25 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
           attempts: 1,
         };
       }
+
+      let done = 0;
+      /**
+       * Proof of life, per slide.
+       *
+       * The stage used to touch `heartbeat_at` once on entry, so a run that
+       * died on the last slide looked exactly like one that died on the first,
+       * and the watchdog could not tell a long deck from a dead one. Now each
+       * finished slide says so — which is also the log line that names where a
+       * stall actually happened.
+       */
+      const beat = async (index: number) => {
+        done += 1;
+        console.log(JSON.stringify({
+          event: "slide_written", job_id: input.jobId, slide: index, done, of: outlineResult.data.slides.length,
+        }));
+        await input.service.from("generation_jobs")
+          .update({ heartbeat_at: new Date().toISOString() }).eq("id", input.jobId);
+      };
 
       const written = await mapWithConcurrency(outlineResult.data.slides, 3, async (slide, index) => {
         const planned = layoutPlan.slides.find((entry) => entry.index === index);
@@ -918,6 +1000,7 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
             attachments: context.attachments,
           });
           templateText.set(index, Object.fromEntries(answer.texts));
+          await beat(index);
           if (answer.filled.length > 0 || answer.trimmed.length > 0) {
             console.log(JSON.stringify({
               event: "template_slide_repaired",
@@ -931,7 +1014,7 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
         }
 
         try {
-          return await writeOneSlide({
+          const one = await writeOneSlide({
             writer,
             topic: prepared.presentation.topic,
             index,
@@ -943,6 +1026,8 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
             researchBrief,
             attachments: context.attachments,
           });
+          await beat(index);
+          return one;
         } catch (failure) {
           // One more ask for this slide alone. The writer has already retried
           // what is worth retrying; this covers the answer that came back
@@ -953,7 +1038,7 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
             slide: index,
             reason: failure instanceof ProviderUnavailable ? failure.reason : "unknown",
           }));
-          return await writeOneSlide({
+          const retried = await writeOneSlide({
             writer,
             topic: prepared.presentation.topic,
             index,
@@ -965,6 +1050,8 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
             researchBrief,
             attachments: [],
           });
+          await beat(index);
+          return retried;
         }
       });
 
@@ -982,7 +1069,7 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
         calls: written.length,
         attempts: written.reduce((total, entry) => total + entry.attempts, 0),
       };
-    }, (value) => `${value.slides.length} ta slayd alohida yozildi`);
+    }, (value) => `${value.slides.length} ta slayd alohida yozildi`), 200_000, "writing_content");
 
 
     // User-entered labels come first — they are what the author explicitly cited —

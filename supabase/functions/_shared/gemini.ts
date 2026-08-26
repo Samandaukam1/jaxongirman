@@ -22,5 +22,14 @@ export function geminiWriter(): GeminiWriter {
     apiKey: Deno.env.get("GEMINI_API_KEY") ?? "",
     researchModel: Deno.env.get("GEMINI_RESEARCH_MODEL") ?? "gemini-3.5-flash-lite",
     writingModel: Deno.env.get("GEMINI_WRITING_MODEL") ?? "gemini-3.5-flash-lite",
+    /**
+     * Short enough that three attempts fit inside a stage's budget.
+     *
+     * The default is generous because research legitimately takes a while; one
+     * slide does not. At seventy-five seconds a slide that retried twice could
+     * outlast the whole stage on its own, which is how a deck ends up killed
+     * rather than failed.
+     */
+    timeoutMs: Number(Deno.env.get("GEMINI_TIMEOUT_MS") ?? "") || 45_000,
   });
 }
