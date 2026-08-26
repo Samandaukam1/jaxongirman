@@ -10,7 +10,7 @@ import { errorMessage } from "@/lib/format";
 import { anotherPhoto, withPhoto, writeSample, type SampleReport } from "@/lib/sampleSlide";
 import {
   archetypeOf, beginGesture, canRedo, canUndo, commit, endGesture, preview,
-  redo, startHistory, undo, type History,
+  redo, setOverlay, startHistory, undo, type History,
 } from "@/lib/studioEdit";
 
 /**
@@ -289,6 +289,18 @@ export function StudioSection({
               photoUrl={sample?.photo?.url ?? null}
               onFamily={onFamily}
               onChange={change}
+              onVeil={(veil, opacity) => {
+                // Every picture slot on the blueprint being looked at: the veil
+                // is a property of the design's treatment of photography, not
+                // of the one photograph that happens to be loaded.
+                let next = design;
+                for (const element of archetype?.elements ?? []) {
+                  if (element.type === "image" || element.type === "frame") {
+                    next = setOverlay(next, archetypeId, element.id, { hex: veil }, opacity);
+                  }
+                }
+                if (next !== design) change(next);
+              }}
             />
           ) : (
           <StudioLayers

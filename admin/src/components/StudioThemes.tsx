@@ -1,5 +1,5 @@
 import {
-  IMAGE_ROLES, THEME_FAMILIES, auditFamily, extractPalette, harmonise, themePalette,
+  IMAGE_ROLES, THEME_FAMILIES, auditFamily, extractPalette, harmonise, themePalette, veilFor,
   type ColorFamily, type ImagePalette, type JslaydDocument,
 } from "@jaxongirman/jslayd";
 import { Check, Wand2 } from "lucide-react";
@@ -30,9 +30,11 @@ type Props = {
   photoUrl: string | null;
   onFamily: (code: string | null) => void;
   onChange: (next: JslaydDocument) => void;
+  /** Applies a veil to whichever image slots the shown blueprint draws. */
+  onVeil: (veil: string, opacity: number) => void;
 };
 
-export function StudioThemes({ document: design, family, photoUrl, onFamily, onChange }: Props) {
+export function StudioThemes({ document: design, family, photoUrl, onFamily, onChange, onVeil }: Props) {
   const [familyId, setFamilyId] = useState<string>(THEME_FAMILIES[0]?.id ?? "");
   const [variantId, setVariantId] = useState<string>(THEME_FAMILIES[0]?.variants[0]?.id ?? "");
   const [image, setImage] = useState<ImagePalette | null>(null);
@@ -66,6 +68,16 @@ export function StudioThemes({ document: design, family, photoUrl, onFamily, onC
   // from the old one — otherwise the palette on screen belongs to a picture
   // nobody is looking at any more.
   useEffect(() => { setImage(null); setHarmonised(null); }, [photoUrl]);
+
+  /**
+   * What it takes to put words on this photograph.
+   *
+   * Text over an image is the one place where the picture wins by default and
+   * the words lose, and it loses silently: the contrast check reads the
+   * design's colours, which say nothing about the photograph behind them. This
+   * answers with the ink that reads better and the scrim that gets it over 4.5.
+   */
+  const veil = useMemo(() => (image ? veilFor(image) : null), [image]);
 
   /**
    * Reading a photograph's colours, in the browser that is showing it.
@@ -134,6 +146,26 @@ export function StudioThemes({ document: design, family, photoUrl, onFamily, onC
             </span>
           ) : null}
           {image && !harmonised ? <span className="studio-note">Avval variant tanlang.</span> : null}
+        </div>
+      ) : null}
+
+      {veil ? (
+        <div className="studio-theme-actions">
+          <span className="studio-note">
+            Bu surat ustidagi matn {veil.ink === "#FFFFFF" ? "oq" : "qora"} bo‘lsin
+            {veil.opacity > 0
+              ? ` va ${Math.round(veil.opacity * 100)}% ${veil.veil === "#000000" ? "qora" : "oq"} qoplama kerak.`
+              : " — qoplamasiz ham o‘qiladi."}
+          </span>
+          {veil.opacity > 0 ? (
+            <button
+              type="button"
+              className="secondary-button compact"
+              onClick={() => onVeil(veil.veil, veil.opacity)}
+            >
+              Qoplamani qo‘yish
+            </button>
+          ) : null}
         </div>
       ) : null}
 
