@@ -34,6 +34,7 @@ const { buildJslayd } = await import("../../packages/jslayd/tests/build.mjs");
 const dir = buildJslayd();
 const { compile } = await import(`${dir}/compile.js`);
 const { SAMPLE_PROMPT } = await import(`${dir}/standard.js`);
+const { readDocument } = await import(`${dir}/serialize.js`);
 
 let failures = 0;
 const check = (ok, what) => {
@@ -129,6 +130,28 @@ try {
 
   const attached = await service.from("presentation_design_fonts").select("font_id, asset_path").eq("design_id", designId);
   check((attached.data ?? []).length > 0, "the design now carries the faces");
+
+  /**
+   * The design is still readable afterwards.
+   *
+   * The resolver rewrites `compiled_config`, and it used to write the full
+   * object key into each font face. `readDocument` refuses any asset carrying
+   * a path separator — the rule that stops an imported file naming
+   * `../../secret.ttf` — so attaching fonts from the library made the design
+   * unreadable to everything that reads one. It surfaced as the sample writer
+   * saying "Dizayn hujjati o'qilmadi" about a design that had just been saved.
+   */
+  const saved = await service.from("presentation_designs")
+    .select("compiled_config").eq("id", designId).single();
+  const reread = readDocument(saved.data.compiled_config);
+  check(Boolean(reread.document),
+    `the design still reads after resolving${reread.document ? "" : `: ${reread.diagnostics.errors.map((e) => e.message).join(" | ")}`}`);
+
+  for (const font of reread.document?.fonts ?? []) {
+    for (const face of font.faces ?? []) {
+      check(!/[\\/]/.test(face.asset), `${font.id} stores a bare file name (${face.asset})`);
+    }
+  }
 
   /**
    * The assertion this whole test is for.

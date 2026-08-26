@@ -172,9 +172,20 @@ Deno.serve(async (request) => {
           fallback: font.fallback,
         }, { onConflict: "design_id,font_id,weight,italic" });
 
-        // Stored as the full object key. The renderer accepts either spelling,
-        // and the full one is what the file is actually addressed by.
-        faces.push({ asset: target, format: face.format as string, weight: face.weight as number, italic: Boolean(face.italic) });
+        /**
+         * The bare file name, never the full key.
+         *
+         * `readDocument` refuses any asset containing a path separator (§82) —
+         * that rule is what stops an imported file naming `../../secret.ttf` —
+         * and the prefix is the design's own slug, which every reader already
+         * has. Writing the full key here produced a document the reader then
+         * rejected outright, so a design that took its fonts from the library
+         * became unreadable: the sample writer, and anything else that reads a
+         * design, answered "Dizayn hujjati o'qilmadi" and named no cause.
+         *
+         * The upload path has always stored the bare name. This now matches it.
+         */
+        faces.push({ asset: fileName, format: face.format as string, weight: face.weight as number, italic: Boolean(face.italic) });
       }
 
       await service.from("design_font_usage").upsert({
