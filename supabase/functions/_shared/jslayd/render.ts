@@ -499,7 +499,10 @@ function fit(text: string, style: TextStyle, box: Box): { fontSize: number; maxL
     const perLine = Math.max(1, Math.floor(box.width / (size * GLYPH_RATIO)));
     return explicit.reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / perLine)), 0);
   };
-  const roomAt = (size: number) => Math.max(1, Math.floor(box.height / (size * style.lineHeight)));
+  // The same floor the emitted style uses: planning against 0.92 while drawing
+  // at 1.05 fits one more line than the box can show.
+  const roomAt = (size: number) =>
+    Math.max(1, Math.floor(box.height / (size * Math.max(MIN_LINE_HEIGHT, style.lineHeight))));
 
   /**
    * The line budget the design was drawn for: what the box holds at the size
@@ -529,6 +532,9 @@ function fit(text: string, style: TextStyle, box: Box): { fontSize: number; maxL
   return { fontSize: MIN_RENDER_FONT_SIZE, maxLines: roomAt(MIN_RENDER_FONT_SIZE) };
 }
 
+/** Below this a line box is shorter than its glyphs, and renderers disagree. */
+const MIN_LINE_HEIGHT = 1.05;
+
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
@@ -538,7 +544,21 @@ function textStyleOf(style: TextStyle, fontSize: number, context: RenderContext)
   return {
     color,
     fontSize,
-    lineHeight: round2(fontSize * style.lineHeight),
+    /**
+     * A line box is never shorter than the glyphs it holds.
+     *
+     * Designs write tight leading — this one asks for 0.92 on its cover title —
+     * and in CSS that is a legitimate choice: the lines overlap slightly and
+     * every letter still draws. React Native does not overlap them, it clips,
+     * so the top of the first line is cut off and a customer sees a title with
+     * its head sliced. A PowerPoint writer does a third thing.
+     *
+     * A ratio no renderer can honour the same way is not a design decision this
+     * engine can pass through. The floor keeps the leading tight — 1.05 is
+     * still tighter than the 1.2 most type sets at — and it is the same in
+     * every renderer, which is what the engine exists to guarantee.
+     */
+    lineHeight: round2(fontSize * Math.max(MIN_LINE_HEIGHT, style.lineHeight)),
     letterSpacing: scale(style.letterSpacing),
     textAlign: style.align,
     verticalAlign: style.verticalAlign === "middle" ? "center" : style.verticalAlign,

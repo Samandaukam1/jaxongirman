@@ -1396,6 +1396,26 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
           : imageArchetypes <= 4 ? "contextual" : "all";
       if (policy === "none") return [] as GeneratedImage[];
 
+      /**
+       * Which archetype each slide will actually be laid out in.
+       *
+       * `archetypesInOrder` is indexed off `layoutPlan`, which covers the
+       * written body — the cover and the agenda sit in front of it and are laid
+       * out by the design's own choice, so both read back undefined. A page
+       * whose archetype cannot be seen here is a page whose picture slot cannot
+       * be seen either, and an unfilled slot draws an empty frame: a grey
+       * rectangle on the first two pages of the deck.
+       */
+      const byPurpose = (purpose: string) => jslayd.document.archetypes.find((entry) => entry.purpose === purpose);
+      const archetypeAt = (index: number) => archetypesInOrder[index]
+        ?? (index === 0 ? byPurpose("cover") ?? jslayd.document.archetypes[0] : undefined)
+        ?? (index === 1 ? byPurpose("agenda") : undefined);
+
+      /** A slot the design left for the deck to fill, rather than its own artwork. */
+      const wantsPicture = (index: number) => (archetypeAt(index)?.elements ?? []).some((element) =>
+        (element.type === "image" || element.type === "frame")
+        && !(element.source && "asset" in element.source));
+
       // A slide whose every visual slot is a library element needs no
       // photograph: the object is the picture.
       const indexed = plan.slides
@@ -1428,7 +1448,26 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
         // second one on the palette ground, so the deck opens with contrast.
         : policy === "contextual"
           ? indexed.filter(({ slide, index }) => index === 0 || (index > 1 && Boolean(slide.visualPrompt))).slice(0, Math.ceil(plan.slides.length * 0.5))
-          : indexed.filter(({ slide, index }) => index > 0 && Boolean(slide.visualPrompt)).slice(0, Math.ceil(plan.slides.length * 0.6));
+          : indexed
+            /**
+             * The cover counts when it has a hole in it.
+             *
+             * `all` excluded index 0 because a cover is usually type on a
+             * colour and dressing it would fight the design. But a design whose
+             * cover *declares* an image slot has already decided otherwise, and
+             * skipping it left an empty picture frame on the first page of the
+             * deck — the first thing anybody sees.
+             *
+             * The cover has no `visualPrompt` either: nothing writes one for a
+             * page the outline does not describe. Its own title is the subject.
+             */
+            .filter(({ slide, index }) => (index > 0 && Boolean(slide.visualPrompt))
+              // Or any page holding an empty picture slot, wherever it sits.
+              // A frame the design left for the deck is a frame the deck has to
+              // fill; leaving it draws a grey rectangle the author cannot
+              // remove.
+              || wantsPicture(index))
+            .slice(0, Math.ceil(plan.slides.length * 0.6));
 
       const results: GeneratedImage[] = [];
       for (const target of targets) {

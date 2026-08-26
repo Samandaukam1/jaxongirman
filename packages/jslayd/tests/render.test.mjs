@@ -523,3 +523,34 @@ test("a slot the deck supplied nothing for still shows the design's own artwork"
   const drawn = JSON.stringify(renderArchetype(DESIGN, withArt, { ...fullSlide(withArt.purpose), images: {} }));
   assert.ok(drawn.includes(art.source.asset), "the design's own artwork was dropped");
 });
+
+test("a line box is never shorter than the glyphs it holds", () => {
+  /**
+   * Designs write tight leading — the cover title of a real published design
+   * asks for 0.92 — and in CSS that is legitimate: the lines overlap and every
+   * letter still draws. React Native does not overlap them, it clips, so a
+   * customer saw a cover title with its head sliced off.
+   *
+   * A ratio no renderer honours the same way is not something the engine can
+   * pass through, whatever the design asked for.
+   */
+  for (const { slide } of renderAllPreviews(DESIGN)) {
+    for (const element of slide.elements) {
+      const size = element.style?.fontSize;
+      const leading = element.style?.lineHeight;
+      if (typeof size !== "number" || typeof leading !== "number") continue;
+      assert.ok(leading >= size, `${element.type} draws ${size}px glyphs in a ${leading}px line`);
+    }
+  }
+});
+
+test("tight leading is kept tight, not normalised away", () => {
+  // The floor is 1.05 — still tighter than the 1.2 most type sets at — so a
+  // design that asked for close leading still reads as close.
+  const { slide } = renderAllPreviews(DESIGN)[0];
+  const headline = slide.elements
+    .filter((element) => typeof element.style?.fontSize === "number")
+    .sort((first, second) => second.style.fontSize - first.style.fontSize)[0];
+  if (!headline) return;
+  assert.ok(headline.style.lineHeight <= headline.style.fontSize * 1.3, "leading was loosened past what any design asked for");
+});
