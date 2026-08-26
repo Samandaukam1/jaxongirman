@@ -31,7 +31,14 @@ writeFileSync(join(out, "jslayd-stub.ts"), [
   "export type ColorValue = { role: string } | { hex: string };",
   "export type GradientStop = { offset: number; color: ColorValue };",
   "export type Gradient = { type: 'linear' | 'radial'; angle: number; stops: readonly GradientStop[] };",
-  "export type JslaydElement = { id: string; type: string; geometry: Geometry; background?: ColorValue | Gradient | null };",
+  "export type Border = { width: number; color: ColorValue; style: 'solid' | 'dashed' | 'dotted'; opacity: number };",
+  "export type Corners = { topLeft: number; topRight: number; bottomRight: number; bottomLeft: number };",
+  "export type Shadow = { offsetX: number; offsetY: number; blur: number; spread: number; opacity: number; color: ColorValue };",
+  "export type JslaydElement = { id: string; type: string; geometry: Geometry; background?: ColorValue | Gradient | null;"
+  + " border?: Border | null; corners?: Corners | null; shadows?: readonly Shadow[];"
+  + " slot?: string; fit?: 'cover' | 'contain' | 'fill'; focus?: { x: number; y: number };"
+  + " orientation?: string; required?: boolean; queryFrom?: readonly string[];"
+  + " stylePreference?: string | null; overlayOpacity?: number };",
   "export type Archetype = { id: string; elements: JslaydElement[] };",
   "export type JslaydDocument = { archetypes: Archetype[] };",
 ].join("\n"));
@@ -65,10 +72,17 @@ const {
   distribute, duplicateElement, endGesture, freeId, moveElement, preview, redo,
   removeElement, renameElement, reorder, resizeBox, setGeometry, snap, stackingOrder,
   startHistory, undo, addStop, gradientFromPreset, gradientOf, removeStop, setFill, setStop,
+  DEFAULT_BORDER, DEFAULT_SHADOW, MAX_SHADOWS, addShadow, cornersAreEven, evenCorners,
+  patchBorder, patchShadow, removeShadow, setBorder, setCorners, setImageRules, setShadows,
+  takesBorder, takesCorners, takesShadow,
 } = studio;
 
 const element = (id, x, y, width, height) => ({
   id, type: "text", geometry: { x, y, width, height, rotation: 0, zIndex: 1, anchor: "top-left" },
+});
+const shape = (id) => ({
+  id, type: "shape",
+  geometry: { x: 0, y: 0, width: 400, height: 200, rotation: 0, zIndex: 1, anchor: "top-left" },
 });
 const doc = (...elements) => ({ archetypes: [{ id: "a1", elements }] });
 const boxOf = (document, id) => document.archetypes[0].elements.find((e) => e.id === id).geometry;
@@ -386,4 +400,124 @@ test("a plain colour is not mistaken for a gradient", () => {
 test("clearing a fill sets null rather than deleting the key", () => {
   const document = setFill(doc(element("box", 0, 0, 100, 100)), "a1", "box", null);
   assert.equal(elementOfDoc(document, "box").background, null);
+});
+
+/* --------------------------------------------------------------- border */
+
+test("a border is written whole or not at all", () => {
+  const before = doc(element("t1", 0, 0, 400, 80));
+
+  // Switching it on from nothing produces every part a renderer needs, rather
+  // than a width with no colour for an exporter to guess at.
+  const on = patchBorder(before, "a1", "t1", { width: 4 });
+  const border = on.archetypes[0].elements[0].border;
+  assert.deepEqual(border, { ...DEFAULT_BORDER, width: 4 });
+
+  const off = setBorder(on, "a1", "t1", null);
+  assert.equal(off.archetypes[0].elements[0].border, null);
+});
+
+test("a patch keeps the parts it was not given", () => {
+  const before = setBorder(doc(element("t1", 0, 0, 400, 80)), "a1", "t1",
+    { width: 6, color: { hex: "#FF0000" }, style: "dashed", opacity: 0.5 });
+  const after = patchBorder(before, "a1", "t1", { width: 2 });
+
+  assert.deepEqual(after.archetypes[0].elements[0].border,
+    { width: 2, color: { hex: "#FF0000" }, style: "dashed", opacity: 0.5 });
+});
+
+/* -------------------------------------------------------------- corners */
+
+test("four corners, set together or read as even", () => {
+  assert.deepEqual(evenCorners(18), { topLeft: 18, topRight: 18, bottomRight: 18, bottomLeft: 18 });
+  assert.ok(cornersAreEven(evenCorners(18)));
+  assert.ok(cornersAreEven(null), "no corners is not an uneven corner");
+  assert.ok(!cornersAreEven({ topLeft: 18, topRight: 0, bottomRight: 18, bottomLeft: 18 }));
+
+  const document = setCorners(doc(element("t1", 0, 0, 400, 80)), "a1", "t1", evenCorners(12));
+  assert.equal(document.archetypes[0].elements[0].corners.bottomLeft, 12);
+});
+
+/* -------------------------------------------------------------- shadows */
+
+test("shadows are capped, because past three nobody can see the difference", () => {
+  let document = doc(shape("s1"));
+  for (let at = 0; at < MAX_SHADOWS + 2; at += 1) document = addShadow(document, "a1", "s1");
+
+  assert.equal(document.archetypes[0].elements[0].shadows.length, MAX_SHADOWS);
+  // Refused, not silently truncated to a different document each time.
+  assert.equal(addShadow(document, "a1", "s1"), document);
+});
+
+test("a shadow is edited and removed by position", () => {
+  let document = addShadow(addShadow(doc(shape("s1")), "a1", "s1"), "a1", "s1");
+  document = patchShadow(document, "a1", "s1", 1, { blur: 4 });
+
+  const shadows = document.archetypes[0].elements[0].shadows;
+  assert.equal(shadows[0].blur, DEFAULT_SHADOW.blur, "the other shadow is untouched");
+  assert.equal(shadows[1].blur, 4);
+
+  const fewer = removeShadow(document, "a1", "s1", 0);
+  assert.equal(fewer.archetypes[0].elements[0].shadows.length, 1);
+  assert.equal(fewer.archetypes[0].elements[0].shadows[0].blur, 4, "the right one was removed");
+
+  // A position that is not there is a no-op rather than a hole in the array.
+  assert.equal(removeShadow(document, "a1", "s1", 9), document);
+  assert.equal(patchShadow(document, "a1", "s1", 9, { blur: 1 }), document);
+});
+
+/* ---------------------------------------------------------------- image */
+
+const image = (id) => ({
+  id, type: "image",
+  geometry: { x: 0, y: 0, width: 800, height: 600, rotation: 0, zIndex: 1, anchor: "top-left" },
+  slot: "hero", fit: "cover", focus: { x: 0.5, y: 0.5 }, orientation: "landscape",
+  required: false, queryFrom: [], stylePreference: null, overlayOpacity: 0,
+});
+
+test("a focal point outside the picture is brought back onto it", () => {
+  const before = doc(image("i1"));
+
+  const past = setImageRules(before, "a1", "i1", { focus: { x: 1.8, y: -0.4 } });
+  assert.deepEqual(past.archetypes[0].elements[0].focus, { x: 1, y: 0 });
+
+  const inside = setImageRules(before, "a1", "i1", { focus: { x: 0.25, y: 0.75 } });
+  assert.deepEqual(inside.archetypes[0].elements[0].focus, { x: 0.25, y: 0.75 });
+});
+
+test("an overlay cannot be more opaque than opaque", () => {
+  const before = doc(image("i1"));
+  assert.equal(setImageRules(before, "a1", "i1", { overlayOpacity: 4 }).archetypes[0].elements[0].overlayOpacity, 1);
+  assert.equal(setImageRules(before, "a1", "i1", { overlayOpacity: -1 }).archetypes[0].elements[0].overlayOpacity, 0);
+});
+
+test("image rules are refused on things that are not images", () => {
+  const before = doc(element("t1", 0, 0, 400, 80));
+  const after = setImageRules(before, "a1", "t1", { fit: "contain" });
+  assert.equal(after.archetypes[0].elements[0].fit, undefined, "a text box has no crop");
+});
+
+test("what an element can carry is read from the language, not from what it happens to hold", () => {
+  /**
+   * An icon has no border because `IconElement` does not define one. Writing
+   * it anyway produces a document that appears to save and loses the change on
+   * the next read, because the compiler drops what the type does not declare.
+   *
+   * Text is the case that makes this worth asserting: it takes a border and a
+   * corner radius but no shadow.
+   */
+  assert.ok(takesBorder({ type: "text" }) && takesCorners({ type: "text" }));
+  assert.ok(!takesShadow({ type: "text" }), "text has no shadow in the language");
+  assert.ok(takesShadow({ type: "line" }), "a line is a shape and shapes do");
+  assert.ok(takesCorners({ type: "table" }) && !takesShadow({ type: "table" }));
+  for (const type of ["icon", "chart", "list", "group"]) {
+    assert.ok(!takesBorder({ type }) && !takesCorners({ type }) && !takesShadow({ type }),
+      `${type} carries no box properties`);
+  }
+
+  const icon = { id: "i1", type: "icon", geometry: { x: 0, y: 0, width: 64, height: 64, rotation: 0, zIndex: 1, anchor: "top-left" } };
+  const before = { archetypes: [{ id: "a1", elements: [icon] }] };
+  assert.equal(setCorners(before, "a1", "i1", evenCorners(8)).archetypes[0].elements[0].corners, undefined);
+  assert.equal(setBorder(before, "a1", "i1", DEFAULT_BORDER).archetypes[0].elements[0].border, undefined);
+  assert.equal(addShadow(before, "a1", "i1"), before, "an icon cannot be given a shadow");
 });

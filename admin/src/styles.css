@@ -1090,3 +1090,17 @@ td small { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; 
   .studio-shell { grid-template-columns: minmax(0, 1fr); }
   .studio-pane { max-height: 320px; }
 }
+
+.studio-shadow {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 8px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--field);
+}
+.studio-shadow-foot { display: flex; gap: 8px; align-items: flex-end; }
+.studio-shadow-foot .studio-field { flex: 1; }
+.studio-shadow-foot button {
+  height: 30px; padding: 0 10px; flex: none;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface); color: var(--ink-muted); font-size: 11px;
+}
+.studio-shadow-foot button:hover { color: var(--bad-ink); border-color: var(--bad-rim); }

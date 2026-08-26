@@ -181,3 +181,95 @@ test("one element that draws several rows gives them all the same origin", () =>
 function collect(elements) {
   return elements.flatMap((element) => [element.id, ...(element.children ? collect(element.children) : [])]);
 }
+
+/* ------------------------------------------- what the inspector now writes */
+
+/** The same shape as the studio's operations: one element changed, in place. */
+const patch = (document, archetypeId, elementId, change) => ({
+  ...document,
+  archetypes: document.archetypes.map((entry) => (entry.id !== archetypeId ? entry : {
+    ...entry,
+    elements: entry.elements.map((child) => (child.id !== elementId ? child : change(child))),
+  })),
+});
+
+const firstOfType = (document, types) => {
+  for (const archetype of document.archetypes) {
+    const element = archetype.elements.find((entry) => types.includes(entry.type));
+    if (element) return { archetype, element };
+  }
+  return null;
+};
+
+/**
+ * The inspector's box properties survive being written out and read back.
+ *
+ * This is the assertion that makes those panels safe to ship. A field the
+ * editor writes and the language does not serialise is the worst kind of bug in
+ * a tool like this: the change appears on the canvas, the design saves without
+ * complaint, and the shadow is gone the next time anybody opens it — by which
+ * point nobody connects the two.
+ */
+test("a border and a corner radius written by the inspector survive the round trip", () => {
+  const start = compile(SAMPLE_PROMPT).document;
+  const { archetype, element } = firstText(start);
+
+  const styled = patch(start, archetype.id, element.id, (child) => ({
+    ...child,
+    border: { width: 3, color: { hex: "#123456" }, style: "dashed", opacity: 0.75 },
+    corners: { topLeft: 24, topRight: 8, bottomRight: 24, bottomLeft: 8 },
+  }));
+
+  const landed = roundTrip(styled).archetypes
+    .find((entry) => entry.id === archetype.id)
+    .elements.find((child) => child.id === element.id);
+
+  assert.deepEqual(landed.border, { width: 3, color: { hex: "#123456" }, style: "dashed", opacity: 0.75 });
+  assert.deepEqual(landed.corners, { topLeft: 24, topRight: 8, bottomRight: 24, bottomLeft: 8 });
+});
+
+test("a shadow written by the inspector survives the round trip", () => {
+  const start = compile(SAMPLE_PROMPT).document;
+  const found = firstOfType(start, ["shape", "divider", "decorative", "line", "image", "frame", "stat"]);
+  assert.ok(found, "the sample design draws something that can carry a shadow");
+
+  const shadow = { offsetX: 4, offsetY: 18, blur: 40, spread: 2, opacity: 0.22, color: { hex: "#000000" } };
+  const styled = patch(start, found.archetype.id, found.element.id, (child) => ({ ...child, shadows: [shadow] }));
+
+  const landed = roundTrip(styled).archetypes
+    .find((entry) => entry.id === found.archetype.id)
+    .elements.find((child) => child.id === found.element.id);
+
+  assert.equal(landed.shadows.length, 1);
+  assert.deepEqual(landed.shadows[0], shadow);
+});
+
+test("image rules written by the inspector survive the round trip", () => {
+  const start = compile(SAMPLE_PROMPT).document;
+  const found = firstOfType(start, ["image", "frame"]);
+  if (!found) return; // The sample design draws no picture; nothing to assert.
+
+  const styled = patch(start, found.archetype.id, found.element.id, (child) => ({
+    ...child,
+    fit: "contain",
+    focus: { x: 0.25, y: 0.75 },
+    orientation: "portrait",
+    required: true,
+    // The tint is written as a pair. An opacity with no colour is not a fainter
+    // overlay — the language writes it only beside one — which is why the
+    // inspector offers the two together rather than the number alone.
+    overlay: { role: "contrast" },
+    overlayOpacity: 0.4,
+  }));
+
+  const landed = roundTrip(styled).archetypes
+    .find((entry) => entry.id === found.archetype.id)
+    .elements.find((child) => child.id === found.element.id);
+
+  assert.equal(landed.fit, "contain");
+  assert.deepEqual(landed.focus, { x: 0.25, y: 0.75 });
+  assert.equal(landed.orientation, "portrait");
+  assert.equal(landed.required, true);
+  assert.deepEqual(landed.overlay, { role: "contrast" });
+  assert.equal(landed.overlayOpacity, 0.4);
+});

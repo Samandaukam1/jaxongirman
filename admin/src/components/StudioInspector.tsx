@@ -4,8 +4,10 @@ import { useMemo } from "react";
 import { COLOR_ROLES, GRADIENT_PRESETS, type ColorValue } from "@jaxongirman/jslayd";
 
 import {
-  addStop, elementOf, gradientFromPreset, gradientOf, removeStop, setFill,
-  setGeometry, setStop, withElement,
+  DEFAULT_BORDER, MAX_SHADOWS, addShadow, addStop, cornersAreEven, elementOf, evenCorners,
+  gradientFromPreset, gradientOf, patchBorder, patchShadow, removeShadow, removeStop,
+  setBorder, setCorners, setFill, setGeometry, setImageRules, setOverlay, setStop,
+  takesBorder, takesCorners, takesShadow, withElement,
 } from "@/lib/studioEdit";
 
 /**
@@ -292,6 +294,256 @@ export function StudioInspector({ document: design, archetype, selectedId, fontF
           </>;
         })()}
       </section>
+
+      {takesBorder(element) || takesCorners(element) ? (
+        <section>
+          <h4>Chegara va burchak</h4>
+          {takesBorder(element) ? (() => {
+            const border = (element as { border?: typeof DEFAULT_BORDER | null }).border ?? null;
+            return <>
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={Boolean(border)}
+                  onChange={(event) => onChange(setBorder(design, archetype.id, element.id,
+                    event.target.checked ? DEFAULT_BORDER : null))}
+                />
+                Chegara
+              </label>
+              {border ? (
+                <>
+                  <div className="studio-grid">
+                    <Field label="Qalinlik" value={border.width} suffix="px" onCommit={(raw) => {
+                      const value = number(raw);
+                      if (value !== null) onChange(patchBorder(design, archetype.id, element.id, { width: Math.max(0, value) }));
+                    }} />
+                    <label className="studio-field">
+                      <span>Uslub</span>
+                      <select
+                        value={border.style}
+                        onChange={(event) => onChange(patchBorder(design, archetype.id, element.id,
+                          { style: event.target.value as typeof border.style }))}
+                      >
+                        <option value="solid">To‘liq</option>
+                        <option value="dashed">Chiziqli</option>
+                        <option value="dotted">Nuqtali</option>
+                      </select>
+                    </label>
+                  </div>
+                  <label className="studio-field">
+                    <span>Rang</span>
+                    <select
+                      value={"role" in border.color ? border.color.role : border.color.hex}
+                      onChange={(event) => onChange(patchBorder(design, archetype.id, element.id,
+                        { color: asColor(event.target.value) }))}
+                    >
+                      {COLOR_ROLES.map((role) => <option key={role} value={role}>{role}</option>)}
+                      {"hex" in border.color ? <option value={border.color.hex}>{border.color.hex}</option> : null}
+                    </select>
+                  </label>
+                </>
+              ) : null}
+            </>;
+          })() : null}
+
+          {takesCorners(element) ? (() => {
+            const corners = (element as { corners?: { topLeft: number; topRight: number; bottomRight: number; bottomLeft: number } | null }).corners ?? null;
+            const even = cornersAreEven(corners);
+            return <>
+              {/**
+                * One field while the four agree, four when they do not.
+                *
+                * Almost every design rounds all four the same, and asking for
+                * four numbers to round a card is three keystrokes of tax on the
+                * common case. A design that deliberately rounds one corner keeps
+                * its own values — this never flattens them silently.
+                */}
+              {even ? (
+                <Field label="Burchak radiusi" value={corners?.topLeft ?? 0} suffix="px" onCommit={(raw) => {
+                  const value = number(raw);
+                  if (value === null) return;
+                  onChange(setCorners(design, archetype.id, element.id,
+                    value > 0 ? evenCorners(Math.max(0, value)) : null));
+                }} />
+              ) : (
+                <div className="studio-grid">
+                  {(["topLeft", "topRight", "bottomLeft", "bottomRight"] as const).map((key) => (
+                    <Field key={key} label={key} value={corners?.[key] ?? 0} suffix="px" onCommit={(raw) => {
+                      const value = number(raw);
+                      if (value === null || !corners) return;
+                      onChange(setCorners(design, archetype.id, element.id, { ...corners, [key]: Math.max(0, value) }));
+                    }} />
+                  ))}
+                </div>
+              )}
+              {!even ? (
+                <button
+                  type="button"
+                  className="text-button"
+                  onClick={() => onChange(setCorners(design, archetype.id, element.id, evenCorners(corners?.topLeft ?? 0)))}
+                >
+                  Hammasini tenglashtirish
+                </button>
+              ) : null}
+            </>;
+          })() : null}
+        </section>
+      ) : null}
+
+      {takesShadow(element) ? (() => {
+        const shadows = (element as { shadows?: readonly { offsetX: number; offsetY: number; blur: number; spread: number; opacity: number }[] }).shadows ?? [];
+        return (
+          <section>
+            <h4>Soya</h4>
+            {shadows.length === 0 ? <p className="studio-note">Soyasiz.</p> : null}
+            {shadows.map((shadow, at) => (
+              <div key={at} className="studio-shadow">
+                <div className="studio-grid">
+                  <Field label="X" value={shadow.offsetX} onCommit={(raw) => {
+                    const value = number(raw);
+                    if (value !== null) onChange(patchShadow(design, archetype.id, element.id, at, { offsetX: value }));
+                  }} />
+                  <Field label="Y" value={shadow.offsetY} onCommit={(raw) => {
+                    const value = number(raw);
+                    if (value !== null) onChange(patchShadow(design, archetype.id, element.id, at, { offsetY: value }));
+                  }} />
+                  <Field label="Blur" value={shadow.blur} onCommit={(raw) => {
+                    const value = number(raw);
+                    if (value !== null) onChange(patchShadow(design, archetype.id, element.id, at, { blur: Math.max(0, value) }));
+                  }} />
+                  <Field label="Spread" value={shadow.spread} onCommit={(raw) => {
+                    const value = number(raw);
+                    if (value !== null) onChange(patchShadow(design, archetype.id, element.id, at, { spread: value }));
+                  }} />
+                </div>
+                <div className="studio-shadow-foot">
+                  <Field label="Opacity" value={shadow.opacity} onCommit={(raw) => {
+                    const value = number(raw);
+                    if (value !== null) {
+                      onChange(patchShadow(design, archetype.id, element.id, at,
+                        { opacity: Math.min(1, Math.max(0, value)) }));
+                    }
+                  }} />
+                  <button type="button" onClick={() => onChange(removeShadow(design, archetype.id, element.id, at))}>
+                    O‘chirish
+                  </button>
+                </div>
+              </div>
+            ))}
+            {shadows.length < MAX_SHADOWS ? (
+              <button
+                type="button"
+                className="text-button"
+                onClick={() => onChange(addShadow(design, archetype.id, element.id))}
+              >
+                + Soya qo‘shish
+              </button>
+            ) : (
+              // Said rather than shown as a dead button: three is a decision,
+              // and past it nobody can see the difference on a projected slide.
+              <p className="studio-note">Uchtadan ko‘p soya slaydda ko‘rinmaydi.</p>
+            )}
+          </section>
+        );
+      })() : null}
+
+      {element.type === "image" || element.type === "frame" ? (() => {
+        const image = element as unknown as {
+          slot: string; fit: "cover" | "contain" | "fill"; focus: { x: number; y: number };
+          orientation: string; required: boolean;
+          overlay: ColorValue | null; overlayOpacity: number;
+        };
+        return (
+          <section>
+            <h4>Rasm qoidalari</h4>
+            {/**
+              * Rules, not a picture. What goes in this box is decided when a
+              * deck is generated; what the design owns is the shape of the hole
+              * and how a photograph should sit in it.
+              */}
+            <Field label="Slot" value={image.slot} onCommit={(raw) => {
+              if (raw.trim()) onChange(setImageRules(design, archetype.id, element.id, { slot: raw.trim() }));
+            }} />
+            <div className="studio-grid">
+              <label className="studio-field">
+                <span>Joylashuv</span>
+                <select
+                  value={image.fit}
+                  onChange={(event) => onChange(setImageRules(design, archetype.id, element.id,
+                    { fit: event.target.value as typeof image.fit }))}
+                >
+                  <option value="cover">To‘ldirish</option>
+                  <option value="contain">Sig‘dirish</option>
+                  <option value="fill">Cho‘zish</option>
+                </select>
+              </label>
+              <label className="studio-field">
+                <span>Yo‘nalish</span>
+                <select
+                  value={image.orientation}
+                  onChange={(event) => onChange(setImageRules(design, archetype.id, element.id,
+                    { orientation: event.target.value as "landscape" | "portrait" | "square" | "any" }))}
+                >
+                  <option value="landscape">Gorizontal</option>
+                  <option value="portrait">Vertikal</option>
+                  <option value="square">Kvadrat</option>
+                  <option value="any">Farqi yo‘q</option>
+                </select>
+              </label>
+            </div>
+            <div className="studio-grid">
+              <Field label="Fokus X" value={image.focus?.x ?? 0.5} onCommit={(raw) => {
+                const value = number(raw);
+                if (value !== null) {
+                  onChange(setImageRules(design, archetype.id, element.id,
+                    { focus: { x: value, y: image.focus?.y ?? 0.5 } }));
+                }
+              }} />
+              <Field label="Fokus Y" value={image.focus?.y ?? 0.5} onCommit={(raw) => {
+                const value = number(raw);
+                if (value !== null) {
+                  onChange(setImageRules(design, archetype.id, element.id,
+                    { focus: { x: image.focus?.x ?? 0.5, y: value } }));
+                }
+              }} />
+            </div>
+            {/**
+              * The colour and its strength together.
+              *
+              * An opacity on its own is not a fainter tint — the language
+              * writes it only beside an overlay, so a lone number would show a
+              * change on the canvas and be gone the next time the design was
+              * opened.
+              */}
+            <label className="studio-field">
+              <span>Qoplama</span>
+              <select
+                value={image.overlay ? ("role" in image.overlay ? image.overlay.role : image.overlay.hex) : ""}
+                onChange={(event) => onChange(setOverlay(design, archetype.id, element.id,
+                  event.target.value ? asColor(event.target.value) : null))}
+              >
+                <option value="">Yo‘q</option>
+                {COLOR_ROLES.map((role) => <option key={role} value={role}>{role}</option>)}
+              </select>
+            </label>
+            {image.overlay ? (
+              <Field label="Qoplama shaffofligi" value={image.overlayOpacity ?? 0.35} onCommit={(raw) => {
+                const value = number(raw);
+                if (value !== null) onChange(setOverlay(design, archetype.id, element.id, image.overlay, value));
+              }} />
+            ) : null}
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={image.required}
+                onChange={(event) => onChange(setImageRules(design, archetype.id, element.id,
+                  { required: event.target.checked }))}
+              />
+              Majburiy — rasm topilmasa slayd tanlanmaydi
+            </label>
+          </section>
+        );
+      })() : null}
 
       <section>
         <h4>Shaffoflik</h4>

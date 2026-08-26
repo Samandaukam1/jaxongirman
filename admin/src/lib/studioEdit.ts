@@ -1,7 +1,7 @@
 import {
   CANVAS_HEIGHT, CANVAS_WIDTH,
-  type Archetype, type ColorValue, type Gradient, type GradientStop,
-  type JslaydDocument, type JslaydElement,
+  type Archetype, type Border, type ColorValue, type Corners, type Gradient, type GradientStop,
+  type JslaydDocument, type JslaydElement, type Shadow,
 } from "@jaxongirman/jslayd";
 
 /**
@@ -493,4 +493,187 @@ export function distribute(
     cursor += element.geometry[size] + gap;
   }
   return next;
+}
+
+/* ------------------------------------------------------ border and corners */
+
+/**
+ * A border is all four of its parts or none of them.
+ *
+ * The language has no partial border — `{width: 2}` with no colour is not a
+ * thin border, it is a document a renderer has to guess at, and §16 is explicit
+ * that a renderer never guesses. So switching one on writes a complete border
+ * and switching it off writes null, rather than leaving a husk behind with a
+ * zero width that every exporter then has to decide about.
+ */
+export const DEFAULT_BORDER: Border = { width: 2, color: { role: "border" }, style: "solid", opacity: 1 };
+
+/**
+ * Which elements carry which box properties, taken from the language.
+ *
+ * Not `"border" in element`. That reads true only because the compiler happens
+ * to emit an explicit null for every field, so the guard silently depends on an
+ * emit detail — and it answers "no" for a hand-built element and for anything a
+ * future compiler leaves out. An icon has no border because `IconElement` does
+ * not define one, and that is a fact about the language, so it is written as
+ * one. Adding a property an element's type does not define produces a document
+ * that appears to save and loses the change on the next read.
+ */
+const TAKES_BORDER = new Set([
+  "text", "quote", "number", "badge", "image", "frame",
+  "shape", "divider", "decorative", "line", "stat",
+]);
+const TAKES_CORNERS = new Set([...TAKES_BORDER, "table"]);
+const TAKES_SHADOW = new Set(["image", "frame", "shape", "divider", "decorative", "line", "stat"]);
+
+export const takesBorder = (element: JslaydElement | null): boolean => Boolean(element && TAKES_BORDER.has(element.type));
+export const takesCorners = (element: JslaydElement | null): boolean => Boolean(element && TAKES_CORNERS.has(element.type));
+export const takesShadow = (element: JslaydElement | null): boolean => Boolean(element && TAKES_SHADOW.has(element.type));
+
+export function setBorder(
+  document: JslaydDocument, archetypeId: string, elementId: string, border: Border | null,
+): JslaydDocument {
+  return withElement(document, archetypeId, elementId, (element) => (
+    takesBorder(element) ? { ...element, border } : element));
+}
+
+export function patchBorder(
+  document: JslaydDocument, archetypeId: string, elementId: string, patch: Partial<Border>,
+): JslaydDocument {
+  const element = elementOf(archetypeOf(document, archetypeId), elementId);
+  const current = (element as { border?: Border | null } | null)?.border ?? DEFAULT_BORDER;
+  return setBorder(document, archetypeId, elementId, { ...current, ...patch });
+}
+
+/** One radius for all four, or four separate ones — the DSL stores four. */
+export function setCorners(
+  document: JslaydDocument, archetypeId: string, elementId: string, corners: Corners | null,
+): JslaydDocument {
+  return withElement(document, archetypeId, elementId, (element) => (
+    takesCorners(element) ? { ...element, corners } : element));
+}
+
+export const evenCorners = (radius: number): Corners =>
+  ({ topLeft: radius, topRight: radius, bottomRight: radius, bottomLeft: radius });
+
+/** True when all four corners agree, which is what the single-field UI shows. */
+export const cornersAreEven = (corners: Corners | null): boolean =>
+  !corners || (corners.topLeft === corners.topRight
+    && corners.topRight === corners.bottomRight
+    && corners.bottomRight === corners.bottomLeft);
+
+/* ----------------------------------------------------------------- shadows */
+
+/**
+ * A shadow with no blur and no offset is invisible, and the design still has to
+ * carry it. So the default is one that can be seen — an author who wants it
+ * subtler can say so, and an author who wants none removes it.
+ */
+export const DEFAULT_SHADOW: Shadow = {
+  offsetX: 0, offsetY: 12, blur: 32, spread: 0, opacity: 0.18, color: { hex: "#000000" },
+};
+
+export function setShadows(
+  document: JslaydDocument, archetypeId: string, elementId: string, shadows: readonly Shadow[],
+): JslaydDocument {
+  return withElement(document, archetypeId, elementId, (element) => (
+    takesShadow(element) ? { ...element, shadows } : element));
+}
+
+export function patchShadow(
+  document: JslaydDocument, archetypeId: string, elementId: string, at: number, patch: Partial<Shadow>,
+): JslaydDocument {
+  const element = elementOf(archetypeOf(document, archetypeId), elementId);
+  const shadows = (element as { shadows?: readonly Shadow[] } | null)?.shadows ?? [];
+  if (!shadows[at]) return document;
+  return setShadows(document, archetypeId, elementId,
+    shadows.map((shadow, index) => (index === at ? { ...shadow, ...patch } : shadow)));
+}
+
+/**
+ * Three, and no more.
+ *
+ * Every shadow is another blur the renderer, the PDF exporter and the PowerPoint
+ * writer each pay for, and past three nobody can see the difference on a slide
+ * viewed across a room. The cap is here rather than in the panel because the
+ * panel is not the only thing that will ever add one.
+ */
+export const MAX_SHADOWS = 3;
+
+export function addShadow(document: JslaydDocument, archetypeId: string, elementId: string): JslaydDocument {
+  const element = elementOf(archetypeOf(document, archetypeId), elementId);
+  if (!takesShadow(element)) return document;
+  const shadows = (element as { shadows?: readonly Shadow[] } | null)?.shadows ?? [];
+  if (shadows.length >= MAX_SHADOWS) return document;
+  return setShadows(document, archetypeId, elementId, [...shadows, DEFAULT_SHADOW]);
+}
+
+export function removeShadow(
+  document: JslaydDocument, archetypeId: string, elementId: string, at: number,
+): JslaydDocument {
+  const element = elementOf(archetypeOf(document, archetypeId), elementId);
+  const shadows = (element as { shadows?: readonly Shadow[] } | null)?.shadows ?? [];
+  if (!shadows[at]) return document;
+  return setShadows(document, archetypeId, elementId, shadows.filter((_, index) => index !== at));
+}
+
+/* ------------------------------------------------------------------- image */
+
+/** The picture rules an image slot carries, none of which are a picture. */
+export type ImageRules = {
+  slot: string;
+  fit: "cover" | "contain" | "fill";
+  focus: { x: number; y: number };
+  orientation: "landscape" | "portrait" | "square" | "any";
+  required: boolean;
+  queryFrom: readonly string[];
+  stylePreference: string | null;
+  overlayOpacity: number;
+};
+
+/**
+ * The tint over a picture, written whole.
+ *
+ * An opacity on its own does nothing and does not survive being saved: the
+ * language writes the opacity only beside an overlay, because an opacity with
+ * no colour is not a fainter tint, it is a number the renderer has nothing to
+ * apply. So the colour and its strength are one operation, and clearing the
+ * colour clears both.
+ */
+export function setOverlay(
+  document: JslaydDocument, archetypeId: string, elementId: string,
+  overlay: ColorValue | Gradient | null, opacity?: number,
+): JslaydDocument {
+  return withElement(document, archetypeId, elementId, (element) => {
+    if (element.type !== "image" && element.type !== "frame") return element;
+    return {
+      ...element,
+      overlay,
+      overlayOpacity: overlay
+        ? Math.min(1, Math.max(0, opacity ?? element.overlayOpacity ?? 0.35))
+        : 0,
+    };
+  });
+}
+
+export function setImageRules(
+  document: JslaydDocument, archetypeId: string, elementId: string, patch: Partial<ImageRules>,
+): JslaydDocument {
+  return withElement(document, archetypeId, elementId, (element) => {
+    if (element.type !== "image" && element.type !== "frame") return element;
+    const next = { ...element, ...patch };
+    // The focal point is a fraction of the box, so a value outside 0–1 is not a
+    // crop somebody chose — it is a number that will place the crop off the
+    // picture entirely.
+    if (patch.focus) {
+      next.focus = {
+        x: Math.min(1, Math.max(0, patch.focus.x)),
+        y: Math.min(1, Math.max(0, patch.focus.y)),
+      };
+    }
+    if (patch.overlayOpacity !== undefined) {
+      next.overlayOpacity = Math.min(1, Math.max(0, patch.overlayOpacity));
+    }
+    return next;
+  });
 }
