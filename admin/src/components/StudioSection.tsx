@@ -42,6 +42,7 @@ export function StudioSection({
   family,
   onChange,
   onFamily,
+  onSaveDraft,
 }: {
   document: JslaydDocument;
   /** Null until the design has been saved; the writer needs a row to read. */
@@ -49,6 +50,15 @@ export function StudioSection({
   family: string | null;
   /** The edited design, and the source it was written back as. */
   onChange: (next: JslaydDocument, source: string) => void;
+  /**
+   * Save the draft and hand back its id.
+   *
+   * The writer reads the design from the database, so an unsaved design has
+   * nothing to read. Making the button dead and explaining why in a tooltip
+   * left the only way forward in another section — the exact puzzle the font
+   * panel above already had to solve. So the button saves first.
+   */
+  onSaveDraft: () => Promise<string | null>;
   /** Switches which colour family the preview above draws in, too. */
   onFamily: (code: string | null) => void;
 }) {
@@ -130,11 +140,18 @@ export function StudioSection({
   };
 
   async function writeIt() {
-    if (!designId || !topic.trim()) return;
+    if (!topic.trim()) return;
     setWriting(true);
     setProblem(null);
     try {
-      const report = await writeSample({ designId, archetypeId, topic: topic.trim(), language });
+      // Saved on the way, because the writer reads the design from the server
+      // and a draft that only exists in this tab is not there to be read.
+      const id = designId ?? await onSaveDraft();
+      if (!id) {
+        setProblem("Qoralama saqlanmadi — promptdagi xatolarni tuzatib qayta urinib ko‘ring.");
+        return;
+      }
+      const report = await writeSample({ designId: id, archetypeId, topic: topic.trim(), language });
       setSample(report);
       setPhotoAt(0);
       if (report.empty) setProblem("Bu blueprintda matn joyi yo‘q — namuna yozilmadi.");
@@ -189,6 +206,7 @@ export function StudioSection({
       <p className="panel-hint">
         Elementni sudrab ko‘chiring yoki burchagidan cho‘zing — o‘zgarish yuqoridagi promptga qaytib yoziladi.
         Namunaviy slayd esa haqiqiy yozuvchi bilan yoziladi: agar matn shu yerda sig‘masa, foydalanuvchida ham sig‘maydi.
+        {designId ? "" : " Dizayn hali saqlanmagan — birinchi bosishda o‘zi saqlanadi."}
       </p>
 
       <div className="studio-bar">
@@ -238,12 +256,13 @@ export function StudioSection({
         <button
           type="button"
           className="primary-button compact"
-          disabled={writing || !designId || !topic.trim()}
+          disabled={writing || !topic.trim()}
           onClick={() => void writeIt()}
-          title={designId ? undefined : "Avval qoralamani saqlang"}
         >
           <Sparkles size={15} strokeWidth={1.9} />
-          {writing ? "Yozilmoqda…" : "Namunaviy slayd yaratish"}
+          {writing
+            ? (designId ? "Yozilmoqda…" : "Saqlanmoqda…")
+            : "Namunaviy slayd yaratish"}
         </button>
         {sample && !sample.empty ? (
           <button type="button" className="secondary-button compact" onClick={() => setSample(null)}>

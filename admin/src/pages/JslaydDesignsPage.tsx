@@ -558,7 +558,7 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
    * while the way to do that is further down the page and switched off is not
    * an instruction, it is a puzzle. So saving compiles on the way.
    */
-  async function save(thenPublish: boolean) {
+  async function save(thenPublish: boolean): Promise<string | null> {
     let ready = outcome;
     if (!ready?.document) {
       setBusy(true);
@@ -575,7 +575,7 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
       // a count on its own is not information, and neither is being sent
       // somewhere else to find out.
       setError("Prompt kompilyatsiya qilinmadi, shuning uchun qoralama saqlanmadi.");
-      return;
+      return null;
     }
     // Narrowed once, so the rest of the body is not re-proving it.
     const compiled = { ...ready, document: ready.document };
@@ -590,7 +590,7 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
         `Slug faqat kichik lotin harflari, raqamlar va chiziqchadan iborat bo‘ladi (3–64 belgi): “${slugToSave}”.`
         + (suggestion ? ` Masalan: “${suggestion}”.` : " Lotin harflaridan foydalaning."),
       );
-      return;
+      return null;
     }
 
     setBusy(true);
@@ -650,8 +650,10 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
       } else {
         setMessage("Qoralama saqlandi.");
       }
+      return id;
     } catch (requestError) {
       setError(errorMessage(requestError));
+      return null;
     } finally {
       setBusy(false);
     }
@@ -915,6 +917,7 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
           family={family}
           onChange={(_next, source) => { set("source", source); setSaved(false); }}
           onFamily={setFamily}
+          onSaveDraft={() => save(false)}
         />
       ) : null}
     </div>
