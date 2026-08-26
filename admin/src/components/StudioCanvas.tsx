@@ -70,12 +70,18 @@ export function StudioCanvas({
   const scale = width / CANVAS.width;
 
   /**
-   * The real render, recomputed only when the design or the slide changes.
+   * The real render, recomputed whenever the design changes — including on
+   * every frame of a drag.
    *
-   * Not on every pointer move: a drag is sixty of those a second, and
-   * recompiling a slide for each one is how an editor starts to feel like a
-   * form. The overlay moves with the pointer; the render catches up when the
-   * gesture ends.
+   * That is deliberate rather than accidental. Resizing a text box and seeing
+   * the words reflow *is* the question an author is asking: whether the title
+   * still fits at this width. An overlay that moves while the artwork waits for
+   * the gesture to end answers it one second too late, after the decision has
+   * been made.
+   *
+   * What is capped is how often: pointer events outrun the display on a
+   * trackpad, so `move` coalesces them onto animation frames and this runs once
+   * per frame at most.
    */
   const rendered = useMemo(() => {
     try {
@@ -95,9 +101,17 @@ export function StudioCanvas({
   useEffect(() => {
     if (!gesture) return;
 
-    const move = (event: PointerEvent) => {
-      const dx = (event.clientX - gesture.startX) / scale;
-      const dy = (event.clientY - gesture.startY) / scale;
+    let frame = 0;
+    let pending: { x: number; y: number } | null = null;
+
+    const apply = () => {
+      frame = 0;
+      const point = pending;
+      pending = null;
+      if (!point) return;
+
+      const dx = (point.x - gesture.startX) / scale;
+      const dy = (point.y - gesture.startY) / scale;
 
       if (gesture.kind === "resize") {
         onPreview(moveElement(design, archetypeId, gesture.id, resizeBox(gesture.box, gesture.handle, dx, dy)));
@@ -113,12 +127,33 @@ export function StudioCanvas({
       onPreview(nudgeElements(anchor.current ?? design, archetypeId, gesture.ids, dx, dy));
     };
 
-    const up = () => { setGesture(null); anchor.current = null; onGestureEnd(); };
+    /**
+     * One render per frame, not one per event.
+     *
+     * A trackpad reports more often than the screen refreshes, so without this
+     * the slide is laid out several times for a single frame the viewer sees —
+     * work nobody looks at, on the one code path that has to stay smooth.
+     */
+    const move = (event: PointerEvent) => {
+      pending = { x: event.clientX, y: event.clientY };
+      if (!frame) frame = window.requestAnimationFrame(apply);
+    };
+
+    const up = () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      // The last movement still counts: releasing between frames must not drop
+      // the final few pixels of a drag.
+      apply();
+      setGesture(null);
+      anchor.current = null;
+      onGestureEnd();
+    };
 
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
     window.addEventListener("pointercancel", up);
     return () => {
+      if (frame) window.cancelAnimationFrame(frame);
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", up);
