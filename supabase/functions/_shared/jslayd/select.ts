@@ -33,24 +33,49 @@ export type Selection = {
  * would not.
  */
 const SUBSTITUTES: Record<ArchetypePurpose, readonly ArchetypePurpose[]> = {
-  cover: ["section", "title_content"],
+  cover: ["minimal_cover", "section", "title_content"],
+  minimal_cover: ["cover", "section", "title_content"],
   section: ["cover", "title_content"],
+  agenda: ["title_content", "features", "two_column"],
+  // An introduction and an "about us" are both a paragraph with something
+  // beside it; neither is a page a design is likely to draw specially, so both
+  // fall to the ordinary text pages rather than to each other first.
+  introduction: ["title_content", "text_image", "section"],
+  about: ["title_content", "text_image", "features"],
+
   title_content: ["text_image", "two_column", "image_text"],
   text_image: ["image_text", "title_content", "two_column"],
   image_text: ["text_image", "title_content", "two_column"],
   full_image: ["text_image", "image_text", "section"],
-  quote: ["section", "title_content"],
-  statistics: ["title_content", "chart", "two_column"],
-  chart: ["statistics", "title_content", "two_column"],
-  table: ["two_column", "title_content", "comparison"],
+  // Three or four peer cards. `three_column` is the same composition under the
+  // name the language used before this one existed.
+  features: ["three_column", "two_column", "title_content"],
+
+  statistics: ["kpi_cards", "title_content", "chart", "two_column"],
+  // Cards carrying a figure each: several statistics, laid out in a row.
+  kpi_cards: ["statistics", "features", "three_column", "title_content"],
+  // Several visuals at once. A design with no dashboard draws the chart it has
+  // and loses the density, which is better than losing the numbers.
+  dashboard: ["chart", "kpi_cards", "statistics", "title_content"],
+  chart: ["dashboard", "statistics", "title_content", "two_column"],
   comparison: ["two_column", "table", "title_content"],
   timeline: ["process", "three_column", "title_content"],
-  process: ["timeline", "three_column", "title_content"],
-  two_column: ["title_content", "comparison", "three_column"],
-  three_column: ["two_column", "title_content"],
-  agenda: ["title_content", "two_column"],
+  process: ["timeline", "infographic", "three_column", "title_content"],
+  // A drawn explanation. Falls to the two page kinds that already sequence
+  // things, because an infographic that cannot be drawn is a set of steps.
+  infographic: ["process", "timeline", "features", "title_content"],
+
+  // People are pictures with names under them, which is what a gallery is.
+  team: ["gallery", "features", "three_column", "title_content"],
+  gallery: ["full_image", "three_column", "image_text", "title_content"],
+  table: ["two_column", "title_content", "comparison"],
+  quote: ["section", "title_content"],
+
   conclusion: ["section", "title_content", "thank_you"],
   thank_you: ["conclusion", "section", "cover"],
+
+  two_column: ["title_content", "comparison", "three_column"],
+  three_column: ["features", "two_column", "title_content"],
   references: ["title_content", "conclusion"],
   custom: ["title_content"],
 };

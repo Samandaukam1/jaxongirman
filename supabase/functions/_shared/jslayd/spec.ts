@@ -259,24 +259,59 @@ export type Condition = (typeof CONDITIONS)[number];
  * declare `purpose: text_image` and the generator treats them as variants (§41).
  */
 export const ARCHETYPE_PURPOSES = [
+  /**
+   * The twenty-five kinds of slide a deck is built from, plus what the
+   * language needed before there were twenty-five.
+   *
+   * The list is ordered the way a deck runs — opening, framing, body, evidence,
+   * closing — because that is how an author reads it when deciding what a page
+   * is, and a purpose is only useful if the right one is easy to find.
+   *
+   * Nothing is ever removed from here. A published design carries its purposes
+   * in `compiled_config`, so dropping one would make every deck built on it
+   * fail to read. `two_column`, `three_column` and `references` predate the
+   * classification and stay for exactly that reason; `custom` is the escape
+   * hatch for a page that is none of these.
+   */
+
+  // Opening
   "cover",
+  "minimal_cover",
   "section",
+  "agenda",
+  "introduction",
+  "about",
+
+  // Body
   "title_content",
   "text_image",
   "image_text",
   "full_image",
-  "quote",
+  "features",
+
+  // Evidence
   "statistics",
+  "kpi_cards",
+  "dashboard",
   "chart",
-  "table",
   "comparison",
   "timeline",
   "process",
-  "two_column",
-  "three_column",
-  "agenda",
+  "infographic",
+
+  // People and work
+  "team",
+  "gallery",
+  "table",
+  "quote",
+
+  // Closing
   "conclusion",
   "thank_you",
+
+  // Structural, older than the classification above.
+  "two_column",
+  "three_column",
   "references",
   "custom",
 ] as const;

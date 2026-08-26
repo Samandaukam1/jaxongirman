@@ -6,6 +6,8 @@ import { buildJslayd } from "./build.mjs";
 const dir = buildJslayd();
 const { compile } = await import(`${dir}/compile.js`);
 const { analyze } = await import(`${dir}/analyze.js`);
+const { ARCHETYPE_PURPOSES } = await import(`${dir}/spec.js`);
+const { planArchetypes } = await import(`${dir}/select.js`);
 const { readDocument, serialize, contentHash } = await import(`${dir}/serialize.js`);
 const { SAMPLE_PROMPT, PROMPT_STANDARD } = await import(`${dir}/standard.js`);
 const { deriveColorFamily, extendChartPalette, contrastRatio } = await import(`${dir}/colors.js`);
@@ -491,5 +493,67 @@ test("a typed name is corrected into the nearest legal slug", async () => {
     if (slug === null) continue;
     assert.ok(SLUG_PATTERN.test(slug), `${typed} produced an illegal slug: ${slug}`);
     assert.ok(slug.length >= 3 && slug.length <= 64);
+  }
+});
+
+/* ------------------------------------------------------- slide classification */
+
+test("every slide kind can be asked for, and lands somewhere", () => {
+  /**
+   * A design carrying only the four pages every deck needs still has to answer
+   * for all twenty-five kinds. That is what the substitution table is for: a
+   * plan asking for `team` when the design draws no team page must get the
+   * nearest thing rather than nothing, because nothing means a slide the
+   * customer paid for is missing.
+   */
+  const { document } = compile(SAMPLE_PROMPT);
+  assert.ok(document, "the sample design must compile");
+
+  for (const purpose of ARCHETYPE_PURPOSES) {
+    const [chosen] = planArchetypes(document, [{ purpose }]);
+    assert.ok(chosen?.archetype, `${purpose} had nowhere to go`);
+  }
+});
+
+test("a substitution never names a slide kind that does not exist", () => {
+  // The table is written by hand and read by the generator; a typo in it is a
+  // purpose that silently never matches, which looks like a missing design.
+  const { document } = compile(SAMPLE_PROMPT);
+  const known = new Set(ARCHETYPE_PURPOSES);
+
+  for (const purpose of ARCHETYPE_PURPOSES) {
+    const [chosen] = planArchetypes(document, [{ purpose }]);
+    assert.ok(known.has(chosen.archetype.purpose),
+      `${purpose} fell back to "${chosen.archetype.purpose}", which is not a slide kind`);
+  }
+});
+
+test("the twenty-five kinds a deck is built from are all in the vocabulary", () => {
+  const classification = [
+    "cover", "minimal_cover", "section", "agenda", "introduction", "about",
+    "title_content", "text_image", "image_text", "full_image", "features",
+    "statistics", "kpi_cards", "dashboard", "chart", "comparison", "timeline",
+    "process", "infographic",
+    "team", "gallery", "table", "quote",
+    "conclusion", "thank_you",
+  ];
+  assert.equal(classification.length, 25);
+  for (const purpose of classification) {
+    assert.ok(ARCHETYPE_PURPOSES.includes(purpose), `${purpose} is not a purpose`);
+  }
+
+  // Nothing is ever removed: a published design carries its purposes in
+  // `compiled_config`, so dropping one makes every deck built on it unreadable.
+  for (const older of ["two_column", "three_column", "references", "custom"]) {
+    assert.ok(ARCHETYPE_PURPOSES.includes(older), `${older} was dropped from the vocabulary`);
+  }
+});
+
+test("the standard tells an author how to classify a slide", () => {
+  // The list of tokens was always there; what an author needs is which one a
+  // page is, and that is a sentence per kind rather than a word.
+  assert.match(PROMPT_STANDARD, /SLAYD TASNIFI/);
+  for (const purpose of ["minimal_cover", "kpi_cards", "dashboard", "infographic", "team", "gallery"]) {
+    assert.ok(PROMPT_STANDARD.includes(purpose), `the standard never mentions ${purpose}`);
   }
 });
