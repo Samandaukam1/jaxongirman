@@ -1104,3 +1104,21 @@ td small { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; 
   background: var(--surface); color: var(--ink-muted); font-size: 11px;
 }
 .studio-shadow-foot button:hover { color: var(--bad-ink); border-color: var(--bad-rim); }
+
+/* A group shows its extent and no handles: resizing several elements has more
+   than one reasonable meaning, and guessing one is worse than offering neither. */
+.studio-group-bounds {
+  position: absolute;
+  border: 1px dashed var(--brand);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+.studio-align { display: flex; gap: 4px; flex-wrap: wrap; }
+.studio-align button {
+  width: 34px; height: 32px;
+  display: grid; place-items: center;
+  border: 1px solid var(--border); border-radius: 9px;
+  background: var(--field); color: var(--ink-muted);
+}
+.studio-align button:hover { color: var(--brand); border-color: var(--brand); }

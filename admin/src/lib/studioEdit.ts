@@ -677,3 +677,56 @@ export function setImageRules(
     return next;
   });
 }
+
+/* -------------------------------------------------------- moving together */
+
+/** The rectangle enclosing several elements, in canvas units. */
+export function boundingBox(archetype: Archetype | null, ids: readonly string[]): Box | null {
+  const boxes = (archetype?.elements ?? []).filter((element) => ids.includes(element.id)).map((element) => element.geometry);
+  if (!boxes.length) return null;
+
+  const left = Math.min(...boxes.map((box) => box.x));
+  const top = Math.min(...boxes.map((box) => box.y));
+  const right = Math.max(...boxes.map((box) => box.x + box.width));
+  const bottom = Math.max(...boxes.map((box) => box.y + box.height));
+  return { x: left, y: top, width: right - left, height: bottom - top };
+}
+
+/**
+ * Several elements moved by one delta.
+ *
+ * The delta is clamped against the group's own bounding box, not against each
+ * element in turn. Clamping individually is the obvious version and it deforms
+ * the selection: dragging three cards toward the left edge stops the leftmost
+ * at zero while the other two keep going, so a row that was evenly spaced
+ * arrives bunched — and the author's undo puts it back, which makes the bug
+ * look intermittent rather than certain.
+ *
+ * Snapping is applied to the delta for the same reason. Snapping each element
+ * to the ladder separately quietly closes gaps that were deliberately off it.
+ */
+export function nudgeElements(
+  document: JslaydDocument, archetypeId: string, ids: readonly string[], dx: number, dy: number,
+): JslaydDocument {
+  const archetype = archetypeOf(document, archetypeId);
+  const bounds = boundingBox(archetype, ids);
+  if (!archetype || !bounds) return document;
+
+  const moved = clampBox({
+    x: snap(bounds.x + dx), y: snap(bounds.y + dy), width: bounds.width, height: bounds.height,
+  });
+  const shiftX = moved.x - bounds.x;
+  const shiftY = moved.y - bounds.y;
+  if (shiftX === 0 && shiftY === 0) return document;
+
+  return {
+    ...document,
+    archetypes: document.archetypes.map((entry) => (entry.id !== archetypeId ? entry : {
+      ...entry,
+      elements: entry.elements.map((element) => (!ids.includes(element.id) ? element : {
+        ...element,
+        geometry: { ...element.geometry, x: element.geometry.x + shiftX, y: element.geometry.y + shiftY },
+      })),
+    })),
+  };
+}

@@ -4,8 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { previewOf, toCanvas } from "@/lib/jslayd";
 import {
-  CANVAS, HANDLES, archetypeOf, elementOf, moveElement, resizeBox, snap,
-  type Handle,
+  CANVAS, HANDLES, archetypeOf, boundingBox, elementOf, moveElement, nudgeElements,
+  resizeBox, snap, type Handle,
 } from "@/lib/studioEdit";
 
 /**
@@ -28,7 +28,7 @@ import {
  */
 
 type Gesture =
-  | { kind: "move"; id: string; startX: number; startY: number; box: Box }
+  | { kind: "move"; ids: readonly string[]; startX: number; startY: number; box: Box }
   | { kind: "resize"; id: string; handle: Handle; startX: number; startY: number; box: Box }
   | null;
 
@@ -37,7 +37,7 @@ type Box = { x: number; y: number; width: number; height: number };
 export function StudioCanvas({
   document: design,
   archetypeId,
-  selectedId,
+  selectedIds,
   width = 880,
   family = null,
   slide = null,
@@ -48,13 +48,14 @@ export function StudioCanvas({
 }: {
   document: JslaydDocument;
   archetypeId: string;
-  selectedId: string | null;
+  selectedIds: readonly string[];
   width?: number;
   /** The colour family to draw in; null is the design's own. */
   family?: string | null;
   /** Real content, when a sample has been written. Null draws placeholders. */
   slide?: SlideData | null;
-  onSelect: (id: string | null) => void;
+  /** Shift or ⌘ held means add to the selection rather than replace it. */
+  onSelect: (ids: readonly string[]) => void;
   /** Every frame of a drag. Local state only — nothing is persisted here. */
   onPreview: (next: JslaydDocument) => void;
   onGestureStart: () => void;
@@ -62,6 +63,8 @@ export function StudioCanvas({
 }) {
   const surface = useRef<HTMLDivElement>(null);
   const [gesture, setGesture] = useState<Gesture>(null);
+  /** The document as it was when the drag began; see `move` below. */
+  const anchor = useRef<JslaydDocument | null>(null);
 
   const archetype = archetypeOf(design, archetypeId);
   const scale = width / CANVAS.width;
@@ -95,13 +98,22 @@ export function StudioCanvas({
     const move = (event: PointerEvent) => {
       const dx = (event.clientX - gesture.startX) / scale;
       const dy = (event.clientY - gesture.startY) / scale;
-      const next = gesture.kind === "move"
-        ? { ...gesture.box, x: gesture.box.x + dx, y: gesture.box.y + dy }
-        : resizeBox(gesture.box, gesture.handle, dx, dy);
-      onPreview(moveElement(design, archetypeId, gesture.id, next));
+
+      if (gesture.kind === "resize") {
+        onPreview(moveElement(design, archetypeId, gesture.id, resizeBox(gesture.box, gesture.handle, dx, dy)));
+        return;
+      }
+
+      /**
+       * Applied to the document the gesture started from, not to the last
+       * frame. A drag that accumulates deltas frame by frame drifts, because
+       * each frame's snap rounds again — and the element ends up a few units
+       * from where the pointer is, further the longer the drag.
+       */
+      onPreview(nudgeElements(anchor.current ?? design, archetypeId, gesture.ids, dx, dy));
     };
 
-    const up = () => { setGesture(null); onGestureEnd(); };
+    const up = () => { setGesture(null); anchor.current = null; onGestureEnd(); };
 
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
@@ -115,7 +127,7 @@ export function StudioCanvas({
 
   /** Arrow keys nudge by one step of the ladder; shift by a bigger one. */
   useEffect(() => {
-    if (!selectedId) return;
+    if (!selectedIds.length) return;
     const key = (event: KeyboardEvent) => {
       const step = event.shiftKey ? 24 : 4;
       const delta = event.key === "ArrowLeft" ? [-step, 0]
@@ -123,18 +135,19 @@ export function StudioCanvas({
           : event.key === "ArrowUp" ? [0, -step]
             : event.key === "ArrowDown" ? [0, step] : null;
       if (!delta) return;
-      const box = boxOf(selectedId);
-      if (!box) return;
+      // A field in the inspector takes its own arrow keys; nudging the canvas
+      // from under a caret is the kind of help nobody asked for.
+      const active = window.document.activeElement;
+      if (active instanceof HTMLInputElement || active instanceof HTMLSelectElement) return;
+
       event.preventDefault();
       onGestureStart();
-      onPreview(moveElement(design, archetypeId, selectedId, {
-        ...box, x: box.x + delta[0]!, y: box.y + delta[1]!,
-      }));
+      onPreview(nudgeElements(design, archetypeId, selectedIds, delta[0]!, delta[1]!));
       onGestureEnd();
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, [archetypeId, boxOf, design, onGestureEnd, onGestureStart, onPreview, selectedId]);
+  }, [archetypeId, design, onGestureEnd, onGestureStart, onPreview, selectedIds]);
 
   if (!archetype) return <div className="studio-canvas-empty">Slayd tanlanmagan.</div>;
 
@@ -143,21 +156,42 @@ export function StudioCanvas({
     event.stopPropagation();
     const box = boxOf(id);
     if (!box) return;
-    onSelect(id);
+
+    if (handle) {
+      onSelect([id]);
+      onGestureStart();
+      setGesture({ kind: "resize", id, handle, startX: event.clientX, startY: event.clientY, box });
+      return;
+    }
+
+    /**
+     * Pressing an element already in the selection keeps the selection.
+     *
+     * Otherwise dragging three aligned cards is impossible: the press to begin
+     * the drag would collapse the selection to one, and only that one would
+     * move. Adding to a selection is shift or ⌘, as everywhere else.
+     */
+    const adding = event.shiftKey || event.metaKey || event.ctrlKey;
+    const next = adding
+      ? (selectedIds.includes(id) ? selectedIds.filter((entry) => entry !== id) : [...selectedIds, id])
+      : (selectedIds.includes(id) ? selectedIds : [id]);
+    onSelect(next);
+    if (!next.length) return;
+
+    anchor.current = design;
     onGestureStart();
-    setGesture(handle
-      ? { kind: "resize", id, handle, startX: event.clientX, startY: event.clientY, box }
-      : { kind: "move", id, startX: event.clientX, startY: event.clientY, box });
+    setGesture({ kind: "move", ids: next, startX: event.clientX, startY: event.clientY, box });
   };
 
-  const selected = elementOf(archetype, selectedId);
+  const selected = selectedIds.length === 1 ? elementOf(archetype, selectedIds[0]!) : null;
+  const group = selectedIds.length > 1 ? boundingBox(archetype, selectedIds) : null;
 
   return (
     <div
       className="studio-canvas"
       ref={surface}
       style={{ width, height: width * (CANVAS.height / CANVAS.width) }}
-      onPointerDown={() => onSelect(null)}
+      onPointerDown={() => onSelect([])}
     >
       {/* The engine's output. Never interactive: the layer above owns the pointer. */}
       <div className="studio-canvas-render" aria-hidden>
@@ -167,7 +201,7 @@ export function StudioCanvas({
       <div className="studio-canvas-hits">
         {archetype.elements.map((element) => {
           const box = element.geometry;
-          const isSelected = element.id === selectedId;
+          const isSelected = selectedIds.includes(element.id);
           return (
             <button
               key={element.id}
@@ -185,6 +219,24 @@ export function StudioCanvas({
             />
           );
         })}
+
+        {/**
+          * A group shows its extent but no handles.
+          *
+          * Resizing several elements at once has more than one reasonable
+          * meaning — scale them, or stretch the box they sit in — and guessing
+          * one is worse than offering neither. Moving and aligning are
+          * unambiguous, so those are what a group can do.
+          */}
+        {group && (
+          <div
+            className="studio-group-bounds"
+            style={{
+              left: group.x * scale, top: group.y * scale,
+              width: group.width * scale, height: group.height * scale,
+            }}
+          />
+        )}
 
         {/* Handles last, so they sit above every hit target including their own. */}
         {selected && (
@@ -215,6 +267,11 @@ export function StudioCanvas({
         <p className="studio-readout">
           {selected.type} · {snap(selected.geometry.x)}, {snap(selected.geometry.y)} ·{" "}
           {snap(selected.geometry.width)} × {snap(selected.geometry.height)}
+        </p>
+      )}
+      {group && (
+        <p className="studio-readout">
+          {selectedIds.length} ta element · {snap(group.width)} × {snap(group.height)}
         </p>
       )}
     </div>

@@ -48,7 +48,7 @@ export function StudioSection({
   onChange: (next: JslaydDocument) => void;
 }) {
   const [history, setHistory] = useState<History>(() => startHistory(compiled));
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<readonly string[]>([]);
   const [archetypeId, setArchetypeId] = useState<string>(compiled.archetypes[0]?.id ?? "");
   const [flags, setFlags] = useState<LayerFlags>({ locked: new Set(), hidden: new Set() });
 
@@ -80,7 +80,7 @@ export function StudioSection({
   useEffect(() => {
     if (!design.archetypes.some((entry) => entry.id === archetypeId)) {
       setArchetypeId(design.archetypes[0]?.id ?? "");
-      setSelectedId(null);
+      setSelectedIds([]);
     }
   }, [archetypeId, design]);
 
@@ -138,7 +138,7 @@ export function StudioSection({
       <div className="studio-bar">
         <select
           value={archetypeId}
-          onChange={(event) => { setArchetypeId(event.target.value); setSelectedId(null); }}
+          onChange={(event) => { setArchetypeId(event.target.value); setSelectedIds([]); }}
           aria-label="Blueprint"
         >
           {design.archetypes.map((entry) => (
@@ -211,9 +211,9 @@ export function StudioSection({
           <StudioLayers
             document={design}
             archetype={archetype}
-            selectedId={selectedId}
+            selectedIds={selectedIds}
             flags={flags}
-            onSelect={setSelectedId}
+            onSelect={setSelectedIds}
             onChange={change}
             onFlags={setFlags}
           />
@@ -222,10 +222,10 @@ export function StudioSection({
         <StudioCanvas
           document={design}
           archetypeId={archetypeId}
-          selectedId={selectedId}
+          selectedIds={selectedIds}
           family={family}
           slide={slide}
-          onSelect={setSelectedId}
+          onSelect={setSelectedIds}
           onPreview={(next) => { setHistory((current) => preview(current, next)); }}
           onGestureStart={() => setHistory((current) => beginGesture(current))}
           onGestureEnd={() => {
@@ -241,7 +241,7 @@ export function StudioSection({
           <StudioInspector
             document={design}
             archetype={archetype}
-            selectedId={selectedId}
+            selectedIds={selectedIds}
             fontFamilies={design.fonts.map((font) => font.name)}
             onChange={change}
           />

@@ -23,7 +23,7 @@ export type LayerFlags = { locked: Set<string>; hidden: Set<string> };
 export function StudioLayers({
   document: design,
   archetype,
-  selectedId,
+  selectedIds,
   flags,
   onSelect,
   onChange,
@@ -31,9 +31,10 @@ export function StudioLayers({
 }: {
   document: JslaydDocument;
   archetype: Archetype | null;
-  selectedId: string | null;
+  selectedIds: readonly string[];
   flags: LayerFlags;
-  onSelect: (id: string | null) => void;
+  /** Shift or ⌘ adds to the selection; a plain click replaces it. */
+  onSelect: (ids: readonly string[]) => void;
   onChange: (next: JslaydDocument) => void;
   onFlags: (next: LayerFlags) => void;
 }) {
@@ -67,7 +68,7 @@ export function StudioLayers({
     const result = renameElement(design, archetype.id, id, draft);
     if (result.error) { setError(result.error); return; }
     onChange(result.document);
-    if (selectedId === id) onSelect(draft.trim());
+    if (selectedIds.includes(id)) onSelect(selectedIds.map((entry) => (entry === id ? draft.trim() : entry)));
     setRenaming(null);
     setError(null);
   };
@@ -75,7 +76,7 @@ export function StudioLayers({
   return (
     <div className="studio-layers">
       {ordered.map((element, index) => {
-        const isSelected = element.id === selectedId;
+        const isSelected = selectedIds.includes(element.id);
         const locked = flags.locked.has(element.id);
         const hidden = flags.hidden.has(element.id);
 
@@ -84,7 +85,13 @@ export function StudioLayers({
             <button
               type="button"
               className="studio-layer-name"
-              onClick={() => onSelect(element.id)}
+              onClick={(event) => {
+                const adding = event.shiftKey || event.metaKey || event.ctrlKey;
+                if (!adding) { onSelect([element.id]); return; }
+                onSelect(selectedIds.includes(element.id)
+                  ? selectedIds.filter((entry) => entry !== element.id)
+                  : [...selectedIds, element.id]);
+              }}
               onDoubleClick={() => { setRenaming(element.id); setDraft(element.id); setError(null); }}
             >
               {renaming === element.id ? (
@@ -119,11 +126,11 @@ export function StudioLayers({
               <button type="button" title="Nusxalash" onClick={() => {
                 const result = duplicateElement(design, archetype.id, element.id);
                 onChange(result.document);
-                if (result.id) onSelect(result.id);
+                if (result.id) onSelect([result.id]);
               }}><Copy size={14} /></button>
               <button type="button" title="O‘chirish" onClick={() => {
                 onChange(removeElement(design, archetype.id, element.id));
-                if (selectedId === element.id) onSelect(null);
+                onSelect(selectedIds.filter((entry) => entry !== element.id));
               }}><Trash2 size={14} /></button>
             </div>
           </div>

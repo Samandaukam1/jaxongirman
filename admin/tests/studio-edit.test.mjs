@@ -74,7 +74,7 @@ const {
   startHistory, undo, addStop, gradientFromPreset, gradientOf, removeStop, setFill, setStop,
   DEFAULT_BORDER, DEFAULT_SHADOW, MAX_SHADOWS, addShadow, cornersAreEven, evenCorners,
   patchBorder, patchShadow, removeShadow, setBorder, setCorners, setImageRules, setShadows,
-  takesBorder, takesCorners, takesShadow,
+  takesBorder, takesCorners, takesShadow, boundingBox, nudgeElements,
 } = studio;
 
 const element = (id, x, y, width, height) => ({
@@ -520,4 +520,48 @@ test("what an element can carry is read from the language, not from what it happ
   assert.equal(setCorners(before, "a1", "i1", evenCorners(8)).archetypes[0].elements[0].corners, undefined);
   assert.equal(setBorder(before, "a1", "i1", DEFAULT_BORDER).archetypes[0].elements[0].border, undefined);
   assert.equal(addShadow(before, "a1", "i1"), before, "an icon cannot be given a shadow");
+});
+
+/* ------------------------------------------------------ moving a selection */
+
+test("a selection moves as one rectangle, not as three elements clamping separately", () => {
+  const before = doc(
+    element("a", 40, 100, 200, 100),
+    element("b", 300, 100, 200, 100),
+    element("c", 560, 100, 200, 100),
+  );
+
+  // Far enough left that the first element alone would hit the wall.
+  const after = nudgeElements(before, "a1", ["a", "b", "c"], -400, 0);
+
+  // The group stops at the edge and keeps its shape: every gap is what it was.
+  assert.equal(boxOf(after, "a").x, 0);
+  assert.equal(boxOf(after, "b").x, 260, "the middle element kept its distance");
+  assert.equal(boxOf(after, "c").x, 520);
+});
+
+test("the bounding box is the rectangle around the selection", () => {
+  const document = doc(
+    element("a", 100, 200, 100, 50),
+    element("b", 400, 100, 200, 400),
+  );
+  assert.deepEqual(boundingBox(document.archetypes[0], ["a", "b"]), { x: 100, y: 100, width: 500, height: 400 });
+  assert.deepEqual(boundingBox(document.archetypes[0], ["a"]), { x: 100, y: 200, width: 100, height: 50 });
+  assert.equal(boundingBox(document.archetypes[0], []), null);
+  assert.equal(boundingBox(document.archetypes[0], ["nope"]), null);
+});
+
+test("elements outside the selection do not move", () => {
+  const before = doc(element("a", 100, 100, 200, 100), element("b", 400, 100, 200, 100));
+  const after = nudgeElements(before, "a1", ["a"], 40, 40);
+
+  assert.deepEqual([boxOf(after, "a").x, boxOf(after, "a").y], [140, 140]);
+  assert.deepEqual([boxOf(after, "b").x, boxOf(after, "b").y], [400, 100]);
+});
+
+test("a nudge that changes nothing returns the same document", () => {
+  const before = doc(element("a", 0, 100, 200, 100));
+  // Already at the wall and pushed further into it.
+  assert.equal(nudgeElements(before, "a1", ["a"], -50, 0), before);
+  assert.equal(nudgeElements(before, "a1", [], 40, 40), before);
 });

@@ -1,10 +1,15 @@
 import type { Archetype, JslaydDocument } from "@jaxongirman/jslayd";
+import {
+  AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical,
+  AlignStartHorizontal, AlignStartVertical, MoveHorizontal, MoveVertical,
+} from "lucide-react";
 import { useMemo } from "react";
 
 import { COLOR_ROLES, GRADIENT_PRESETS, type ColorValue } from "@jaxongirman/jslayd";
 
 import {
-  DEFAULT_BORDER, MAX_SHADOWS, addShadow, addStop, cornersAreEven, elementOf, evenCorners,
+  DEFAULT_BORDER, MAX_SHADOWS, addShadow, addStop, alignElements, cornersAreEven, distribute,
+  elementOf, evenCorners,
   gradientFromPreset, gradientOf, patchBorder, patchShadow, removeShadow, removeStop,
   setBorder, setCorners, setFill, setGeometry, setImageRules, setOverlay, setStop,
   takesBorder, takesCorners, takesShadow, withElement,
@@ -28,7 +33,7 @@ import {
 type Props = {
   document: JslaydDocument;
   archetype: Archetype | null;
-  selectedId: string | null;
+  selectedIds: readonly string[];
   fontFamilies: readonly string[];
   onChange: (next: JslaydDocument) => void;
 };
@@ -58,10 +63,26 @@ function Field({
   );
 }
 
-export function StudioInspector({ document: design, archetype, selectedId, fontFamilies, onChange }: Props) {
-  const element = useMemo(() => elementOf(archetype, selectedId), [archetype, selectedId]);
+export function StudioInspector({ document: design, archetype, selectedIds, fontFamilies, onChange }: Props) {
+  const element = useMemo(
+    () => (selectedIds.length === 1 ? elementOf(archetype, selectedIds[0]!) : null),
+    [archetype, selectedIds],
+  );
 
   if (!archetype) return <p className="studio-empty">Slayd tanlanmagan.</p>;
+
+  /**
+   * Several elements get the operations that mean something for several.
+   *
+   * Not a merged property sheet. Showing one X for three elements has to answer
+   * what X means when they disagree, and every answer is a guess about what the
+   * author meant — while align and distribute are exactly the operations a
+   * multiple selection exists for, and they were already written and tested
+   * with no way to reach them.
+   */
+  if (selectedIds.length > 1) {
+    return <GroupTools design={design} archetypeId={archetype.id} ids={selectedIds} onChange={onChange} />;
+  }
   if (!element) return <p className="studio-empty">Elementni tanlang.</p>;
 
   const geometry = element.geometry;
@@ -555,6 +576,82 @@ export function StudioInspector({ document: design, archetype, selectedId, fontF
           })));
         }} />
       </section>
+    </div>
+  );
+}
+
+/**
+ * What can be done to several elements at once.
+ *
+ * Aligning to the selection's own bounding box rather than to the canvas: three
+ * cards aligned left should meet the leftmost card, not the slide's edge, which
+ * is where they would all end up if the canvas were the reference.
+ */
+function GroupTools({
+  design, archetypeId, ids, onChange,
+}: {
+  design: JslaydDocument;
+  archetypeId: string;
+  ids: readonly string[];
+  onChange: (next: JslaydDocument) => void;
+}) {
+  const alignments = [
+    { key: "left", label: "Chapga", icon: AlignStartVertical },
+    { key: "centerX", label: "Gorizontal markaz", icon: AlignCenterVertical },
+    { key: "right", label: "O‘ngga", icon: AlignEndVertical },
+    { key: "top", label: "Tepaga", icon: AlignStartHorizontal },
+    { key: "middle", label: "Vertikal markaz", icon: AlignCenterHorizontal },
+    { key: "bottom", label: "Pastga", icon: AlignEndHorizontal },
+  ] as const;
+
+  return (
+    <div className="studio-inspector">
+      <header>
+        <strong>{ids.length} ta element</strong>
+        <small>tanlandi</small>
+      </header>
+
+      <section>
+        <h4>Tekislash</h4>
+        <div className="studio-align">
+          {alignments.map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              type="button"
+              title={label}
+              aria-label={label}
+              onClick={() => onChange(alignElements(design, archetypeId, ids, key))}
+            >
+              <Icon size={16} strokeWidth={1.8} />
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <h4>Bir xil oraliq</h4>
+        {/**
+          * Three is the fewest that can be spaced: with two there is nothing
+          * between the outermost pair to move, so the button would do nothing
+          * and look broken rather than say why.
+          */}
+        {ids.length < 3 ? (
+          <p className="studio-note">Kamida uchta element kerak.</p>
+        ) : (
+          <div className="studio-align">
+            <button type="button" title="Gorizontal" onClick={() => onChange(distribute(design, archetypeId, ids, "x"))}>
+              <MoveHorizontal size={16} strokeWidth={1.8} />
+            </button>
+            <button type="button" title="Vertikal" onClick={() => onChange(distribute(design, archetypeId, ids, "y"))}>
+              <MoveVertical size={16} strokeWidth={1.8} />
+            </button>
+          </div>
+        )}
+      </section>
+
+      <p className="studio-note">
+        Sudrab ko‘chirish hammasini birga siljitadi. O‘lchamni o‘zgartirish uchun bitta elementni tanlang.
+      </p>
     </div>
   );
 }
