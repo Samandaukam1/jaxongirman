@@ -86,6 +86,7 @@ export function toCanvas(rendered: RenderedSlide, key: string) {
     slide: { title: null, background: rendered.background as never },
     elements: rendered.elements.map((element, index) => ({
       ...element,
+      content: withPublicUrl(element.content as Record<string, unknown>),
       id: `${key}-${index}`,
       slide_id: key,
       presentation_id: key,
@@ -94,6 +95,28 @@ export function toCanvas(rendered: RenderedSlide, key: string) {
       updated_at: "",
     })) as never[],
   };
+}
+
+/**
+ * A design's own picture, as something a browser can load.
+ *
+ * The engine emits `{storageBucket, storagePath}` for artwork the design ships,
+ * because it has no opinion about how a reader reaches storage. The canvas
+ * reads `url`, so without this every image a design owns drew as an empty
+ * placeholder — and a design imported from PowerPoint is almost entirely images
+ * it owns, so the preview showed the layout with the artwork missing and
+ * nothing anywhere saying why.
+ *
+ * `design-assets` is a public bucket, so this is a URL rather than a signed
+ * request: no round trip, and nothing to expire while somebody is looking.
+ */
+function withPublicUrl(content: Record<string, unknown>): Record<string, unknown> {
+  const bucket = typeof content?.storageBucket === "string" ? content.storageBucket : null;
+  const path = typeof content?.storagePath === "string" ? content.storagePath : null;
+  if (!bucket || !path || content.url) return content;
+
+  const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+  return data?.publicUrl ? { ...content, url: data.publicUrl } : content;
 }
 
 export function allPreviewsOf(document: JslaydDocument, family?: string | null) {

@@ -453,3 +453,34 @@ test("the floor fires when the palette collides, and lands on black or white", (
   // count depends on the sample and is not the property worth pinning.
   assert.ok(rescued.length > 0, "kontrast qoidasi umuman ishlamadi");
 });
+
+test("a picture reaches the slide through the slot the renderer reads", () => {
+  /**
+   * The lookup is `slide.images[element.slot]`, not `[element.id]`, and the two
+   * are different strings on every design in the corpus. Binding by id makes
+   * every lookup miss and the slide renders the design's placeholder — which is
+   * a legitimate state for a slide with no photograph, so nothing anywhere
+   * reports a problem and the picture is simply never there.
+   *
+   * Asserted from the renderer's side so it stays true if the field is renamed.
+   */
+  const withImage = DESIGN.archetypes.find((entry) =>
+    entry.elements.some((element) => element.type === "image" || element.type === "frame"));
+  if (!withImage) return; // The sample draws no picture; nothing to bind.
+
+  const image = withImage.elements.find((element) => element.type === "image" || element.type === "frame");
+  assert.ok(image.slot, "an image element carries a slot");
+  assert.notEqual(image.slot, image.id, "slot and id are different strings, which is why this matters");
+
+  const slide = { ...fullSlide(withImage.purpose), images: { [image.slot]: { url: "https://example.test/p.jpg" } } };
+  const rendered = renderArchetype(DESIGN, withImage, slide);
+  const drawn = rendered.elements.filter((entry) => entry.type === "image");
+  assert.ok(drawn.some((entry) => JSON.stringify(entry).includes("example.test")),
+    "the picture bound to the slot was not drawn");
+
+  // The same picture bound to the element's id instead reaches nothing.
+  const wrong = { ...fullSlide(withImage.purpose), images: { [image.id]: { url: "https://example.test/p.jpg" } } };
+  const missed = renderArchetype(DESIGN, withImage, wrong);
+  assert.ok(!JSON.stringify(missed).includes("example.test"),
+    "binding by element id must not accidentally work, or this test proves nothing");
+});

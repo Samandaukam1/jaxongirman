@@ -76,6 +76,13 @@ async function call(body: Record<string, unknown>): Promise<unknown> {
  * Done here rather than on the server because the server does not know which
  * slots this blueprint draws — that is the document's business, and the
  * document is already open in this tab.
+ *
+ * Keyed by the element's `slot`, which is what the renderer looks up: two image
+ * elements can share one slot on purpose, so a design that draws the same
+ * picture twice gets it twice. Keyed by element id — the obvious mistake, and
+ * the one this made — every lookup misses, and the slide renders with the
+ * design's placeholder as though no photograph had been found at all. Nothing
+ * reports a problem, because a missing picture is a legitimate state.
  */
 export function withPhoto(slide: SlideData, document: JslaydDocument, archetypeId: string, url: string | null): SlideData {
   if (!url) return slide;
@@ -84,7 +91,9 @@ export function withPhoto(slide: SlideData, document: JslaydDocument, archetypeI
 
   const images: SlideData["images"] = { ...slide.images };
   for (const element of archetype.elements) {
-    if (element.type === "image") images[element.id] = { url };
+    if (element.type !== "image" && element.type !== "frame") continue;
+    const slot = (element as { slot?: string }).slot;
+    if (slot) images[slot] = { url };
   }
   return { ...slide, images };
 }
