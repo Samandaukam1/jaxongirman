@@ -1,4 +1,7 @@
-import { decompile, SAMPLE_PROMPT, SLUG_PATTERN, TIERS, TIER_LABELS, toSlug, type Tier } from "@jaxongirman/jslayd";
+import {
+  decompile, SAMPLE_PROMPT, SLUG_PATTERN, TIERS, TIER_LABELS, toSlug,
+  type FontDeclaration, type Tier,
+} from "@jaxongirman/jslayd";
 import { ScaledSlide } from "@jaxongirman/slide-dom";
 import { Download, Plus, Rocket, Search, Trash2, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -340,8 +343,30 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
   const [kept, setKept] = useState<KeptDraft<Draft> | null>(() => recallDraft(draft.id, draft));
   const [saved, setSaved] = useState(false);
 
+  /**
+   * Fields the author has taken over from the prompt.
+   *
+   * The prompt already declares a name, a slug, a tier, a description and
+   * whether the design is premium — and `save` has always fallen back to them,
+   * so the form's job was to restate what the text below it already said, in
+   * five boxes somebody had to copy by hand. Now the prompt fills them.
+   *
+   * Typing in a field claims it: from then on the prompt stops writing there,
+   * because a form that overwrites what you just typed every time the text
+   * recompiles is worse than one that stays empty.
+   */
+  const FILLED = ["name", "slug", "tier", "description", "premium"] as const;
+  const [claimed, setClaimed] = useState<Set<keyof Draft>>(() => new Set(
+    // A saved design opens showing what was saved. Its prompt and its stored
+    // tier can legitimately disagree — the dropdown is what `save` writes — and
+    // silently flipping a published design's tier on open would be the prompt
+    // overruling a decision somebody already made.
+    draft.id ? FILLED : [],
+  ));
+
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => {
     setSaved(false);
+    setClaimed((current) => (current.has(key) ? current : new Set(current).add(key)));
     setForm((current) => ({ ...current, [key]: value }));
   };
 
@@ -390,6 +415,34 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
     }, 350);
     return () => { live = false; window.clearTimeout(timer); };
   }, [form.source]);
+
+  /**
+   * The prompt fills the form, for every field nobody has claimed.
+   *
+   * Runs off the compiled document rather than off the text, so a half-typed
+   * `[DESIGN]` block does not put half a slug in the field and then take it
+   * back a keystroke later.
+   */
+  const design = outcome?.document?.design;
+  useEffect(() => {
+    if (!design) return;
+    setForm((current) => {
+      const next = { ...current };
+      let changed = false;
+      const fill = <K extends keyof Draft>(key: K, value: Draft[K]) => {
+        if (claimed.has(key) || current[key] === value) return;
+        next[key] = value;
+        changed = true;
+      };
+
+      fill("name", design.name);
+      fill("slug", design.slug);
+      fill("tier", design.tier);
+      fill("description", design.description);
+      fill("premium", design.premium);
+      return changed ? next : current;
+    });
+  }, [claimed, design]);
 
   // A reload with work in hand still deserves the browser's own warning: the
   // local copy is a safety net, not a reason to lose the admin's place.
@@ -611,6 +664,7 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
           <FontSlot
             key={slot}
             slot={slot}
+            declared={outcome?.document?.fonts.find((font) => font.id === slot) ?? null}
             required={index === 0}
             disabled={!form.id || !form.slug}
             designId={form.id}
@@ -771,9 +825,11 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
  * what it looks like. So each slot lists what it has and takes up to ten.
  */
 function FontSlot({
-  slot, required, disabled, designId, slug, faces, onError, onSaved,
+  slot, declared, required, disabled, designId, slug, faces, onError, onSaved,
 }: {
   slot: string;
+  /** What the prompt says this slot is, before any file has been attached. */
+  declared: FontDeclaration | null;
   required: boolean;
   disabled: boolean;
   designId: string | null;
@@ -790,6 +846,26 @@ function FontSlot({
   const [italic, setItalic] = useState(false);
   const [fallback, setFallback] = useState<string>(first?.fallback ?? "Manrope");
   const [busy, setBusy] = useState(false);
+  const [typed, setTyped] = useState(false);
+
+  /**
+   * The prompt names its own fonts; this stops making somebody retype them.
+   *
+   * A slot is seeded from the file already attached to it when there is one,
+   * because that is what the design actually ships. Otherwise it follows the
+   * prompt's declaration — which for a new design is the only place the name,
+   * the roles and the fallback exist at all, and the boxes sat empty beside it.
+   *
+   * Typing stops the following, for the same reason as the form above.
+   */
+  useEffect(() => {
+    if (typed || first || !declared) return;
+    setName(declared.name);
+    setRoles(declared.roles.join(", "));
+    setFallback(declared.fallback);
+  }, [declared, first, typed]);
+
+  const write = (change: () => void) => { setTyped(true); change(); };
 
   const full = mine.length >= 10;
   const taken = mine.some((face) => face.weight === weight && face.italic === italic);
@@ -836,9 +912,9 @@ function FontSlot({
       </div>
 
       <div className="jslayd-font-family">
-        <input placeholder="Nomi" value={name} onChange={(event) => setName(event.target.value)} />
-        <input placeholder="Rollar" value={roles} onChange={(event) => setRoles(event.target.value)} />
-        <select value={fallback} onChange={(event) => setFallback(event.target.value)}>
+        <input placeholder="Nomi" value={name} onChange={(event) => write(() => setName(event.target.value))} />
+        <input placeholder="Rollar" value={roles} onChange={(event) => write(() => setRoles(event.target.value))} />
+        <select value={fallback} onChange={(event) => write(() => setFallback(event.target.value))}>
           {FALLBACKS.map((value) => <option key={value} value={value}>{value}</option>)}
         </select>
       </div>
