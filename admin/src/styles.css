@@ -1032,3 +1032,19 @@ td small { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; 
 .studio-field em { font-style: normal; color: var(--ink-soft); }
 .studio-field input, .studio-field select { padding: 7px 9px; font-size: 12px; border-radius: 9px; }
 .studio-note { margin: 2px 0 0; font-size: 11px; color: var(--ink-soft); }
+
+.studio-tabs { display: flex; gap: 4px; }
+.studio-tabs button {
+  flex: 1; min-height: 30px; padding: 0 10px;
+  border: 1px solid var(--border); border-radius: 9px;
+  background: var(--field); color: var(--ink-muted); font-size: 11px;
+}
+.studio-tabs button.on { border-color: var(--brand); color: var(--brand); background: var(--surface-muted); }
+.studio-stop { display: grid; grid-template-columns: 1fr 58px 28px; gap: 6px; align-items: center; }
+.studio-stop input { padding: 6px 8px; font-size: 12px; border-radius: 8px; }
+.studio-stop-offset { text-align: right; }
+.studio-stop button {
+  height: 28px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--field); color: var(--ink-muted);
+}
+.studio-stop button:disabled { opacity: .4; cursor: default; }

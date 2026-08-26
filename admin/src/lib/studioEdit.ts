@@ -1,4 +1,8 @@
-import { CANVAS_HEIGHT, CANVAS_WIDTH, type Archetype, type JslaydDocument, type JslaydElement } from "@jaxongirman/jslayd";
+import {
+  CANVAS_HEIGHT, CANVAS_WIDTH,
+  type Archetype, type ColorValue, type Gradient, type GradientStop,
+  type JslaydDocument, type JslaydElement,
+} from "@jaxongirman/jslayd";
 
 /**
  * Editing a compiled design, without a second model of it.
@@ -84,6 +88,109 @@ export function setGeometry(
     const merged = { ...element.geometry, ...patch };
     const box = clampBox({ x: merged.x, y: merged.y, width: merged.width, height: merged.height });
     return { ...element, geometry: { ...merged, ...box } };
+  });
+}
+
+/* -------------------------------------------------------------------- fill */
+
+/**
+ * A fill is a colour or a gradient, and the language is strict about both.
+ *
+ * Stops are sorted by offset and there are never fewer than two — a "gradient"
+ * with one stop is a colour that will surprise whoever reads the document, and
+ * an unsorted one renders differently in different engines. Both rules are kept
+ * here rather than trusted to the editor's UI, because the UI is not the only
+ * thing that will ever write a fill.
+ */
+export type Fill = ColorValue | Gradient | null;
+
+const ordered = (stops: readonly GradientStop[]): GradientStop[] =>
+  stops.slice().sort((a, b) => a.offset - b.offset);
+
+export function setFill(
+  document: JslaydDocument, archetypeId: string, elementId: string, fill: Fill,
+): JslaydDocument {
+  const value = fill && typeof fill === "object" && "stops" in fill
+    ? { ...fill, stops: ordered(fill.stops) }
+    : fill;
+  return withElement(document, archetypeId, elementId, (element) => ({
+    ...element, background: value,
+  } as typeof element));
+}
+
+export const gradientOf = (element: JslaydElement | null): Gradient | null => {
+  const background = (element as { background?: unknown } | null)?.background;
+  return background && typeof background === "object" && "stops" in background
+    ? background as Gradient
+    : null;
+};
+
+/**
+ * A gradient built from a preset, in this design's own colours.
+ *
+ * The preset names roles, not hex, so the same preset is a different gradient
+ * under a different palette — which is what makes changing theme move a slide's
+ * gradients with it instead of leaving them behind.
+ */
+export function gradientFromPreset(
+  preset: { type: "linear" | "radial"; angle: number; stops: readonly { role: string; position: number; opacity?: number }[] },
+): Gradient {
+  return {
+    type: preset.type,
+    angle: preset.angle,
+    stops: ordered(preset.stops.map((stop) => ({
+      offset: stop.position,
+      // Kept as a role rather than resolved to hex: resolving here would
+      // freeze the gradient to whichever palette happened to be selected.
+      color: { role: stop.role } as ColorValue,
+    }))),
+  };
+}
+
+export function setStop(
+  document: JslaydDocument, archetypeId: string, elementId: string,
+  index: number, patch: Partial<GradientStop>,
+): JslaydDocument {
+  const archetype = archetypeOf(document, archetypeId);
+  const gradient = gradientOf(elementOf(archetype, elementId));
+  if (!gradient || !gradient.stops[index]) return document;
+  const stops = gradient.stops.map((stop, at) => (at === index ? { ...stop, ...patch } : stop));
+  return setFill(document, archetypeId, elementId, { ...gradient, stops });
+}
+
+/** A new stop halfway to the next one, so it lands somewhere visible. */
+export function addStop(
+  document: JslaydDocument, archetypeId: string, elementId: string,
+): JslaydDocument {
+  const archetype = archetypeOf(document, archetypeId);
+  const gradient = gradientOf(elementOf(archetype, elementId));
+  if (!gradient) return document;
+
+  const stops = ordered(gradient.stops);
+  let widest = { at: 0, gap: -1 };
+  for (let at = 0; at < stops.length - 1; at += 1) {
+    const gap = stops[at + 1]!.offset - stops[at]!.offset;
+    if (gap > widest.gap) widest = { at, gap };
+  }
+  const before = stops[widest.at]!;
+  const after = stops[widest.at + 1] ?? before;
+  const inserted: GradientStop = {
+    offset: Math.round((before.offset + after.offset) / 2),
+    color: after.color,
+  };
+  return setFill(document, archetypeId, elementId, { ...gradient, stops: [...stops, inserted] });
+}
+
+/** Removing a stop is refused when it would leave fewer than two. */
+export function removeStop(
+  document: JslaydDocument, archetypeId: string, elementId: string, index: number,
+): JslaydDocument {
+  const archetype = archetypeOf(document, archetypeId);
+  const gradient = gradientOf(elementOf(archetype, elementId));
+  if (!gradient || gradient.stops.length <= 2) return document;
+  return setFill(document, archetypeId, elementId, {
+    ...gradient,
+    stops: gradient.stops.filter((_, at) => at !== index),
   });
 }
 

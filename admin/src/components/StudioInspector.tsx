@@ -1,7 +1,12 @@
 import type { Archetype, JslaydDocument } from "@jaxongirman/jslayd";
 import { useMemo } from "react";
 
-import { elementOf, setGeometry, withElement } from "@/lib/studioEdit";
+import { COLOR_ROLES, GRADIENT_PRESETS, type ColorValue } from "@jaxongirman/jslayd";
+
+import {
+  addStop, elementOf, gradientFromPreset, gradientOf, removeStop, setFill,
+  setGeometry, setStop, withElement,
+} from "@/lib/studioEdit";
 
 /**
  * The selected element's properties, and only the ones it has.
@@ -27,6 +32,10 @@ type Props = {
 };
 
 /** The geometry fields the panel writes; a union rather than a value. */
+/** A value from the role list, or a literal somebody pasted. */
+const asColor = (value: string): ColorValue =>
+  (value.startsWith("#") ? { hex: value } : { role: value as ColorValue extends { role: infer R } ? R : never });
+
 type GeometryField = "x" | "y" | "width" | "height" | "rotation" | "zIndex";
 
 function Field({
@@ -164,6 +173,125 @@ export function StudioInspector({ document: design, archetype, selectedId, fontF
           </div>
         </section>
       )}
+
+      <section>
+        <h4>To‘ldirish</h4>
+
+        {(() => {
+          const gradient = gradientOf(element);
+          const background = (element as { background?: unknown }).background;
+          const solid = !gradient && background && typeof background === "object"
+            ? ("role" in background ? String((background as { role: string }).role)
+              : String((background as { hex: string }).hex ?? ""))
+            : "";
+
+          return <>
+            <div className="studio-tabs">
+              <button type="button" className={!gradient ? "on" : undefined}
+                onClick={() => onChange(setFill(design, archetype.id, element.id, { role: "surface" }))}>
+                Rang
+              </button>
+              <button type="button" className={gradient ? "on" : undefined}
+                onClick={() => onChange(setFill(design, archetype.id, element.id,
+                  gradientFromPreset(GRADIENT_PRESETS[0]!)))}>
+                Gradient
+              </button>
+              <button type="button" onClick={() => onChange(setFill(design, archetype.id, element.id, null))}>
+                Yo‘q
+              </button>
+            </div>
+
+            {!gradient && (
+              <label className="studio-field">
+                <span>Rang</span>
+                {/* Roles are a closed set in the language, so they are chosen
+                    rather than typed: a misspelt role is a design that will not
+                    compile, found at save time instead of at the keystroke. */}
+                <select
+                  value={solid}
+                  onChange={(event) => onChange(setFill(design, archetype.id, element.id,
+                    asColor(event.target.value)))}
+                >
+                  {COLOR_ROLES.map((role) => <option key={role} value={role}>{role}</option>)}
+                  {solid.startsWith("#") ? <option value={solid}>{solid}</option> : null}
+                </select>
+              </label>
+            )}
+
+            {gradient && <>
+              <div className="studio-grid">
+                <label className="studio-field">
+                  <span>Turi</span>
+                  <select value={gradient.type} onChange={(event) => onChange(setFill(design, archetype.id, element.id,
+                    { ...gradient, type: event.target.value as "linear" | "radial" }))}>
+                    <option value="linear">linear</option>
+                    <option value="radial">radial</option>
+                  </select>
+                </label>
+                <Field label="Burchak" suffix="°" value={gradient.angle} onCommit={(raw) => {
+                  const value = Number(raw);
+                  if (Number.isFinite(value)) {
+                    onChange(setFill(design, archetype.id, element.id, { ...gradient, angle: value }));
+                  }
+                }} />
+              </div>
+
+              {/* Every stop names a role, so switching theme moves the gradient
+                  with the rest of the slide instead of leaving it behind. */}
+              {gradient.stops.map((stop, index) => (
+                <div className="studio-stop" key={`${index}-${stop.offset}`}>
+                  <select
+                    value={"role" in stop.color ? stop.color.role : stop.color.hex}
+                    onChange={(event) => onChange(setStop(design, archetype.id, element.id, index,
+                      { color: asColor(event.target.value) }))}
+                  >
+                    {COLOR_ROLES.map((role) => <option key={role} value={role}>{role}</option>)}
+                  </select>
+                  <input
+                    className="studio-stop-offset"
+                    defaultValue={stop.offset}
+                    onBlur={(event) => {
+                      const value = Number(event.target.value);
+                      if (Number.isFinite(value)) {
+                        onChange(setStop(design, archetype.id, element.id, index,
+                          { offset: Math.min(100, Math.max(0, value)) }));
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    disabled={gradient.stops.length <= 2}
+                    title={gradient.stops.length <= 2 ? "Gradientda kamida ikkita to‘xtash bo‘ladi" : "O‘chirish"}
+                    onClick={() => onChange(removeStop(design, archetype.id, element.id, index))}
+                  >−</button>
+                </div>
+              ))}
+
+              <div className="studio-tabs">
+                <button type="button" onClick={() => onChange(addStop(design, archetype.id, element.id))}>
+                  To‘xtash qo‘shish
+                </button>
+              </div>
+
+              <label className="studio-field">
+                <span>Tayyor gradientlar</span>
+                <select
+                  value=""
+                  onChange={(event) => {
+                    const preset = GRADIENT_PRESETS.find((entry) => entry.id === event.target.value);
+                    if (preset) onChange(setFill(design, archetype.id, element.id, gradientFromPreset(preset)));
+                  }}
+                >
+                  <option value="">— tanlash —</option>
+                  {GRADIENT_PRESETS.map((preset) => (
+                    <option key={preset.id} value={preset.id}>{preset.name}</option>
+                  ))}
+                </select>
+              </label>
+            </>}
+          </>;
+        })()}
+      </section>
 
       <section>
         <h4>Shaffoflik</h4>

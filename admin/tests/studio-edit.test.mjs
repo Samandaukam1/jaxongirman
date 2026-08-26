@@ -28,7 +28,10 @@ writeFileSync(join(out, "jslayd-stub.ts"), [
   "export const CANVAS_WIDTH = 1920;",
   "export const CANVAS_HEIGHT = 1080;",
   "export type Geometry = { x: number; y: number; width: number; height: number; rotation: number; zIndex: number; anchor: string };",
-  "export type JslaydElement = { id: string; type: string; geometry: Geometry };",
+  "export type ColorValue = { role: string } | { hex: string };",
+  "export type GradientStop = { offset: number; color: ColorValue };",
+  "export type Gradient = { type: 'linear' | 'radial'; angle: number; stops: readonly GradientStop[] };",
+  "export type JslaydElement = { id: string; type: string; geometry: Geometry; background?: ColorValue | Gradient | null };",
   "export type Archetype = { id: string; elements: JslaydElement[] };",
   "export type JslaydDocument = { archetypes: Archetype[] };",
 ].join("\n"));
@@ -61,7 +64,7 @@ const {
   CANVAS, HANDLES, alignElements, beginGesture, canRedo, canUndo, clampBox, commit,
   distribute, duplicateElement, endGesture, freeId, moveElement, preview, redo,
   removeElement, renameElement, reorder, resizeBox, setGeometry, snap, stackingOrder,
-  startHistory, undo,
+  startHistory, undo, addStop, gradientFromPreset, gradientOf, removeStop, setFill, setStop,
 } = studio;
 
 const element = (id, x, y, width, height) => ({
@@ -323,4 +326,64 @@ test("renaming an element to its own name is allowed", () => {
   const before = doc(element("a", 0, 0, 100, 50));
   const same = renameElement(before, "a1", "a", "a");
   assert.equal(same.error, null);
+});
+
+/* ------------------------------------------------------------------ fill */
+
+const gradient = (...offsets) => ({
+  type: "linear", angle: 90,
+  stops: offsets.map((offset) => ({ offset, color: { role: "primary" } })),
+});
+const elementOfDoc = (document, id) => document.archetypes[0].elements.find((e) => e.id === id);
+
+test("stops are sorted whatever order they arrive in", () => {
+  const before = doc(element("box", 0, 0, 100, 100));
+  const after = setFill(before, "a1", "box", gradient(80, 0, 40));
+  assert.deepEqual(gradientOf(elementOfDoc(after, "box")).stops.map((s) => s.offset), [0, 40, 80]);
+});
+
+test("a preset becomes a gradient in roles, not in hex", () => {
+  const built = gradientFromPreset({
+    type: "linear", angle: 135,
+    stops: [{ role: "primary", position: 0 }, { role: "accent", position: 100 }],
+  });
+  assert.equal(built.type, "linear");
+  assert.equal(built.angle, 135);
+  assert.deepEqual(built.stops.map((s) => s.color), [{ role: "primary" }, { role: "accent" }]);
+});
+
+test("a stop can be moved and recoloured, and the order is kept", () => {
+  let document = setFill(doc(element("box", 0, 0, 100, 100)), "a1", "box", gradient(0, 100));
+  document = setStop(document, "a1", "box", 0, { offset: 70 });
+  const stops = gradientOf(elementOfDoc(document, "box")).stops;
+  assert.deepEqual(stops.map((s) => s.offset), [70, 100]);
+});
+
+test("a new stop lands in the widest gap, where it can be seen", () => {
+  let document = setFill(doc(element("box", 0, 0, 100, 100)), "a1", "box", gradient(0, 10, 100));
+  document = addStop(document, "a1", "box");
+  const offsets = gradientOf(elementOfDoc(document, "box")).stops.map((s) => s.offset);
+  // The widest gap is 10 → 100, so the new stop is at 55, not at 5.
+  assert.ok(offsets.includes(55), `stops: ${offsets.join(", ")}`);
+});
+
+test("a gradient is never allowed fewer than two stops", () => {
+  let document = setFill(doc(element("box", 0, 0, 100, 100)), "a1", "box", gradient(0, 100));
+  const after = removeStop(document, "a1", "box", 0);
+  assert.equal(gradientOf(elementOfDoc(after, "box")).stops.length, 2, "a gradient was reduced to a colour");
+
+  document = setFill(document, "a1", "box", gradient(0, 50, 100));
+  const trimmed = removeStop(document, "a1", "box", 1);
+  assert.equal(gradientOf(elementOfDoc(trimmed, "box")).stops.length, 2);
+});
+
+test("a plain colour is not mistaken for a gradient", () => {
+  const document = setFill(doc(element("box", 0, 0, 100, 100)), "a1", "box", { role: "surface" });
+  assert.equal(gradientOf(elementOfDoc(document, "box")), null);
+  assert.deepEqual(elementOfDoc(document, "box").background, { role: "surface" });
+});
+
+test("clearing a fill sets null rather than deleting the key", () => {
+  const document = setFill(doc(element("box", 0, 0, 100, 100)), "a1", "box", null);
+  assert.equal(elementOfDoc(document, "box").background, null);
 });
