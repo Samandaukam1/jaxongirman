@@ -33,6 +33,18 @@ type Body = {
   archetypeId?: string;
   topic?: string;
   language?: string;
+  /**
+   * Search for this instead of writing a new slide.
+   *
+   * Judging a design against a photograph nobody chose is half a judgement —
+   * the first result for "clean water drops" may be the wrong register
+   * entirely, and the design is what is on trial, not the search. So a caller
+   * can re-run only the picture, which costs a search rather than a model call
+   * and leaves the words exactly as they were.
+   */
+  imageQuery?: string;
+  /** How many results to skip; each press of "another photo" goes one further. */
+  photoOffset?: number;
 };
 
 /** Long enough to write a slide, short enough that a runaway answer stops. */
@@ -51,7 +63,20 @@ Deno.serve(async (request) => {
     const designId = (body.designId ?? "").trim();
     const topic = (body.topic ?? "").trim();
     const language = (body.language ?? "uz").trim() || "uz";
-    if (!designId) throw new HttpError(400, "designId yuborilmadi.", "missing_design");
+    const rerollQuery = (body.imageQuery ?? "").trim();
+    if (!designId && !rerollQuery) throw new HttpError(400, "designId yuborilmadi.", "missing_design");
+
+    // Only the picture: no design to read, no model call, no words to replace.
+    if (rerollQuery) {
+      if (rerollQuery.length > 120) throw new HttpError(400, "So‘rov juda uzun.", "query_too_long");
+      if (!unsplashConfigured()) {
+        throw new HttpError(503, "UNSPLASH_ACCESS_KEY sozlanmagan.", "unsplash_not_configured");
+      }
+      const skip = Math.max(0, Math.min(20, Number(body.photoOffset) || 0));
+      const photo = await searchUnsplash(rerollQuery, "landscape", skip);
+      return json({ photo, imageQuery: rerollQuery });
+    }
+
     if (!topic) throw new HttpError(400, "Mavzu yozilmadi.", "missing_topic");
     if (topic.length > 200) throw new HttpError(400, "Mavzu juda uzun.", "topic_too_long");
 

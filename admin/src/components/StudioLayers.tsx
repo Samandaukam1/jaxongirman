@@ -41,6 +41,9 @@ export function StudioLayers({
   const [renaming, setRenaming] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
+  /** The row being dragged, and the gap it is currently over. */
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [over, setOver] = useState<string | null>(null);
 
   if (!archetype) return <p className="studio-empty">Slayd tanlanmagan.</p>;
 
@@ -54,6 +57,31 @@ export function StudioLayers({
     if (at < 0 || to < 0 || to >= ids.length) return;
     const next = ids.slice();
     next.splice(to, 0, ...next.splice(at, 1));
+    // The list is drawn top-first; `reorder` numbers from the bottom.
+    onChange(reorder(design, archetype.id, next.slice().reverse()));
+  };
+
+  /**
+   * Dropping one row onto another puts it in that row's place.
+   *
+   * The buttons stay. A four-element slide is faster to reorder with two
+   * presses than with a drag, and a drag is the only sane way to move something
+   * past nine layers — neither replaces the other, and the arithmetic is the
+   * same `reorder` in both cases.
+   */
+  const drop = (targetId: string) => {
+    const id = dragging;
+    setDragging(null);
+    setOver(null);
+    if (!id || id === targetId) return;
+
+    const ids = ordered.map((element) => element.id);
+    const from = ids.indexOf(id);
+    const to = ids.indexOf(targetId);
+    if (from < 0 || to < 0) return;
+
+    const next = ids.slice();
+    next.splice(to, 0, ...next.splice(from, 1));
     // The list is drawn top-first; `reorder` numbers from the bottom.
     onChange(reorder(design, archetype.id, next.slice().reverse()));
   };
@@ -81,7 +109,23 @@ export function StudioLayers({
         const hidden = flags.hidden.has(element.id);
 
         return (
-          <div key={element.id} className={`studio-layer${isSelected ? " selected" : ""}`}>
+          <div
+            key={element.id}
+            className={`studio-layer${isSelected ? " selected" : ""}`
+              + (dragging === element.id ? " dragging" : "")
+              + (over === element.id && dragging && dragging !== element.id ? " over" : "")}
+            draggable={renaming !== element.id}
+            onDragStart={(event) => {
+              setDragging(element.id);
+              event.dataTransfer.effectAllowed = "move";
+              // Firefox refuses to start a drag with no payload.
+              event.dataTransfer.setData("text/plain", element.id);
+            }}
+            onDragOver={(event) => { event.preventDefault(); setOver(element.id); }}
+            onDragLeave={() => setOver((current) => (current === element.id ? null : current))}
+            onDrop={(event) => { event.preventDefault(); drop(element.id); }}
+            onDragEnd={() => { setDragging(null); setOver(null); }}
+          >
             <button
               type="button"
               className="studio-layer-name"

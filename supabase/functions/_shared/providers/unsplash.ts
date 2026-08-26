@@ -30,6 +30,16 @@ export const unsplashConfigured = (): boolean => Boolean(Deno.env.get("UNSPLASH_
 export async function searchUnsplash(
   query: string,
   orientation: "landscape" | "portrait" | "square" | "any",
+  /**
+   * How many usable results to pass over.
+   *
+   * For "another photograph, same subject". Counted in *usable* results rather
+   * than in raw ones, so pressing it twice moves two pictures forward even when
+   * the results in between had no photographer to credit — otherwise the button
+   * appears to do nothing at exactly the moment somebody is looking for
+   * something different.
+   */
+  skip = 0,
 ): Promise<PhotoHit | null> {
   const key = Deno.env.get("UNSPLASH_ACCESS_KEY");
   if (!key || !query.trim()) return null;
@@ -60,6 +70,6 @@ export async function searchUnsplash(
     return null;
   }
 
-  return firstUsable(payload.results ?? []);
+  return firstUsable(payload.results ?? [], skip);
 }
 

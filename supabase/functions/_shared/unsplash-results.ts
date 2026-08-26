@@ -42,13 +42,24 @@ export type UnsplashPhoto = {
  * Both halves matter. A photo with no file is useless; a photo with no
  * photographer and no link back cannot be published under Unsplash's terms, so
  * it is skipped rather than used with an empty credit line.
+ *
+ * `skip` passes over that many usable results, for "another photograph, same
+ * subject". Past the end it returns nothing rather than wrapping around, so a
+ * caller stepping through a short result set is told it has run out instead of
+ * being handed the first picture again as though it were new.
  */
-export function firstUsable(results: readonly UnsplashPhoto[]): PhotoHit | null {
+export function firstUsable(results: readonly UnsplashPhoto[], skip = 0): PhotoHit | null {
+  let passed = 0;
   for (const photo of results) {
     const url = photo.urls?.regular ?? photo.urls?.full;
     const creator = photo.user?.name ?? photo.user?.username;
     const sourceUrl = photo.links?.html;
     if (!url || !creator || !sourceUrl) continue;
+
+    // Counted in usable results, not raw ones: skipping raw results would make
+    // "another photo" appear to do nothing whenever the result in between had
+    // no photographer to credit.
+    if (passed < skip) { passed += 1; continue; }
 
     return {
       url,

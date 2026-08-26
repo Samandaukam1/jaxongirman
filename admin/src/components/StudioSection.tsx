@@ -6,7 +6,7 @@ import { StudioCanvas } from "@/components/StudioCanvas";
 import { StudioInspector } from "@/components/StudioInspector";
 import { StudioLayers, type LayerFlags } from "@/components/StudioLayers";
 import { errorMessage } from "@/lib/format";
-import { withPhoto, writeSample, type SampleReport } from "@/lib/sampleSlide";
+import { anotherPhoto, withPhoto, writeSample, type SampleReport } from "@/lib/sampleSlide";
 import {
   archetypeOf, beginGesture, canRedo, canUndo, commit, endGesture, preview,
   redo, startHistory, undo, type History,
@@ -57,6 +57,8 @@ export function StudioSection({
   const [sample, setSample] = useState<SampleReport | null>(null);
   const [writing, setWriting] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  /** How far into the search results the current photograph is. */
+  const [photoAt, setPhotoAt] = useState(0);
 
   /**
    * The compiled document replaces the studio's, unless the studio wrote it.
@@ -109,10 +111,39 @@ export function StudioSection({
     try {
       const report = await writeSample({ designId, archetypeId, topic: topic.trim(), language });
       setSample(report);
+      setPhotoAt(0);
       if (report.empty) setProblem("Bu blueprintda matn joyi yo‘q — namuna yozilmadi.");
     } catch (error) {
       setProblem(errorMessage(error));
       setSample(null);
+    } finally {
+      setWriting(false);
+    }
+  }
+
+  /**
+   * Another picture for the words already written.
+   *
+   * A search rather than a model call, so an administrator can look through
+   * several photographs against the same design without paying to have the
+   * slide rewritten each time — and without the words changing underneath,
+   * which would make the comparison worthless.
+   */
+  async function reroll() {
+    if (!sample?.imageQuery) return;
+    setWriting(true);
+    setProblem(null);
+    try {
+      const at = photoAt + 1;
+      const photo = await anotherPhoto(sample.imageQuery, at);
+      if (!photo) {
+        setProblem("Bu so‘rov bo‘yicha boshqa surat topilmadi.");
+        return;
+      }
+      setPhotoAt(at);
+      setSample((current) => (current ? { ...current, photo } : current));
+    } catch (error) {
+      setProblem(errorMessage(error));
     } finally {
       setWriting(false);
     }
@@ -203,6 +234,16 @@ export function StudioSection({
           Surat: <a href={sample.photo.attribution.sourceUrl} target="_blank" rel="noreferrer">
             {sample.photo.attribution.creator}
           </a> · Unsplash
+          {" · "}
+          <button type="button" className="text-button" disabled={writing} onClick={() => void reroll()}>
+            Boshqa surat
+          </button>
+        </p>
+      ) : sample?.imageQuery ? (
+        // The query was written but nothing came back. Said plainly, because the
+        // usual cause is a missing key rather than a subject nobody photographs.
+        <p className="studio-note">
+          Rasm so‘rovi: “{sample.imageQuery}” — surat topilmadi.
         </p>
       ) : null}
 

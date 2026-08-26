@@ -85,3 +85,23 @@ test("the ladder is ordered from most specific to least", () => {
   // but the real queries narrow.
   assert.ok(lengths[0] > lengths[1] && lengths[1] > lengths[2]);
 });
+
+test("stepping to another photo counts the ones that could be used", () => {
+  /**
+   * The second result here has no photographer, so it can never be shown. If
+   * `skip` counted raw results, asking for the next photo after the first would
+   * land on it, find it unusable, and return the third — which is right by
+   * accident. Asking for the one after that would then run off the end and
+   * return nothing, while a usable photo was still in the list.
+   */
+  const results = [
+    { urls: { regular: "a.jpg" }, user: { name: "Ann" }, links: { html: "https://u/a" } },
+    { urls: { regular: "b.jpg" }, links: { html: "https://u/b" } },
+    { urls: { regular: "c.jpg" }, user: { name: "Cy" }, links: { html: "https://u/c" } },
+  ];
+
+  assert.equal(firstUsable(results, 0).url, "a.jpg");
+  assert.equal(firstUsable(results, 1).url, "c.jpg");
+  // Past the end is nothing, not the first one handed back as though it were new.
+  assert.equal(firstUsable(results, 2), null);
+});

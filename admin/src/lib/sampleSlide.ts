@@ -28,8 +28,25 @@ export async function writeSample(input: {
   topic: string;
   language: string;
 }): Promise<SampleReport> {
-  const { data, error } = await supabase.functions.invoke("sample-slide", { body: input });
-  if (!error) return data as SampleReport;
+  return call(input) as Promise<SampleReport>;
+}
+
+/**
+ * Another photograph, same words.
+ *
+ * Judging a design against a picture nobody chose is half a judgement — the
+ * first result for "clean water drops" may be the wrong register entirely, and
+ * the design is what is on trial, not the search. This costs a search rather
+ * than a model call and leaves the writing exactly as it was.
+ */
+export async function anotherPhoto(imageQuery: string, photoOffset: number): Promise<SampleReport["photo"]> {
+  const answer = await call({ imageQuery, photoOffset }) as { photo: SampleReport["photo"] };
+  return answer.photo;
+}
+
+async function call(body: Record<string, unknown>): Promise<unknown> {
+  const { data, error } = await supabase.functions.invoke("sample-slide", { body });
+  if (!error) return data;
 
   /**
    * The function's refusals are answers.
