@@ -736,7 +736,7 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
           document={outcome.document}
           designId={form.id}
           family={family}
-          onChange={(next) => { set("source", decompile(next)); setSaved(false); }}
+          onChange={(_next, source) => { set("source", source); setSaved(false); }}
         />
       ) : null}
     </div>

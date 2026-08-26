@@ -1,4 +1,4 @@
-import type { JslaydDocument, SlideData, SlotOutcome } from "@jaxongirman/jslayd";
+import { decompile, type JslaydDocument, type SlideData, type SlotOutcome } from "@jaxongirman/jslayd";
 import { Redo2, Sparkles, Undo2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -45,7 +45,8 @@ export function StudioSection({
   /** Null until the design has been saved; the writer needs a row to read. */
   designId: string | null;
   family: string | null;
-  onChange: (next: JslaydDocument) => void;
+  /** The edited design, and the source it was written back as. */
+  onChange: (next: JslaydDocument, source: string) => void;
 }) {
   const [history, setHistory] = useState<History>(() => startHistory(compiled));
   const [selectedIds, setSelectedIds] = useState<readonly string[]>([]);
@@ -64,13 +65,24 @@ export function StudioSection({
    * The compiled document replaces the studio's, unless the studio wrote it.
    *
    * Every visual edit goes out as source, comes back through the compiler, and
-   * arrives here as a new document — so without this check the panel would
-   * reset its own history on every drag. `mine` is what the last edit sent; an
-   * arrival that is not it came from the prompt editor, and the prompt wins.
+   * arrives as a *new object* — so comparing identity never matches, and the
+   * panel would clear its own undo history a moment after every drag. What is
+   * compared is the source: the round trip is stable, so a design this panel
+   * sent decompiles to exactly the text it sent. Anything else was typed in the
+   * prompt editor, and the prompt wins.
    */
-  const mine = useRef<JslaydDocument | null>(null);
+  const mine = useRef<string | null>(null);
   useEffect(() => {
-    if (mine.current === compiled) return;
+    let source: string | null;
+    try {
+      source = decompile(compiled);
+    } catch {
+      // A design that will not serialise cannot be one this panel sent, so it
+      // is treated as an arrival from the prompt editor.
+      source = null;
+    }
+    if (source !== null && source === mine.current) return;
+    mine.current = source;
     setHistory(startHistory(compiled));
   }, [compiled]);
 
@@ -87,8 +99,16 @@ export function StudioSection({
   }, [archetypeId, design]);
 
   const publish = (next: JslaydDocument) => {
-    mine.current = next;
-    onChange(next);
+    let source: string;
+    try {
+      source = decompile(next);
+    } catch {
+      // Unserialisable is not something to write back: the prompt would be
+      // replaced by nothing and the design lost. The canvas keeps the edit.
+      return;
+    }
+    mine.current = source;
+    onChange(next, source);
   };
 
   const change = (next: JslaydDocument) => {
