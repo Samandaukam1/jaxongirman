@@ -75,15 +75,39 @@ Deno.serve(async (request) => {
       const normalized = normaliseFamily(font.name);
       if (!normalized) { updatedFonts.push(font); continue; }
 
-      // The shelf. Created on first sight so the eleventh design that names
-      // this family finds it rather than discovering it again.
-      const family = await service.from("font_families")
-        .upsert({ canonical_name: font.name, normalized_name: normalized, source: "google" },
-          { onConflict: "normalized_name" })
+      /**
+       * The shelf. Read first, written only when the family is genuinely new.
+       *
+       * This used to upsert, which on conflict rewrote `canonical_name` and
+       * `source` — so a design whose prompt happened to say "montserrat" in
+       * lower case renamed the library's Montserrat for every screen that
+       * reads it, the user's font picker included. A design naming a family is
+       * not an authority on what that family is called; the library is, and the
+       * two thousand families imported from Google Fonts carry the real names.
+       */
+      const existing = await service.from("font_families")
         .select("id, license_metadata")
-        .single();
-      if (family.error) {
-        report.push({ font: font.id, name: font.name, faces: 0, source: "error", note: family.error.message });
+        .eq("normalized_name", normalized)
+        .maybeSingle();
+
+      let family = existing;
+      if (!existing.error && !existing.data) {
+        family = await service.from("font_families")
+          .insert({ canonical_name: font.name, normalized_name: normalized, source: "google" })
+          .select("id, license_metadata")
+          // Two designs resolving the same new family at once: the loser reads
+          // the winner's row rather than failing the whole resolution.
+          .single();
+        if (family.error) {
+          family = await service.from("font_families")
+            .select("id, license_metadata")
+            .eq("normalized_name", normalized)
+            .maybeSingle();
+        }
+      }
+
+      if (family.error || !family.data) {
+        report.push({ font: font.id, name: font.name, faces: 0, source: "error", note: family.error?.message ?? "family_missing" });
         updatedFonts.push(font);
         continue;
       }

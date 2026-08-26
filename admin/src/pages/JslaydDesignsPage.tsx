@@ -18,13 +18,16 @@ import {
   compilePrompt,
   downloadDocument,
   editableSource,
+  findFamilies,
   importDocument,
   listDesignFonts,
+  normalizeFamily,
   removeDesignFont,
   listDesigns,
   loadDesign,
   previewOf,
   publishDesign,
+  resolveDesignFonts,
   saveDesign,
   toCanvas,
   uploadFont,
@@ -32,6 +35,7 @@ import {
   type DesignFontFace,
   type DesignRow,
   type DesignStatus,
+  type LibraryFamily,
 } from "@/lib/jslayd";
 import { forgetDraft, keepDraft, recallDraft, sameDraft, type KeptDraft } from "@/lib/workbench-draft";
 
@@ -444,6 +448,64 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
     });
   }, [claimed, design]);
 
+  /**
+   * Which of the prompt's fonts the library already holds.
+   *
+   * Two thousand Google families are on the shelf, so naming one in the prompt
+   * should be the whole of "attaching a font" — the .ttf upload beside each
+   * slot exists for a face nobody can download, not for Montserrat.
+   */
+  const declaredFonts = outcome?.document?.fonts;
+  const [library, setLibrary] = useState<Map<string, LibraryFamily>>(new Map());
+  useEffect(() => {
+    if (!declaredFonts?.length) { setLibrary(new Map()); return; }
+    let live = true;
+    findFamilies(declaredFonts.map((font) => font.name))
+      .then((found) => { if (live) setLibrary(found); })
+      // A lookup that fails leaves the slots saying nothing about the library,
+      // which is the honest state — the upload path still works.
+      .catch(() => { if (live) setLibrary(new Map()); });
+    return () => { live = false; };
+  }, [declaredFonts]);
+
+  const libraryReady = useMemo(
+    () => (declaredFonts ?? [])
+      .map((font) => library.get(normalizeFamily(font.name)))
+      .filter((entry): entry is LibraryFamily => Boolean(entry)),
+    [declaredFonts, library],
+  );
+
+  const [attaching, setAttaching] = useState(false);
+
+  /**
+   * Copy every declared family out of the library and onto this design.
+   *
+   * The server does the work, because deciding what a family is and copying its
+   * faces has to happen once rather than in every admin's tab racing the
+   * others for the same files.
+   */
+  async function attachFromLibrary() {
+    if (!form.id) return;
+    setAttaching(true);
+    setError(null);
+    try {
+      const report = await resolveDesignFonts(form.id);
+      const attached = report.filter((entry) => entry.faces > 0);
+      const missing = report.filter((entry) => entry.faces === 0);
+      setMessage(
+        attached.length
+          ? `${attached.map((entry) => `${entry.name} (${entry.faces} face)`).join(", ")} biriktirildi.`
+            + (missing.length ? ` Topilmadi: ${missing.map((entry) => entry.name).join(", ")}.` : "")
+          : "Hech qanday shrift topilmadi.",
+      );
+      await loadFonts();
+    } catch (requestError) {
+      setError(errorMessage(requestError));
+    } finally {
+      setAttaching(false);
+    }
+  }
+
   // A reload with work in hand still deserves the browser's own warning: the
   // local copy is a safety net, not a reason to lose the admin's place.
   useEffect(() => {
@@ -559,6 +621,29 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
       forgetDraft(draft.id);
       forgetDraft(id);
       setSaved(true);
+
+      /**
+       * Attached without being asked, the first time.
+       *
+       * Naming a family in the prompt is the whole of choosing a font when the
+       * library already holds it, so a design saved with matches and no faces
+       * yet gets them now. Only when nothing is attached: a design whose files
+       * somebody uploaded by hand is not one to overwrite from the shelf.
+       */
+      if (!fonts.length && libraryReady.length) {
+        try {
+          const report = await resolveDesignFonts(id);
+          const attached = report.filter((entry) => entry.faces > 0);
+          if (attached.length) {
+            setMessage(`Qoralama saqlandi. Kutubxonadan biriktirildi: ${attached.map((entry) => entry.name).join(", ")}.`);
+            await loadFonts();
+          }
+        } catch {
+          // The save succeeded; a font that did not attach is a button away and
+          // must not be reported as a failed save.
+        }
+      }
+
       if (thenPublish) {
         const version = await publishDesign(id);
         setMessage(`Chop etildi — v${version}. Foydalanuvchilar uni ilovani yangilamasdan ko‘radi.`);
@@ -657,14 +742,34 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
       <section className="panel">
         <h3>2. Fontlar</h3>
         <p className="panel-hint">
-          1-shrift majburiy, 2–4 ixtiyoriy. .ttf, .otf va .woff qabul qilinadi — WOFF2 emas, chunki PDF eksporti uni
-          joylay olmaydi. PPTX’da maxsus shrift ochuvchining kompyuterida almashtirilishi mumkin.
+          Promptda shrift nomini yozing — agar u kutubxonada bo‘lsa, fayl yuklash shart emas, o‘zi biriktiriladi.
+          Fayl yuklash faqat kutubxonada yo‘q shrift uchun: .ttf, .otf va .woff — WOFF2 emas, chunki PDF eksporti
+          uni joylay olmaydi.
         </p>
+        {form.id && libraryReady.length ? (
+          <div className="jslayd-font-gate">
+            <p className="panel-hint">
+              Kutubxonada topildi: {libraryReady.map((entry) => entry.canonical_name).join(", ")}.
+            </p>
+            <button
+              className="secondary-button"
+              type="button"
+              disabled={attaching}
+              onClick={() => void attachFromLibrary()}
+            >
+              {attaching ? "Biriktirilmoqda…" : "Kutubxonadan biriktirish"}
+            </button>
+          </div>
+        ) : null}
         {FONT_SLOTS.map((slot, index) => (
           <FontSlot
             key={slot}
             slot={slot}
             declared={outcome?.document?.fonts.find((font) => font.id === slot) ?? null}
+            inLibrary={(() => {
+              const named = outcome?.document?.fonts.find((font) => font.id === slot)?.name;
+              return named ? library.get(normalizeFamily(named)) ?? null : null;
+            })()}
             required={index === 0}
             disabled={!form.id || !form.slug}
             designId={form.id}
@@ -825,11 +930,13 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
  * what it looks like. So each slot lists what it has and takes up to ten.
  */
 function FontSlot({
-  slot, declared, required, disabled, designId, slug, faces, onError, onSaved,
+  slot, declared, inLibrary, required, disabled, designId, slug, faces, onError, onSaved,
 }: {
   slot: string;
   /** What the prompt says this slot is, before any file has been attached. */
   declared: FontDeclaration | null;
+  /** The library's entry for the declared family, when it holds one. */
+  inLibrary: LibraryFamily | null;
   required: boolean;
   disabled: boolean;
   designId: string | null;
@@ -929,6 +1036,13 @@ function FontSlot({
             </li>
           ))}
         </ul>
+      ) : inLibrary ? (
+        // The upload box below is for a face nobody can download. Saying so
+        // here stops an admin hunting for a .ttf of Montserrat.
+        <p className="jslayd-font-empty ok">
+          Kutubxonada bor: {inLibrary.canonical_name} · {inLibrary.faces} face
+          {inLibrary.is_variable ? " · variable" : ""}. Fayl yuklash shart emas — saqlashda o‘zi biriktiriladi.
+        </p>
       ) : (
         <p className="jslayd-font-empty">Hali fayl yo‘q — zaxira shrift chiziladi.</p>
       )}

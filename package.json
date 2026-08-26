@@ -28,6 +28,7 @@
     "test:survey": "node supabase/tests/survey-smoke.mjs",
     "test:marketplace": "node supabase/tests/marketplace-smoke.mjs",
     "test:sample": "node supabase/tests/sample-slide-smoke.mjs",
+    "test:libraryfonts": "node supabase/tests/library-fonts-smoke.mjs",
     "test:pptx": "node supabase/tests/pptx-import-smoke.mjs",
     "test:pairing": "node supabase/tests/pairing-smoke.mjs",
     "dev:web": "npm run dev --workspace=@jaxongirman/web",

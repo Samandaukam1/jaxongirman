@@ -1144,3 +1144,6 @@ td small { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; 
   flex: none; width: 18px; height: 18px; border-radius: 6px;
   border: 1px solid var(--border);
 }
+
+/* A slot the library can fill is not an empty slot. */
+.jslayd-font-empty.ok { color: var(--ok-ink); }

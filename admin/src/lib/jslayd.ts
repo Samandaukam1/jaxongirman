@@ -607,3 +607,88 @@ export async function resolveDesignFonts(designId: string): Promise<FontResoluti
   if (error) throw error;
   return ((data as { fonts?: FontResolution[] })?.fonts ?? []);
 }
+
+/* ------------------------------------------------------------ font library */
+
+export type LibraryFamily = {
+  id: string;
+  canonical_name: string;
+  normalized_name: string;
+  category: string;
+  is_variable: boolean;
+  faces: number;
+};
+
+/**
+ * The same normalisation the importer and the resolver use.
+ *
+ * A design's prompt says "Playfair Display" and the library stores
+ * `playfairdisplay`; matching on the display name would miss every family whose
+ * name has a space in it, which is most of them.
+ */
+export const normalizeFamily = (name: string): string =>
+  name.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/**
+ * Which of these families the library already holds.
+ *
+ * Asked in one query rather than one per slot: a design declares up to four
+ * fonts and this runs on every recompile, so four round trips per keystroke is
+ * four too many.
+ */
+export async function findFamilies(names: readonly string[]): Promise<Map<string, LibraryFamily>> {
+  const wanted = [...new Set(names.map(normalizeFamily).filter(Boolean))];
+  if (!wanted.length) return new Map();
+
+  const { data, error } = await supabase
+    .from("font_families")
+    .select("id, canonical_name, normalized_name, category, is_variable, font_faces(count)")
+    .in("normalized_name", wanted);
+  if (error) throw error;
+
+  const found = new Map<string, LibraryFamily>();
+  for (const row of data ?? []) {
+    const counted = row.font_faces as unknown as { count: number }[] | null;
+    found.set(row.normalized_name, {
+      id: row.id,
+      canonical_name: row.canonical_name,
+      normalized_name: row.normalized_name,
+      category: row.category ?? "sans-serif",
+      is_variable: Boolean(row.is_variable),
+      faces: counted?.[0]?.count ?? 0,
+    });
+  }
+  return found;
+}
+
+/**
+ * Families whose name starts with what was typed, for the picker.
+ *
+ * A prefix rather than a substring: two thousand families make "an" match
+ * hundreds of them, and nobody scrolls to find Manrope inside that.
+ */
+export async function searchFamilies(prefix: string, limit = 20): Promise<LibraryFamily[]> {
+  const term = normalizeFamily(prefix);
+  if (!term) return [];
+
+  const { data, error } = await supabase
+    .from("font_families")
+    .select("id, canonical_name, normalized_name, category, is_variable, font_faces(count)")
+    .like("normalized_name", `${term}%`)
+    .eq("is_active", true)
+    .order("normalized_name")
+    .limit(limit);
+  if (error) throw error;
+
+  return (data ?? []).map((row) => {
+    const counted = row.font_faces as unknown as { count: number }[] | null;
+    return {
+      id: row.id,
+      canonical_name: row.canonical_name,
+      normalized_name: row.normalized_name,
+      category: row.category ?? "sans-serif",
+      is_variable: Boolean(row.is_variable),
+      faces: counted?.[0]?.count ?? 0,
+    };
+  });
+}
