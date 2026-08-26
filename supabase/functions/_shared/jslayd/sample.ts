@@ -404,14 +404,50 @@ export function readSample(
   return { slide, outcomes, imageQuery: wantsImage && query ? query : null };
 }
 
-/** Cut at a word boundary; a sentence ending mid-word reads as a bug. */
+/**
+ * Cut until it fits, measured rather than counted.
+ *
+ * Length is not the only way to overflow. `checkFit` honours an explicit
+ * newline as the writer's own line decision, so twelve words on twelve lines
+ * overflow a two-line box while sitting well inside its character budget — and
+ * a trim that only counted characters kept the whole thing and let it clip.
+ *
+ * So the line breaks go first: a title the design draws on one line has no use
+ * for them, and collapsing them is what a person would do. Only if it still
+ * does not fit is the text shortened, at a word boundary — a sentence ending
+ * mid-word reads as a bug rather than as an edit.
+ */
 function fit(slot: TextSlotBudget, value: string): string {
-  const text = value.trim();
+  let text = value.trim();
+  if (checkFit(slot, text).fits) return text;
+
+  if (text.includes("\n")) {
+    text = text.replace(/\s+/g, " ").trim();
+    if (checkFit(slot, text).fits) return text;
+  }
+
   const limit = slot.budget.maximumCharacters;
-  if (text.length <= limit) return text;
-  const cut = text.slice(0, limit);
-  const boundary = cut.lastIndexOf(" ");
-  return (boundary > limit * 0.6 ? cut.slice(0, boundary) : cut).trimEnd();
+  if (text.length > limit) {
+    const cut = text.slice(0, limit);
+    const boundary = cut.lastIndexOf(" ");
+    text = (boundary > limit * 0.6 ? cut.slice(0, boundary) : cut).trimEnd();
+  }
+
+  /**
+   * A last resort for a box the estimate says holds less than it counted.
+   *
+   * The character budget is `charactersPerLine × maximumLines`, so trimming to
+   * it normally fits by construction — but a long unbreakable word can wrap
+   * early and cost a line. Dropping whole words until the measurement agrees is
+   * slower than arithmetic and terminates, which matters more: the alternative
+   * is returning text this function has already been told does not fit.
+   */
+  while (text.length > 0 && !checkFit(slot, text).fits) {
+    const boundary = text.lastIndexOf(" ");
+    if (boundary <= 0) return text.slice(0, Math.max(1, Math.floor(text.length / 2))).trimEnd();
+    text = text.slice(0, boundary).trimEnd();
+  }
+  return text;
 }
 
 /**

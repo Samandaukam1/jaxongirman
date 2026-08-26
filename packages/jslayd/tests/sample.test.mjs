@@ -284,3 +284,49 @@ test("a missing answer leaves the slide empty rather than inventing filler", () 
   assert.equal(slide.statistic, null);
   assert.equal(slide.imageQuery, undefined, "the slide model has no such field to leak into");
 });
+
+test("a short answer broken across many lines is still made to fit", () => {
+  /**
+   * Length is not the only way to overflow. `checkFit` honours an explicit
+   * newline as the writer's own line decision, so five words on five lines
+   * overflow a two-line box while sitting well inside its character budget —
+   * and a trim that only counts characters would keep the whole thing and let
+   * it clip.
+   */
+  const { document, archetype } = find((brief) => brief.slots.some((slot) => !slot.maxItems), "a text slot");
+  const brief = sampleBrief(document, archetype);
+  const slot = brief.slots.find((entry) => !entry.maxItems);
+
+  const tall = Array.from({ length: 12 }, (_, at) => `Q${at}`).join("\n");
+  const { slide, outcomes } = readSample({ ...obedient(brief), [slot.binding]: tall }, document, archetype);
+
+  const budget = buildWritingBrief(document, archetype).slots.find((entry) => entry.binding === slot.binding);
+  const kept = outcomes.find((entry) => entry.binding === slot.binding).text;
+  assert.ok(checkFit(budget, kept).fits, `${slot.binding} kept ${JSON.stringify(kept)}, which does not fit`);
+  assert.ok(slide !== null);
+});
+
+test("everything kept fits, across the whole corpus and every way of overflowing", () => {
+  const long = "Mamlakat iqtisodiyotini raqamlashtirish yo‘nalishidagi keng qamrovli islohotlar ".repeat(6);
+  const tall = Array.from({ length: 20 }, (_, at) => `Qator ${at}`).join("\n");
+
+  for (const { document, archetype } of PAIRS) {
+    const brief = sampleBrief(document, archetype);
+    const budgets = new Map(buildWritingBrief(document, archetype).slots.map((slot) => [slot.binding, slot]));
+
+    for (const shape of [long, tall, `${tall}\n${long}`]) {
+      const answer = {};
+      for (const slot of brief.slots) {
+        answer[slot.binding] = slot.maxItems ? [shape, shape] : shape;
+      }
+
+      for (const outcome of readSample(answer, document, archetype).outcomes) {
+        const budget = budgets.get(outcome.binding);
+        for (const kept of [outcome.text].flat()) {
+          assert.ok(checkFit(budget, kept).fits,
+            `${archetype.id}/${outcome.binding} kept text that does not fit: ${JSON.stringify(kept.slice(0, 60))}`);
+        }
+      }
+    }
+  }
+});
