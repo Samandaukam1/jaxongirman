@@ -170,3 +170,8 @@ export {
 
 export { inspectBatch, readBatch, summarise } from "./batch.ts";
 export type { BatchEntry, BatchInput, BatchReport } from "./batch.ts";
+
+export { GRADIENT_PRESETS, THEME_FAMILIES, auditFamily, themeFamily, themePalette, themeVariants } from "./themes.ts";
+export type { GradientPreset, ThemeFamily, ThemeFamilyId, ThemeVariant } from "./themes.ts";
+export { IMAGE_ROLES, extractPalette, fromHsl, harmonise, temper, toHsl, veilFor } from "./palette.ts";
+export type { Harmonised, ImagePalette } from "./palette.ts";
