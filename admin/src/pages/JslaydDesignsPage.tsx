@@ -683,6 +683,24 @@ function Workbench({ draft, onClose }: { draft: Draft; onClose: () => void }) {
               </li>
             ))}
           </ul>
+          {/**
+            * The findings themselves, not only the scores.
+            *
+            * A row reading "Sig‘imi ✓ 84" says something is imperfect and
+            * nothing about what — and the checks that matter most here name a
+            * specific element that can be widened two panels down. Sixteen is
+            * where a list stops being read.
+            */}
+          {outcome.health.findings.length ? (
+            <>
+              <DiagnosticList diagnostics={outcome.health.findings.slice(0, 16)} />
+              {outcome.health.findings.length > 16 ? (
+                <p className="panel-hint">
+                  Yana {outcome.health.findings.length - 16} ta xabar bor.
+                </p>
+              ) : null}
+            </>
+          ) : null}
         </section>
       ) : null}
 

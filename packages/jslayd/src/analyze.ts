@@ -9,6 +9,7 @@ import type {
 } from "./document.ts";
 import { DiagnosticBag, type Diagnostic } from "./diagnostics.ts";
 import { CANVAS_HEIGHT, CANVAS_WIDTH, MIN_READABLE_FONT_SIZE } from "./spec.ts";
+import { buildWritingBrief } from "./budget.ts";
 import { cellCapacity, characterCapacity } from "./text-metrics.ts";
 
 /**
@@ -50,6 +51,35 @@ const LABELS: Record<CheckName, string> = {
   tables: "Jadvallar",
   assets: "Fayllar",
 };
+
+/**
+ * The smallest amount of room in which each kind of copy is still writable.
+ *
+ * These are floors, not targets, and the difference matters. Measured across
+ * the fifteen-design corpus, the median title slot holds 21 characters and a
+ * tenth hold 11 or fewer — because a display title set large *is* a short box,
+ * and the writer is told its budget and writes inside it. A floor set at what a
+ * title deserves would flag half of every design ever published, and a warning
+ * that fires on everything is one nobody reads.
+ *
+ * So each number is the point below which the slot stops being usable rather
+ * than merely tight: under twelve characters there is no title that names a
+ * subject, "Suv tejash" being ten. What a slot this small costs is the writing
+ * — every deck gets two words where the topic needed five — which is invisible
+ * in a preview, because placeholder copy is short by nature, and obvious in the
+ * first real deck.
+ */
+const WANTS = new Map<string, number>([
+  ["section_label", 4],
+  ["title", 12], ["chart_title", 12], ["table_title", 12],
+  ["subtitle", 12],
+  ["body", 60],
+  ["bullets", 80],
+  ["bullet_1", 15], ["bullet_2", 15], ["bullet_3", 15],
+  ["bullet_4", 15], ["bullet_5", 15], ["bullet_6", 15],
+  ["quote_text", 40], ["quote_attribution", 10],
+  ["stat_label", 8],
+]);
 
 /** Types whose geometry may bleed past the canvas on purpose (§18). */
 const MAY_BLEED = new Set(["shape", "decorative", "divider", "line", "image", "frame", "icon", "group"]);
@@ -123,8 +153,33 @@ function checkFonts(document: JslaydDocument, bag: DiagnosticBag): void {
 
 function checkOverflow(document: JslaydDocument, bag: DiagnosticBag): void {
   for (const archetype of document.archetypes) {
+    /**
+     * The writer's own budget, not a second estimate of it.
+     *
+     * `characterCapacity` is how much text the box could physically hold;
+     * what the writer is given is that number after the fill factor and the
+     * language's density, and it is meaningfully smaller. Comparing against
+     * the raw capacity would understate how tight a box is — and would report
+     * a different number from the one the sample slide is written to, which is
+     * the fastest way to make an author distrust both.
+     */
+    const budgets = new Map<string, number>();
+    try {
+      for (const slot of buildWritingBrief(document, archetype).slots) {
+        const seen = budgets.get(slot.elementId);
+        if (seen === undefined || slot.budget.maximumCharacters < seen) {
+          budgets.set(slot.elementId, slot.budget.maximumCharacters);
+        }
+      }
+    } catch {
+      // A design the brief cannot measure is one the other checks will fail on
+      // their own terms; this check simply says nothing about it.
+    }
+
     bag.within(archetype.id, () => {
       for (const element of flatten(archetype.elements)) {
+        const source = (element as { source?: { bind?: string } }).source;
+        const binding = typeof source?.bind === "string" ? source.bind : null;
         const { x, y, width, height } = element.geometry;
         const outside = x < 0 || y < 0 || x + width > CANVAS_WIDTH || y + height > CANVAS_HEIGHT;
         if (outside && !MAY_BLEED.has(element.type)) {
@@ -155,6 +210,35 @@ function checkOverflow(document: JslaydDocument, bag: DiagnosticBag): void {
           const capacity = characterCapacity(element.geometry.width, element.geometry.height, style);
           if (capacity < floor) {
             bag.error("no_room_for_text", `\`${element.id}\` bloki matn uchun juda kichik (taxminan ${capacity} belgi).`, 0);
+            continue;
+          }
+
+          /**
+           * Room for text is not the same as room for *this* text.
+           *
+           * The floor above asks whether anything at all fits. A title box that
+           * holds fourteen characters clears it and still cannot hold a title:
+           * "Suv resurslarini tejash" is twenty-three, and every deck generated
+           * from that design arrives with its heading cut in half.
+           *
+           * The numbers below are what the binding is actually for, measured
+           * against real Uzbek copy rather than chosen to be safe. A warning
+           * rather than an error because a design may deliberately want a short
+           * label in a small plate — but the author should be told, at the
+           * moment they can still widen the box, rather than by a customer.
+           */
+          const wanted = binding ? WANTS.get(binding) : undefined;
+          const budget = budgets.get(element.id) ?? capacity;
+          if (wanted !== undefined && budget < wanted) {
+            bag.warn(
+              "tight_for_binding",
+              `\`${element.id}\` ${binding} uchun tor: ${budget} belgi (${wanted} kerak).`,
+              0,
+              // Not "the text gets cut": the writer is told this limit and
+              // writes to it. What the box costs is the heading itself — two
+              // words where the topic needed five.
+              "Matn kesilmaydi — yozuvchi shu chegarada yozadi. Lekin bu qutiga to‘liq fikr sig‘maydi: blokni kengaytiring yoki keglni kichraytiring.",
+            );
           }
         }
       }

@@ -358,6 +358,33 @@ test("the analyzer catches text that leaves the canvas", () => {
   assert.ok(report.findings.some((item) => item.code === "out_of_canvas"));
 });
 
+test("the analyzer catches a slot too small for the copy it is bound to", () => {
+  /**
+   * Not the same as "too small for any text". A title box a third of its
+   * original width still holds a dozen glyphs and passes the generic floor,
+   * while being a box in which no title can name a subject.
+   */
+  const { document } = compile(MINIMAL.replace("width: 1200", "width: 500"));
+  const report = analyze(document);
+
+  // Narrower still and `no_room_for_text` fires instead, which is the right
+  // answer for a box that holds nothing — the two never report the same box.
+  assert.ok(!report.findings.some((item) => item.code === "no_room_for_text"));
+  const tight = report.findings.find((item) => item.code === "tight_for_binding");
+  assert.ok(tight, `expected a tight slot: ${report.findings.map((item) => item.code).join(", ")}`);
+  assert.match(tight.message, /title/);
+  // A warning, not an error: a design may deliberately want a short label, and
+  // nothing is broken — the writer is told the budget and writes inside it.
+  assert.ok(report.checks.find((check) => check.name === "overflow").passed);
+});
+
+test("a design with room for its copy is not warned about", () => {
+  const { document } = compile(SAMPLE_PROMPT);
+  const report = analyze(document);
+  assert.ok(!report.findings.some((item) => item.code === "tight_for_binding"),
+    report.findings.filter((item) => item.code === "tight_for_binding").map((item) => item.message).join(" | "));
+});
+
 test("the analyzer catches unreadable contrast", () => {
   const { document } = compile(MINIMAL.replace("color: text", "color: background"));
   const report = analyze(document);
