@@ -36,8 +36,23 @@ const providers = (over = {}) => ({
   unsplash: spy(null),
   wikimedia: spy(null),
   openverse: spy(null),
+  // Neutral by default: most of these exercise the ordinary ladder, and a
+  // subject that is not a person is what puts them on it. The person tests set
+  // their own answer.
+  person: async () => ({ kind: "not_a_person" }),
   ...over,
 });
+
+/** A person lookup that records what it was asked, like `spy` does. */
+const personSpy = (answer) => {
+  const calls = [];
+  const fn = async (name, orientation, skip) => {
+    calls.push({ name, orientation, skip });
+    return typeof answer === "function" ? answer() : answer;
+  };
+  fn.calls = calls;
+  return fn;
+};
 
 test("Unsplash answers first when it has anything at all", async () => {
   const p = providers({ unsplash: spy(hit("u.jpg")), openverse: spy(hit("o.jpg")) });
@@ -133,20 +148,21 @@ test("a person is never sent to the stock library", async () => {
    * library does not answer "I have no picture of him" — it returns a confident
    * portrait of somebody else, and a biography opens with a stranger's face.
    */
-  const p = providers({ unsplash: spy(hit("stranger.jpg")), wikimedia: spy(hit("navoiy.jpg")) });
+  const p = providers({ unsplash: spy(hit("stranger.jpg")), wikimedia: spy(hit("wrong.jpg")), person: personSpy({ kind: "photo", hit: hit("navoiy.jpg") }) });
   const found = await findFromProviders(p, { query: "Alisher Navoiy" });
 
-  assert.equal(found.source, "wikimedia");
+  assert.equal(found.source, "wikidata");
   assert.equal(p.unsplash.calls.length, 0, "the stock library was asked about a person");
+  assert.equal(p.wikimedia.calls.length, 0, "an image search was asked about a person");
 });
 
 test("a person's name is asked for whole, not widened", async () => {
   // The ladder drops words to broaden a failing search. For a subject that
   // finds something near enough; for a person it finds a different person.
-  const p = providers({ openverse: spy(null) });
+  const p = providers({ person: personSpy({ kind: "unverified", reason: "no_entity" }) });
   await findFromProviders(p, { query: "Alisher Navoiy hayoti va ijodi" });
 
-  assert.equal(p.openverse.calls.length, 1, "a name must not be broadened into a search for anybody");
+  assert.equal(p.person.calls.length, 1, "a name must not be broadened into a search for anybody");
 });
 
 test("an ordinary subject still gets the stock library and the full ladder", async () => {
@@ -168,7 +184,9 @@ test("Unsplash first: a stock answer stops the search", async () => {
 
 test("Wikimedia second: it answers when Unsplash cannot", async () => {
   const p = providers({ unsplash: spy(null), wikimedia: spy(hit("w.jpg")), openverse: spy(hit("o.jpg")) });
-  const found = await findFromProviders(p, { query: "Registan Samarkand" });
+  // An unnamed subject, so the order is the ordinary one: a named subject goes
+  // to Commons first and is covered by its own test below.
+  const found = await findFromProviders(p, { query: "ancient stone archway" });
 
   assert.equal(found.source, "wikimedia");
   assert.equal(p.openverse.calls.length, 0, "the widest net is only for when the other two came back empty");
@@ -176,7 +194,7 @@ test("Wikimedia second: it answers when Unsplash cannot", async () => {
 
 test("Openverse last: it answers when neither of the others could", async () => {
   const p = providers({ unsplash: spy(null), wikimedia: spy(null), openverse: spy(hit("o.jpg")) });
-  const found = await findFromProviders(p, { query: "Apollo 11 Moon" });
+  const found = await findFromProviders(p, { query: "moon landing footage" });
   assert.equal(found.source, "openverse");
 });
 
@@ -243,4 +261,101 @@ test("an unnamed subject keeps the order it always had", async () => {
 
   assert.equal(found.source, "unsplash");
   assert.equal(p.wikimedia.calls.length, 0);
+});
+
+/* ----------------------------------------------- a person, or nobody at all */
+
+test("a person nobody can verify gets no picture, not somebody else's", async () => {
+  /**
+   * The rule the whole exercise is for. Every index answers a name with
+   * something: Commons with a comedy premiere, a stock library with a
+   * confident stranger, Openverse with whichever person its index liked. All
+   * three look like success.
+   *
+   * No picture is a slide the design already knows how to draw. The wrong
+   * picture is a different person's face on somebody's biography.
+   */
+  const p = providers({
+    person: personSpy({ kind: "unverified", reason: "no_entity" }),
+    unsplash: spy(hit("stranger.jpg")),
+    wikimedia: spy(hit("comedy-premiere.jpg")),
+    openverse: spy(hit("some-man.jpg")),
+  });
+
+  assert.equal(await findFromProviders(p, { query: "Sherzodxon Qudratxo‘ja" }), null);
+  assert.equal(p.unsplash.calls.length, 0);
+  assert.equal(p.wikimedia.calls.length, 0);
+  assert.equal(p.openverse.calls.length, 0, "not even the fallback may guess at a person");
+});
+
+test("a verified person is used, and nothing else is asked", async () => {
+  const p = providers({ person: personSpy({ kind: "photo", hit: hit("verified.jpg") }), unsplash: spy(hit("stranger.jpg")) });
+  const found = await findFromProviders(p, { query: "Sherzodxon Qudratxo‘ja" });
+
+  assert.equal(found.source, "wikidata");
+  assert.equal(found.hit.url, "verified.jpg");
+});
+
+test("a person provider that throws still yields nothing rather than a guess", async () => {
+  const p = providers({
+    person: async () => { throw new Error("wikidata down"); },
+    unsplash: spy(hit("stranger.jpg")),
+    openverse: spy(hit("some-man.jpg")),
+  });
+
+  assert.equal(await findFromProviders(p, { query: "Sherzodxon Qudratxo‘ja" }), null);
+  assert.equal(p.openverse.calls.length, 0);
+});
+
+test("orientation is passed to the person lookup but never overrules identity", async () => {
+  // The right person's less-than-ideal photograph beats the wrong person's
+  // perfect portrait, so orientation is a preference the provider may ignore.
+  const p = providers({ person: personSpy({ kind: "photo", hit: hit("verified.jpg") }) });
+  await findFromProviders(p, { query: "Alisher Navoiy", orientation: "portrait" });
+  assert.equal(p.person.calls[0].orientation, "portrait");
+});
+
+test("the subject is checked for person-ness, not the whole decorated query", async () => {
+  /**
+   * By the time a slide asks for a picture the query carries the scene as well
+   * as the subject — "Sherzodxon Qudratxoja dramatic" — and testing the whole
+   * string decides it is not a name. That is how the wrong photograph reached a
+   * biography even after the person rule existed.
+   */
+  const p = providers({
+    person: personSpy({ kind: "photo", hit: hit("verified.jpg") }),
+    wikimedia: spy(hit("comedy-premiere.jpg")),
+  });
+
+  const found = await findFromProviders(p, { query: "Sherzodxon Qudratxoja dramatic" });
+  assert.equal(found.source, "wikidata");
+  assert.equal(p.person.calls[0].name, "Sherzodxon Qudratxoja", "the scene words must not reach the encyclopaedia");
+  assert.equal(p.wikimedia.calls.length, 0);
+});
+
+test("a name that turns out to be a place carries on to the ordinary providers", async () => {
+  /**
+   * "Registan Samarkand" reads like a name by any shallow test, and it is a
+   * square. Blocking it would lose the picture entirely, so the entity lookup
+   * says what it found rather than only whether it found a portrait.
+   */
+  const p = providers({
+    person: personSpy({ kind: "not_a_person" }),
+    wikimedia: spy(hit("registan.jpg")),
+  });
+
+  const found = await findFromProviders(p, { query: "Registan Samarkand ancient" });
+  assert.equal(found.source, "wikimedia");
+});
+
+test("a person the encyclopaedia cannot confirm blocks every other provider", async () => {
+  const p = providers({
+    person: personSpy({ kind: "unverified", reason: "entity_name_mismatch" }),
+    unsplash: spy(hit("stranger.jpg")),
+    wikimedia: spy(hit("someone-else.jpg")),
+    openverse: spy(hit("any-man.jpg")),
+  });
+
+  assert.equal(await findFromProviders(p, { query: "Sherzodxon Qudratxoja portrait" }), null);
+  assert.equal(p.wikimedia.calls.length, 0, "the search that returns a comedy premiere must not be reached");
 });

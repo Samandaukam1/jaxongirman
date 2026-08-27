@@ -1,3 +1,4 @@
+import { normaliseName } from "./entity-match.ts";
 import { namedSubject } from "./photo-query.ts";
 import { queryLadder, type PhotoHit } from "./unsplash-results.ts";
 
@@ -11,7 +12,7 @@ import { queryLadder, type PhotoHit } from "./unsplash-results.ts";
  * break Unsplash on purpose to see Openverse answer.
  */
 
-export type PhotoSource = "unsplash" | "wikimedia" | "openverse";
+export type PhotoSource = "unsplash" | "wikidata" | "wikimedia" | "openverse";
 export type Orientation = "landscape" | "portrait" | "square" | "any";
 
 export type ProviderSearch = (query: string, orientation: Orientation, skip: number) => Promise<PhotoHit | null>;
@@ -26,7 +27,31 @@ export type PhotoProviders = {
    */
   wikimedia: ProviderSearch;
   openverse: ProviderSearch;
+  /**
+   * The picture a named person's own entity records as itself.
+   *
+   * Separate from the others because it is not a search and does not answer
+   * like one. Identity is established first and the picture follows from it,
+   * and when there is no picture the caller has to know *why*: a name that
+   * turns out to be a building may go on to the ordinary providers, and a name
+   * that is a person may not.
+   */
+  person: PersonLookup;
 };
+
+export type PersonResult =
+  /** Verified: this is the picture the entity records as itself. */
+  | { kind: "photo"; hit: PhotoHit }
+  /** The name resolves to a place, a film, a building — carry on searching. */
+  | { kind: "not_a_person" }
+  /** It reads as a person and could not be verified. Stop: no picture. */
+  | { kind: "unverified"; reason: string };
+
+export type PersonLookup = (
+  name: string,
+  orientation: Orientation,
+  skip: number,
+) => Promise<PersonResult>;
 
 /**
  * Unsplash across the whole ladder first, then Openverse across it.
@@ -71,16 +96,76 @@ export async function findFromProviders(
    * photograph of the wrong human on a biography is a different kind of wrong.
    * Everything unnamed keeps the order it always had.
    */
-  const person = looksLikePerson(input.query);
-  const named = person || namedSubject(input.query).length > 0;
+  /**
+   * Is the *subject* a person, rather than the whole decorated query?
+   *
+   * By the time a slide asks for a picture the query carries the scene as well
+   * as the subject — "Sherzodxon Qudratxoja dramatic" — and testing the whole
+   * string decides it is not a name, which is how the wrong photograph reached
+   * a biography even after the person rule existed. The subject is the part
+   * that names something; the rest describes it.
+   */
+  const subject = namedSubject(input.query) || input.query;
+  const maybePerson = looksLikePerson(subject);
+  const named = maybePerson || namedSubject(input.query).length > 0;
 
   const unsplash = { source: "unsplash" as const, search: providers.unsplash };
   const wikimedia = { source: "wikimedia" as const, search: providers.wikimedia };
   const openverse = { source: "openverse" as const, search: providers.openverse };
 
+  /**
+   * A named person has exactly one acceptable source, and it is not a search.
+   *
+   * Every image index answers a name with something. Commons offers a comedy
+   * premiere for "Sherzodxon Qudratxo'ja"; a stock library offers a confident
+   * portrait of a stranger; Openverse offers whichever photograph of a person
+   * its index liked. All three look like success and all three put somebody
+   * else's face on a person's biography.
+   *
+   * So a person is resolved as an entity or not at all. No picture is a slide
+   * the design already knows how to draw. The wrong picture is a different
+   * kind of mistake, and no amount of relevance ranking makes it recoverable.
+   */
+  if (maybePerson) {
+    /**
+     * Asked by name alone, never by the decorated query.
+     *
+     * The scene words describe a photograph; the entity lookup needs the
+     * person. Sending "Sherzodxon Qudratxoja dramatic" to an encyclopaedia
+     * finds nothing and would fail somebody who is actually in it.
+     */
+    let result: PersonResult = { kind: "unverified", reason: "lookup_failed" };
+    try {
+      result = await providers.person(subject, orientation, skip);
+    } catch {
+      result = { kind: "unverified", reason: "lookup_failed" };
+    }
+
+    if (result.kind === "photo") {
+      console.log(JSON.stringify({
+        event: "photo_found", photo_query: subject, photo_provider: "wikidata",
+        photo_width: result.hit.width, photo_height: result.hit.height,
+        search_type: "person", fell_back: false,
+      }));
+      return { hit: result.hit, source: "wikidata" };
+    }
+
+    if (result.kind === "unverified") {
+      console.log(JSON.stringify({
+        event: "photo_missing", photo_query: subject, search_type: "person",
+        // Said explicitly, because an empty frame on a biography is a decision
+        // rather than a failure and somebody will ask why.
+        reason: result.reason,
+      }));
+      return null;
+    }
+    // `not_a_person`: a place, a building, a film named after somebody. The
+    // ordinary providers are exactly right for those.
+  }
+
   const order: Array<{ source: PhotoSource; search: ProviderSearch }> = [];
   if (named) order.push(wikimedia);
-  if (!person && providers.unsplashConfigured()) order.push(unsplash);
+  if (providers.unsplashConfigured()) order.push(unsplash);
   if (!named) order.push(wikimedia);
   order.push(openverse);
 
@@ -92,7 +177,7 @@ export async function findFromProviders(
      * finds something near enough and for a person finds a different person —
      * "Alisher Navoiy" widened to "Alisher" is a search for anybody.
      */
-    const rungs = person ? ladder.slice(0, 1) : ladder;
+    const rungs = maybePerson ? ladder.slice(0, 1) : ladder;
     for (const rung of rungs) {
       let hit: PhotoHit | null = null;
       try {
@@ -177,7 +262,17 @@ export function looksLikePerson(query: string): boolean {
 
   if (remaining.length < 2 || remaining.length > 3) return false;
 
-  // Every remaining word starts with a capital and is a word rather than a
-  // number or a code. A sentence has lower-case words in it; a name does not.
-  return remaining.every((word) => /^[\p{Lu}][\p{L}'’-]{1,}$/u.test(word));
+  /**
+   * Every remaining word starts with a capital and is a word rather than a
+   * number or a code. A sentence has lower-case words in it; a name does not.
+   *
+   * The apostrophes come out first. `Qudratxo‘ja` carries U+2018, `Qudratxo’ja`
+   * carries U+2019 and `Qudratxoʻja` carries U+02BB — one surname on three
+   * keyboards — and a character class that knows only some of them decides a
+   * person is not a person, which is how the wrong photograph gets through.
+   */
+  return remaining.every((word) => {
+    const bare = word.replace(/[‘’ʻʼ′'`´]/g, "");
+    return /^[\p{Lu}][\p{L}-]{1,}$/u.test(bare) && normaliseName(word).length > 1;
+  });
 }

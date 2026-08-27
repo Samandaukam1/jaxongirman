@@ -33,7 +33,7 @@
     "test:wikimedia": "node --test supabase/tests/wikimedia-live.test.mjs",
     "test:photos:template": "DESIGN_SLUG=kardiologiya EXPECT_PROVIDER=any CHECK_EXPORT=1 node supabase/tests/photo-provider-smoke.mjs",
     "test:watchdog": "node supabase/tests/watchdog-smoke.mjs",
-    "test:photoorder": "node --test supabase/tests/photo-order.test.mjs supabase/tests/unsplash.test.mjs supabase/tests/wikimedia.test.mjs supabase/tests/writer.test.mjs supabase/tests/pptx-pictures.test.mjs",
+    "test:photoorder": "node --test supabase/tests/photo-order.test.mjs supabase/tests/unsplash.test.mjs supabase/tests/wikimedia.test.mjs supabase/tests/entity-match.test.mjs supabase/tests/writer.test.mjs supabase/tests/pptx-pictures.test.mjs",
     "test:pptx": "node supabase/tests/pptx-import-smoke.mjs",
     "test:pairing": "node supabase/tests/pairing-smoke.mjs",
     "dev:web": "npm run dev --workspace=@jaxongirman/web",

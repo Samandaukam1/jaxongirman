@@ -26,7 +26,7 @@ export function namedSubject(topic: string): string {
   const named: string[] = [];
 
   for (const [at, word] of words.entries()) {
-    const bare = word.replace(/[^\p{L}\p{N}'’-]/gu, "");
+    const bare = word.replace(/[^\p{L}\p{N}‘’ʻʼ'-]/gu, "");
     if (bare.length < 3) continue;
     // The first word's capital is the sentence's, not the subject's — unless
     // the word after it is capitalised too, which is what a full name looks
@@ -54,7 +54,15 @@ export function photoQuery(direction: string, topic: string): string {
 
   const words = direction
     .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s-]/gu, " ")
+    /**
+     * The apostrophe stays.
+     *
+     * In Uzbek Latin `o‘` and `g‘` are letters, not punctuation: stripping them
+     * turns "Qudratxo‘ja" into "Qudratxoja", which is a different string to
+     * every index that matches on labels — and Wikidata answers the first and
+     * not the second.
+     */
+    .replace(/[^\p{L}\p{N}\s‘’ʻʼ'-]/gu, " ")
     .split(/\s+/)
     .filter((word) => word.length > 2 && !STYLE_WORDS.has(word));
 

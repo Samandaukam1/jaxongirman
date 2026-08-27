@@ -29,6 +29,7 @@ import { findFromProviders, type Orientation, type PhotoSource } from "../photo-
 import type { PhotoHit } from "../unsplash-results.ts";
 import { searchUnsplash, unsplashConfigured } from "./unsplash.ts";
 import { searchWikimedia } from "./wikimedia.ts";
+import { searchPerson } from "./wikidata.ts";
 
 const ENDPOINT = "https://api.openverse.org/v1/images/";
 
@@ -77,6 +78,7 @@ export function searchStock(input: {
     unsplash: searchUnsplash,
     wikimedia: searchWikimedia,
     openverse: searchOpenverse,
+    person: searchPerson,
   }, input);
 }
 

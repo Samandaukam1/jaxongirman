@@ -188,9 +188,13 @@ try {
     check(Boolean(credit.license), `${row.provider}: the licence is recorded (${credit.license ?? "—"})`);
     // Commons results carry a licence URL and are the ones whose terms are
     // actually conditional, so the link has to survive to the credits slide.
-    if (row.provider === "wikimedia") {
-      check(/^https?:\/\//.test(credit.licenseUrl ?? ""), `wikimedia: the licence link is recorded (${credit.licenseUrl ?? "—"})`);
-      check(!/[<>]/.test(credit.creator ?? ""), "wikimedia: the credit is text, not markup");
+    if (row.provider === "wikimedia" || row.provider === "wikidata") {
+      // Public-domain files carry no licence URL, which is correct rather than
+      // missing: there are no terms to link to.
+      const publicDomain = /public domain|^cc0/i.test(credit.license ?? "");
+      check(publicDomain || /^https?:\/\//.test(credit.licenseUrl ?? ""),
+        `${row.provider}: the licence link is recorded (${credit.licenseUrl || credit.license})`);
+      check(!/[<>]/.test(credit.creator ?? ""), `${row.provider}: the credit is text, not markup`);
     }
     check(row.metadata?.source === row.provider, `${row.provider}: metadata and column agree on the source`);
   }
