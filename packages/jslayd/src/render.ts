@@ -769,7 +769,15 @@ function renderImage(element: ImageElement, box: Box, geometry: Geometry, contex
    * page; above it nothing is a logo.
    */
   const supplied = context.slide.images[element.slot] ?? null;
-  const roomy = (box.width * box.height) >= (CANVAS_WIDTH * CANVAS_HEIGHT) / 10;
+  /**
+   * Measured in authoring units, which is what the canvas constants are in.
+   *
+   * `box` is the render box — already scaled down to the model the apps draw —
+   * so comparing it against a 1920×1080 canvas made the threshold nearly four
+   * times what it reads as. A picture filling a third of the page counted as
+   * furniture, and every template kept its own artwork.
+   */
+  const roomy = (geometry.width * geometry.height) >= (CANVAS_WIDTH * CANVAS_HEIGHT) / 10;
   const picture = (supplied && (roomy || !owned)) ? supplied : owned ?? supplied ?? null;
   // A slot with no picture still draws when the design says the image is
   // required: the renderer shows a placeholder, which is a composition with a

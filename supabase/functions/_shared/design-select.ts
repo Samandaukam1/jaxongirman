@@ -141,6 +141,25 @@ export function rankDesigns(
       if (candidate.featured) score += 1;
 
       /**
+       * Nothing in the topic was recognised, so a subject template is a guess.
+       *
+       * A design claiming "biologiya: 100" is asserting what it is for. Handed
+       * a topic the taxonomy does not know — a misspelled name, a subject
+       * nobody has catalogued — every design scores the same and the winner is
+       * whichever sorts first, which is how a deck about a poet's life came out
+       * in a biology template.
+       *
+       * A design that claims no subject claims nothing wrong. When the topic is
+       * unrecognised it is the safer answer, so the specific ones step back —
+       * by how loudly they claim, which is what makes a lightly-tagged design
+       * still usable and a strongly-tagged one a deliberate choice.
+       */
+      if (wanted.size === 0 && candidate.keywords.length > 0) {
+        const loudest = Math.max(...candidate.keywords.map((claim) => Math.max(0, Math.min(100, claim.score))));
+        score -= (loudest / 100) * 4;
+      }
+
+      /**
        * A cover that cannot say what the deck is about.
        *
        * An architecture template's cover word is "Architecture" — a box that

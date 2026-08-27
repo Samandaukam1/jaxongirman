@@ -1411,10 +1411,39 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
         ?? (index === 0 ? byPurpose("cover") ?? jslayd.document.archetypes[0] : undefined)
         ?? (index === 1 ? byPurpose("agenda") : undefined);
 
-      /** A slot the design left for the deck to fill, rather than its own artwork. */
-      const wantsPicture = (index: number) => (archetypeAt(index)?.elements ?? []).some((element) =>
-        (element.type === "image" || element.type === "frame")
-        && !(element.source && "asset" in element.source));
+      /**
+       * The two pages whose layout is not settled yet.
+       *
+       * `archetypesInOrder` covers the written body. The cover and the agenda
+       * are chosen later, inside the layout step, because that choice depends
+       * on which pictures were found — and the pictures are found here. The
+       * circle is real and not worth breaking for this.
+       *
+       * So for a template, where nearly every page carries a stock photograph
+       * somebody else chose, an unresolved prefix page is assumed to want one.
+       * The cost of being wrong is a search nothing uses; the cost of not
+       * asking is the template's own picture on the second page of every deck,
+       * which is what an author noticed.
+       */
+      const unresolvedPrefix = (index: number) => isTemplate && index < DECK_PREFIX && !archetypeAt(index);
+
+      /**
+       * A page this deck can put a picture on.
+       *
+       * For a written design that means an *empty* slot: its own artwork is
+       * part of the composition and replacing it would fight the design.
+       *
+       * For a template it is the opposite. Every picture a template has is its
+       * own — a stock photograph chosen for somebody else's subject — and those
+       * are exactly the ones worth replacing. Asking for empty slots there
+       * found none, which is why a six-page template deck came back with one
+       * picture changed out of six.
+       */
+      const wantsPicture = (index: number) => (archetypeAt(index)?.elements ?? []).some((element) => {
+        if (element.type !== "image" && element.type !== "frame") return false;
+        const owned = Boolean(element.source && "asset" in element.source);
+        return isTemplate ? true : !owned;
+      });
 
       // A slide whose every visual slot is a library element needs no
       // photograph: the object is the picture.
@@ -1438,10 +1467,11 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
        * most.
        */
       const targets = isTemplate
+        // Every page that draws a picture, capped so a long deck does not spend
+        // a search on each of thirty pages.
         ? indexed
-          .filter(({ index }) => (archetypesInOrder[index]?.elements ?? [])
-            .some((element) => element.type === "image" || element.type === "frame"))
-          .slice(0, Math.ceil(plan.slides.length * 0.6))
+          .filter(({ index }) => wantsPicture(index) || unresolvedPrefix(index))
+          .slice(0, Math.ceil(plan.slides.length * 0.7))
         : policy === "cover"
         ? indexed.filter(({ index }) => index === 0)
         // `contextual` always dresses the opening slide and always leaves the

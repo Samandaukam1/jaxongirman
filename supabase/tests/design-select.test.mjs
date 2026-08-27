@@ -619,3 +619,44 @@ test("a short topic is not a shortfall", () => {
   ], wanted);
   assert.equal(first.score, second.score, "nothing to penalise when the title fits");
 });
+
+test("an unrecognised topic gets a design that claims no subject", () => {
+  /**
+   * The choice this got wrong. "Alisher Naboo hayoti va ijodi" — a misspelled
+   * name — matched nothing in the taxonomy, so every design scored the same and
+   * the winner was whichever sorted first. A deck about a poet's life came out
+   * in a biology template.
+   *
+   * A design claiming "biologiya: 100" asserts what it is for; a design
+   * claiming nothing asserts nothing wrong.
+   */
+  const nothing = new Map();
+  const ranked = rankDesigns([
+    claiming("biologiya", "biologiya", 100),
+    { id: "neutral", slug: "neutral", keywords: [], pages: 10, featured: false },
+  ], nothing);
+
+  assert.equal(ranked[0].id, "neutral");
+});
+
+test("a recognised topic still goes to the design that claims it", () => {
+  // The step-back only applies when nothing matched. A design that claims the
+  // subject in front of it is exactly what should win.
+  const wanted = new Map([["biologiya", 3]]);
+  const ranked = rankDesigns([
+    claiming("biologiya", "biologiya", 100),
+    { id: "neutral", slug: "neutral", keywords: [], pages: 10, featured: false },
+  ], wanted);
+
+  assert.equal(ranked[0].id, "biologiya");
+});
+
+test("a lightly tagged design steps back less than a loudly tagged one", () => {
+  const nothing = new Map();
+  const ranked = rankDesigns([
+    claiming("loud", "biologiya", 100),
+    claiming("quiet", "biologiya", 20),
+  ], nothing);
+
+  assert.equal(ranked[0].id, "quiet");
+});

@@ -507,6 +507,9 @@ test("a picture the deck found replaces the template's, unless it is furniture",
   };
 
   const drawn = JSON.stringify(renderArchetype(DESIGN, withArt, slide));
+  // Authoring units, which is the space the canvas constants are in. Measuring
+  // the render box against them made the threshold nearly four times what it
+  // reads as, and every template kept its own artwork.
   const big = art.geometry.width * art.geometry.height >= (1920 * 1080) / 10;
   if (big) assert.ok(drawn.includes("example.test"), "the found picture must win a content-sized slot");
   else assert.ok(!drawn.includes("example.test"), "a logo-sized slot keeps the design's own mark");
@@ -553,4 +556,35 @@ test("tight leading is kept tight, not normalised away", () => {
     .sort((first, second) => second.style.fontSize - first.style.fontSize)[0];
   if (!headline) return;
   assert.ok(headline.style.lineHeight <= headline.style.fontSize * 1.3, "leading was loosened past what any design asked for");
+});
+
+test("a picture filling a third of the page is content, not furniture", () => {
+  /**
+   * The arithmetic this got wrong. The threshold is a tenth of the canvas, and
+   * it was measured against the *render* box — already scaled down to the model
+   * the apps draw — while the canvas constants are in authoring units. The
+   * effective threshold became nearly four tenths, so a template photograph
+   * covering a third of the page counted as a logo and was never replaced.
+   */
+  const doc = compile(SAMPLE_PROMPT).document;
+  const third = {
+    ...doc,
+    archetypes: [{
+      ...doc.archetypes[0],
+      elements: [{
+        id: "art", type: "image", slot: "art_1",
+        // A third of 1920×1080.
+        geometry: { x: 0, y: 0, width: 700, height: 1000, rotation: 0, zIndex: 1, anchor: "top-left" },
+        when: "always", opacity: 1, grow: false,
+        source: { asset: "own.png" }, strategy: "none", required: true,
+        queryFrom: [], orientation: "any", stylePreference: null, fit: "cover",
+        focus: { x: 0.5, y: 0.5 }, corners: null, border: null, shadows: [],
+        overlay: null, overlayOpacity: 0,
+      }],
+    }],
+  };
+
+  const slide = { ...fullSlide("cover"), images: { art_1: { url: "https://example.test/found.jpg" } } };
+  const drawn = JSON.stringify(renderArchetype(third, third.archetypes[0], slide));
+  assert.ok(drawn.includes("example.test"), "a third of the page is the page's picture");
 });
