@@ -99,3 +99,57 @@ test("the style preference widens a failing search rather than narrowing the fir
   assert.equal(rungs[0], "growth", "the subject is asked for first, unqualified");
   assert.ok(rungs.some((rung) => rung.includes("editorial")), "the theme was never tried");
 });
+
+/* ---------------------------------------------------------------- people */
+
+const { looksLikePerson } = await import(`${edge}/photo-order.js`);
+
+test("a name is recognised, a subject is not", () => {
+  for (const name of ["Alisher Navoiy", "Jaxongir Qurbonnazarov", "Islom Karimov", "Ada Lovelace"]) {
+    assert.ok(looksLikePerson(name), `${name} should read as a person`);
+  }
+  for (const subject of [
+    "Korrupsiyaga qarshi kurash",
+    "suv resurslarini tejash",
+    "Toshkent metrosi",
+    "Raqamli iqtisodiyot",
+    "AI",
+  ]) {
+    assert.ok(!looksLikePerson(subject), `${subject} should not read as a person`);
+  }
+});
+
+test("a name wearing a topic word is still a name", () => {
+  // "Jaxongir Qurbonnazarov haqida" is a biography of one person, and the
+  // picture it needs is of him.
+  assert.ok(looksLikePerson("Jaxongir Qurbonnazarov haqida"));
+  assert.ok(looksLikePerson("Alisher Navoiy hayoti"));
+});
+
+test("a person is never sent to the stock library", async () => {
+  /**
+   * The failure this exists to prevent. Asked for "Alisher Navoiy", a stock
+   * library does not answer "I have no picture of him" — it returns a confident
+   * portrait of somebody else, and a biography opens with a stranger's face.
+   */
+  const p = providers({ unsplash: spy(hit("stranger.jpg")), openverse: spy(hit("navoiy.jpg")) });
+  const found = await findFromProviders(p, { query: "Alisher Navoiy" });
+
+  assert.equal(found.source, "openverse");
+  assert.equal(p.unsplash.calls.length, 0, "the stock library was asked about a person");
+});
+
+test("a person's name is asked for whole, not widened", async () => {
+  // The ladder drops words to broaden a failing search. For a subject that
+  // finds something near enough; for a person it finds a different person.
+  const p = providers({ openverse: spy(null) });
+  await findFromProviders(p, { query: "Alisher Navoiy hayoti va ijodi" });
+
+  assert.equal(p.openverse.calls.length, 1, "a name must not be broadened into a search for anybody");
+});
+
+test("an ordinary subject still gets the stock library and the full ladder", async () => {
+  const p = providers({ unsplash: spy(null), openverse: spy(hit("o.jpg")) });
+  await findFromProviders(p, { query: "suv resurslarini tejash" });
+  assert.ok(p.unsplash.calls.length > 1, "a subject must still get the preferred index and the whole ladder");
+});

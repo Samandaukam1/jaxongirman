@@ -43,12 +43,29 @@ export async function findFromProviders(
   const skip = input.skip ?? 0;
   const ladder = queryLadder(input.query, input.theme ?? undefined);
 
+  /**
+   * A named person goes to the encyclopaedia, and only there.
+   *
+   * Unsplash has no photograph of Alisher Navoiy and will not say so: it
+   * answers with a confident portrait of somebody else, which on the cover of a
+   * biography is worse than an empty frame. Openverse indexes Wikimedia, which
+   * either holds that person or holds nothing.
+   */
+  const person = looksLikePerson(input.query);
   const order: Array<{ source: PhotoSource; search: ProviderSearch }> = [];
-  if (providers.unsplashConfigured()) order.push({ source: "unsplash", search: providers.unsplash });
+  if (!person && providers.unsplashConfigured()) order.push({ source: "unsplash", search: providers.unsplash });
   order.push({ source: "openverse", search: providers.openverse });
 
   for (const { source, search } of order) {
-    for (const rung of ladder) {
+    /**
+     * A name is asked for as a name, not widened.
+     *
+     * The ladder drops words to broaden a failing search, which for a subject
+     * finds something near enough and for a person finds a different person —
+     * "Alisher Navoiy" widened to "Alisher" is a search for anybody.
+     */
+    const rungs = person ? ladder.slice(0, 1) : ladder;
+    for (const rung of rungs) {
       let hit: PhotoHit | null = null;
       try {
         hit = await search(rung, orientation, skip);
@@ -61,4 +78,59 @@ export async function findFromProviders(
     }
   }
   return null;
+}
+
+/**
+ * Does this query name a person?
+ *
+ * It matters because the two indexes fail differently. Asked for "Alisher
+ * Navoiy", a stock library does not say "I have no picture of him" — it
+ * confidently returns a photograph of some other person, and a biography deck
+ * opens with a stranger's face. An encyclopaedic index either has that person
+ * or returns nothing, which is the honest answer and the one a deck can
+ * survive.
+ *
+ * Deliberately conservative. A false positive costs a stock photograph that
+ * would have been fine; a false negative puts the wrong human on the cover of
+ * somebody's biography, and those are not the same mistake.
+ */
+
+/** Words that make a phrase a subject rather than a name. */
+const NOT_A_NAME = new Set([
+  "haqida", "hayoti", "biografiya", "tarjimai", "faoliyati", "ijodi", "asarlari",
+  "tarixi", "rivoji", "muammolari", "tahlili", "asoslari", "usullari", "turlari",
+  "about", "life", "biography", "history", "analysis",
+]);
+
+/**
+ * Uzbek names carry these as separate words. "Jaxongir Qurbonnazarov o'g'li" is
+ * one person, not a person and a topic.
+ */
+const NAME_PARTICLES = new Set(["o'g'li", "ogli", "qizi", "bin", "ibn", "van", "de", "al"]);
+
+export function looksLikePerson(query: string): boolean {
+  const words = query.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0 || words.length > 6) return false;
+
+  /**
+   * The topic words come off first, then what is left has to be a name.
+   *
+   * Checking the length before stripping them was backwards: "Alisher Navoiy
+   * hayoti va ijodi" is five words and a biography of one person, and counting
+   * first ruled it out before the words that made it long were even looked at.
+   */
+  const remaining = words.filter((word) => {
+    const bare = word.toLowerCase().replace(/[^\p{L}'’]/gu, "");
+    if (!bare) return false;
+    if (NOT_A_NAME.has(bare) || NAME_PARTICLES.has(bare)) return false;
+    // Connectives: too short to be a name, and lower case in every language
+    // this writes in.
+    return !(bare.length <= 2 && word === word.toLowerCase());
+  });
+
+  if (remaining.length < 2 || remaining.length > 3) return false;
+
+  // Every remaining word starts with a capital and is a word rather than a
+  // number or a code. A sentence has lower-case words in it; a name does not.
+  return remaining.every((word) => /^[\p{Lu}][\p{L}'’-]{1,}$/u.test(word));
 }
