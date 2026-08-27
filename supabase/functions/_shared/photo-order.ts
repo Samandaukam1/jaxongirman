@@ -1,3 +1,4 @@
+import { namedSubject } from "./photo-query.ts";
 import { queryLadder, type PhotoHit } from "./unsplash-results.ts";
 
 /**
@@ -10,7 +11,7 @@ import { queryLadder, type PhotoHit } from "./unsplash-results.ts";
  * break Unsplash on purpose to see Openverse answer.
  */
 
-export type PhotoSource = "unsplash" | "openverse";
+export type PhotoSource = "unsplash" | "wikimedia" | "openverse";
 export type Orientation = "landscape" | "portrait" | "square" | "any";
 
 export type ProviderSearch = (query: string, orientation: Orientation, skip: number) => Promise<PhotoHit | null>;
@@ -19,6 +20,11 @@ export type PhotoProviders = {
   /** False when no key is configured; Unsplash is then skipped entirely. */
   unsplashConfigured: () => boolean;
   unsplash: ProviderSearch;
+  /**
+   * Wikimedia Commons. No key, no configuration flag — the API is open, so
+   * there is nothing to switch on and nothing that can be left unset.
+   */
+  wikimedia: ProviderSearch;
   openverse: ProviderSearch;
 };
 
@@ -51,10 +57,32 @@ export async function findFromProviders(
    * biography is worse than an empty frame. Openverse indexes Wikimedia, which
    * either holds that person or holds nothing.
    */
+  /**
+   * Who is asked first depends on whether the query names something.
+   *
+   * A stock library always answers. Asked for "Amir Temur" it does not say "I
+   * have no picture of him" — it returns a confident photograph of a monument
+   * somewhere else, and the deck looks illustrated while showing the wrong
+   * thing. An encyclopaedia either has that subject or has nothing, and
+   * nothing is the answer that lets the next provider try.
+   *
+   * So a named subject goes to Commons first. A person never reaches the stock
+   * library at all: a photograph of the wrong monument is a weak slide, and a
+   * photograph of the wrong human on a biography is a different kind of wrong.
+   * Everything unnamed keeps the order it always had.
+   */
   const person = looksLikePerson(input.query);
+  const named = person || namedSubject(input.query).length > 0;
+
+  const unsplash = { source: "unsplash" as const, search: providers.unsplash };
+  const wikimedia = { source: "wikimedia" as const, search: providers.wikimedia };
+  const openverse = { source: "openverse" as const, search: providers.openverse };
+
   const order: Array<{ source: PhotoSource; search: ProviderSearch }> = [];
-  if (!person && providers.unsplashConfigured()) order.push({ source: "unsplash", search: providers.unsplash });
-  order.push({ source: "openverse", search: providers.openverse });
+  if (named) order.push(wikimedia);
+  if (!person && providers.unsplashConfigured()) order.push(unsplash);
+  if (!named) order.push(wikimedia);
+  order.push(openverse);
 
   for (const { source, search } of order) {
     /**
@@ -74,9 +102,28 @@ export async function findFromProviders(
         // there is a next one; a throw must not become a deck with no picture.
         break;
       }
-      if (hit) return { hit, source };
+      if (hit) {
+        /**
+         * Which index answered, and what it answered with.
+         *
+         * A deck whose pictures came from the fallback looks the same as one
+         * whose pictures came from the first choice, and the difference only
+         * shows up in the log. No query text beyond the subject and no secret:
+         * the search terms are the author's topic, not their identity.
+         */
+        console.log(JSON.stringify({
+          event: "photo_found",
+          photo_query: rung,
+          photo_provider: source,
+          photo_width: hit.width,
+          photo_height: hit.height,
+          fell_back: source !== order[0]?.source,
+        }));
+        return { hit, source };
+      }
     }
   }
+  console.log(JSON.stringify({ event: "photo_missing", photo_query: input.query, tried: order.map((entry) => entry.source) }));
   return null;
 }
 

@@ -3,10 +3,13 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js";
 /**
  * Photographs, found rather than generated.
  *
- * Two indexes, one pipeline. Unsplash is better curated and is asked first;
- * Openverse indexes openly licensed work across Flickr, Wikimedia and others,
- * needs no key, and answers when Unsplash cannot — no result, an error, or a
- * rate limit, which on a free Unsplash key is a matter of when rather than if.
+ * Three indexes, one pipeline. Unsplash is better curated and is asked first;
+ * Wikimedia Commons has the subjects a real deck is about — Amir Temur, the
+ * Registan, a labelled heart — which no stock library carries; Openverse is the
+ * widest net behind both, indexing openly licensed work across Flickr,
+ * Wikimedia and others. Each answers when the one before it cannot: no result,
+ * an error, or a rate limit, which on a free Unsplash key is a matter of when
+ * rather than if.
  *
  * Which one replies is decided by whether a key is configured, never by a flag
  * somebody has to remember, and the fallback is not optional: an install with
@@ -25,6 +28,7 @@ import { firstUsableOpenverse, type OpenversePhoto } from "../openverse-results.
 import { findFromProviders, type Orientation, type PhotoSource } from "../photo-order.ts";
 import type { PhotoHit } from "../unsplash-results.ts";
 import { searchUnsplash, unsplashConfigured } from "./unsplash.ts";
+import { searchWikimedia } from "./wikimedia.ts";
 
 const ENDPOINT = "https://api.openverse.org/v1/images/";
 
@@ -71,6 +75,7 @@ export function searchStock(input: {
   return findFromProviders({
     unsplashConfigured,
     unsplash: searchUnsplash,
+    wikimedia: searchWikimedia,
     openverse: searchOpenverse,
   }, input);
 }

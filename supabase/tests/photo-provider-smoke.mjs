@@ -67,7 +67,7 @@ try {
   const generated = await user.functions.invoke("generate-presentation", {
     body: {
       presentationId,
-      topic: "Toshkent metrosining me'moriy merosi",
+      topic: process.env.TOPIC ?? "Toshkent metrosining me'moriy merosi",
       title: "Metro me'morchiligi",
       style: "super_professional",
       /**
@@ -186,6 +186,12 @@ try {
     check(Boolean(credit.creator), `${row.provider}: the photographer is recorded (${credit.creator ?? "—"})`);
     check(/^https?:\/\//.test(credit.sourceUrl ?? ""), `${row.provider}: a link back is recorded`);
     check(Boolean(credit.license), `${row.provider}: the licence is recorded (${credit.license ?? "—"})`);
+    // Commons results carry a licence URL and are the ones whose terms are
+    // actually conditional, so the link has to survive to the credits slide.
+    if (row.provider === "wikimedia") {
+      check(/^https?:\/\//.test(credit.licenseUrl ?? ""), `wikimedia: the licence link is recorded (${credit.licenseUrl ?? "—"})`);
+      check(!/[<>]/.test(credit.creator ?? ""), "wikimedia: the credit is text, not markup");
+    }
     check(row.metadata?.source === row.provider, `${row.provider}: metadata and column agree on the source`);
   }
 

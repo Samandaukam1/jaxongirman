@@ -13,6 +13,23 @@ export type PhotoHit = {
   url: string;
   width: number;
   height: number;
+  /**
+   * What the bytes are, where the provider says.
+   *
+   * Optional because two of the three providers do not report it and the
+   * pipeline does not need it — the download's own `content-type` decides the
+   * extension. It is carried so a deck's pictures can be audited later without
+   * fetching them again.
+   */
+  mimeType?: string;
+  /**
+   * The full-size file, when the url above is a rendered variant of it.
+   *
+   * A Commons original is routinely eight thousand pixels across; what goes on
+   * a slide is the rendered copy. Keeping the original addressable is what lets
+   * somebody check the choice, or take a larger copy later.
+   */
+  originalUrl?: string;
   attribution: {
     title: string;
     creator: string;
