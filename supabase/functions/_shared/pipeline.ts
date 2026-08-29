@@ -1353,7 +1353,18 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
 
     const elementCovered = slidesWithElements(jslayd.document, archetypesInOrder as never);
 
-    const generatedImages = await runStage(input.service, input, "generating_images", async () => {
+    /**
+     * Bounded, because this stage is a loop of network calls.
+     *
+     * Each search and each download gives up on its own, but a deck with a
+     * dozen picture slots multiplies those limits together, and the sum can
+     * outlast the wall clock the worker is given. Being killed mid-stage leaves
+     * the job at `running` for ever with the author's credits reserved; giving
+     * up here leaves a deck with fewer pictures, which every design already
+     * handles. Two minutes is well inside the platform's limit and well outside
+     * a healthy run, which finishes this stage in under forty seconds.
+     */
+    const generatedImages = await withDeadline(runStage(input.service, input, "generating_images", async () => {
       if (prepared.presentation.style !== "super_professional" || mode === "mock") return [] as GeneratedImage[];
       /**
        * A template deck used to bring its own photographs and nothing else.
@@ -1609,6 +1620,10 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
           metadata: {
             slide_index: target.index,
             source: photo.source,
+            // What the resolver decided this picture is of. A deck whose
+            // pictures cannot be traced back to a subject cannot be audited
+            // later for the one failure that matters: the wrong person.
+            subject: photo.entity ?? null,
             attribution: photo.attribution,
             // The picture's own shape, so the exporter can choose which frame
             // it belongs in without downloading it twice to find out.
@@ -1636,7 +1651,7 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
       }, {});
       const where = Object.entries(counted).map(([name, count]) => `${name}: ${count}`).join(", ");
       return `${value.length} ta litsenziyalangan foto topildi (${where})`;
-    });
+    }), 120_000, "generating_images");
 
     const built = await runStage(input.service, input, "building_slides", async () => {
       const shared = {
@@ -1688,6 +1703,48 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
       if (elementInsert.error) throw elementInsert.error;
       return rows;
     }, (value) => `${value.slides.length} ta slayd va ${value.elements.length} ta tahrirlanadigan element saqlandi`);
+
+    /**
+     * Which slide, and which hole in it, each picture actually landed in.
+     *
+     * Pictures are found before the slides exist, because the layout depends on
+     * what was found — so an asset row can only be written with a slide index
+     * and no way to say more. The elements know the rest: every image element
+     * carries the slot it fills and the path it draws.
+     *
+     * Read back off what was written rather than predicted from the archetype.
+     * A picture the renderer declined to place — too small a frame, a slot the
+     * substituted composition does not have — would otherwise be recorded as
+     * placed somewhere it is not, and a credit line pointing at the wrong slide
+     * is worse than one pointing nowhere.
+     */
+    if (generatedImages.length > 0) {
+      const placed = new Map<string, { slideId: string; slot: string }>();
+      for (const element of built.elements) {
+        const content = element.content as { storagePath?: unknown; slot?: unknown } | null;
+        const path = typeof content?.storagePath === "string" ? content.storagePath : null;
+        const slot = typeof content?.slot === "string" ? content.slot : null;
+        if (!path || !slot || placed.has(path)) continue;
+        placed.set(path, { slideId: element.slide_id, slot });
+      }
+
+      const stored = await input.service.from("presentation_assets")
+        .select("id,storage_path,metadata")
+        .eq("presentation_id", input.presentationId)
+        .in("storage_path", [...placed.keys()]);
+
+      for (const row of stored.data ?? []) {
+        const where = placed.get(row.storage_path as string);
+        if (!where) continue;
+        const bound = await input.service.from("presentation_assets").update({
+          metadata: { ...(row.metadata as Record<string, unknown> ?? {}), slide_id: where.slideId, image_slot: where.slot },
+        }).eq("id", row.id);
+        // Not fatal. The picture is on the slide either way; what is lost is
+        // the ability to say which slot it is in, and that is worth a line in
+        // the log rather than a failed deck.
+        if (bound.error) console.error("picture binding not recorded", input.presentationId, row.storage_path, bound.error.message);
+      }
+    }
 
     await runStage(input.service, input, "quality_checking", async () => {
       const failed = built.slides.filter((slide) => slide.quality_score < 80);

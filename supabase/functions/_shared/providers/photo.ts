@@ -173,7 +173,16 @@ export async function findPhoto(
 
     const found = { hit: resolved.hit!, source: resolved.provider as never };
 
-    const image = await fetch(found.hit.url);
+    /**
+     * The download is bounded like the search is.
+     *
+     * Every provider call already gives up after ten seconds, but the file
+     * itself was fetched with no limit at all — and a provider that answers
+     * quickly and then serves bytes slowly would hold the whole stage open
+     * until the platform killed the worker, leaving the job at `running` with
+     * the author's credits reserved. A picture is never worth that.
+     */
+    const image = await fetch(found.hit.url, { signal: AbortSignal.timeout(20_000) });
     if (!image.ok) return null;
     const bytes = new Uint8Array(await image.arrayBuffer());
     if (bytes.byteLength === 0) return null;
