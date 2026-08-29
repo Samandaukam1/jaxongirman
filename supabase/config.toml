@@ -425,6 +425,12 @@ verify_jwt = false
 [functions.image-resolver]
 verify_jwt = false
 
+# Telegram is a server-to-server webhook. It authenticates the webhook secret
+# header itself; authenticated app actions validate the Supabase access token in
+# the function, the same asymmetric-key-compatible pattern used elsewhere.
+[functions.telegram-image-bot]
+verify_jwt = false
+
 # Writes a sample slide for a design an administrator is judging. Admin-only,
 # checked in SQL, same as the rest.
 [functions.sample-slide]

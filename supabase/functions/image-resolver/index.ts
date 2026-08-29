@@ -18,9 +18,7 @@
 import { requestContext } from "../_shared/auth.ts";
 import { preflight } from "../_shared/cors.ts";
 import { bodyJson, errorResponse, HttpError, json } from "../_shared/http.ts";
-import { readIntent } from "../_shared/image-intent.ts";
-import { resolveImage } from "../_shared/image-resolver.ts";
-import { searchStock } from "../_shared/providers/photo.ts";
+import { resolveImage, resolveImageCandidates } from "../_shared/image-resolver.ts";
 import type { Orientation } from "../_shared/wikimedia-results.ts";
 
 type Body = {
@@ -52,8 +50,6 @@ Deno.serve(async (request) => {
 
     const orientation = ORIENTATIONS.has(String(body.orientation)) ? body.orientation! : "landscape";
     const mode = body.mode === "candidates" ? "candidates" : "best";
-    const reading = readIntent({ query, title: body.title, topic: body.topic });
-
     if (mode === "best") {
       const resolved = await resolveImage(context.serviceClient, {
         query,
@@ -74,35 +70,23 @@ Deno.serve(async (request) => {
      * and that emptiness is the answer rather than a reason to loosen the
      * search — which is exactly what a human is about to confirm or not.
      */
-    const limit = Math.max(1, Math.min(10, Number(body.limit) || 6));
-    const candidates = [];
-    const seen = new Set<string>();
-
-    for (let at = 0; at < limit; at += 1) {
-      const found = await searchStock({
-        query,
-        orientation,
-        theme: body.stylePreference ?? null,
-        skip: at,
-      });
-      if (!found) break;
-      if (seen.has(found.hit.url)) break;
-      seen.add(found.hit.url);
-      candidates.push({ provider: found.source, ...found.hit });
-    }
-
-    return json({
-      intent: reading.intent,
-      entity: reading.entity,
-      normalized: reading.normalized,
+    const resolved = await resolveImageCandidates(context.serviceClient, {
+      query,
+      title: body.title ?? null,
+      topic: body.topic ?? null,
       orientation,
-      candidates,
-      // Said plainly: for a person this is not "we looked and there were few",
-      // it is "nothing could be proved", and confirming one by hand is how it
-      // gets an answer.
-      note: candidates.length === 0 && reading.intent === "exact_person"
-        ? "Bu shaxs uchun tasdiqlangan rasm topilmadi. Qo‘lda tasdiqlash kerak."
-        : null,
+      stylePreference: body.stylePreference ?? null,
+    }, Number(body.limit) || 6);
+    return json({
+      ...resolved,
+      // Keep the public/admin response shape unchanged: candidate fields are
+      // flattened even though the shared resolver keeps the hit grouped.
+      candidates: resolved.candidates.map((candidate) => ({
+        provider: candidate.provider,
+        ...candidate.hit,
+        storagePath: candidate.storagePath,
+        confidence: candidate.confidence,
+      })),
     });
   } catch (error) {
     return errorResponse(error);

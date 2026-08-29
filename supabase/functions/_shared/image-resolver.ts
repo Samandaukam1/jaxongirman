@@ -73,6 +73,22 @@ export type ResolveInput = {
   used?: ReadonlySet<string>;
 };
 
+export type ResolvedCandidate = {
+  provider: PhotoSource | "verified";
+  hit: PhotoHit;
+  storagePath: string | null;
+  confidence: number;
+};
+
+export type CandidateResult = {
+  intent: ImageIntent;
+  entity: string;
+  normalized: string;
+  orientation: Orientation;
+  candidates: ResolvedCandidate[];
+  note: string | null;
+};
+
 const CONFIDENCE = { verified: 1, entity: 0.9, named: 0.7, generic: 0.5 } as const;
 
 /**
@@ -231,4 +247,78 @@ export async function resolveImage(
     reason: null,
     trace: [...trace, { step: "providers", detail: found.source }],
   });
+}
+
+/**
+ * The resolver's human-choice mode.
+ *
+ * It deliberately shares the verified-library lookup and provider routing with
+ * `best`: Telegram, the admin debugger and generation cannot disagree about
+ * whether a query is a person or loosen an unknown name into a stock portrait.
+ */
+export async function resolveImageCandidates(
+  service: SupabaseClient,
+  input: Omit<ResolveInput, "used" | "skip">,
+  requestedLimit = 6,
+): Promise<CandidateResult> {
+  const reading = readIntent({ query: input.query, title: input.title, topic: input.topic });
+  const orientation = input.orientation ?? "landscape";
+  const limit = Math.max(1, Math.min(10, Math.trunc(requestedLimit) || 6));
+
+  const confirmed = await fromLibrary(service, reading.normalized, reading.intent);
+  if (confirmed?.hit && confirmed.storagePath) {
+    return {
+      intent: reading.intent,
+      entity: reading.entity,
+      normalized: reading.normalized,
+      orientation,
+      candidates: [{
+        provider: "verified",
+        hit: confirmed.hit,
+        storagePath: confirmed.storagePath,
+        confidence: confirmed.confidence,
+      }],
+      note: null,
+    };
+  }
+
+  const candidates: ResolvedCandidate[] = [];
+  const seen = new Set<string>();
+  const intent = reading.intent === "exact_person"
+    ? "exact_person"
+    : reading.intent === "generic_concept" ? "generic" : "named_thing";
+
+  for (let at = 0; at < limit; at += 1) {
+    const found = await searchStock({
+      query: input.query,
+      orientation,
+      theme: input.stylePreference ?? null,
+      skip: at,
+      // An exact person is never reclassified by a provider from the text
+      // shape and never falls through to generic stock search.
+      intent,
+    });
+    if (!found) break;
+    if (seen.has(found.hit.url)) break;
+    seen.add(found.hit.url);
+    candidates.push({
+      provider: found.source,
+      hit: found.hit,
+      storagePath: null,
+      confidence: found.source === "wikidata"
+        ? CONFIDENCE.entity
+        : reading.intent === "generic_concept" ? CONFIDENCE.generic : CONFIDENCE.named,
+    });
+  }
+
+  return {
+    intent: reading.intent,
+    entity: reading.entity,
+    normalized: reading.normalized,
+    orientation,
+    candidates,
+    note: candidates.length === 0 && reading.intent === "exact_person"
+      ? "Bu shaxs uchun tasdiqlangan rasm topilmadi. Qo‘lda tasdiqlash kerak."
+      : null,
+  };
 }

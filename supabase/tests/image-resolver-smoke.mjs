@@ -48,7 +48,10 @@ const userId = created.data.user.id;
  * query — the resolver strips the scene words before looking anything up, and
  * a key built from the whole string would never be found again.
  */
-const invented = `Qoraqalpoq Sinovbek${Date.now().toString(36)}`;
+// Unique per run, but letters only: a trailing digit reads as a model number,
+// which makes the deterministic intent reader call this a product rather than
+// a person — and then the test would be measuring the wrong refusal.
+const invented = `Qoraqalpoq Sinovbek${Date.now().toString(36).replace(/\d/g, "x")}`;
 let normalized = "";
 
 try {
@@ -85,6 +88,7 @@ try {
   /* ------------------------------------------- the rule that matters most */
 
   console.log("\nNoto‘g‘ri odam oldini olish:");
+  check(!/\d/.test(invented), "the fabricated name carries no digit a product rule could catch");
   const unknown = await resolve({ query: invented, mode: "best" });
   // The resolver's own key, so the confirmation below is filed where the next
   // lookup will actually look.

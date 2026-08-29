@@ -4601,6 +4601,177 @@ export type Database = {
         }
         Relationships: []
       }
+      telegram_image_candidates: {
+        Row: {
+          attribution: Json
+          confidence: number
+          created_at: string
+          download_url: string | null
+          height: number
+          mime_type: string | null
+          opaque_id: string
+          original_url: string | null
+          provider: string
+          selected_at: string | null
+          session_id: string
+          storage_bucket: string | null
+          storage_path: string | null
+          width: number
+        }
+        Insert: {
+          attribution?: Json
+          confidence?: number
+          created_at?: string
+          download_url?: string | null
+          height?: number
+          mime_type?: string | null
+          opaque_id: string
+          original_url?: string | null
+          provider: string
+          selected_at?: string | null
+          session_id: string
+          storage_bucket?: string | null
+          storage_path?: string | null
+          width?: number
+        }
+        Update: {
+          attribution?: Json
+          confidence?: number
+          created_at?: string
+          download_url?: string | null
+          height?: number
+          mime_type?: string | null
+          opaque_id?: string
+          original_url?: string | null
+          provider?: string
+          selected_at?: string | null
+          session_id?: string
+          storage_bucket?: string | null
+          storage_path?: string | null
+          width?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "telegram_image_candidates_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "telegram_image_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      telegram_image_sessions: {
+        Row: {
+          cancelled_at: string | null
+          consumed_at: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          image_element_id: string
+          image_slot: string
+          initial_query: string | null
+          intent: string | null
+          latest_query: string | null
+          presentation_id: string
+          slide_id: string
+          slide_index: number
+          status: string
+          telegram_chat_id: number | null
+          telegram_user_id: number | null
+          token_hash: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cancelled_at?: string | null
+          consumed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          image_element_id: string
+          image_slot: string
+          initial_query?: string | null
+          intent?: string | null
+          latest_query?: string | null
+          presentation_id: string
+          slide_id: string
+          slide_index: number
+          status?: string
+          telegram_chat_id?: number | null
+          telegram_user_id?: number | null
+          token_hash: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cancelled_at?: string | null
+          consumed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          image_element_id?: string
+          image_slot?: string
+          initial_query?: string | null
+          intent?: string | null
+          latest_query?: string | null
+          presentation_id?: string
+          slide_id?: string
+          slide_index?: number
+          status?: string
+          telegram_chat_id?: number | null
+          telegram_user_id?: number | null
+          token_hash?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "telegram_image_sessions_image_element_id_fkey"
+            columns: ["image_element_id"]
+            isOneToOne: false
+            referencedRelation: "slide_elements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telegram_image_sessions_presentation_id_user_id_fkey"
+            columns: ["presentation_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "presentations"
+            referencedColumns: ["id", "owner_id"]
+          },
+          {
+            foreignKeyName: "telegram_image_sessions_slide_id_presentation_id_user_id_fkey"
+            columns: ["slide_id", "presentation_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "slides"
+            referencedColumns: ["id", "presentation_id", "owner_id"]
+          },
+        ]
+      }
+      telegram_image_updates: {
+        Row: {
+          completed_at: string | null
+          error_code: string | null
+          received_at: string
+          status: string
+          update_id: number
+        }
+        Insert: {
+          completed_at?: string | null
+          error_code?: string | null
+          received_at?: string
+          status?: string
+          update_id: number
+        }
+        Update: {
+          completed_at?: string | null
+          error_code?: string | null
+          received_at?: string
+          status?: string
+          update_id?: number
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -5725,6 +5896,59 @@ export type Database = {
       assert_reads_own_entitlements: {
         Args: { p_user_id: string }
         Returns: undefined
+      }
+      bind_telegram_image_session: {
+        Args: {
+          p_telegram_chat_id: number
+          p_telegram_user_id: number
+          p_token_hash: string
+        }
+        Returns: {
+          cancelled_at: string | null
+          consumed_at: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          image_element_id: string
+          image_slot: string
+          initial_query: string | null
+          intent: string | null
+          latest_query: string | null
+          presentation_id: string
+          slide_id: string
+          slide_index: number
+          status: string
+          telegram_chat_id: number | null
+          telegram_user_id: number | null
+          token_hash: string
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "telegram_image_sessions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      claim_telegram_image_update: {
+        Args: { p_update_id: number }
+        Returns: boolean
+      }
+      cleanup_telegram_image_sessions: { Args: never; Returns: Json }
+      commit_telegram_image_selection: {
+        Args: {
+          p_byte_size: number
+          p_candidate_id: string
+          p_height: number
+          p_mime_type: string
+          p_session_id: string
+          p_storage_bucket: string
+          p_storage_path: string
+          p_telegram_user_id: number
+          p_width: number
+        }
+        Returns: Json
       }
       create_survey_from_template: {
         Args: { p_template_id: string; p_title?: string }

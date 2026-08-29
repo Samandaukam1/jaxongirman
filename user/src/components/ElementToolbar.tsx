@@ -1,7 +1,7 @@
 import type { Json, Tables } from "@jaxongirman/types";
 import {
   ArrowUpDown, Blend, Bold, Check, ChevronDown, ChevronsDown, ChevronsUp, Image as ImageIcon, Italic, Layers, List,
-  Minus, Plus, Sheet, SquareRoundCorner, Strikethrough, TextAlignCenter, TextAlignEnd, TextAlignJustify, TextAlignStart, Type,
+  Minus, Plus, Send, Sheet, SquareRoundCorner, Strikethrough, TextAlignCenter, TextAlignEnd, TextAlignJustify, TextAlignStart, Type,
   Underline, WandSparkles, type LucideIcon,
 } from "lucide-react-native";
 import { useEffect, useState } from "react";
@@ -34,6 +34,7 @@ type Props = {
   onContent: (content: { [key: string]: Json | undefined }) => void;
   onElement: (patch: { opacity?: number; z_index?: number }) => void;
   onReplaceImage: () => void;
+  onChooseTelegramImage: () => void;
   zRange: { min: number; max: number };
 };
 
@@ -62,7 +63,7 @@ function clamp(value: number, min: number, max: number) {
  * scrolling row of formatting tools, with an expanding panel above it for the
  * ones that need more than a tap.
  */
-export function ElementToolbar({ element, swatches, panel, onPanel, onStyle, onContent, onElement, onReplaceImage, zRange }: Props) {
+export function ElementToolbar({ element, swatches, panel, onPanel, onStyle, onContent, onElement, onReplaceImage, onChooseTelegramImage, zRange }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [recent, setRecent] = useState<string[]>([]);
   useEffect(() => { if (pickerOpen) void recentFonts().then(setRecent); }, [pickerOpen]);
@@ -288,10 +289,18 @@ export function ElementToolbar({ element, swatches, panel, onPanel, onStyle, onC
         ) : null}
 
         {element.type === "image" ? (
-          <Pressable onPress={onReplaceImage} style={styles.chip}>
-            <ImageIcon color={colors.primary} size={icon.sm} strokeWidth={icon.stroke} />
-            <Text style={styles.chipText}>{isVideo ? "Videoni almashtirish" : "Rasmni almashtirish"}</Text>
-          </Pressable>
+          <>
+            <Pressable onPress={onReplaceImage} style={styles.chip}>
+              <ImageIcon color={colors.primary} size={icon.sm} strokeWidth={icon.stroke} />
+              <Text style={styles.chipText}>{isVideo ? "Videoni almashtirish" : "Rasmni almashtirish"}</Text>
+            </Pressable>
+            {!isVideo ? (
+              <Pressable accessibilityLabel="Telegram orqali rasm tanlash" onPress={onChooseTelegramImage} style={styles.chip}>
+                <Send color={colors.primary} size={icon.sm} strokeWidth={icon.stroke} />
+                <Text style={styles.chipText}>Telegram orqali rasm tanlash</Text>
+              </Pressable>
+            ) : null}
+          </>
         ) : null}
 
         {canRound ? <Tool icon={SquareRoundCorner} label="Burchak radiusi" active={panel === "corner"} onPress={() => toggle("corner")} /> : null}
