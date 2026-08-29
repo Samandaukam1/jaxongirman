@@ -8,25 +8,11 @@ import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js";
 import { requestContext } from "../_shared/auth.ts";
 import { preflight } from "../_shared/cors.ts";
 import { bodyJson, errorResponse, HttpError, json } from "../_shared/http.ts";
-import { resolveImage, resolveImageCandidates, type ResolvedCandidate } from "../_shared/image-resolver.ts";
-import {
-  isBlockedIp,
-  safeRemoteUrl,
-  TELEGRAM_IMAGE_MAX_BYTES,
-  validateImageBytes,
-  type ValidatedImage,
-} from "../_shared/telegram-image-security.ts";
+import { resolveImageCandidates, type ResolvedCandidate } from "../_shared/image-resolver.ts";
+import { downloadRemoteImage } from "../_shared/image-download.ts";
+import { IMAGE_MAX_BYTES, validateImageBytes, type ValidatedImage } from "../_shared/image-security.ts";
 
 const BOT_USERNAME = "JaxongirmanAppImagesBot";
-/**
- * Stamped on every automatic answer and stored with the picture.
- *
- * A deck's pictures should say which service found them, not only which index
- * they came from — otherwise "did generation actually go through the resolver"
- * is a question only the source code can answer, and source code is not
- * evidence about a deck somebody generated last week.
- */
-const SERVICE_NAME = "telegram-image-bot";
 const SESSION_SECONDS = 15 * 60;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CALLBACK = /^is:([A-Za-z0-9_-]{16,32})$/;
@@ -89,23 +75,13 @@ type TelegramUpdate = {
 };
 
 type ClientBody = {
-  action?: "create_session" | "complete_session" | "configure_webhook" | "auto_resolve";
+  action?: "create_session" | "complete_session" | "configure_webhook";
   presentationId?: string;
   slideId?: string;
   imageElementId?: string;
   initialQuery?: string | null;
   token?: string;
   query?: string;
-  /** auto_resolve only: the deck being generated and who it belongs to. */
-  ownerId?: string;
-  title?: string | null;
-  topic?: string | null;
-  orientation?: "landscape" | "portrait" | "square" | "any";
-  stylePreference?: string | null;
-  slideIndex?: number;
-  imageSlot?: string | null;
-  /** Subjects this deck has already illustrated, so one is not repeated. */
-  used?: string[];
 };
 
 type StoredCandidate = CandidateRow & { previewUrl: string; title: string };
@@ -188,81 +164,6 @@ async function answerCallback(callbackId: string, text: string, showAlert = fals
   });
 }
 
-async function requirePublicDns(url: URL): Promise<void> {
-  // URL syntax has already rejected private IP literals. DNS is checked too,
-  // and this is repeated after every redirect.
-  if (url.hostname.includes(":") || /^\d+(?:\.\d+){3}$/.test(url.hostname)) {
-    if (isBlockedIp(url.hostname)) throw new Error("private_image_host_forbidden");
-    return;
-  }
-  const lookups = await Promise.allSettled([
-    Deno.resolveDns(url.hostname, "A"),
-    Deno.resolveDns(url.hostname, "AAAA"),
-  ]);
-  const addresses = lookups.flatMap((result) => result.status === "fulfilled" ? result.value : []);
-  if (addresses.length === 0) throw new Error("image_dns_unavailable");
-  if (addresses.some(isBlockedIp)) throw new Error("private_image_host_forbidden");
-}
-
-async function downloadRemoteImage(source: string): Promise<{ bytes: Uint8Array; image: ValidatedImage }> {
-  let url = safeRemoteUrl(source);
-  for (let redirect = 0; redirect <= 4; redirect += 1) {
-    await requirePublicDns(url);
-    const clock = new AbortController();
-    const alarm = setTimeout(() => clock.abort(), 15_000);
-    let response: Response;
-    try {
-      response = await fetch(url, {
-        redirect: "manual",
-        signal: clock.signal,
-        headers: {
-          Accept: "image/jpeg,image/png,image/webp",
-          "User-Agent": "Jaxongirman/1.0 Telegram image importer",
-        },
-      });
-    } catch {
-      throw new Error("image_download_failed");
-    } finally {
-      clearTimeout(alarm);
-    }
-
-    if (response.status >= 300 && response.status < 400) {
-      const location = response.headers.get("location");
-      if (!location || redirect === 4) throw new Error("image_download_failed");
-      url = safeRemoteUrl(new URL(location, url).toString());
-      continue;
-    }
-    if (!response.ok || !response.body) throw new Error("image_download_failed");
-
-    const declared = response.headers.get("content-type");
-    const mime = (declared ?? "").split(";", 1)[0]!.trim().toLowerCase();
-    if (mime && !["image/jpeg", "image/png", "image/webp", "application/octet-stream"].includes(mime)) {
-      throw new Error("image_content_type_invalid");
-    }
-    const announced = Number(response.headers.get("content-length") ?? 0);
-    if (announced > TELEGRAM_IMAGE_MAX_BYTES) throw new Error("image_download_too_large");
-
-    const reader = response.body.getReader();
-    const chunks: Uint8Array[] = [];
-    let length = 0;
-    while (true) {
-      const next = await reader.read();
-      if (next.done) break;
-      length += next.value.byteLength;
-      if (length > TELEGRAM_IMAGE_MAX_BYTES) {
-        await reader.cancel();
-        throw new Error("image_download_too_large");
-      }
-      chunks.push(next.value);
-    }
-    const bytes = new Uint8Array(length);
-    let at = 0;
-    for (const chunk of chunks) { bytes.set(chunk, at); at += chunk.byteLength; }
-    return { bytes, image: validateImageBytes(bytes, declared) };
-  }
-  throw new Error("image_download_failed");
-}
-
 async function imageFromCandidate(
   service: SupabaseClient,
   candidate: CandidateRow,
@@ -270,7 +171,7 @@ async function imageFromCandidate(
   if (candidate.storage_bucket && candidate.storage_path) {
     if (candidate.storage_bucket !== "stock-images") throw new Error("candidate_storage_forbidden");
     const result = await service.storage.from(candidate.storage_bucket).download(candidate.storage_path);
-    if (result.error || !result.data || result.data.size > TELEGRAM_IMAGE_MAX_BYTES) {
+    if (result.error || !result.data || result.data.size > IMAGE_MAX_BYTES) {
       throw new Error("image_download_failed");
     }
     const bytes = new Uint8Array(await result.data.arrayBuffer());
@@ -682,158 +583,6 @@ async function configureWebhook(request: Request): Promise<Response> {
   });
 }
 
-/**
- * The automatic door, opened by what a caller can do rather than by what it
- * knows.
- *
- * This function is reachable without a JWT — Telegram's webhook cannot present
- * one — so the automatic action has to lock itself. The obvious lock is to
- * compare the bearer token against the service role key, and it is the wrong
- * one: the platform issues that credential in more than one format, and a
- * string comparison quietly refuses a legitimate server the day the format
- * changes. It refused ours.
- *
- * So the credential is put to work instead. Listing accounts is something only
- * the server may do; a signed-in person's token and the public key both fail
- * it. That is a fact about authority rather than about spelling, and it stays
- * true through every key rotation and format change.
- */
-async function requireServerCaller(request: Request): Promise<void> {
-  const offered = (request.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
-  const url = Deno.env.get("SUPABASE_URL");
-  if (!url) throw new Error("supabase_server_environment_incomplete");
-  if (!offered) throw new HttpError(403, "Forbidden: no_authorization_header", "forbidden");
-  const probe = createClient(url, offered, { auth: { persistSession: false, autoRefreshToken: false } });
-  const allowed = await probe.auth.admin.listUsers({ page: 1, perPage: 1 });
-  // The refusal names itself. An authorisation error is not secret material,
-  // and a door that will not say why it is shut cannot be fixed from outside.
-  if (allowed.error) throw new HttpError(403, `Forbidden: ${allowed.error.message}`, "forbidden");
-}
-
-/**
- * The generator asking for a picture, with nobody in the chat.
- *
- * Everything else this function does starts with a person: a deep link they
- * opened, a message they sent, a button they pressed. Generation has none of
- * that — an author typed a topic and is waiting — and yet the picture it needs
- * has to be found the same way, by the same resolver, with the same refusal for
- * a face nothing can prove.
- *
- * So this is the same service, entered by a different door. There is no
- * Telegram round-trip: the Bot API sends messages to people, and inventing a
- * chat with nobody in it to make the diagram symmetrical would add a network
- * hop, a token requirement and a failure mode, and would buy nothing. No bot
- * token is needed to run it, which is why generation works today and manual
- * selection is still waiting for one.
- *
- * What the automatic path does gain from living here is this function's
- * downloader — DNS-checked against private address space on every redirect,
- * size-capped while streaming, and validated by magic bytes rather than by what
- * a server claims in a header. That is stronger than what the generator used to
- * do for itself, and a deck is a public document.
- */
-async function autoResolve(request: Request, body: ClientBody): Promise<Response> {
-  await requireServerCaller(request);
-
-  const ownerId = (body.ownerId ?? "").trim();
-  const presentationId = (body.presentationId ?? "").trim();
-  if (!UUID.test(ownerId) || !UUID.test(presentationId)) {
-    throw new HttpError(400, "Taqdimot yoki egasi yaroqsiz.", "invalid_target");
-  }
-  const query = queryText(body.query);
-  const slideIndex = Number.isSafeInteger(body.slideIndex) ? Number(body.slideIndex) : null;
-  const imageSlot = typeof body.imageSlot === "string" && body.imageSlot.trim() ? body.imageSlot.trim() : null;
-  const used = new Set((Array.isArray(body.used) ? body.used : []).filter((value) => typeof value === "string"));
-  const where = { presentation_id: presentationId, slide_index: slideIndex, image_slot: imageSlot };
-
-  console.log(JSON.stringify({ event: "telegram_auto_resolve_started", ...where, query_length: query.length, used: used.size }));
-  const service = serverClient();
-
-  let resolved;
-  try {
-    resolved = await resolveImage(service, {
-      query,
-      title: body.title ?? null,
-      topic: body.topic ?? null,
-      orientation: body.orientation ?? "landscape",
-      stylePreference: body.stylePreference ?? null,
-      used,
-    });
-  } catch (error) {
-    // A resolver that fails costs the deck a picture, never the deck. The
-    // caller is told plainly rather than left to time out.
-    console.error(JSON.stringify({ event: "image_resolution_failed", ...where, reason: errorCode(error) }));
-    return json({ status: "error", reason: errorCode(error) });
-  }
-
-  console.log(JSON.stringify({
-    event: "image_resolver_result", ...where,
-    status: resolved.status, intent: resolved.intent, provider: resolved.provider,
-    entity: resolved.normalized, confidence: resolved.confidence, reason: resolved.reason,
-  }));
-
-  if (resolved.status === "no_image" || !resolved.hit) {
-    console.log(JSON.stringify({ event: "image_no_image", ...where, intent: resolved.intent, reason: resolved.reason }));
-    return json({ status: "no_image", intent: resolved.intent, entity: resolved.normalized, reason: resolved.reason });
-  }
-
-  /**
-   * A confirmed picture is already in the bucket: nothing to fetch, nothing to
-   * store, and the same file every time somebody asks for this subject.
-   */
-  if (resolved.status === "verified" && resolved.storagePath) {
-    console.log(JSON.stringify({
-      event: "image_selected", ...where, provider: "verified",
-      intent: resolved.intent, entity: resolved.normalized,
-    }));
-    return json({
-      status: "selected", service: SERVICE_NAME, provider: "verified", intent: resolved.intent, entity: resolved.normalized,
-      bucket: "stock-images", path: resolved.storagePath,
-      width: resolved.hit.width, height: resolved.hit.height,
-      mimeType: null, attribution: resolved.hit.attribution,
-    });
-  }
-
-  let stored;
-  try {
-    const { bytes, image } = await downloadRemoteImage(resolved.hit.url);
-    console.log(JSON.stringify({
-      event: "image_downloaded", ...where, provider: resolved.provider,
-      bytes: bytes.byteLength, mime: image.mimeType, width: image.width, height: image.height,
-    }));
-    const path = `${ownerId}/${presentationId}/${crypto.randomUUID()}.${image.extension}`;
-    const upload = await service.storage.from("stock-images").upload(path, bytes, {
-      contentType: image.mimeType,
-      upsert: false,
-    });
-    if (upload.error) throw new Error("image_store_failed");
-    stored = { path, image };
-  } catch (error) {
-    console.error(JSON.stringify({ event: "image_resolution_failed", ...where, provider: resolved.provider, reason: errorCode(error) }));
-    return json({ status: "error", reason: errorCode(error) });
-  }
-
-  console.log(JSON.stringify({
-    event: "image_selected", ...where, provider: resolved.provider,
-    intent: resolved.intent, entity: resolved.normalized, confidence: resolved.confidence,
-  }));
-  return json({
-    status: "selected",
-    service: SERVICE_NAME,
-    provider: resolved.provider,
-    intent: resolved.intent,
-    entity: resolved.normalized,
-    bucket: "stock-images",
-    path: stored.path,
-    width: stored.image.width,
-    height: stored.image.height,
-    mimeType: stored.image.mimeType,
-    // Whatever the provider said, unchanged: a credit line the system rewrote
-    // is a credit line nobody can check against the source.
-    attribution: resolved.hit.attribution,
-  });
-}
-
 Deno.serve(async (request) => {
   const early = preflight(request);
   if (early) return early;
@@ -868,7 +617,6 @@ Deno.serve(async (request) => {
     if (body.action === "create_session") return await createSession(request, body);
     if (body.action === "complete_session") return await completeSession(request, body);
     if (body.action === "configure_webhook") return await configureWebhook(request);
-    if (body.action === "auto_resolve") return await autoResolve(request, body);
     throw new HttpError(400, "Noma’lum amal.", "invalid_action");
   } catch (error) {
     return errorResponse(error);

@@ -109,22 +109,22 @@ try {
   const signedIn = await user.auth.signInWithPassword({ email, password });
   if (signedIn.error) throw signedIn.error;
 
-  console.log("Avtomatik eshik:");
+  console.log("Avtomatik eshik (Telegram emas):");
   const anonymous = createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
   for (const [who, client] of [["a signed-in app account", user], ["a signed-out client", anonymous]]) {
-    const refused = await client.functions.invoke("telegram-image-bot", {
-      body: { action: "auto_resolve", ownerId: userId, presentationId: [...decks.values()][0], query: "Amir Temur" },
+    const refused = await client.functions.invoke("image-resolution-service", {
+      body: { action: "resolve", ownerId: userId, presentationId: [...decks.values()][0], query: "Amir Temur" },
     });
     let code = null;
     try { code = (await refused.error?.context?.json?.())?.code ?? null; } catch { /* consumed */ }
     check(Boolean(refused.error) && code === "forbidden", `${who} cannot drive the automatic endpoint (${code ?? "allowed"})`);
   }
   // And the one credential that may: the same call the generator makes.
-  const internal = await service.functions.invoke("telegram-image-bot", {
-    body: { action: "auto_resolve", ownerId: userId, presentationId: [...decks.values()][0], query: "Amir Temur", slideIndex: 0, imageSlot: "hero_image" },
+  const internal = await service.functions.invoke("image-resolution-service", {
+    body: { action: "resolve", ownerId: userId, presentationId: [...decks.values()][0], query: "Amir Temur", slideIndex: 0, imageSlot: "hero_image" },
   });
-  check(internal.data?.status === "selected" && internal.data?.service === "telegram-image-bot",
-    `the server may, and the service names itself (${internal.data?.status ?? internal.error?.message ?? "?"})`);
+  check(internal.data?.status === "selected" && internal.data?.service === "image-resolution-service",
+    `the server may, and the service names itself honestly (${internal.data?.service ?? internal.error?.message ?? "?"})`);
   check(["wikidata", "verified"].includes(internal.data?.provider),
     `and it answered through the resolver, not a stock library (${internal.data?.provider ?? "—"})`);
   if (internal.data?.path) paths.push(internal.data.path);
@@ -216,8 +216,12 @@ try {
       const where = drawn.get(row.storage_path);
       check(Boolean(credit.creator) && Boolean(credit.license) && /^https?:\/\//.test(credit.sourceUrl ?? ""),
         `${entry.key}: ${row.provider} — author, licence and source travelled with the file`);
-      check(row.metadata?.resolved_via === "telegram-image-bot",
-        `${entry.key}: ${row.provider} — found through the image service (${row.metadata?.resolved_via ?? "—"})`);
+      // Two separate facts, never conflated: which service resolved it, and
+      // which index the picture actually came from. Telegram is neither.
+      check(row.metadata?.resolved_via === "image-resolution-service",
+        `${entry.key}: ${row.provider} — resolved by the image service (${row.metadata?.resolved_via ?? "—"})`);
+      check(row.metadata?.resolved_via !== "telegram-image-bot" && row.provider !== "telegram",
+        `${entry.key}: ${row.provider} — and is not claimed to have come through Telegram`);
       check(row.metadata?.slide_id === where?.slideId && row.metadata?.image_slot === where?.slot && Boolean(where?.slot),
         `${entry.key}: ${row.provider} — pinned to the slide and slot that draws it (${row.metadata?.image_slot ?? "—"})`);
       const bytes = await service.storage.from(row.storage_bucket).download(row.storage_path);
@@ -238,10 +242,18 @@ try {
       `${entry.key}: charged once and only once (${Object.entries(kinds).map(([name, count]) => `${name}×${count}`).join(", ") || "—"})`);
   }
 
-  console.log("\nTelegram holati:");
-  const sessions = await service.from("telegram_image_sessions")
-    .select("id", { count: "exact", head: true }).eq("user_id", userId);
-  check((sessions.count ?? 0) === 0, `automatic generation opened no Telegram session (${sessions.count ?? 0})`);
+  console.log("\nTelegram transporti:");
+  const [sessions, candidates] = await Promise.all([
+    service.from("telegram_image_sessions").select("id", { count: "exact", head: true }).eq("user_id", userId),
+    service.from("telegram_image_updates").select("update_id", { count: "exact", head: true }),
+  ]);
+  const telegramRows = sessions.count ?? 0;
+  check(telegramRows === 0, `automatic generation opened no Telegram session (${telegramRows})`);
+  console.log(JSON.stringify({
+    resolver_service_used: "image-resolution-service",
+    telegram_transport_used: telegramRows === 0 ? "NO" : "YES",
+    telegram_updates_total: candidates.count ?? 0,
+  }));
 
   console.log("\nHisob va ish holati:");
   const [after, stuck] = await Promise.all([

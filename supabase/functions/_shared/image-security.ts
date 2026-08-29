@@ -1,9 +1,9 @@
 /** Pure validation used by the Telegram downloader and its Node tests. */
 
-export const TELEGRAM_IMAGE_MAX_BYTES = 12 * 1024 * 1024;
-export const TELEGRAM_IMAGE_MAX_PIXELS = 40_000_000;
-export const TELEGRAM_IMAGE_MAX_DIMENSION = 16_000;
-export const TELEGRAM_IMAGE_MIN_DIMENSION = 64;
+export const IMAGE_MAX_BYTES = 12 * 1024 * 1024;
+export const IMAGE_MAX_PIXELS = 40_000_000;
+export const IMAGE_MAX_DIMENSION = 16_000;
+export const IMAGE_MIN_DIMENSION = 64;
 
 const BLOCKED_HOSTS = new Set([
   "localhost",
@@ -148,16 +148,16 @@ function dimensions(bytes: Uint8Array): ValidatedImage | null {
 
 /** Magic bytes and actual dimensions, not the remote server's declaration. */
 export function validateImageBytes(bytes: Uint8Array, declaredMime: string | null): ValidatedImage {
-  if (bytes.byteLength === 0 || bytes.byteLength > TELEGRAM_IMAGE_MAX_BYTES) throw new Error("image_size_invalid");
+  if (bytes.byteLength === 0 || bytes.byteLength > IMAGE_MAX_BYTES) throw new Error("image_size_invalid");
   const found = dimensions(bytes);
   if (!found) throw new Error("broken_or_unsupported_image");
   const declared = (declaredMime ?? "").split(";", 1)[0]!.trim().toLowerCase();
   if (declared && declared !== "application/octet-stream" && declared !== found.mimeType) {
     throw new Error("image_content_type_mismatch");
   }
-  if (found.width < TELEGRAM_IMAGE_MIN_DIMENSION || found.height < TELEGRAM_IMAGE_MIN_DIMENSION
-    || found.width > TELEGRAM_IMAGE_MAX_DIMENSION || found.height > TELEGRAM_IMAGE_MAX_DIMENSION
-    || found.width * found.height > TELEGRAM_IMAGE_MAX_PIXELS) {
+  if (found.width < IMAGE_MIN_DIMENSION || found.height < IMAGE_MIN_DIMENSION
+    || found.width > IMAGE_MAX_DIMENSION || found.height > IMAGE_MAX_DIMENSION
+    || found.width * found.height > IMAGE_MAX_PIXELS) {
     throw new Error("image_dimensions_invalid");
   }
   return found;

@@ -204,6 +204,7 @@ export async function resolveImage(
    * Unsplash. Nothing here re-decides any of that.
    */
   const found = await searchStock({
+    subject: reading.entity,
     query: input.query,
     orientation,
     theme: input.stylePreference ?? null,
@@ -290,6 +291,7 @@ export async function resolveImageCandidates(
 
   for (let at = 0; at < limit; at += 1) {
     const found = await searchStock({
+      subject: reading.entity,
       query: input.query,
       orientation,
       theme: input.stylePreference ?? null,

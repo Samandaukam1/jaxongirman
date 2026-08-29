@@ -7,7 +7,7 @@ import { pathToFileURL } from "node:url";
 import { buildEdgeModules, repoRoot } from "../scripts/build-edge.mjs";
 
 const out = buildEdgeModules();
-const security = await import(pathToFileURL(path.join(out, "telegram-image-security.js")));
+const security = await import(pathToFileURL(path.join(out, "image-security.js")));
 
 test("SSRF guard accepts only ordinary public HTTP(S) addresses", () => {
   assert.equal(security.safeRemoteUrl("https://images.unsplash.com/photo.jpg").hostname, "images.unsplash.com");

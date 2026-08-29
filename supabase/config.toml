@@ -431,6 +431,12 @@ verify_jwt = false
 [functions.telegram-image-bot]
 verify_jwt = false
 
+# Automatic illustration during generation. Called by one edge function from
+# another, so there is no end-user token to verify: the function checks that the
+# caller holds server authority itself. Nothing about it is Telegram.
+[functions.image-resolution-service]
+verify_jwt = false
+
 # Writes a sample slide for a design an administrator is judging. Admin-only,
 # checked in SQL, same as the rest.
 [functions.sample-slide]

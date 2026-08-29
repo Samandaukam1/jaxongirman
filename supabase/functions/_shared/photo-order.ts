@@ -82,6 +82,19 @@ export async function findFromProviders(
      * archway that is not the Registan. The resolver knows better and says so.
      */
     intent?: "exact_person" | "named_thing" | "generic";
+    /**
+     * Who or what the caller decided this is about.
+     *
+     * The query is one slide's scene; the subject can only be read from the
+     * slide's title or the deck's topic, which is where a person's name usually
+     * lives. Without it this ladder re-derived the subject from the scene
+     * alone: a slide reading "Qoraqalpog‘iston tabiati" in a deck about a
+     * person it cannot verify was checked as if it were about Karakalpakstan,
+     * passed the person test by not being one, and came back with a stock
+     * photograph filed under that person's name. The identity rule has to be
+     * applied to the identity the answer will be labelled with.
+     */
+    subject?: string | null;
   },
 ): Promise<{ hit: PhotoHit; source: PhotoSource } | null> {
   const orientation = input.orientation ?? "landscape";
@@ -119,7 +132,7 @@ export async function findFromProviders(
    * a biography even after the person rule existed. The subject is the part
    * that names something; the rest describes it.
    */
-  const subject = namedSubject(input.query) || input.query;
+  const subject = (input.subject ?? "").trim() || namedSubject(input.query) || input.query;
   const maybePerson = input.intent === "exact_person"
     || (input.intent === undefined && looksLikePerson(subject));
   const named = maybePerson

@@ -78,6 +78,8 @@ export function searchStock(input: {
   skip?: number;
   /** What the caller already knows about the subject; see `findFromProviders`. */
   intent?: "exact_person" | "named_thing" | "generic";
+  /** Who or what the answer will be labelled as being of. */
+  subject?: string | null;
 }): Promise<{ hit: PhotoHit; source: PhotoSource } | null> {
   return findFromProviders({
     unsplashConfigured,
@@ -155,20 +157,20 @@ export async function findPhoto(
     }));
 
     /**
-     * Through the image service, which is where the resolver lives.
+     * Through the image resolution service.
      *
-     * The generator used to resolve, download and store a picture itself. It
-     * now asks the same service a person asks when they pick one by hand, so
-     * there is one place that decides what may be shown as whom, one
-     * downloader — DNS-checked, size-capped, validated by magic bytes — and one
-     * bucket the bytes land in. What comes back is a stored file or a reason
-     * there is none.
+     * The generator used to resolve, download and store a picture itself. That
+     * work now lives behind one door, so there is one place that decides what
+     * may be shown as whom, one downloader — DNS-checked, size-capped,
+     * validated by magic bytes — and one bucket the bytes land in. What comes
+     * back is a stored file or a reason there is none.
      *
-     * Called with the service client, so the request carries the one credential
-     * the automatic door accepts. No Telegram account, no chat and no bot token
-     * are involved: this is server-to-server.
+     * Not Telegram. Telegram is where a person picks a picture by hand, and
+     * that path is a different function with a human in every step of it. This
+     * one is server-to-server, called with the service credential, and it says
+     * so in what it writes: `resolved_via` is the service that ran.
      */
-    const answer = await service.functions.invoke("telegram-image-bot", {
+    const answer = await service.functions.invoke("image-resolution-service", {
       /**
        * Sent by hand, because the client does not send it here.
        *
@@ -182,7 +184,7 @@ export async function findPhoto(
        */
       headers: { Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""}` },
       body: {
-        action: "auto_resolve",
+        action: "resolve",
         ownerId: input.ownerId,
         presentationId: input.presentationId,
         slideIndex: input.slideIndex,
