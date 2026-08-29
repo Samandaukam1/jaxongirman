@@ -1513,6 +1513,8 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
       const results: GeneratedImage[] = [];
       /** Subjects this deck has already put a picture of on a slide. */
       const illustrated = new Set<string>();
+      /** Why the slides without one have none, counted by reason. */
+      const refusals = new Map<string, number>();
       for (const target of targets) {
         /**
          * What the design asked for, where the design said.
@@ -1583,9 +1585,11 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
           title: target.slide.title ?? null,
           orientation: slot?.orientation ?? "landscape",
           stylePreference: slot?.stylePreference ?? null,
+          imageSlot: (slot as { slot?: string } | undefined)?.slot ?? null,
           // One subject, one picture per deck: six slides about one person
           // should not be the same photograph six times.
           used: illustrated,
+          report: (reason) => refusals.set(reason, (refusals.get(reason) ?? 0) + 1),
         });
         // No photograph is a slide on the palette ground, which several designs
         // treat as a deliberate composition. It is never a reason to stop.
@@ -1624,6 +1628,9 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
             // pictures cannot be traced back to a subject cannot be audited
             // later for the one failure that matters: the wrong person.
             subject: photo.entity ?? null,
+            // Which service found it. The provider says which index answered;
+            // this says which door the question went through.
+            resolved_via: photo.via ?? null,
             attribution: photo.attribution,
             // The picture's own shape, so the exporter can choose which frame
             // it belongs in without downloading it twice to find out.
@@ -1640,9 +1647,17 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
           console.error("stock attribution not stored", input.presentationId, target.index, credited.error.message);
         }
       }
-      return results;
+      if (refusals.size > 0) {
+        console.log(JSON.stringify({
+          event: "image_refusals",
+          presentation_id: input.presentationId,
+          refusals: Object.fromEntries(refusals),
+        }));
+      }
+      return Object.assign(results, { refusals: [...refusals].map(([reason, count]) => `${reason}: ${count}`).join(", ") });
     }, (value) => {
-      if (!value.length) return "Ushbu dizayn uchun foto talab qilinmadi";
+      const why = (value as GeneratedImage[] & { refusals?: string }).refusals;
+      if (!value.length) return why ? `Rasm topilmadi (${why})` : "Ushbu dizayn uchun foto talab qilinmadi";
       // Named in the progress line, because "8 photos found" does not say
       // whether the better index answered or the fallback carried the deck.
       const counted = value.reduce<Record<string, number>>((tally, image) => {
@@ -1650,7 +1665,7 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
         return tally;
       }, {});
       const where = Object.entries(counted).map(([name, count]) => `${name}: ${count}`).join(", ");
-      return `${value.length} ta litsenziyalangan foto topildi (${where})`;
+      return `${value.length} ta litsenziyalangan foto topildi (${where})${why ? ` · ${why}` : ""}`;
     }), 120_000, "generating_images");
 
     const built = await runStage(input.service, input, "building_slides", async () => {
@@ -1743,6 +1758,14 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
         // the ability to say which slot it is in, and that is worth a line in
         // the log rather than a failed deck.
         if (bound.error) console.error("picture binding not recorded", input.presentationId, row.storage_path, bound.error.message);
+        else {
+          console.log(JSON.stringify({
+            event: "image_bound_to_slot",
+            presentation_id: input.presentationId,
+            slide_id: where.slideId,
+            image_slot: where.slot,
+          }));
+        }
       }
     }
 
