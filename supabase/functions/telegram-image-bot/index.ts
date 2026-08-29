@@ -75,7 +75,7 @@ type TelegramUpdate = {
 };
 
 type ClientBody = {
-  action?: "create_session" | "complete_session" | "configure_webhook";
+  action?: "create_session" | "complete_session" | "configure_webhook" | "bot_info";
   presentationId?: string;
   slideId?: string;
   imageElementId?: string;
@@ -559,6 +559,36 @@ async function completeSession(request: Request, body: ClientBody): Promise<Resp
   return json({ ok: true, result });
 }
 
+/**
+ * Who this bot actually is, according to Telegram.
+ *
+ * The only way to know that a token belongs to @JaxongirmanAppImagesBot and
+ * not to some other bot is to ask Telegram, and the only place the token
+ * exists is the server. So the question is asked here and the answer comes
+ * back without it: a username and an id, which are public facts about a bot
+ * anybody can look up.
+ *
+ * It is also the one check that distinguishes "the code is deployed" from
+ * "the bot is live". Until a token is configured this returns 503 and says
+ * which secret is missing, which is the honest answer rather than a pass.
+ */
+async function botInfo(request: Request): Promise<Response> {
+  const context = await requestContext(request);
+  const admin = await context.serviceClient.rpc("is_admin", { p_user_id: context.user.id });
+  if (admin.error || !admin.data) throw new HttpError(403, "Forbidden", "forbidden");
+  if (!Deno.env.get("TELEGRAM_IMAGE_BOT_TOKEN")) {
+    throw new HttpError(503, "Bot token configured emas.", "missing_bot_token");
+  }
+  const me = await telegram("getMe", {});
+  return json({
+    id: me.id ?? null,
+    username: me.username ?? null,
+    expected: BOT_USERNAME,
+    matches: me.username === BOT_USERNAME,
+    can_read_all_group_messages: me.can_read_all_group_messages ?? null,
+  });
+}
+
 async function configureWebhook(request: Request): Promise<Response> {
   const context = await requestContext(request);
   const admin = await context.serviceClient.rpc("is_admin", { p_user_id: context.user.id });
@@ -617,6 +647,7 @@ Deno.serve(async (request) => {
     if (body.action === "create_session") return await createSession(request, body);
     if (body.action === "complete_session") return await completeSession(request, body);
     if (body.action === "configure_webhook") return await configureWebhook(request);
+    if (body.action === "bot_info") return await botInfo(request);
     throw new HttpError(400, "Noma’lum amal.", "invalid_action");
   } catch (error) {
     return errorResponse(error);

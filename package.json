@@ -35,6 +35,7 @@
     "test:autoimages": "node supabase/tests/auto-image-e2e.mjs",
     "test:telegram": "node --test supabase/tests/telegram-image-bot.test.mjs",
     "test:telegram:smoke": "node supabase/tests/telegram-image-bot-smoke.mjs",
+    "test:telegram:live": "node supabase/tests/telegram-live-smoke.mjs",
     "telegram:webhook": "node scripts/set-image-bot-webhook.mjs",
     "test:photos:template": "DESIGN_SLUG=kardiologiya EXPECT_PROVIDER=any CHECK_EXPORT=1 node supabase/tests/photo-provider-smoke.mjs",
     "test:watchdog": "node supabase/tests/watchdog-smoke.mjs",
