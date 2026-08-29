@@ -1500,6 +1500,8 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
             .slice(0, Math.ceil(plan.slides.length * 0.6));
 
       const results: GeneratedImage[] = [];
+      /** Subjects this deck has already put a picture of on a slide. */
+      const illustrated = new Set<string>();
       for (const target of targets) {
         /**
          * What the design asked for, where the design said.
@@ -1565,13 +1567,20 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
           slideIndex: target.index,
           direction: target.slide.visualPrompt ?? plan.visualDna.imageDirection,
           topic: prepared.presentation.topic,
+          // The slide's own title names the subject; the direction describes
+          // the scene. The resolver reads both.
+          title: target.slide.title ?? null,
           orientation: slot?.orientation ?? "landscape",
           stylePreference: slot?.stylePreference ?? null,
+          // One subject, one picture per deck: six slides about one person
+          // should not be the same photograph six times.
+          used: illustrated,
         });
         // No photograph is a slide on the palette ground, which several designs
         // treat as a deliberate composition. It is never a reason to stop.
         if (!photo) continue;
 
+        if (photo.entity) illustrated.add(photo.entity);
         results.push({
           slideIndex: photo.slideIndex, bucket: photo.bucket, path: photo.path,
           // Which index answered, not which site hosts the file. Openverse

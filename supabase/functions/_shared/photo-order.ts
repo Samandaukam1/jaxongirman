@@ -68,7 +68,21 @@ export type PersonLookup = (
  */
 export async function findFromProviders(
   providers: PhotoProviders,
-  input: { query: string; orientation?: Orientation; theme?: string | null; skip?: number },
+  input: {
+    query: string;
+    orientation?: Orientation;
+    theme?: string | null;
+    skip?: number;
+    /**
+     * What the caller already worked out about the subject.
+     *
+     * This can tell a name from a phrase, but not a square from a surname:
+     * "Registon maydoni" has no second capital, so it read as an ordinary
+     * phrase and went to a stock library — which answered with a handsome
+     * archway that is not the Registan. The resolver knows better and says so.
+     */
+    intent?: "exact_person" | "named_thing" | "generic";
+  },
 ): Promise<{ hit: PhotoHit; source: PhotoSource } | null> {
   const orientation = input.orientation ?? "landscape";
   const skip = input.skip ?? 0;
@@ -106,8 +120,11 @@ export async function findFromProviders(
    * that names something; the rest describes it.
    */
   const subject = namedSubject(input.query) || input.query;
-  const maybePerson = looksLikePerson(subject);
-  const named = maybePerson || namedSubject(input.query).length > 0;
+  const maybePerson = input.intent === "exact_person"
+    || (input.intent === undefined && looksLikePerson(subject));
+  const named = maybePerson
+    || input.intent === "named_thing"
+    || (input.intent === undefined && namedSubject(input.query).length > 0);
 
   const unsplash = { source: "unsplash" as const, search: providers.unsplash };
   const wikimedia = { source: "wikimedia" as const, search: providers.wikimedia };

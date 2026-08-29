@@ -64,6 +64,7 @@ export function buildEdgeModules() {
       path.join(shared, "openverse-results.ts"),
       path.join(shared, "wikimedia-results.ts"),
       path.join(shared, "entity-match.ts"),
+      path.join(shared, "image-intent.ts"),
       path.join(shared, "photo-order.ts"),
       path.join(shared, "pptx-pictures.ts"),
       path.join(shared, "export-model.ts"),

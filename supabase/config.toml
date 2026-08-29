@@ -419,6 +419,12 @@ verify_jwt = false
 [functions.ai-diagnose]
 verify_jwt = false
 
+# Resolves a picture for a query — the generator's own rules, behind an
+# endpoint, for the admin debugger and whatever asks next. Admin-only, checked
+# in SQL, same as the rest.
+[functions.image-resolver]
+verify_jwt = false
+
 # Writes a sample slide for a design an administrator is judging. Admin-only,
 # checked in SQL, same as the rest.
 [functions.sample-slide]

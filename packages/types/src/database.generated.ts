@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.15"
+    PostgrestVersion: "14.17"
   }
   public: {
     Tables: {
@@ -818,8 +818,8 @@ export type Database = {
           format: string
           id: string
           italic: boolean
-          style_name: string
           storage_path: string
+          style_name: string
           weight: number
         }
         Insert: {
@@ -830,8 +830,8 @@ export type Database = {
           format?: string
           id?: string
           italic?: boolean
-          style_name: string
           storage_path: string
+          style_name?: string
           weight?: number
         }
         Update: {
@@ -842,8 +842,8 @@ export type Database = {
           format?: string
           id?: string
           italic?: boolean
-          style_name?: string
           storage_path?: string
+          style_name?: string
           weight?: number
         }
         Relationships: [
@@ -1417,6 +1417,8 @@ export type Database = {
           completed_at: string | null
           created_at: string
           details: Json
+          duration_ms: number | null
+          error_code: string | null
           id: string
           job_id: string
           key: string
@@ -1434,6 +1436,8 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           details?: Json
+          duration_ms?: number | null
+          error_code?: string | null
           id?: string
           job_id: string
           key: string
@@ -1451,6 +1455,8 @@ export type Database = {
           completed_at?: string | null
           created_at?: string
           details?: Json
+          duration_ms?: number | null
+          error_code?: string | null
           id?: string
           job_id?: string
           key?: string
@@ -4673,6 +4679,72 @@ export type Database = {
           },
         ]
       }
+      verified_images: {
+        Row: {
+          confidence: number
+          created_at: string
+          creator: string | null
+          display_name: string
+          entity_type: string
+          id: string
+          image_storage_path: string
+          last_checked_at: string | null
+          license: string | null
+          license_url: string | null
+          metadata: Json
+          normalized_entity: string
+          original_url: string | null
+          provider: string
+          source_url: string | null
+          updated_at: string
+          verified: boolean
+          verified_at: string | null
+          verified_by: string | null
+        }
+        Insert: {
+          confidence?: number
+          created_at?: string
+          creator?: string | null
+          display_name: string
+          entity_type?: string
+          id?: string
+          image_storage_path: string
+          last_checked_at?: string | null
+          license?: string | null
+          license_url?: string | null
+          metadata?: Json
+          normalized_entity: string
+          original_url?: string | null
+          provider: string
+          source_url?: string | null
+          updated_at?: string
+          verified?: boolean
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Update: {
+          confidence?: number
+          created_at?: string
+          creator?: string | null
+          display_name?: string
+          entity_type?: string
+          id?: string
+          image_storage_path?: string
+          last_checked_at?: string | null
+          license?: string | null
+          license_url?: string | null
+          metadata?: Json
+          normalized_entity?: string
+          original_url?: string | null
+          provider?: string
+          source_url?: string | null
+          updated_at?: string
+          verified?: boolean
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -5148,6 +5220,15 @@ export type Database = {
         Args: { p_family_id: string }
         Returns: number
       }
+      admin_reclaim_credits: {
+        Args: {
+          p_amount: number
+          p_idempotency_key?: string
+          p_reason: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
       admin_recolor_jelement_family: {
         Args: { p_color_tokens: Json; p_family_id: string }
         Returns: {
@@ -5178,15 +5259,6 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
-      }
-      admin_reclaim_credits: {
-        Args: {
-          p_amount: number
-          p_idempotency_key?: string
-          p_reason: string
-          p_user_id: string
-        }
-        Returns: Json
       }
       admin_record_finance_entry: {
         Args: {
@@ -5698,6 +5770,10 @@ export type Database = {
           p_job_id: string
         }
         Returns: undefined
+      }
+      fail_stale_generations: {
+        Args: { p_stale_minutes?: number }
+        Returns: number
       }
       finance_month_days: { Args: never; Returns: number }
       finance_period_total: {
@@ -6524,6 +6600,7 @@ export type Database = {
         Returns: Json
       }
       reap_stale_export_jobs: { Args: { p_owner_id?: string }; Returns: number }
+      reconcile_credit_reservations: { Args: never; Returns: number }
       record_survey_export: {
         Args: {
           p_form_id: string
@@ -6714,6 +6791,22 @@ export type Database = {
         Args: { p_period: string; p_user_id: string }
         Returns: string
       }
+      verify_image: {
+        Args: {
+          p_creator?: string
+          p_display_name: string
+          p_entity_type: string
+          p_license?: string
+          p_license_url?: string
+          p_metadata?: Json
+          p_normalized_entity: string
+          p_original_url?: string
+          p_provider: string
+          p_source_url?: string
+          p_storage_path: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       app_role: "user" | "admin" | "super_admin"
@@ -6724,6 +6817,7 @@ export type Database = {
         | "icon"
         | "thumbnail"
         | "export"
+        | "stock"
       credit_transaction_type:
         | "grant"
         | "reservation"
@@ -7042,7 +7136,15 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["user", "admin", "super_admin"],
-      asset_kind: ["upload", "web", "generated", "icon", "thumbnail", "export"],
+      asset_kind: [
+        "upload",
+        "web",
+        "generated",
+        "icon",
+        "thumbnail",
+        "export",
+        "stock",
+      ],
       credit_transaction_type: [
         "grant",
         "reservation",

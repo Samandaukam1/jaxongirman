@@ -24,6 +24,7 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js";
  */
 
 import { photoQuery } from "../photo-query.ts";
+import { resolveImage } from "../image-resolver.ts";
 import { firstUsableOpenverse, type OpenversePhoto } from "../openverse-results.ts";
 import { findFromProviders, type Orientation, type PhotoSource } from "../photo-order.ts";
 import type { PhotoHit } from "../unsplash-results.ts";
@@ -42,6 +43,8 @@ export type StockPhoto = {
   source: PhotoSource;
   width: number;
   height: number;
+  /** The subject, normalised — what the deck records as already illustrated. */
+  entity?: string;
   /** What has to be shown for the licence to be honoured. */
   attribution: {
     title: string;
@@ -72,6 +75,8 @@ export function searchStock(input: {
   theme?: string | null;
   /** Usable results to pass over, for "another photograph, same subject". */
   skip?: number;
+  /** What the caller already knows about the subject; see `findFromProviders`. */
+  intent?: "exact_person" | "named_thing" | "generic";
 }): Promise<{ hit: PhotoHit; source: PhotoSource } | null> {
   return findFromProviders({
     unsplashConfigured,
@@ -119,18 +124,54 @@ export async function findPhoto(
     orientation?: Orientation;
     /** The design's own `stylePreference`, when the slot declares one. */
     stylePreference?: string | null;
+    /** The slide's own title, which names the subject better than a scene does. */
+    title?: string | null;
+    /** Subjects this deck has already illustrated, so one is not repeated. */
+    used?: ReadonlySet<string>;
   },
 ): Promise<StockPhoto | null> {
   try {
     const query = photoQuery(input.direction, input.topic);
     if (!query) return null;
 
-    const found = await searchStock({
+    /**
+     * Through the resolver, so the deck gets the same answer anything else
+     * would.
+     *
+     * It reads the intent, checks what an administrator has already confirmed,
+     * and only then runs the ladder below. A picture somebody has confirmed is
+     * of this person costs nothing and cannot be the wrong person, which is
+     * the whole reason the library exists.
+     */
+    const resolved = await resolveImage(service, {
       query,
+      title: input.title ?? null,
+      topic: input.topic,
       orientation: input.orientation ?? "landscape",
-      theme: input.stylePreference ?? null,
+      stylePreference: input.stylePreference ?? null,
+      used: input.used,
     });
-    if (!found) return null;
+
+    if (resolved.status === "no_image") return null;
+
+    /**
+     * A confirmed picture is already in the bucket. Nothing to download,
+     * nothing to store, and the same file every time it is asked for.
+     */
+    if (resolved.status === "verified" && resolved.storagePath) {
+      return {
+        slideIndex: input.slideIndex,
+        bucket: "stock-images",
+        path: resolved.storagePath,
+        source: "verified" as never,
+        entity: resolved.normalized,
+        width: resolved.hit?.width ?? 0,
+        height: resolved.hit?.height ?? 0,
+        attribution: resolved.hit!.attribution,
+      };
+    }
+
+    const found = { hit: resolved.hit!, source: resolved.provider as never };
 
     const image = await fetch(found.hit.url);
     if (!image.ok) return null;
@@ -152,6 +193,7 @@ export async function findPhoto(
       bucket: "stock-images",
       path,
       source: found.source,
+      entity: resolved.normalized,
       // Carried so the exporter can pick the hole this actually fits: a
       // landscape photograph in a portrait frame is a face cropped to its ear.
       width: found.hit.width,

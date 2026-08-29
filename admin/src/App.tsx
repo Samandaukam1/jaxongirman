@@ -12,6 +12,7 @@ import { FontsPage } from "@/pages/FontsPage";
 import { GiftsPage } from "@/pages/GiftsPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { JElementFamilyPage } from "@/pages/JElementFamilyPage";
+import { ImageResolverPage } from "@/pages/ImageResolverPage";
 import { JElementsPage } from "@/pages/JElementsPage";
 import { JslaydDesignsPage } from "@/pages/JslaydDesignsPage";
 import { PptxTemplatesPage } from "@/pages/PptxTemplatesPage";
@@ -36,6 +37,7 @@ const pages: Record<string, ReactNode> = {
   "/jslayd": <JslaydDesignsPage />,
   "/pptx": <PptxTemplatesPage />,
   "/jelements": <JElementsPage />,
+  "/rasmlar": <ImageResolverPage />,
   "/qr-video": <QrVideoPage />,
   "/tariflar": <TariffsPage />,
   "/usage": <UsagePage />,
