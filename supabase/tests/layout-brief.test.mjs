@@ -2,11 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { buildJslayd } from "../../packages/jslayd/tests/build.mjs";
+import { buildEdgeModules } from "../scripts/build-edge.mjs";
 
 const pkg = buildJslayd();
+const edge = buildEdgeModules();
 const { compile } = await import(`${pkg}/compile.js`);
 const { SAMPLE_PROMPT } = await import(`${pkg}/standard.js`);
 const { buildWritingBrief, planArchetypes, purposeForLayout } = await import(`${pkg}/index.js`);
+const { adaptContentToBrief, findSlotProblems } = await import(`${edge}/layout-brief.js`);
 
 const { document: DOCUMENT, diagnostics } = compile(SAMPLE_PROMPT);
 assert.deepEqual(diagnostics.errors, [], "the sample design must compile");
@@ -139,4 +142,112 @@ test("the payload carries no colours, fonts or other archetypes", () => {
   assert.equal(/#[0-9a-f]{6}/i.test(text), false, "no hex colours reach the writer");
   assert.equal(text.includes("colorFamilies"), false);
   assert.equal(text.includes("archetypes"), false, "one archetype, not the catalogue");
+});
+
+/* ----------------------------------------------------------- two-way fit */
+
+const BODY_BRIEF = {
+  archetypeId: "body-test", purpose: "title_content", canvas: { width: 1920, height: 1080 },
+  visualZones: [], slots: [{
+    elementId: "body", binding: "body", role: "body", priority: 2,
+    geometry: { x: 100, y: 300, width: 1200, height: 500 },
+    typography: {
+      font: "font_1", fontSize: 32, fontWeight: 400, lineHeight: 1.2,
+      letterSpacing: 0, align: "left", verticalAlign: "top", transform: "none",
+      maxLines: 12, minFontSize: 24, overflow: "shrink",
+    },
+    budget: {
+      minimumCharacters: 75, preferredCharacters: 100, maximumCharacters: 140,
+      minimumWords: 11, preferredWords: 15, maximumWords: 21,
+      estimatedCharactersPerLine: 24, estimatedLines: 12,
+    },
+  }],
+};
+
+const semanticFor = (brief, text) => {
+  const slot = brief.slots[0];
+  return {
+    slide: {
+      title: "Aniq sarlavha", subtitle: null, purpose: "Sinov", layout: "title_body",
+      bullets: slot.binding === "bullets" && text ? [text] : [],
+      body: slot.binding === "body" ? text : null,
+      quote: null, statistic: null, chart: null, table: null, visualPrompt: null,
+    },
+    slot,
+  };
+};
+
+const words = (characters) => "Mazmunli fikr sabab va natija bilan tushuntiriladi. ".repeat(Math.ceil(characters / 52)).slice(0, characters);
+
+test("short body copy is sent to the expansion path", () => {
+  const brief = BODY_BRIEF;
+  const sample = semanticFor(brief, "Qisqa fikr.");
+  const problem = findSlotProblems(brief, sample.slide).find((entry) => entry.binding === sample.slot.binding);
+  assert.equal(problem?.direction, "expand");
+  assert.ok(problem?.shortBy > 0);
+});
+
+test("an empty content page requests exactly one fill", () => {
+  const brief = BODY_BRIEF;
+  const empty = semanticFor(brief, "").slide;
+  const problems = findSlotProblems(brief, empty).filter((entry) => entry.direction === "expand");
+  assert.equal(problems.length, 1);
+  assert.equal(problems[0].text, "");
+});
+
+test("bullets are preserved inside a body-only composition", () => {
+  const slide = semanticFor(BODY_BRIEF, "Qisqa kirish.").slide;
+  slide.bullets = ["Birinchi dalil", "Ikkinchi natija"];
+  const adapted = adaptContentToBrief(slide, BODY_BRIEF);
+  assert.equal(adapted.bullets.length, 0);
+  assert.match(adapted.body, /Qisqa kirish\. Birinchi dalil\. Ikkinchi natija\./);
+});
+
+test("body copy is preserved inside a bullets-only composition", () => {
+  const bulletsBrief = {
+    ...BODY_BRIEF,
+    slots: BODY_BRIEF.slots.map((slot) => ({ ...slot, binding: "bullets", role: "bullets" })),
+  };
+  const slide = semanticFor(BODY_BRIEF, "Birinchi izoh. Ikkinchi izoh.").slide;
+  slide.bullets = ["Mavjud band"];
+  const adapted = adaptContentToBrief(slide, bulletsBrief);
+  assert.equal(adapted.body, null);
+  assert.deepEqual(adapted.bullets, ["Mavjud band", "Birinchi izoh.", "Ikkinchi izoh."]);
+});
+
+test("overlong body copy is sent to the shortening path", () => {
+  const brief = BODY_BRIEF;
+  const base = semanticFor(brief, "");
+  const sample = semanticFor(brief, words(base.slot.budget.maximumCharacters + 120));
+  const problem = findSlotProblems(brief, sample.slide).find((entry) => entry.binding === sample.slot.binding);
+  assert.equal(problem?.direction, "shorten");
+  assert.ok(problem?.overBy > 0);
+});
+
+test("normal body copy needs no rewrite", () => {
+  const brief = BODY_BRIEF;
+  const base = semanticFor(brief, "");
+  const sample = semanticFor(brief, words(base.slot.budget.preferredCharacters));
+  assert.equal(findSlotProblems(brief, sample.slide).some((entry) => entry.binding === base.slot.binding), false);
+});
+
+test("a section-only page is not treated as a silent content page", () => {
+  const titleOnly = {
+    archetypeId: "section-only", purpose: "section", canvas: { width: 1920, height: 1080 },
+    visualZones: [], slots: [{
+      elementId: "heading", binding: "title", role: "title",
+      geometry: { x: 100, y: 100, width: 1200, height: 200 },
+      typography: { fontSize: 80, lineHeight: 1.1, maxLines: 2 },
+      budget: {
+        minimumCharacters: 0, preferredCharacters: 40, maximumCharacters: 80,
+        minimumWords: 0, preferredWords: 6, maximumWords: 12,
+        estimatedCharactersPerLine: 20, estimatedLines: 2,
+      },
+    }],
+  };
+  const slide = {
+    title: "Bo‘lim", subtitle: null, purpose: "Ajratish", layout: "title_body",
+    bullets: [], body: null, quote: null, statistic: null, chart: null, table: null, visualPrompt: null,
+  };
+  assert.deepEqual(findSlotProblems(titleOnly, slide), []);
 });

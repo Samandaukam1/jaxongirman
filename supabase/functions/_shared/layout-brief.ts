@@ -3,6 +3,7 @@ import {
   type ArchetypeWritingBrief, type JslaydDocument, type SlotFit, type TextSlotBudget,
 } from "./jslayd/index.ts";
 import { planStory, selectPages, type PageProfile } from "./design-select.ts";
+import type { RequiredSlideContent } from "./plan-schema.ts";
 import type { StoryRole } from "./pptx-classify.ts";
 import type { LayoutName, SemanticSlide } from "./presentation-types.ts";
 
@@ -159,8 +160,21 @@ function slotLine(slot: TextSlotBudget): Record<string, unknown> {
     fontSize: slot.typography.fontSize,
     maxLines: slot.typography.maxLines ?? slot.budget.estimatedLines,
     charsPerLine: slot.budget.estimatedCharactersPerLine,
+    min: slot.budget.minimumCharacters,
     aim: slot.budget.preferredCharacters,
     limit: slot.budget.maximumCharacters,
+    /**
+     * The aim again, in a unit a model can actually count in.
+     *
+     * Given a character budget the writer produced a quarter of it, run after
+     * run; given "three sentences" it writes three sentences. The number is
+     * derived from the same budget, so a design with bigger boxes asks for
+     * more without anybody maintaining a second set of figures. Only where a
+     * floor exists — a caption is not short by mistake.
+     */
+    ...(slot.budget.minimumCharacters > 0
+      ? { sentences: Math.max(1, Math.round(slot.budget.preferredCharacters / 110)) }
+      : {}),
     ...(slot.budget.maximumItems === undefined ? {} : { maxItems: slot.budget.maximumItems }),
   };
 }
@@ -197,13 +211,77 @@ function textFor(slide: SemanticSlide, binding: string): string | null {
   }
 }
 
+/**
+ * Preserve useful copy the model put in a field this composition cannot draw.
+ *
+ * The generic slide schema offers both `body` and `bullets`, while a concrete
+ * archetype often offers only one. Before this bridge, four good bullet points
+ * could sit in the semantic slide and disappear because the chosen page had a
+ * paragraph box; the paragraph then looked empty and repeated rewrites tried
+ * to recreate information the model had already supplied. Move, never invent:
+ * every word comes from the same slide and the fit pass still trims it against
+ * the real destination budget.
+ */
+export function adaptContentToBrief(slide: SemanticSlide, brief: ArchetypeWritingBrief): SemanticSlide {
+  const bindings = new Set(brief.slots.map((slot) => slot.binding));
+  const hasBody = bindings.has("body");
+  const hasBullets = [...bindings].some((binding) => binding === "bullets" || /^bullet_[1-6]$/.test(binding));
+
+  if (hasBody && !hasBullets && slide.bullets.length > 0) {
+    const punctuate = (value: string) => /[.!?…]$/.test(value.trim()) ? value.trim() : `${value.trim()}.`;
+    const merged = [slide.body?.trim() ?? "", ...slide.bullets.map(punctuate)].filter(Boolean).join(" ");
+    return { ...slide, body: merged || null, bullets: [] };
+  }
+
+  if (hasBullets && !hasBody && slide.body?.trim()) {
+    const additions = slide.body.trim().split(/(?<=[.!?…])\s+/).map((part) => part.trim()).filter(Boolean);
+    return { ...slide, body: null, bullets: [...slide.bullets, ...additions] };
+  }
+
+  return slide;
+}
+
+/**
+ * Which semantic field must carry the page's prose.
+ *
+ * Prefer the archetype's largest real content box, not a generic schema field
+ * that the renderer may never read. Chart/table data can make a page speak on
+ * their own, so only prose roles participate here.
+ */
+export function requiredContentForBrief(brief: ArchetypeWritingBrief): RequiredSlideContent | null {
+  const candidates = brief.slots
+    .filter((slot) => CONTENT_ROLES.has(slot.role) && slot.budget.minimumCharacters > 0)
+    .sort((a, b) => b.budget.preferredCharacters - a.budget.preferredCharacters);
+
+  for (const slot of candidates) {
+    if (slot.binding === "body") return "body";
+    if (slot.binding === "bullets" || /^bullet_[1-6]$/.test(slot.binding)) return "bullets";
+    if (slot.binding === "subtitle") return "subtitle";
+    if (slot.binding === "quote_text" || slot.binding === "quote_attribution") return "quote";
+    if (slot.binding === "stat_value" || slot.binding === "stat_label") return "statistic";
+  }
+  return null;
+}
+
 export type SlotProblem = SlotFit & {
   binding: string;
   role: string;
   /** What to aim for on the rewrite. */
   aim: number;
+  /** Which way it is wrong: too much copy, or a box left looking empty. */
+  direction: "shorten" | "expand";
   text: string;
 };
+
+/**
+ * Slots that carry what a slide is actually saying.
+ *
+ * A design offers more boxes than most slides need and an unused caption is
+ * whitespace — but a page whose every content box is empty is a heading over
+ * nothing, and a deck of those is what an author is holding when they say the
+ * slides have no text on them.
+ */
+const CONTENT_ROLES = new Set(["body", "bullets", "quote", "statistic_label", "subtitle"]);
 
 /**
  * What does not fit, and by how much.
@@ -218,25 +296,58 @@ export type SlotProblem = SlotFit & {
 export function findSlotProblems(brief: ArchetypeWritingBrief, slide: SemanticSlide): SlotProblem[] {
   const problems: SlotProblem[] = [];
 
+  /**
+   * Whether this page says anything at all.
+   *
+   * Computed before the loop because it changes what an empty box means: the
+   * first content slot on a page with nothing written on it has to be filled,
+   * while the third caption on a page that already reads well does not.
+   */
+  const speaks = Boolean(slide.chart?.values?.length || slide.table?.rows?.length)
+    || brief.slots.some((slot) => {
+      if (!CONTENT_ROLES.has(slot.role)) return false;
+      return Boolean(textFor(slide, slot.binding)?.trim());
+    });
+  let asked = false;
+
   for (const slot of brief.slots) {
     const text = textFor(slide, slot.binding);
-    if (!text || !text.trim()) continue;
+    const written = text?.trim() ?? "";
 
-    const fit = checkFit(slot, text);
-    if (fit.fits) continue;
+    if (!written) {
+      // One request per silent page, for the first box that can carry it.
+      if (speaks || asked || !CONTENT_ROLES.has(slot.role) || slot.budget.minimumCharacters === 0) continue;
+      asked = true;
+      problems.push({
+        ...checkFit(slot, ""),
+        binding: slot.binding,
+        role: slot.role,
+        aim: slot.budget.preferredCharacters,
+        direction: "expand",
+        text: "",
+      });
+      continue;
+    }
+
+    const fit = checkFit(slot, written);
+    if (fit.fits && fit.shortBy === 0) continue;
 
     problems.push({
       ...fit,
       binding: slot.binding,
       role: slot.role,
       aim: slot.budget.preferredCharacters,
-      text,
+      // Too long is the louder failure: copy that overflows is cut off on the
+      // slide, while copy that is short only looks thin.
+      direction: fit.overBy > 0 || fit.orphan ? "shorten" : "expand",
+      text: written,
     });
   }
 
   // Loudest first: a title that does not fit is worth more attention than a
   // caption that does not, and a rewrite request has a budget of its own.
-  return problems.sort((a, b) => b.overBy - a.overBy);
+  // Overflow outranks shortfall, because one is cut off and the other is thin.
+  return problems.sort((a, b) => (b.overBy - a.overBy) || (b.shortBy - a.shortBy));
 }
 
 /** Applies a rewritten field back onto the slide it belongs to. */

@@ -2,7 +2,8 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js";
 
 import { object, string, type ExportElement } from "./export-model.ts";
 
-const ALLOWED_BUCKETS = new Set(["user-uploads", "presentation-assets", "generated-images"]);
+const OWNER_BUCKETS = new Set(["user-uploads", "presentation-assets", "generated-images", "stock-images"]);
+const PUBLIC_ASSET_BUCKETS = new Set(["design-assets", "jelement-assets"]);
 const MAX_ASSET_BYTES = 20 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 96 * 1024 * 1024;
 const MAX_ASSETS = 160;
@@ -52,9 +53,18 @@ export class ExportAssetLoader {
     const bucket = string(content.storageBucket);
     const path = string(content.storagePath);
     if (!bucket && !path) return null;
-    if (!ALLOWED_BUCKETS.has(bucket)) throw new ExportAssetError("Slide image bucket is not allowed");
+    if (!OWNER_BUCKETS.has(bucket) && !PUBLIC_ASSET_BUCKETS.has(bucket)) {
+      // The outer export handler keeps this internal detail away from real
+      // users; it names the next missing allowlist case in E2E diagnostics.
+      throw new ExportAssetError(`Slide image bucket is not allowed: ${bucket || "(empty)"}`);
+    }
+    const unsafe = !path || path.startsWith("/") || path.includes("..") || path.includes("//");
     const prefix = `${this.ownerId}/${this.presentationId}/`;
-    if (!path.startsWith(prefix) || path.includes("..") || path.includes("//")) {
+    // Design and JElement assets are intentionally public and namespaced by
+    // their catalogue entry; they cannot expose another user's data. Private
+    // buckets keep the strict owner/presentation prefix that binds editable
+    // element content to this deck.
+    if (unsafe || (!PUBLIC_ASSET_BUCKETS.has(bucket) && !path.startsWith(prefix))) {
       throw new ExportAssetError("Slide image does not belong to this presentation");
     }
 
@@ -85,4 +95,3 @@ export class ExportAssetLoader {
     return { bytes, mimeType };
   }
 }
-

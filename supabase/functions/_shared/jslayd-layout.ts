@@ -1,5 +1,6 @@
 import {
   DEFAULT_META,
+  familyOf,
   purposeForLayout,
   readDocument,
   renderArchetype,
@@ -260,6 +261,113 @@ function templateReport(
   };
 }
 
+type ChartBox = { x: number; y: number; width: number; height: number };
+
+function overlapArea(left: ChartBox, right: ChartBox): number {
+  const width = Math.max(0, Math.min(left.x + left.width, right.x + right.width) - Math.max(left.x, right.x));
+  const height = Math.max(0, Math.min(left.y + left.height, right.y + right.height) - Math.max(left.y, right.y));
+  return width * height;
+}
+
+/**
+ * Draw the product-level chart even when an older published design has no
+ * chart archetype of its own.
+ *
+ * New code designs normally render their authored chart element. Imported
+ * templates and legacy code designs do not. Refusing every one of those decks
+ * would turn a visual requirement into a design-migration outage, so the
+ * renderer occupies the page's largest image frame where possible and otherwise
+ * chooses the least-obstructed widescreen chart region. A surface panel keeps
+ * labels readable without changing or moving any authored element.
+ */
+function appendVisualStatistic(
+  rows: ElementRow[],
+  slide: SlideData,
+  document: JslaydDocument,
+  paletteCode: string | null,
+  ids: { presentationId: string; ownerId: string; slideId: string },
+): void {
+  if (!slide.chart || rows.some((row) => row.type === "chart")) return;
+  const values = slide.chart.values;
+  if (values.length < 2 || values.length !== slide.chart.labels.length) return;
+
+  const imageFrames = rows
+    .filter((row) => row.type === "image" && row.width >= 280 && row.height >= 180)
+    .sort((left, right) => right.width * right.height - left.width * left.height);
+  const candidates: ChartBox[] = imageFrames.length
+    ? imageFrames.map(({ x, y, width, height }) => ({ x, y, width, height }))
+    : [
+        { x: 520, y: 145, width: 420, height: 330 },
+        { x: 60, y: 145, width: 420, height: 330 },
+        { x: 100, y: 300, width: 800, height: 215 },
+      ];
+  const obstacles = rows.filter((row) => row.type === "text" || row.type === "table" || row.type === "chart");
+  const box = candidates
+    .map((candidate) => ({
+      candidate,
+      overlap: obstacles.reduce((total, row) => total + overlapArea(candidate, row), 0),
+    }))
+    .sort((left, right) => left.overlap - right.overlap)[0]!.candidate;
+
+  const family = familyOf(document, paletteCode);
+  const maximumZ = rows.reduce((maximum, row) => Math.max(maximum, row.z_index), 0);
+  const base = {
+    slide_id: ids.slideId,
+    presentation_id: ids.presentationId,
+    owner_id: ids.ownerId,
+    x: box.x,
+    y: box.y,
+    width: box.width,
+    height: box.height,
+    rotation: 0,
+    opacity: 1,
+    locked: false,
+  };
+
+  rows.push({
+    ...base,
+    id: crypto.randomUUID(),
+    type: "shape",
+    z_index: maximumZ + 1,
+    locked: true,
+    style: { fill: family.colors.surface, stroke: family.colors.border, strokeWidth: 1, radius: 18 },
+    content: { shape: "roundRect", role: "visual-statistic-panel" },
+  });
+  rows.push({
+    ...base,
+    id: crypto.randomUUID(),
+    type: "chart",
+    x: box.x + 18,
+    y: box.y + 18,
+    width: Math.max(1, box.width - 36),
+    height: Math.max(1, box.height - 36),
+    z_index: maximumZ + 2,
+    style: {
+      color: family.colors.primary,
+      trackColor: family.colors.surfaceAlt,
+      labelColor: family.colors.text,
+      axisColor: family.colors.border,
+      series: family.chartPalette.length ? family.chartPalette : document.chartPalette,
+      labelSize: 15,
+      showLegend: false,
+      showLabels: true,
+      showValues: true,
+      showGrid: false,
+      showAxis: slide.chart.type !== "donut",
+      cornerRadius: 8,
+      gap: 12,
+      strokeWidth: 1,
+    },
+    content: {
+      chartType: slide.chart.type === "donut" ? "donut" : "bar",
+      chartKind: slide.chart.type === "donut" ? "donut" : "bar",
+      labels: slide.chart.labels,
+      values,
+      generatedFallback: true,
+    },
+  });
+}
+
 export function buildJslaydSlides(input: BuildInput): { slides: SlideRow[]; elements: ElementRow[] } {
   const profileByArchetype = new Map((input.design.profiles ?? []).map((profile) => [profile.archetypeId, profile]));
   const generated = new Map(input.generatedImages.map((item) => [item.slideIndex, item]));
@@ -290,6 +398,27 @@ export function buildJslaydSlides(input: BuildInput): { slides: SlideRow[]; elem
     if (!wanted) return selection;
     const archetype = input.design.document.archetypes.find((entry) => entry.id === wanted);
     return archetype ? { archetype, substituted: false } : selection;
+  }).map((selection, index) => {
+    if (data[index]?.sources.length === 0) return selection;
+    const takesSources = (archetype: JslaydDocument["archetypes"][number]) =>
+      archetype.elements.some((element) =>
+        "source" in element && element.source && "bind" in element.source
+        && ["sources", "bullets", "body"].includes(element.source.bind));
+    if (takesSources(selection.archetype)) return selection;
+
+    /**
+     * The chosen substitute may be a cover — a title and no content box. In
+     * that composition the fallback below has nowhere to put the bibliography,
+     * so the data still disappears. Reseat only this server-built page to the
+     * highest-priority archetype that can physically carry the source list.
+     */
+    const candidates = input.design.document.archetypes
+      .filter(takesSources)
+      .sort((left, right) =>
+        Number(right.purpose === "references") - Number(left.purpose === "references")
+        || right.selection.priority - left.selection.priority
+        || left.id.localeCompare(right.id));
+    return candidates[0] ? { archetype: candidates[0], substituted: true } : selection;
   });
 
   const slideRows: SlideRow[] = [];
@@ -308,6 +437,29 @@ export function buildJslaydSlides(input: BuildInput): { slides: SlideRow[]; elem
     if (picture) {
       for (const element of selection.archetype.elements) {
         if (element.type === "image" || element.type === "frame") slide.images[element.slot] = picture;
+      }
+    }
+
+    /**
+     * A design with no bibliography page still has to show the bibliography.
+     *
+     * The citation list fills a `{{sources}}` binding, and a design that never
+     * declares one — most of them, since a references page is not a
+     * composition anybody designs for pleasure — sends the whole list nowhere.
+     * The page is then laid into whatever the substitution picked and arrives
+     * as a heading over an empty slide, which is what an author sees at the end
+     * of every deck.
+     *
+     * So it falls back to the boxes the chosen page does have. Written as a
+     * list where there is one, as a paragraph otherwise.
+     */
+    if (slide.sources.length > 0) {
+      const takes = (binding: string) =>
+        selection.archetype.elements.some((element) =>
+          "source" in element && element.source && "bind" in element.source && element.source.bind === binding);
+      if (!takes("sources")) {
+        if (takes("bullets") && slide.bullets.length === 0) slide.bullets = [...slide.sources];
+        else if (!slide.body?.trim()) slide.body = slide.sources.join("\n");
       }
     }
 
@@ -357,6 +509,12 @@ export function buildJslaydSlides(input: BuildInput): { slides: SlideRow[]; elem
       style: element.style,
       content: element.content,
     }));
+
+    appendVisualStatistic(rows, slide, input.design.document, input.paletteCode, {
+      presentationId: input.presentationId,
+      ownerId: input.ownerId,
+      slideId,
+    });
 
     const checked = validateAndRepair(rows, { authoredGeometry: true });
     slideRows.push({

@@ -197,6 +197,34 @@ test("the deck's real text reaches the rows", () => {
   assert.ok(texts.some((text) => text.includes("68%")), "the statistic must render");
 });
 
+test("the semantic visual statistic becomes an editable chart element", () => {
+  const chart = build().elements.find((element) =>
+    element.type === "chart" && Array.isArray(element.content.values) && element.content.values.length > 0);
+  assert.ok(chart, "the chart slide must produce a visible chart row");
+  assert.ok(["bar", "donut"].includes(chart.content.chartType));
+  assert.deepEqual(chart.content.labels, ["A", "B", "C"]);
+  assert.deepEqual(chart.content.values, [48, 32, 20]);
+});
+
+test("a legacy design without a chart archetype receives a visible design-coloured fallback", () => {
+  const legacy = JSON.parse(JSON.stringify(DOCUMENT));
+  for (const archetype of legacy.archetypes) {
+    archetype.elements = archetype.elements.filter((element) => element.type !== "chart");
+    archetype.selection.supportsChart = false;
+  }
+  const design = readDesign({ ...DESIGN_ROW, slug: "legacy-without-chart", compiled_config: legacy }).design;
+  assert.ok(design, "the legacy design fixture must remain readable");
+
+  const built = build({ design });
+  const chart = built.elements.find((element) => element.type === "chart" && element.content.generatedFallback === true);
+  assert.ok(chart, "a semantic chart must not disappear because the published design predates chart archetypes");
+  assert.ok(["bar", "donut"].includes(chart.content.chartType));
+  assert.ok(built.elements.some((element) =>
+    element.slide_id === chart.slide_id
+    && element.type === "shape"
+    && element.content.role === "visual-statistic-panel"), "the fallback chart needs a readable surface panel");
+});
+
 test("the bibliography is the only slide that lists sources", () => {
   const built = build();
   const listing = built.slides.filter((slide) => {
@@ -204,6 +232,53 @@ test("the bibliography is the only slide that lists sources", () => {
     return [...ids].some((text) => text.includes("stat.uz"));
   });
   assert.ok(listing.length <= 1, "sources must not be repeated across the deck");
+});
+
+test("references fall back into a content box when the design has no sources binding", () => {
+  const fallbackPrompt = `${SAMPLE_PROMPT}
+
+[SLIDE source_fallback]
+purpose: title_content
+background: background
+priority: 95
+
+[ELEMENT fallback_heading]
+type: text
+bind: {{title}}
+x: 120
+y: 100
+width: 1680
+height: 140
+font: font_1
+fontSize: 72
+color: text
+maxLines: 2
+
+[ELEMENT fallback_list]
+type: list
+bind: {{bullets}}
+x: 120
+y: 300
+width: 1680
+height: 620
+font: font_2
+fontSize: 30
+color: text
+maxItems: 8
+marker: bullet
+`;
+  const fallback = compile(fallbackPrompt);
+  assert.deepEqual(fallback.diagnostics.errors, []);
+  const built = build({
+    design: readDesign({ ...DESIGN_ROW, compiled_config: fallback.document }).design,
+  });
+  const referenceSlide = built.slides.find((slide) => slide.position === built.slides.length - 2);
+  const text = built.elements
+    .filter((element) => element.slide_id === referenceSlide.id && element.type === "text")
+    .flatMap((element) => [element.content.text, ...(element.content.items ?? [])])
+    .filter((value) => typeof value === "string")
+    .join("\n");
+  assert.match(text, /stat\.uz/, "the bibliography must remain visible after substitution");
 });
 
 test("a generated image is bound into every image slot the archetype declares", () => {

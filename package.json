@@ -33,6 +33,7 @@
     "test:wikimedia": "node --test supabase/tests/wikimedia-live.test.mjs",
     "test:resolver": "node supabase/tests/image-resolver-smoke.mjs",
     "test:autoimages": "node supabase/tests/auto-image-e2e.mjs",
+    "test:textfill": "node supabase/tests/text-fill-e2e.mjs",
     "test:telegram": "node --test supabase/tests/telegram-image-bot.test.mjs",
     "test:telegram:smoke": "node supabase/tests/telegram-image-bot-smoke.mjs",
     "test:telegram:live": "node supabase/tests/telegram-live-smoke.mjs",

@@ -340,6 +340,54 @@ test("an export is the template's package with the deck's words in it", async ()
   assert.equal(result.report.slides[0].nonTextObjectsPreserved, 2);
 });
 
+test("a cloned template receives the generated native bar chart and workbook", async () => {
+  const bytes = await zip([...deck()].map(([name, value]) => ({ name, bytes: value })));
+  const chart = {
+    id: "chart-1", slide_id: "s1", type: "chart",
+    x: 500, y: 150, width: 420, height: 300, rotation: 0, z_index: 20, opacity: 1,
+    style: { series: ["#173E35", "#D4A72C"], labelColor: "#151A18" },
+    content: { chartType: "bar", labels: ["2024", "2025"], values: [12, 18] },
+  };
+  const donor = async () => zip(Object.entries({
+    "[Content_Types].xml":
+      '<Types xmlns="ct"><Default Extension="xlsx" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"/>'
+      + '<Override PartName="/ppt/charts/chart1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/></Types>',
+    "ppt/slides/slide1.xml":
+      '<p:sld xmlns:p="ppt" xmlns:a="draw" xmlns:c="chart" xmlns:r="rel"><p:cSld><p:spTree>'
+      + '<p:nvGrpSpPr><p:cNvPr id="1" name=""/></p:nvGrpSpPr><p:grpSpPr/>'
+      + '<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="2" name="Chart 1"/></p:nvGraphicFramePr>'
+      + '<p:xfrm/><a:graphic><a:graphicData><c:chart r:id="rId1"/></a:graphicData></a:graphic>'
+      + '</p:graphicFrame></p:spTree></p:cSld></p:sld>',
+    "ppt/slides/_rels/slide1.xml.rels":
+      '<Relationships><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart1.xml"/></Relationships>',
+    "ppt/charts/chart1.xml":
+      '<c:chartSpace xmlns:c="chart" xmlns:r="rel"><c:chart><c:plotArea><c:barChart/></c:plotArea></c:chart><c:externalData r:id="rId1"/></c:chartSpace>',
+    "ppt/charts/_rels/chart1.xml.rels":
+      '<Relationships><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/package" Target="../embeddings/Microsoft_Excel_Worksheet1.xlsx"/></Relationships>',
+    "ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx": "workbook",
+  }).map(([name, value]) => ({ name, bytes: new TextEncoder().encode(value) })));
+
+  const result = await exportByCloning(
+    bytes,
+    [deckSlides[0]],
+    [...deckElements, chart],
+    [profiles[0]],
+    new Map(),
+    donor,
+  );
+  assert.equal(result.ok, true, result.ok ? "" : result.reason);
+
+  const entries = await unzip(result.bytes);
+  const slide = decoder.decode(entries.get("ppt/slides/slide1.xml"));
+  const relationships = decoder.decode(entries.get("ppt/slides/_rels/slide1.xml.rels"));
+  const chartPart = [...entries.keys()].find((name) => /^ppt\/charts\/jaxongirmanChart\d+\.xml$/.test(name));
+  const workbook = [...entries.keys()].find((name) => /^ppt\/embeddings\/jaxongirmanChart\d+-\d+\.xlsx$/.test(name));
+  assert.ok(slide.includes("<c:chart"), "the visible chart frame was not added to the selected slide");
+  assert.match(relationships, /relationships\/chart/);
+  assert.ok(chartPart && decoder.decode(entries.get(chartPart)).includes("<c:barChart"));
+  assert.ok(workbook, "the editable chart workbook was not carried into the clone");
+});
+
 test("template copy that survived fails the export rather than shipping", async () => {
   const bytes = await zip([...deck()].map(([name, value]) => ({ name, bytes: value })));
   // The body is left unmentioned, so its sample sentence would still be there.

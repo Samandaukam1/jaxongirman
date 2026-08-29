@@ -1,8 +1,9 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js";
 import { elementSlotsFor, fillElementSlots, findIllustration, slidesWithElements } from "./jelement-visuals.ts";
-import { familyOf } from "./jslayd/index.ts";
+import { familyOf, type ArchetypeWritingBrief } from "./jslayd/index.ts";
 import {
-  applyRewrite, briefForPrompt, findSlotProblems, planDeckLayout, reseatOverflowing,
+  adaptContentToBrief, applyRewrite, briefForPrompt, findSlotProblems, planDeckLayout, requiredContentForBrief,
+  reseatOverflowing,
   type SlotProblem,
 } from "./layout-brief.ts";
 import { buildJslaydSlides, readDesign, type ResolvedDesign } from "./jslayd-layout.ts";
@@ -17,6 +18,9 @@ import {
   asksFor, bindingsFromSlots, readTemplateAnswer, templatePrompt, templateSchema, usableSlots,
   TEMPLATE_SCHEMA_NAME, type WritableSlot,
 } from "./pptx-writer.ts";
+import {
+  deckHasVisualStatistic, isVisualStatistic, requireVisualStatistic,
+} from "./visual-statistic.ts";
 
 type PipelineInput = { jobId: string; presentationId: string; ownerId: string; service: SupabaseClient };
 /** The model supplies narrative direction only — never colours or typography. */
@@ -303,7 +307,9 @@ function mockContent(outline: Outline): Content {
     body: index === 0 ? null : "Mavzu aniq tuzilma, qisqa izohlar va o‘qilishi oson vizual iyerarxiya orqali yoritiladi.",
     quote: null,
     statistic: slide.layout === "statistic" ? { value: "3", label: "mavzuni tushunishga yordam beradigan asosiy yo‘nalish" } : null,
-    chart: null,
+    chart: slide.layout === "chart"
+      ? { type: "bar", labels: ["Birinchi", "Ikkinchi", "Uchinchi"], values: [3, 2, 1] }
+      : null,
     table: null,
   })) };
 }
@@ -521,7 +527,7 @@ async function writeOneSlide(input: {
   outline: Outline["slides"][number];
   previous: string | null;
   next: string | null;
-  brief: unknown;
+  brief: ArchetypeWritingBrief | null;
   /** What this page is for in the talk, where the design says. */
   role?: string;
   researchBrief: string;
@@ -541,14 +547,24 @@ async function writeOneSlide(input: {
     input.next ? `Keyingi slayd: ${input.next}` : null,
     "",
     "Faqat SHU slayd uchun matn yozing.",
-    "- subtitle: sarlavhani ochib beruvchi bitta qisqa jumla.",
-    "- bullets: 3–5 ta band. Har biri aniq fikr: raqam, sana, ism yoki ta'rif. \"Muhim ahamiyatga ega\" kabi quruq iboralarni yozmang.",
-    "- body: bandlarni bog'lovchi 1–2 jumla, agar slayd shuni talab qilsa.",
+    /**
+     * The instruction that was actually deciding the length.
+     *
+     * The design measures each box and the brief carries the number; this line
+     * said "one or two sentences" and the writer obeyed it, filling a quarter
+     * of a box built for a paragraph on every content slide of every deck. The
+     * budget was never the constraint — this sentence was.
+     */
+    "- subtitle: sarlavhani ochib beruvchi 1–2 jumla.",
+    "- bullets: 4–6 ta band. Har biri to'liq fikr: raqam, sana, ism yoki ta'rif bilan. \"Muhim ahamiyatga ega\" kabi quruq iboralarni yozmang.",
+    "- body: DIZAYN O'LCHOVLARIdagi \"sentences\" soniga teng to'liq jumla yozing (odatda 4–6). Har bir fikrni rivojlantiring: da'vo, sabab yoki mexanizm, natija yoki aniq misol. Bir-ikki jumla bilan cheklanmang.",
     "- statistic: faqat tadqiqotda haqiqatan uchragan raqam.",
-    "- chart: faqat tadqiqotdagi haqiqiy qiymatlar.",
+    input.outline.layout === "chart"
+      ? "- chart: MAJBURIY. Faqat tekshirilgan manbadagi bir xil birlikda o‘lchangan 2–8 ta qiymatni yozing. type faqat bar yoki donut bo‘lsin; donut faqat qiymatlar bir butunning qismlari bo‘lsa ishlatiladi. Raqam o‘ylab topmang."
+      : "- chart: faqat tadqiqotdagi haqiqiy qiymatlar; kerak bo‘lmasa null.",
     "- table: faqat haqiqatan jadval ko'rinishidagi ma'lumot bo'lsa; har qator {\"cells\": [...]}.",
     "Kerak bo'lmagan maydonni null qoldiring.",
-    input.brief ? `\nDIZAYN O'LCHOVLARI (\"aim\" — mo'ljal, \"limit\" — qat'iy chegara):\n${JSON.stringify(input.brief)}` : "",
+    input.brief ? `\nDIZAYN O'LCHOVLARI (\"sentences\" — nechta jumla, \"min\" — eng kam belgi, \"aim\" — mo'ljal, \"limit\" — qat'iy chegara):\n${JSON.stringify(input.brief)}` : "",
     input.researchBrief,
   ].filter(Boolean).join("\n");
 
@@ -556,11 +572,18 @@ async function writeOneSlide(input: {
     prompt: `${system}\n\n${prompt}`,
     system,
     schemaName: "presentation_slide",
-    schema: slideSchema(),
+    schema: slideSchema({ requireVisualStatistic: input.outline.layout === "chart" }),
     attachments: input.attachments,
     // One slide's worth. The old sixteen thousand was for ten of them at once.
     maxOutputTokens: 2_400,
   });
+
+  if (input.outline.layout === "chart" && !isVisualStatistic(answer.data.chart)) {
+    // The schema rejects a missing chart in normal operation. Keep a runtime
+    // check at the boundary as well: labels and values must have equal lengths,
+    // which JSON Schema cannot express without making the prompt enormous.
+    throw new Error("Majburiy vizual statistika yaroqli bar yoki doira diagrammasi bo‘lib qaytmadi.");
+  }
 
   return { index: input.index, slide: answer.data, usage: answer.usage, attempts: answer.attempts };
 }
@@ -805,7 +828,7 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
       // prose that the writing stage then compressed away — a deck needs the
       // facts, and the facts are short. Asking for them as a list rather than
       // as exposition is most of the saving.
-      const prompt = `Mavzu: ${prepared.presentation.topic}\n\nIshonchli manbalardan qidiring: rasmiy saytlar, ilmiy nashrlar, statistika idoralari, universitetlar.\nQuyidagilarni QISQA ro'yxat qilib yozing — izoh va kirish so'zlarisiz:\n- FAKTLAR: 8–12 ta aniq dalil, har biri bir qatorda, qavsda manba.\n- RAQAMLAR: 4–8 ta statistika, yil va manba bilan.\n- TA'RIFLAR: 2–4 ta asosiy tushuncha, bir jumladan.\n- MANBALAR: 5–8 ta havola.\nManbasi yo'q da'voni yozmang. Uzun paragraf yozmang.\nBiriktirilgan fayllar bo'lsa, ular ham kontekst hisoblanadi.`;
+      const prompt = `Mavzu: ${prepared.presentation.topic}\n\nIshonchli manbalardan qidiring: rasmiy saytlar, ilmiy nashrlar, statistika idoralari, universitetlar.\nQuyidagilarni QISQA ro'yxat qilib yozing — izoh va kirish so'zlarisiz:\n- FAKTLAR: 8–12 ta aniq dalil, har biri bir qatorda, qavsda manba.\n- RAQAMLAR: 4–8 ta statistika, yil va manba bilan.\n- DIAGRAMMA UCHUN: kamida 2 ta o‘zaro taqqoslanadigan qiymatni bir xil birlik, yil va bitta aniq manba bilan bering. Ulushlar bo‘lsa jami nimani anglatishini yozing.\n- TA'RIFLAR: 2–4 ta asosiy tushuncha, bir jumladan.\n- MANBALAR: 5–8 ta havola.\nManbasi yo'q da'voni yozmang. Uzun paragraf yozmang.\nBiriktirilgan fayllar bo'lsa, ular ham kontekst hisoblanadi.`;
       try {
         const result = await writer.research({
           prompt: `${system}\n\n${prompt}`,
@@ -854,7 +877,7 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
     const outlineResult = await runStage(input.service, input, "creating_outline", async () => {
       if (mode === "mock") return { data: mockOutline(prepared.presentation.topic, contentCount), usage: {}, requestId: null, provider: "google" as const, model: writer.writingModel, attempts: 1 };
       const system = "You are Jaxongir AI, a senior presentation strategist. Produce academically usable Uzbek Latin content architecture grounded in the supplied research. Every slide must advance a specific, concrete idea — never a vague heading. The visual design is fixed by the chosen design, so never propose colours, fonts or decoration. Return only the required schema.";
-      const prompt = `Mavzu: ${prepared.presentation.topic}\nMazmun slaydlari soni: ${contentCount}\nUslub: ${prepared.presentation.style}\nTanlangan dizayn: ${jslayd.document.design.name} — ${jslayd.document.design.description}.\n\nSarlavha, mavzular rejasi, foydalanilgan adabiyotlar va yakuniy slaydlarni server o'zi qo'shadi — ularni rejalashtirmang. Faqat ${contentCount} ta mazmun slaydini rejalashtiring va ularni mantiqiy ketma-ketlikda joylashtiring: tushuncha → tahlil → dalillar → amaliyot → xulosa.\nHar bir sarlavha aniq bo'lsin: "Kirish" emas, mavzu haqida nima aytilishini ayting.\nRaqam yoki statistika bor slayd uchun statistic yoki chart layoutini tanlang.\nVisual prompt faqat matnsiz illyustratsiyani tasvirlaydi va yuqoridagi art directionga mos bo'lishi kerak.${researchBrief}`;
+      const prompt = `Mavzu: ${prepared.presentation.topic}\nMazmun slaydlari soni: ${contentCount}\nUslub: ${prepared.presentation.style}\nTanlangan dizayn: ${jslayd.document.design.name} — ${jslayd.document.design.description}.\n\nSarlavha, mavzular rejasi, foydalanilgan adabiyotlar va yakuniy slaydlarni server o'zi qo'shadi — ularni rejalashtirmang. Faqat ${contentCount} ta mazmun slaydini rejalashtiring va ularni mantiqiy ketma-ketlikda joylashtiring: tushuncha → tahlil → dalillar → amaliyot → xulosa.\nHar bir sarlavha aniq bo'lsin: "Kirish" emas, mavzu haqida nima aytilishini ayting.\nKamida BITTA slayd layoutini chart qiling: u tekshirilgan raqamlarni bar yoki doira diagrammasida ko‘rsatadi. Diagramma uchun uydirma raqam ishlatmang.\nVisual prompt faqat matnsiz illyustratsiyani tasvirlaydi va yuqoridagi art directionga mos bo'lishi kerak.${researchBrief}`;
       return writer.structured<Outline>({
         prompt: `${system}\n\n${prompt}`,
         system,
@@ -863,6 +886,11 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
         attachments: context.attachments,
       });
     }, (value) => `${value.data.slides.length} ta mazmun slaydi rejalashtirildi`);
+
+    // A model instruction is not a product invariant. If the outline omitted
+    // the chart, deterministically assign the most numeric slide (or a middle
+    // content slide) before its archetype and writing budget are chosen.
+    outlineResult.data.slides = requireVisualStatistic(outlineResult.data.slides) as Outline["slides"];
 
     /**
      * The composition each slide will be laid into, chosen before its copy is
@@ -886,8 +914,12 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
     );
 
     const layoutInstruction = `\n\nDIZAYN O'LCHOVLARI — matn shu qutilarga yozilishi kerak.\n`
-      + `Har slayd o'z arxetipiga ega. "aim" — mo'ljal, "limit" — qat'iy chegara (belgi soni).\n`
-      + `Bo'sh joy dizaynning bir qismi: limitgacha yozish SHART EMAS, aim atrofida to'xtang.\n`
+      + `Har slayd o'z arxetipiga ega. "min" — eng kami, "aim" — mo'ljal, "limit" — qat'iy chegara (belgi soni).\n`
+      + `Har bir maydonni "aim" ga yaqin yozing: "min" dan kam yozish MUMKIN EMAS, "limit" dan oshmang.\n`
+      + `"sentences" bor maydonlarda shuncha to'liq jumla yozing — bir jumla bilan cheklanmang. `
+      + `Har bir fikrni rivojlantiring: da'vo, sabab yoki mexanizm, natija yoki aniq misol.\n`
+      + `Har bir slaydda kamida bitta mazmun maydoni (body, bullets, quote yoki statistic) to'ldirilgan bo'lsin — `
+      + `faqat sarlavhadan iborat slayd bo'lmasin.\n`
       + `Sarlavhada zarur bo'lsa \\n bilan mantiqiy joydan qator ajrating; oxirgi qator bitta qisqa so'z bo'lib qolmasin.\n`
       + `Arxetiplar:\n${JSON.stringify(layoutPlan.briefs.map(briefForPrompt))}\n`
       + `Slaydlar: ${JSON.stringify(layoutPlan.slides.map((slide) => ({ i: slide.index, archetype: slide.archetypeId })))}`;
@@ -988,7 +1020,7 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
         // A template page is written into its own boxes rather than into the
         // design's fields: same one request, different question.
         if (slots && slots.length > 0) {
-          const answer = await writeTemplateSlide({
+          let answer = await writeTemplateSlide({
             writer,
             topic: prepared.presentation.topic,
             index,
@@ -999,6 +1031,41 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
             researchBrief,
             attachments: context.attachments,
           });
+
+          /**
+           * A template writer answers for the page's text boxes, not for a
+           * semantic chart field. That used to make every imported-PPTX design
+           * return `chart: null`, even when the outline deliberately reserved
+           * this page for the required visual statistic.
+           *
+           * Ask the ordinary grounded slide writer for the chart payload only.
+           * The template answer still owns every word and every measured box;
+           * this second answer contributes just the verified labels and
+           * values that both the preview and the clone exporter can draw.
+           */
+          if (slide.layout === "chart") {
+            const chartAnswer = await writeOneSlide({
+              writer,
+              topic: prepared.presentation.topic,
+              index,
+              outline: slide,
+              previous: outlineResult.data.slides[index - 1]?.title ?? null,
+              next: outlineResult.data.slides[index + 1]?.purpose ?? null,
+              brief: null,
+              ...(planned?.role ? { role: planned.role } : {}),
+              researchBrief,
+              attachments: context.attachments,
+            });
+            answer = {
+              ...answer,
+              slide: { ...answer.slide, chart: chartAnswer.slide.chart },
+              usage: {
+                input_tokens: (answer.usage.input_tokens ?? 0) + (chartAnswer.usage.input_tokens ?? 0),
+                output_tokens: (answer.usage.output_tokens ?? 0) + (chartAnswer.usage.output_tokens ?? 0),
+              },
+              attempts: answer.attempts + chartAnswer.attempts,
+            };
+          }
           templateText.set(index, Object.fromEntries(answer.texts));
           await beat(index);
           if (answer.filled.length > 0 || answer.trimmed.length > 0) {
@@ -1108,6 +1175,13 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
     // nested array badly and refused the request that carried one. Unwrapped
     // here so nothing past this line knows the difference.
     const writtenSlides = contentResult.slides.map(flattenTableRows);
+    if (!isTemplate) {
+      for (const planned of layoutPlan.slides) {
+        const brief = briefById.get(planned.archetypeId);
+        const written = writtenSlides[planned.index];
+        if (brief && written) writtenSlides[planned.index] = adaptContentToBrief(written as never, brief) as never;
+      }
+    }
     let rewriteUsage = { input_tokens: 0, output_tokens: 0 };
     let rewrites = 0;
     let rewriteAttribution: { provider: string; model: string; attempts: number } =
@@ -1123,7 +1197,7 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
      * different source page after its words were written for this one's shapes.
      */
     if (mode !== "mock" && !isTemplate) {
-      for (let attempt = 0; attempt < 2; attempt += 1) {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
         const failing: { index: number; problems: SlotProblem[] }[] = [];
 
         layoutPlan.slides.forEach((planned) => {
@@ -1144,18 +1218,59 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
 
         const request = failing.map((entry) => ({
           slide: entry.index,
+          /**
+           * What the slide is about, sent with every request.
+           *
+           * Shortening needs no context — the meaning is in the sentence being
+           * cut. Expanding an empty box needs all of it: the first attempt at
+           * this sent the field name and an empty string, and the model
+           * returned an empty string back, correctly, because nothing in the
+           * request said what the slide was for.
+           */
+          about: {
+            title: outlineResult.data.slides[entry.index]?.title ?? "",
+            purpose: outlineResult.data.slides[entry.index]?.purpose ?? "",
+            topic: prepared.presentation.topic,
+          },
           fields: entry.problems.map((problem) => ({
             field: problem.binding,
             current: problem.text,
             maxCharacters: problem.maximumCharacters,
             aimCharacters: problem.aim,
             maxLines: problem.maximumLines,
-            issue: problem.orphan ? "last line is a single short word" : `${problem.overBy} characters too long`,
+            issue: problem.orphan
+              ? "last line is a single short word"
+              : problem.overBy > 0
+                ? `${problem.overBy} characters too long`
+                : problem.text
+                  ? `too short: ${problem.text.length} characters where the box holds ${problem.aim}`
+                  : "this box is empty and the slide says nothing",
+            // Characters are not a unit a model can count in. Sentences are.
+            ...(problem.direction === "expand"
+              ? { add: `${Math.max(1, Math.round((problem.aim - problem.text.length) / 110))} ta qo'shimcha jumla` }
+              : {}),
           })),
         }));
 
-        const rewriteSystem = "You are rewriting presentation copy to fit a fixed layout. Preserve the meaning and the facts exactly. Shorten by removing unnecessary words, simplifying sentences and dropping duplicated ideas — in that order. Never invent a new fact to fill space, never change a number, and never mention the layout. Return only the required schema.";
-        const rewritePrompt = `Quyidagi matnlar dizayndagi qutilarga sig'madi. Ma'noni saqlagan holda qisqartiring.\nHar bir maydon uchun "aimCharacters" atrofida yozing, "maxCharacters" dan oshmang.\n"last line is a single short word" bo'lsa, qator ajratishni o'zgartiring yoki qisqartiring.\n\n${JSON.stringify(request)}`;
+        /**
+         * Both directions, because a box can be wrong two ways.
+         *
+         * This pass only ever shortened, which is why nothing noticed that the
+         * writer was filling a quarter of every content box: copy that is too
+         * thin passes a fit check perfectly. Expanding is the more dangerous
+         * half — a model asked for more words will invent facts to produce
+         * them — so the instruction is explicit that the extra length comes
+         * from developing what the slide already says, and from the deck's own
+         * material, never from anywhere else.
+         */
+        const rewriteSystem = "You are rewriting presentation copy to fit a fixed layout. Preserve the meaning and the facts exactly. Where copy is too long, shorten it by removing unnecessary words, simplifying sentences and dropping duplicated ideas — in that order. Where copy is too short, develop what is already there: explain the mechanism, add the consequence, name the concrete case that the slide's own subject supplies. Never invent a fact, a number, a name or a date to fill space, never change a number, and never mention the layout. Return only the required schema.";
+        const rewritePrompt = `Quyidagi matnlar dizayndagi qutilarga mos kelmadi.\n`
+          + `"too long" bo'lsa — ma'noni saqlab qisqartiring.\n`
+          + `"too short" yoki "empty" bo'lsa — "about" dagi mavzu va sarlavhaga tayanib yozing: `
+          + `sabab, mexanizm, natija yoki aniq misol qo'shing. `
+          + `Yangi fakt, raqam, ism yoki sana O'YLAB TOPMANG.\n`
+          + `Har bir maydon uchun "aimCharacters" atrofida yozing, "maxCharacters" dan oshmang.\n`
+          + `"last line is a single short word" bo'lsa, qator ajratishni o'zgartiring yoki qisqartiring.\n\n${JSON.stringify(request)}`;
         const rewritten = await writer.structured<{ slides: { slide: number; fields: { field: string; text: string }[] }[] }>({
           prompt: `${rewriteSystem}\n\n${rewritePrompt}`,
           system: rewriteSystem,
@@ -1221,6 +1336,10 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
           moves: moved.reseats,
         }));
       }
+    }
+
+    if (!deckHasVisualStatistic(writtenSlides)) {
+      throw new Error("Taqdimot uchun majburiy bar yoki doira diagrammasi yaratilmagan.");
     }
 
     const plan = await runStage(
@@ -1710,6 +1829,20 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
         teacherName: prepared.presentation.teacher_name,
         paletteCode: prepared.presentation.palette_code,
       });
+      const visibleChart = rows.elements.some((element) => {
+        if (element.type !== "chart") return false;
+        const content = element.content as { chartType?: unknown; labels?: unknown; values?: unknown } | null;
+        return isVisualStatistic({
+          type: content?.chartType,
+          labels: content?.labels,
+          values: content?.values,
+        });
+      });
+      if (!visibleChart) {
+        // No ready deck can export a chartless PPTX. Designs that cannot draw
+        // the required visual fail here rather than silently dropping data.
+        throw new Error("Tanlangan dizayn majburiy vizual statistikani ko‘rsata olmadi.");
+      }
       const deleteResult = await input.service.from("slides").delete().eq("presentation_id", input.presentationId);
       if (deleteResult.error) throw deleteResult.error;
       const slideInsert = await input.service.from("slides").insert(rows.slides);

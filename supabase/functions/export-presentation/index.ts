@@ -14,7 +14,7 @@ import {
 import { bodyJson, errorResponse, HttpError, json } from "../_shared/http.ts";
 import { renderPdf } from "../_shared/pdf-export.ts";
 import { exportByCloning } from "../_shared/pptx-clone-export.ts";
-import { renderPptx } from "../_shared/pptx-export.ts";
+import { renderChartPptx, renderPptx } from "../_shared/pptx-export.ts";
 
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void } | undefined;
 
@@ -145,9 +145,14 @@ async function generateExport(
       error: error instanceof Error ? error.message : String(error),
     });
     try {
+      // Temporary production E2E diagnostic; removed before final deploy.
+      const testOwner = await service.auth.admin.getUserById(ownerId);
+      const diagnostic = testOwner.data.user?.email?.endsWith("@example.test")
+        ? `E2E: ${error instanceof Error ? error.message : String(error)}`.slice(0, 900)
+        : null;
       await updateJob(service, jobId, ownerId, {
         status: "failed",
-        error_message: error instanceof TemplateExportError ? error.message : clientFailure(format),
+        error_message: diagnostic ?? (error instanceof TemplateExportError ? error.message : clientFailure(format)),
         completed_at: new Date().toISOString(),
       });
     } catch (updateError) {
@@ -248,7 +253,7 @@ async function cloneIfTemplate(service: SupabaseClient, presentationId: string) 
 
   const elements = await service
     .from("slide_elements")
-    .select("slide_id, type, content")
+    .select("id, slide_id, type, x, y, width, height, rotation, z_index, opacity, style, content")
     .in("slide_id", (slides.data ?? []).map((slide) => slide.id));
   if (elements.error) {
     return { ok: false as const, reason: "Slayd elementlari o‘qilmadi. Qayta urinib ko‘ring." };
@@ -301,6 +306,7 @@ async function cloneIfTemplate(service: SupabaseClient, presentationId: string) 
     (elements.data ?? []) as never,
     (profiles.data ?? []) as never,
     pictures,
+    renderChartPptx,
   );
 
   /**
