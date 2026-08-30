@@ -61,6 +61,24 @@ Deno.serve(async (request) => {
     } else {
       if (!body.topic || body.topic.trim().length < 3 || body.topic.length > 2000) throw new HttpError(400, "Topic must be 3–2000 characters", "invalid_topic");
       if (!body.style || !styles.has(body.style)) throw new HttpError(400, "Presentation style is invalid", "invalid_style");
+
+      /**
+       * A style the operator has switched off is not on offer.
+       *
+       * The phone reads the enabled list, but the check belongs here: an older
+       * build, a cached screen or a direct call would otherwise start a deck in
+       * a tier the catalogue no longer publishes designs for, and the failure
+       * would arrive minutes later as "no design available" after the credits
+       * were reserved.
+       */
+      const tier = await context.serviceClient
+        .from("style_configs")
+        .select("is_active,label")
+        .eq("style", body.style)
+        .maybeSingle();
+      if (tier.data && tier.data.is_active === false) {
+        throw new HttpError(422, `«${tier.data.label}» uslubi hozircha yopiq.`, "style_disabled");
+      }
       if (!Number.isInteger(body.slideCount) || (body.slideCount ?? 0) < 1 || (body.slideCount ?? 0) > 30) throw new HttpError(400, "Slide count must be 1–30", "invalid_slide_count");
       const sources = Array.isArray(body.sources) ? body.sources.map((source) => String(source).trim()).filter(Boolean).slice(0, 30) : [];
 

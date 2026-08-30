@@ -512,8 +512,21 @@ export function buildJslaydSlides(input: BuildInput): { slides: SlideRow[]; elem
 
     if (slide.sources.length > 0) {
       if (!takes("sources")) {
-        if (takesBullets() && slide.bullets.length === 0) slide.bullets = [...slide.sources];
-        else if (!slide.body?.trim()) slide.body = slide.sources.join("\n");
+        /**
+         * Bounded, because the page that receives them was composed for
+         * something else.
+         *
+         * A design without a bibliography page sends the list to whichever box
+         * the substitution landed on, and a full list is longer than any of
+         * them: 1724 characters arrived in a box built for 81. A reader is
+         * better served by the first several citations than by a paragraph
+         * running off the slide, and the deck's own sources stay complete in
+         * `presentation_assets` either way.
+         */
+        const shown = slide.sources.slice(0, 8).map((line) =>
+          line.length > 120 ? `${line.slice(0, 117).trimEnd()}…` : line);
+        if (takesBullets() && slide.bullets.length === 0) slide.bullets = shown;
+        else if (!slide.body?.trim()) slide.body = shown.join("\n");
       }
     }
 
