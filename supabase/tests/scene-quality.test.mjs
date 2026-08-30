@@ -6,7 +6,7 @@ import { buildEdgeModules } from "../scripts/build-edge.mjs";
 const edge = buildEdgeModules();
 const { readScene } = await import(`${edge}/scene-spec.js`);
 const { placeScene, findCollisions, findOutOfBounds, measureText } = await import(`${edge}/scene-geometry.js`);
-const { scoreScene, compositionSignature, similarity, findRepetition } = await import(`${edge}/scene-quality.js`);
+const { scoreScene, compositionSignature, similarity, findRepetition, speaks, freeBand, withRescuedContent } = await import(`${edge}/scene-quality.js`);
 
 const judge = (raw) => {
   const { scene, problems } = readScene(raw);
@@ -121,4 +121,54 @@ test("a deck that repeats one composition is caught by slide index", () => {
   const other = "solid|title@0,0,12x1|chart@0,2,12x5";
   assert.deepEqual(findRepetition([one, one, other, other, one]), [1, 3]);
   assert.deepEqual(findRepetition([one, other, one, other]), []);
+});
+
+test("a page with a heading and a photograph and nothing else is silent", () => {
+  const { scene } = readScene({
+    purpose: "p",
+    background: { kind: "solid", color: "background" },
+    elements: [
+      { type: "text", role: "title", place: { column: 0, span: 7, row: 0, rows: 2 }, typography: { font: "display", step: "title", color: "ink" }, text: "Sarlavha" },
+      { type: "image", place: { column: 7, span: 5, row: 0, rows: 4 }, treatment: "rounded", intent: { query: "x", orientation: "portrait" } },
+    ],
+  });
+  assert.equal(speaks(scene), false);
+  const rescued = withRescuedContent(scene, "Bu sahifaning asosiy fikri.");
+  assert.equal(speaks(rescued), true);
+  const added = rescued.elements.at(-1);
+  assert.equal(added.role, "body");
+  assert.equal(added.text, "Bu sahifaning asosiy fikri.");
+});
+
+test("the rescued paragraph lands where nothing else is", () => {
+  const { scene } = readScene({
+    purpose: "p",
+    background: { kind: "solid", color: "background" },
+    elements: [
+      { type: "text", role: "title", place: { column: 0, span: 12, row: 0, rows: 2 }, typography: { font: "display", step: "title", color: "ink" }, text: "Sarlavha" },
+    ],
+  });
+  const rescued = withRescuedContent(scene, "Fikr.");
+  const placed = placeScene(rescued);
+  assert.deepEqual(findCollisions(placed), [], "the rescue does not land on the title");
+  assert.ok(rescued.elements.at(-1).place.row >= 2);
+});
+
+test("a page that already speaks is left alone", () => {
+  const { scene } = readScene(healthy);
+  const rescued = withRescuedContent(scene, "Qo'shimcha");
+  assert.equal(rescued.elements.length, scene.elements.length);
+});
+
+test("a full page cannot be rescued and is not damaged trying", () => {
+  const { scene } = readScene({
+    purpose: "p",
+    background: { kind: "solid", color: "background" },
+    elements: [
+      { type: "text", role: "title", place: { column: 0, span: 12, row: 0, rows: 4 }, typography: { font: "display", step: "title", color: "ink" }, text: "Sarlavha" },
+      { type: "image", place: { column: 0, span: 12, row: 4, rows: 4 }, treatment: "rounded", intent: { query: "x", orientation: "landscape" } },
+    ],
+  });
+  assert.equal(freeBand(scene), null);
+  assert.equal(withRescuedContent(scene, "Fikr.").elements.length, 2);
 });

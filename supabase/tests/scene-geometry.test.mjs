@@ -42,12 +42,51 @@ test("a placement running off the grid is refused by name", () => {
   assert.ok(problems.some((one) => one.path.endsWith(".span")), JSON.stringify(problems));
 });
 
-test("an unknown role is an error rather than a silently dropped element", () => {
-  const { problems } = readScene({
+test("a role the model got wrong is inferred from the size it asked for", () => {
+  // A model that says step: "title" and calls the role "headline" has said
+  // what it meant. Losing the page over the word costs more than it saves.
+  const { scene, problems } = readScene({
     background: { kind: "solid", color: "background" },
     elements: [{ ...title(), role: "headline" }],
   });
-  assert.ok(problems.some((one) => one.message.includes("unknown text role")));
+  assert.deepEqual(problems, []);
+  assert.equal(scene.elements[0].role, "title");
+});
+
+test("an element with words but no role at all is a paragraph", () => {
+  // Most elements are, and losing the page over the omission is the trade the
+  // first real run showed to be wrong.
+  const { scene, problems } = readScene({
+    background: { kind: "solid", color: "background" },
+    elements: [{ type: "text", place: { column: 0, span: 6, row: 0, rows: 2 }, text: "Bir jumla." }],
+  });
+  assert.deepEqual(problems, []);
+  assert.equal(scene.elements[0].role, "body");
+  assert.equal(scene.elements[0].typography.font, "body", "and it is set the way a paragraph is set");
+});
+
+test("an element with no words is dropped without taking the slide with it", () => {
+  const { scene, problems } = readScene({
+    background: { kind: "solid", color: "background" },
+    elements: [
+      { type: "text", place: { column: 0, span: 6, row: 0, rows: 2 }, text: "   " },
+      title(),
+    ],
+  });
+  assert.deepEqual(problems, []);
+  assert.equal(scene.elements.length, 1, "the empty box is gone and the page survives");
+});
+
+test("a card asked for an image treatment still draws as a card", () => {
+  const { scene, problems } = readScene({
+    background: { kind: "solid", color: "background" },
+    elements: [{
+      type: "card", treatment: "rounded", place: { column: 0, span: 4, row: 0, rows: 2 },
+      children: [{ role: "body", text: "Matn", font: "body", step: "body", color: "ink" }],
+    }],
+  });
+  assert.deepEqual(problems, []);
+  assert.equal(scene.elements[0].treatment, "solid");
 });
 
 test("two elements in the same cells collide", () => {
@@ -136,10 +175,15 @@ test("a pie of negative values is refused", () => {
   assert.ok(problems.some((one) => one.message.includes("parts of a whole")));
 });
 
-test("an empty card is refused, because it is decoration pretending to be content", () => {
-  const { problems } = readScene({
+test("an empty card is dropped without taking the slide with it", () => {
+  const { scene, problems } = readScene({
     background: { kind: "solid", color: "background" },
-    elements: [{ type: "card", treatment: "solid", place: { column: 0, span: 4, row: 0, rows: 2 }, children: [] }],
+    elements: [
+      { type: "card", treatment: "solid", place: { column: 0, span: 4, row: 0, rows: 2 }, children: [] },
+      title(),
+    ],
   });
-  assert.ok(problems.some((one) => one.path.endsWith(".children")));
+  assert.deepEqual(problems, []);
+  assert.equal(scene.elements.length, 1);
+  assert.equal(scene.elements[0].type, "text");
 });

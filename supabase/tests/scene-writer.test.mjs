@@ -24,15 +24,17 @@ const item = schema.properties.elements.items;
 test("every vocabulary the schema offers is one the reader accepts", () => {
   assert.deepEqual(item.properties.role.enum, [...spec.TEXT_ROLES]);
   assert.deepEqual(item.properties.color.enum, [...spec.COLOR_ROLES]);
-  assert.deepEqual(item.properties.typography.properties.font.enum, [...spec.FONT_ROLES]);
-  assert.deepEqual(item.properties.typography.properties.step.enum, Object.keys(spec.TYPE_SCALE));
+  assert.deepEqual(item.properties.font.enum, [...spec.FONT_ROLES]);
+  assert.deepEqual(item.properties.step.enum, Object.keys(spec.TYPE_SCALE));
   assert.deepEqual(item.properties.chart.properties.kind.enum, [...spec.CHART_TYPES]);
   for (const treatment of [...spec.IMAGE_TREATMENTS, ...spec.CARD_TREATMENTS]) {
     assert.ok(item.properties.treatment.enum.includes(treatment), treatment);
   }
-  for (const kind of spec.SHAPE_KINDS) {
-    assert.ok(item.properties.kind.enum.includes(kind), kind);
-  }
+  // Decoration is not offered in this version: the schema had to shrink, and a
+  // rule or an orb is the part a page can do without. The reader still accepts
+  // them, so the renderer and a later version need no change.
+  assert.deepEqual(item.properties.type.enum, ["text", "image", "card", "chart"]);
+  assert.equal(item.properties.kind, undefined);
 });
 
 test("the direction schema offers exactly the moods and grounds the palette knows", () => {
@@ -47,12 +49,34 @@ test("the direction schema offers exactly the moods and grounds the palette know
 test("the schema cannot express a hex, a font name or a pixel size", () => {
   const text = JSON.stringify(schema);
   assert.ok(!/fontFamily|fontSize|"#/.test(text), "the model can name a value it should not");
-  assert.equal(item.properties.typography.properties.step.type, "string");
+  assert.equal(item.properties.step.type, "string");
 });
 
 test("cards hold type and never another card", () => {
   const children = item.properties.children.items;
-  assert.deepEqual(children.properties.type.enum, ["text"]);
+  assert.deepEqual(Object.keys(children.properties).sort(), ["align", "color", "font", "role", "step", "text"]);
+  // No nesting and no grid: a card is a column, and what it holds stacks in it.
+  assert.equal(children.properties.children, undefined);
+  assert.equal(children.properties.place, undefined);
+});
+
+test("a card's children stack without being told where to sit", () => {
+  const { scene, problems } = readScene({
+    purpose: "p",
+    background: { kind: "solid", color: "background" },
+    elements: [{
+      type: "card", treatment: "solid", place: { column: 0, span: 4, row: 0, rows: 4 },
+      children: [
+        { role: "statistic", text: "73%", font: "data", step: "statistic", color: "ink" },
+        { role: "statistic_label", text: "o'quvchilar", font: "body", step: "caption", color: "inkMuted" },
+      ],
+    }],
+  });
+  assert.deepEqual(problems, [], JSON.stringify(problems));
+  const card = scene.elements[0];
+  assert.equal(card.children.length, 2);
+  assert.equal(card.children[0].place.row, 0);
+  assert.equal(card.children[1].place.row, 1, "the second sits under the first");
 });
 
 test("a scene written to the schema shape reads and scores", () => {

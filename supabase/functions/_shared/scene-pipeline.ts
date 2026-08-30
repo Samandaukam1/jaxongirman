@@ -14,13 +14,14 @@
  */
 
 import { buildDNA, type DesignDNA, type DesignDirection, type LibraryFamily, MOODS, GROUNDS } from "./scene-dna.ts";
-import { runSceneCycle, type CycleResult } from "./scene-cycle.ts";
+import { runSceneCycle, validateScene, type CycleResult } from "./scene-cycle.ts";
 import { renderScene, imageIntents, type RenderedSlide, type ResolvedPicture } from "./scene-render.ts";
-import { findRepetition } from "./scene-quality.ts";
+import { findRepetition, sceneFromBrief, withRescuedContent } from "./scene-quality.ts";
 import {
   briefPrompt, briefSchema, directionPrompt, directionSchema, repairPrompt, scenePrompt, sceneSchema,
   type SemanticBrief,
 } from "./scene-writer.ts";
+import * as readerFor from "./scene-spec.ts";
 import type { Scene } from "./scene-spec.ts";
 
 export type Ask = (input: {
@@ -57,6 +58,8 @@ export type GeneratedSlide = {
   rendered: RenderedSlide | null;
   score: number;
   accepted: boolean;
+  /** True when the engine built the page from the brief because the model did not. */
+  synthesised: boolean;
   attempts: number;
   faults: string[];
 };
@@ -72,6 +75,7 @@ export type GeneratedDeck = {
     scores: number[];
     repairCount: number;
     unacceptedSlides: number[];
+    synthesisedSlides: number[];
     repeatedCompositions: number[];
     askCount: number;
   };
@@ -180,17 +184,57 @@ export async function generateDeck(deps: Deps, input: DeckInput): Promise<Genera
       brief = readBrief(null, planned.title);
     }
 
+    /**
+     * A page that came back silent gets its own sentence back.
+     *
+     * Applied inside the cycle rather than after it, so the rescued page is
+     * measured like any other — the paragraph has to fit the band it was put
+     * in, and if it does not, the repair pass sees that too.
+     */
+    const rescue = (raw: unknown): unknown => {
+      const scene = raw as { elements?: unknown } | null;
+      if (!scene || typeof scene !== "object") return raw;
+      const { readScene } = readerFor;
+      const read = readScene(raw);
+      if (!read.scene) return raw;
+      return withRescuedContent(read.scene, brief?.mainMessage ?? "");
+    };
+
     const cycle: CycleResult = await runSceneCycle(async (previous) => {
       const prompt = previous
         ? repairPrompt(previous.scene, previous.report)
         : scenePrompt({ brief: brief!, topic: input.topic, fonts: dna.fonts, mood: direction.mood, used: signatures, language });
       if (previous) repairCount += 1;
-      return await ask({ prompt, schema: sceneSchema(), schemaName: "slide_scene", maxOutputTokens: 3_000 });
+      return rescue(await ask({ prompt, schema: sceneSchema(), schemaName: "slide_scene", maxOutputTokens: 3_000 }));
     }, { threshold: input.threshold ?? 90, maxAttempts: input.maxAttempts ?? 3, language });
 
+    /**
+     * A page the model could not produce is built from its own brief.
+     *
+     * Reported as synthesised rather than passed off as designed: the score
+     * and the fault list travel with it, so a deck full of these is visible
+     * rather than merely quiet.
+     */
+    let synthesised = false;
+    let scene = cycle.scene;
+    let score = cycle.report?.score ?? 0;
+    if (!scene) {
+      const fallback = sceneFromBrief({
+        title: planned.title,
+        message: brief?.mainMessage ?? "",
+        supporting: brief?.supportingMessage ?? null,
+      });
+      const checked = validateScene(fallback, language);
+      if (checked.scene && checked.report) {
+        scene = checked.scene;
+        score = checked.report.score;
+        synthesised = true;
+      }
+    }
+
     let rendered: RenderedSlide | null = null;
-    if (cycle.scene) {
-      signatures.push(cycle.report!.signature);
+    if (scene) {
+      if (cycle.report) signatures.push(cycle.report.signature);
 
       /**
        * Pictures last, and only for the composition that was accepted.
@@ -200,7 +244,7 @@ export async function generateDeck(deps: Deps, input: DeckInput): Promise<Genera
        * service is the expensive half of this pipeline.
        */
       const found = new Map<string, ResolvedPicture>();
-      for (const intent of imageIntents(cycle.scene)) {
+      for (const intent of imageIntents(scene)) {
         try {
           const picture = await deps.findImage(intent);
           if (picture) found.set(intent.query, picture);
@@ -209,17 +253,18 @@ export async function generateDeck(deps: Deps, input: DeckInput): Promise<Genera
           // nothing else; the renderer draws the frame empty.
         }
       }
-      rendered = renderScene(cycle.scene, dna, found);
+      rendered = renderScene(scene, dna, found);
     }
 
     slides.push({
       index,
       title: planned.title,
       brief,
-      scene: cycle.scene,
+      scene,
       rendered,
-      score: cycle.report?.score ?? 0,
+      score,
       accepted: cycle.accepted,
+      synthesised,
       attempts: cycle.attempts,
       faults: cycle.report?.faults.map((fault) => fault.code) ?? cycle.history.at(-1)?.faults ?? [],
     });
@@ -235,6 +280,7 @@ export async function generateDeck(deps: Deps, input: DeckInput): Promise<Genera
       scores: slides.map((slide) => slide.score),
       repairCount,
       unacceptedSlides: slides.filter((slide) => !slide.accepted).map((slide) => slide.index),
+    synthesisedSlides: slides.filter((slide) => slide.synthesised).map((slide) => slide.index),
       repeatedCompositions: findRepetition(signatures),
       askCount,
     },

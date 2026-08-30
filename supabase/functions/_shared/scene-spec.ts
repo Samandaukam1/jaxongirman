@@ -179,6 +179,16 @@ export type Scene = {
 
 export type SceneProblem = { path: string; message: string };
 
+/**
+ * Bounds the schema cannot carry.
+ *
+ * Gemini rejects a schema containing `minItems`/`maxItems` outright, so the
+ * counts that make a slide a slide are checked here instead — which is the
+ * better home for them anyway.
+ */
+export const MAX_ELEMENTS = 10;
+export const MAX_CARD_CHILDREN = 4;
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
 
@@ -223,47 +233,111 @@ function readPlacement(value: unknown, path: string, problems: SceneProblem[]): 
   return placement;
 }
 
-function readElement(value: unknown, path: string, problems: SceneProblem[]): SceneElement | null {
-  if (!isRecord(value)) {
+/**
+ * What each role is set in, when the model did not say.
+ *
+ * Almost every typographic field is optional in the schema, because a schema
+ * small enough for the provider to accept could not require them — and a model
+ * given optional fields omits them. The first real run lost two slides
+ * entirely to elements with a role and nothing else. These are the choices a
+ * renderer can make on its own, so it makes them.
+ */
+const TEXT_DEFAULTS: Record<TextRole, { font: FontRole; step: TypeStep; color: ColorRole }> = {
+  eyebrow: { font: "body", step: "micro", color: "inkMuted" },
+  title: { font: "display", step: "title", color: "ink" },
+  subtitle: { font: "heading", step: "heading", color: "ink" },
+  lead: { font: "body", step: "lead", color: "ink" },
+  body: { font: "body", step: "body", color: "ink" },
+  bullets: { font: "body", step: "body", color: "ink" },
+  statistic: { font: "data", step: "statistic", color: "primary" },
+  statistic_label: { font: "body", step: "caption", color: "inkMuted" },
+  quote: { font: "quote", step: "lead", color: "ink" },
+  attribution: { font: "body", step: "caption", color: "inkMuted" },
+  caption: { font: "body", step: "caption", color: "inkMuted" },
+  footer: { font: "body", step: "micro", color: "inkMuted" },
+};
+
+/** The role a type step implies, for a model that named one and not the other. */
+function roleForStep(value: Record<string, unknown>): TextRole | null {
+  const typography = isRecord(value.typography) ? value.typography : value;
+  const step = typography.step;
+  switch (step) {
+    case "display": case "title": return "title";
+    case "heading": return "subtitle";
+    case "lead": return "lead";
+    case "body": return "body";
+    case "statistic": return "statistic";
+    case "caption": return "caption";
+    case "micro": return "eyebrow";
+    default: return null;
+  }
+}
+
+function readElement(input: unknown, path: string, problems: SceneProblem[]): SceneElement | null {
+  if (!isRecord(input)) {
     problems.push({ path, message: "element must be an object" });
     return null;
   }
+  const value: Record<string, unknown> = input;
   const place = readPlacement(value.place, `${path}.place`, problems);
   if (!place) return null;
 
   switch (value.type) {
     case "text": {
-      if (!oneOf(TEXT_ROLES, value.role)) {
+      /**
+       * A missing role is inferred, not refused.
+       *
+       * A model that sets `step: "title"` and forgets `role` has said what it
+       * meant; throwing the slide away over the omission cost a whole page in
+       * the first real run. The type step is the same decision under another
+       * name, so it answers for it.
+       */
+      const text = typeof value.text === "string" ? value.text : "";
+      // Said before anything else about the element: an empty box is empty
+      // whatever role it claims, and "no text" is the useful message.
+      /**
+       * Dropped rather than fatal, like an empty card.
+       *
+       * A model that emits a text element and forgets its words has produced
+       * an empty box; the page is better off without it and no worse for the
+       * omission. Taking the slide down instead cost a whole page in a real
+       * run — twice.
+       */
+      if (!text.trim()) return null;
+      const inferred = oneOf(TEXT_ROLES, value.role)
+        ? value.role
+        // A step names the role when the role does not; and an element with
+        // words and neither is a paragraph, which is what most of them are.
+        : roleForStep(value) ?? "body";
+      if (!inferred) {
         problems.push({ path: `${path}.role`, message: `unknown text role ${JSON.stringify(value.role)}` });
         return null;
       }
-      const typography = isRecord(value.typography) ? value.typography : {};
-      if (!oneOf(FONT_ROLES, typography.font)) {
-        problems.push({ path: `${path}.typography.font`, message: `unknown font role ${JSON.stringify(typography.font)}` });
-        return null;
-      }
-      if (!(typeof typography.step === "string" && typography.step in TYPE_SCALE)) {
-        problems.push({ path: `${path}.typography.step`, message: `unknown type step ${JSON.stringify(typography.step)}` });
-        return null;
-      }
-      if (!oneOf(COLOR_ROLES, typography.color)) {
-        problems.push({ path: `${path}.typography.color`, message: `unknown colour role ${JSON.stringify(typography.color)}` });
-        return null;
-      }
-      const text = typeof value.text === "string" ? value.text : "";
-      if (!text.trim()) {
-        problems.push({ path: `${path}.text`, message: "text element carries no text" });
-        return null;
-      }
+      const fallback = TEXT_DEFAULTS[inferred];
+      /**
+       * Flat or nested, the same slide.
+       *
+       * Gemini refused the nested form: `typography` inside an element inside
+       * a card is four levels of object, and the provider rejects a schema
+       * past a depth it does not name. So `font`, `step` and `color` may sit
+       * on the element itself — which is also less for a model to keep track
+       * of — and both shapes read the same.
+       */
+      const typography = isRecord(value.typography) ? value.typography : value;
+      const font = oneOf(FONT_ROLES, typography.font) ? typography.font : fallback.font;
+      const step = typeof typography.step === "string" && typography.step in TYPE_SCALE
+        ? typography.step as TypeStep
+        : fallback.step;
+      const color = oneOf(COLOR_ROLES, typography.color) ? typography.color : fallback.color;
       return {
         type: "text",
-        role: value.role,
+        role: inferred,
         place,
         text,
         typography: {
-          font: typography.font,
-          step: typography.step as TypeStep,
-          color: typography.color,
+          font,
+          step,
+          color,
           ...(typography.align === "center" || typography.align === "end" || typography.align === "start"
             ? { align: typography.align }
             : {}),
@@ -273,10 +347,14 @@ function readElement(value: unknown, path: string, problems: SceneProblem[]): Sc
       };
     }
     case "image": {
-      if (!oneOf(IMAGE_TREATMENTS, value.treatment)) {
-        problems.push({ path: `${path}.treatment`, message: `unknown image treatment ${JSON.stringify(value.treatment)}` });
-        return null;
-      }
+      /**
+       * The two treatment vocabularies share one field, so they get confused.
+       *
+       * A card asked for `rounded` and an image asked for `glass` are both
+       * clear about everything except the word: the element type already says
+       * which family was meant. Falling back beats losing the page.
+       */
+      const treatment = oneOf(IMAGE_TREATMENTS, value.treatment) ? value.treatment : "rounded";
       const intent = isRecord(value.intent) ? value.intent : {};
       if (typeof intent.query !== "string" || !intent.query.trim()) {
         problems.push({ path: `${path}.intent.query`, message: "an image needs to say what it is of" });
@@ -286,7 +364,7 @@ function readElement(value: unknown, path: string, problems: SceneProblem[]): Sc
       return {
         type: "image",
         place,
-        treatment: value.treatment,
+        treatment,
         intent: { query: intent.query.trim(), orientation },
         ...(typeof value.radius === "number" ? { radius: value.radius } : {}),
         ...(isRecord(value.focus) && typeof value.focus.x === "number" && typeof value.focus.y === "number"
@@ -298,24 +376,41 @@ function readElement(value: unknown, path: string, problems: SceneProblem[]): Sc
       };
     }
     case "card": {
-      if (!oneOf(CARD_TREATMENTS, value.treatment)) {
-        problems.push({ path: `${path}.treatment`, message: `unknown card treatment ${JSON.stringify(value.treatment)}` });
-        return null;
-      }
+      const treatment = oneOf(CARD_TREATMENTS, value.treatment) ? value.treatment : "solid";
+      /**
+       * Children stack, and are given their rows here.
+       *
+       * A caption inside a card that has to say which column it is in is a
+       * placement nobody needs and a model gets wrong. The card is a column;
+       * what it holds sits in it in order.
+       */
       const children: SceneElement[] = [];
       const raw = Array.isArray(value.children) ? value.children : [];
       raw.forEach((child, index) => {
-        const read = readElement(child, `${path}.children[${index}]`, problems);
+        const stacked = isRecord(child) && !isRecord(child.place)
+          ? { type: "text", ...child, place: { column: 0, span: 1, row: index, rows: 1 } }
+          : child;
+        const read = readElement(stacked, `${path}.children[${index}]`, problems);
         if (read) children.push(read);
       });
+      if (children.length > MAX_CARD_CHILDREN) {
+        problems.push({ path: `${path}.children`, message: `a card holding ${children.length} things is a slide of its own` });
+        return null;
+      }
       if (children.length === 0) {
-        problems.push({ path: `${path}.children`, message: "a card with nothing in it is decoration pretending to be content" });
+        /**
+         * Dropped, not fatal.
+         *
+         * An empty card is decoration the model forgot to fill, and taking the
+         * whole slide down with it cost two pages in the first real run. The
+         * page keeps everything else and scores on what it actually has.
+         */
         return null;
       }
       return {
         type: "card",
         place,
-        treatment: value.treatment,
+        treatment,
         children,
         ...(typeof value.radius === "number" ? { radius: value.radius } : {}),
       };
@@ -430,6 +525,8 @@ export function readScene(value: unknown): { scene: Scene | null; problems: Scen
   });
   if (elements.length === 0) {
     problems.push({ path: "elements", message: "a slide with no elements is not a slide" });
+  } else if (elements.length > MAX_ELEMENTS) {
+    problems.push({ path: "elements", message: `${elements.length} elements is more than a page can hold (${MAX_ELEMENTS})` });
   }
   const scene: Scene = {
     purpose: typeof value.purpose === "string" ? value.purpose : "",

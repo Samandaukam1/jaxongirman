@@ -168,3 +168,34 @@ test("a deck repeating one composition says which slides repeat", async () => {
   assert.deepEqual(deck.observability.repeatedCompositions, [1, 2]);
   assert.equal(deck.observability.scores.length, 3);
 });
+
+test("a slide the model could not produce is built from its own brief", async () => {
+  const { ask } = model({
+    design_direction: [{ mood: "civic", ground: "warm_white", brand: "#5A78F0", cornerLanguage: "soft", gradients: true }],
+    slide_brief: [{ slideGoal: "yakunlash", mainMessage: "Suv tejash hammaning ishi.", supportingMessage: "Kichik odat katta natija beradi.", informationDensity: 0.5, visualPriority: 0.2, needs: { image: false, chart: false, statistic: false, quote: false, comparison: false, timeline: false, example: false } }],
+    // Everything empty, three times: what a real model did on a conclusion.
+    slide_scene: () => ({ background: { kind: "solid", color: "background" }, elements: [{ type: "text", place: { column: 0, span: 6, row: 0, rows: 2 }, text: "  " }] }),
+  });
+  const deck = await generateDeck(deps({ ask }), { topic: "Suv", slides: [{ title: "Xulosa" }] });
+
+  const slide = deck.slides[0];
+  assert.equal(slide.synthesised, true, "the engine built the page");
+  assert.equal(slide.accepted, false, "and does not pretend the model designed it");
+  assert.ok(slide.scene, "a deck missing its conclusion is worse than a plain one");
+  assert.equal(slide.score, 100, "what it built is sound");
+  assert.deepEqual(deck.observability.synthesisedSlides, [0]);
+  // The words are the brief's own; nothing was invented to fill the page.
+  const body = slide.scene.elements.find((element) => element.role === "body");
+  assert.match(body.text, /Suv tejash hammaning ishi/);
+});
+
+test("a slide the model produced is never overwritten by the fallback", async () => {
+  const { ask } = model({
+    design_direction: [{ mood: "civic", ground: "warm_white", brand: "#5A78F0", cornerLanguage: "soft", gradients: true }],
+    slide_brief: [{}],
+    slide_scene: () => sound("Bir"),
+  });
+  const deck = await generateDeck(deps({ ask }), { topic: "T", slides: [{ title: "Bir" }] });
+  assert.equal(deck.slides[0].synthesised, false);
+  assert.deepEqual(deck.observability.synthesisedSlides, []);
+});

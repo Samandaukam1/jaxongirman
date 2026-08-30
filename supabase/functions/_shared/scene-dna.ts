@@ -187,8 +187,19 @@ const CATEGORY_ORDER: Record<Mood, Record<FontRole, string[]>> = {
   },
 };
 
+/**
+ * Families that are in the library and cannot carry a slide.
+ *
+ * The first real run set the deck's data font in Adobe Blank, which is a font
+ * whose glyphs are deliberately empty — every number on the page would have
+ * rendered as nothing. Icon and symbol families are the same problem with a
+ * different cause: they are in a font library because they are fonts, not
+ * because anybody should set a sentence in them.
+ */
+const UNREADABLE = /\b(blank|icons?|symbols?|dingbat|emoji|braille|barcode|ornament)\b/i;
+
 export function pairFonts(mood: Mood, library: readonly LibraryFamily[]): Record<FontRole, string> | null {
-  const usable = library.filter((family) => family.name.trim().length > 0);
+  const usable = library.filter((family) => family.name.trim().length > 0 && !UNREADABLE.test(family.name));
   if (usable.length === 0) return null;
 
   const byCategory = new Map<string, string[]>();

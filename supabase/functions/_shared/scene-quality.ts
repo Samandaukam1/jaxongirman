@@ -180,3 +180,109 @@ export function findRepetition(signatures: readonly string[], threshold = 0.8): 
   }
   return repeats;
 }
+
+
+/* --------------------------------------------------------- content rescue */
+
+/** Whether anything on this page carries what the slide is trying to say. */
+export function speaks(scene: Scene): boolean {
+  return scene.elements.some((element) =>
+    (element.type === "text" && ["body", "bullets", "lead", "quote", "statistic"].includes(element.role))
+    || element.type === "chart"
+    || element.type === "card");
+}
+
+/**
+ * A band of the grid with nothing in it, wide enough to hold a paragraph.
+ *
+ * Searched from the bottom, because a page missing its content almost always
+ * has a heading at the top and space under it — and text added below a title
+ * reads as the page's body rather than as an afterthought floating above it.
+ */
+export function freeBand(scene: Scene, wantRows = 3): { column: number; span: number; row: number; rows: number } | null {
+  const taken = new Set<string>();
+  for (const element of scene.elements) {
+    if (element.place.bleed) continue;
+    for (let row = element.place.row; row < element.place.row + element.place.rows; row += 1) {
+      for (let column = element.place.column; column < element.place.column + element.place.span; column += 1) {
+        taken.add(`${column},${row}`);
+      }
+    }
+  }
+
+  for (let rows = wantRows; rows >= 2; rows -= 1) {
+    for (let row = GRID.rows - rows; row >= 0; row -= 1) {
+      for (const span of [7, 6, 5]) {
+        for (let column = 0; column + span <= GRID.columns; column += 1) {
+          let free = true;
+          for (let r = row; r < row + rows && free; r += 1) {
+            for (let c = column; c < column + span; c += 1) {
+              if (taken.has(`${c},${r}`)) { free = false; break; }
+            }
+          }
+          if (free) return { column, span, row, rows };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Give a silent page the sentence the brief already wrote for it.
+ *
+ * Not invention: the brief is the model's own statement of what this slide is
+ * for, produced before any composition existed. A page that ends up with a
+ * heading, a photograph and nothing else is a page whose own message was left
+ * out, and putting it back is a repair the engine can make without asking
+ * anybody.
+ */
+export function withRescuedContent(scene: Scene, message: string): Scene {
+  if (speaks(scene) || !message.trim()) return scene;
+  const place = freeBand(scene);
+  if (!place) return scene;
+  return {
+    ...scene,
+    elements: [...scene.elements, {
+      type: "text",
+      role: "body",
+      place,
+      typography: { font: "body", step: "body", color: "ink" },
+      text: message.trim(),
+    }],
+  };
+}
+
+
+/**
+ * A page built from the brief alone, when the model produced nothing usable.
+ *
+ * Three attempts at one slide came back with every element empty, and the run
+ * before that lost the same page twice. A deck missing its conclusion is worse
+ * than a plain conclusion, and the brief already contains the words: it is the
+ * model's own statement of what the slide is for, written before any
+ * composition existed. Nothing is invented here — only placed.
+ *
+ * Recorded as synthesised by the caller, so nothing pretends this page was
+ * designed.
+ */
+export function sceneFromBrief(input: { title: string; message: string; supporting?: string | null }): Scene {
+  const elements: Scene["elements"] = [{
+    type: "text",
+    role: "title",
+    place: { column: 0, span: 8, row: 1, rows: 2 },
+    typography: { font: "display", step: "title", color: "ink" },
+    text: input.title.trim() || "Xulosa",
+  }];
+  const body = [input.message, input.supporting].filter((one) => one && one.trim()).join(" ").trim();
+  if (body) {
+    elements.push({
+      type: "text",
+      role: "body",
+      place: { column: 0, span: 7, row: 3, rows: 4 },
+      typography: { font: "body", step: "body", color: "ink" },
+      text: body,
+    });
+  }
+  return { purpose: input.title, background: { kind: "solid", color: "background" }, elements };
+}

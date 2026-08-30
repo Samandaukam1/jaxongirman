@@ -431,6 +431,12 @@ verify_jwt = false
 [functions.telegram-image-bot]
 verify_jwt = false
 
+# The generative design engine, run as a preview for an administrator. Stores
+# nothing and charges nothing; it exists to find out whether a real model can
+# answer the scene schema before any of it reaches a customer's deck.
+[functions.scene-preview]
+verify_jwt = false
+
 # Automatic illustration during generation. Called by one edge function from
 # another, so there is no end-user token to verify: the function checks that the
 # caller holds server authority itself. Nothing about it is Telegram.
