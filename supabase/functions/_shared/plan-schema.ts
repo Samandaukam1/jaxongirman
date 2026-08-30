@@ -201,19 +201,13 @@ const statisticSchema = {
     }
   ]
 };
-const chartSchema = {
-  anyOf: [
-    {
+const chartObjectSchema = (visualStatisticOnly = false) => ({
       type: "object",
       additionalProperties: false,
       properties: {
         type: {
           type: "string",
-          enum: [
-            "bar",
-            "line",
-            "donut"
-          ]
+          enum: visualStatisticOnly ? ["bar", "donut"] : ["bar", "line", "donut"]
         },
         labels: {
           type: "array",
@@ -237,7 +231,10 @@ const chartSchema = {
         "labels",
         "values"
       ]
-    },
+    });
+const chartSchema = {
+  anyOf: [
+    chartObjectSchema(),
     {
       type: "null"
     }
@@ -257,18 +254,41 @@ const chartSchema = {
  * a slot budget is per slide, a fit check is per slide, and a rewrite was
  * always about one slide that did not fit.
  */
-export function slideSchema(): Record<string, unknown> {
+export type RequiredSlideContent = "body" | "bullets" | "subtitle" | "quote" | "statistic";
+
+/**
+ * A generic semantic slide has more fields than most designs can draw.
+ *
+ * The selected archetype is already known before writing, so make the one
+ * content family that page actually exposes non-null in the response schema.
+ * Prompting alone was not enough: the model occasionally returned both
+ * `body: null` and `bullets: []` for a body-only page, leaving a perfectly good
+ * composition with nothing but its heading.
+ */
+export function slideSchema(options: {
+  requireVisualStatistic?: boolean;
+  requiredContent?: RequiredSlideContent;
+} = {}): Record<string, unknown> {
+  const required = options.requiredContent;
   return {
     type: "object",
     additionalProperties: false,
     properties: {
       title: { type: "string" },
-      subtitle: nullableString,
-      bullets: { type: "array", items: { type: "string" }, maxItems: 6 },
-      body: nullableString,
-      quote: quoteSchema,
-      statistic: statisticSchema,
-      chart: chartSchema,
+      subtitle: required === "subtitle" ? { type: "string" } : nullableString,
+      bullets: {
+        type: "array",
+        items: { type: "string" },
+        ...(required === "bullets" ? { minItems: 1 } : {}),
+        maxItems: 6,
+      },
+      body: required === "body" ? { type: "string" } : nullableString,
+      quote: required === "quote" ? quoteSchema.anyOf[0] : quoteSchema,
+      statistic: required === "statistic" ? statisticSchema.anyOf[0] : statisticSchema,
+      // The one chart slide is non-null by schema, not by hope. Restricting it
+      // to bar/donut also makes the user's "pie or bar" requirement exact;
+      // line charts remain available on any additional, optional chart slide.
+      chart: options.requireVisualStatistic ? chartObjectSchema(true) : chartSchema,
       table: tableSchema,
     },
     required: ["title", "subtitle", "bullets", "body", "quote", "statistic", "chart", "table"],

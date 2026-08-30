@@ -51,10 +51,21 @@ export type TextSlotBudget = {
     overflow: string;
   };
   budget: {
+    /**
+     * Below this the box reads as empty.
+     *
+     * Measured decks came back writing 136 characters into a box the design
+     * measured for 578 — one sentence in a space composed for a paragraph, on
+     * every content slide. Nothing caught it, because every check ever written
+     * here asks whether copy is too long. A floor is the same question asked
+     * the other way, and it is the one an author actually noticed.
+     */
+    minimumCharacters: number;
     /** Aim for this. Leaves the whitespace the design was composed around. */
     preferredCharacters: number;
     /** Past this the estimate says it will not fit. */
     maximumCharacters: number;
+    minimumWords: number;
     preferredWords: number;
     maximumWords: number;
     estimatedCharactersPerLine: number;
@@ -170,21 +181,21 @@ const PRIORITY: Record<SlotRole, number> = {
  * `hard` is below the raw capacity too: the estimate has no idea whether the
  * copy is full of Ws.
  */
-const FILL: Record<SlotRole, { preferred: number; hard: number }> = {
-  title: { preferred: 0.60, hard: 0.85 },
-  statistic_value: { preferred: 0.70, hard: 0.90 },
-  quote: { preferred: 0.65, hard: 0.85 },
-  subtitle: { preferred: 0.65, hard: 0.88 },
-  body: { preferred: 0.72, hard: 0.90 },
-  bullets: { preferred: 0.70, hard: 0.90 },
-  statistic_label: { preferred: 0.70, hard: 0.90 },
-  chart_title: { preferred: 0.65, hard: 0.88 },
-  table_title: { preferred: 0.65, hard: 0.88 },
-  eyebrow: { preferred: 0.70, hard: 0.90 },
-  attribution: { preferred: 0.70, hard: 0.90 },
-  references: { preferred: 0.85, hard: 0.95 },
-  page_number: { preferred: 0.80, hard: 0.95 },
-  meta: { preferred: 0.70, hard: 0.90 },
+const FILL: Record<SlotRole, { floor: number; preferred: number; hard: number }> = {
+  title: { floor: 0, preferred: 0.60, hard: 0.85 },
+  statistic_value: { floor: 0, preferred: 0.70, hard: 0.90 },
+  quote: { floor: 0.50, preferred: 0.65, hard: 0.85 },
+  subtitle: { floor: 0.55, preferred: 0.65, hard: 0.88 },
+  body: { floor: 0.75, preferred: 0.72, hard: 0.90 },
+  bullets: { floor: 0.75, preferred: 0.70, hard: 0.90 },
+  statistic_label: { floor: 0.55, preferred: 0.70, hard: 0.90 },
+  chart_title: { floor: 0, preferred: 0.65, hard: 0.88 },
+  table_title: { floor: 0, preferred: 0.65, hard: 0.88 },
+  eyebrow: { floor: 0, preferred: 0.70, hard: 0.90 },
+  attribution: { floor: 0, preferred: 0.70, hard: 0.90 },
+  references: { floor: 0, preferred: 0.85, hard: 0.95 },
+  page_number: { floor: 0, preferred: 0.80, hard: 0.95 },
+  meta: { floor: 0, preferred: 0.70, hard: 0.90 },
 };
 
 /** Mean characters per word including the space, close enough for a budget. */
@@ -213,9 +224,23 @@ function budgetFor(
     Math.floor(capacity * fill.preferred * density),
   ));
 
+  /**
+   * A fraction of the aim, not of the raw capacity.
+   *
+   * The aim already holds the design's whitespace back; taking the floor from
+   * capacity instead would put it above the aim in any box where the two are
+   * close, and then no text could satisfy both.
+   */
+  const minimumCharacters = Math.max(0, Math.min(
+    preferredCharacters,
+    Math.floor(preferredCharacters * fill.floor),
+  ));
+
   return {
+    minimumCharacters,
     preferredCharacters,
     maximumCharacters,
+    minimumWords: minimumCharacters === 0 ? 0 : wordsFor(minimumCharacters, language),
     preferredWords: wordsFor(preferredCharacters, language),
     maximumWords: wordsFor(maximumCharacters, language),
     estimatedCharactersPerLine: charactersPerLine(width, style),
@@ -378,6 +403,8 @@ export type SlotFit = {
   /** A last line holding one short word, which reads as a mistake. */
   orphan: boolean;
   overBy: number;
+  /** How far below the floor this is: a box the copy leaves looking empty. */
+  shortBy: number;
 };
 
 export function checkFit(slot: TextSlotBudget, text: string): SlotFit {
@@ -404,5 +431,6 @@ export function checkFit(slot: TextSlotBudget, text: string): SlotFit {
     maximumLines: maxLines,
     orphan,
     overBy: Math.max(0, characters - slot.budget.maximumCharacters),
+    shortBy: Math.max(0, slot.budget.minimumCharacters - characters),
   };
 }

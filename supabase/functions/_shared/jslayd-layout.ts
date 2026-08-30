@@ -129,6 +129,28 @@ type BuildInput = {
  * Image and element slots stay empty here and are filled once the archetype is
  * known — which slots exist is a property of the design, not of the content.
  */
+/**
+ * An eyebrow is a label, and a purpose is a sentence.
+ *
+ * The outline writes each slide's purpose as a full description — "Mavzuni va
+ * mualliflarni tanishtirish" — and that string was handed straight to the
+ * `section_label` binding, which designs draw in a strip a couple of dozen
+ * characters wide. One divider came back with a hundred and twenty-eight
+ * characters in a twenty-seven character box.
+ *
+ * The first clause is the label. Cut on a word boundary rather than mid-word,
+ * because a label ending in half a word reads as a bug rather than as brevity.
+ */
+function sectionLabel(purpose: string | null | undefined): string | null {
+  const text = (purpose ?? "").trim();
+  if (!text) return null;
+  const clause = text.split(/[:—–-]|\.\s/)[0]!.trim();
+  if (clause.length <= 28) return clause;
+  const cut = clause.slice(0, 28);
+  const boundary = cut.lastIndexOf(" ");
+  return (boundary > 14 ? cut.slice(0, boundary) : cut).trim();
+}
+
 function toSlideData(
   semantic: SemanticSlide,
   index: number,
@@ -155,7 +177,7 @@ function toSlideData(
     // one a `{{sources}}` binding should fill — every other slide would repeat
     // the whole list.
     sources: index === total - 2 ? sources : [],
-    meta: { ...DEFAULT_META, author: authorName, teacher: teacherName, sectionLabel: semantic.purpose },
+    meta: { ...DEFAULT_META, author: authorName, teacher: teacherName, sectionLabel: sectionLabel(semantic.purpose) },
   };
 }
 
@@ -453,12 +475,44 @@ export function buildJslaydSlides(input: BuildInput): { slides: SlideRow[]; elem
      * So it falls back to the boxes the chosen page does have. Written as a
      * list where there is one, as a paragraph otherwise.
      */
+    const takes = (binding: string) =>
+      selection.archetype.elements.some((element) =>
+        "source" in element && element.source && "bind" in element.source && element.source.bind === binding);
+    const takesBullets = () =>
+      takes("bullets") || ["bullet_1", "bullet_2", "bullet_3"].some((one) => takes(one));
+
+    /**
+     * Copy is never lost because the page has a different shape for it.
+     *
+     * The writer decides in fields — a paragraph or a list — and the page it
+     * lands on decides in boxes. When they disagree, the copy used to vanish:
+     * a slide written as bullets, laid into a composition that draws only a
+     * paragraph, arrived as a heading over nothing. Two slides of a ten-slide
+     * deck came back that way, which is what an author means when they say the
+     * later slides are empty.
+     *
+     * Converting is safe in both directions because both are the same
+     * sentences. Nothing is invented and nothing is dropped; only the
+     * punctuation between them changes.
+     */
+    if (slide.bullets.length > 0 && !takesBullets() && takes("body") && !slide.body?.trim()) {
+      slide.body = slide.bullets
+        .map((item) => item.trim().replace(/[;,]$/, ""))
+        .map((item) => (/[.!?]$/.test(item) ? item : `${item}.`))
+        .join(" ");
+      slide.bullets = [];
+    } else if (slide.body?.trim() && !takes("body") && takesBullets() && slide.bullets.length === 0) {
+      slide.bullets = slide.body
+        .split(/(?<=[.!?])\s+/)
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+        .slice(0, 6);
+      slide.body = null;
+    }
+
     if (slide.sources.length > 0) {
-      const takes = (binding: string) =>
-        selection.archetype.elements.some((element) =>
-          "source" in element && element.source && "bind" in element.source && element.source.bind === binding);
       if (!takes("sources")) {
-        if (takes("bullets") && slide.bullets.length === 0) slide.bullets = [...slide.sources];
+        if (takesBullets() && slide.bullets.length === 0) slide.bullets = [...slide.sources];
         else if (!slide.body?.trim()) slide.body = slide.sources.join("\n");
       }
     }

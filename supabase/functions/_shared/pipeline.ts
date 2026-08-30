@@ -1175,15 +1175,29 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
     // nested array badly and refused the request that carried one. Unwrapped
     // here so nothing past this line knows the difference.
     const writtenSlides = contentResult.slides.map(flattenTableRows);
-    if (!isTemplate) {
+    /**
+     * Make every slide's shape match the composition it is planned for.
+     *
+     * Called again whenever that composition can have changed. A slide written
+     * as a list, adapted for a page that draws lists, and then *reseated* onto
+     * a page that draws only a paragraph was converted afterwards by the
+     * renderer — long after the last fit check — and arrived at 2097
+     * characters in a box measured for 578. The conversion is cheap and pure;
+     * running it once was the mistake.
+     */
+    const adaptAll = () => {
+      if (isTemplate) return;
       for (const planned of layoutPlan.slides) {
         const brief = briefById.get(planned.archetypeId);
         const written = writtenSlides[planned.index];
         if (brief && written) writtenSlides[planned.index] = adaptContentToBrief(written as never, brief) as never;
       }
-    }
+    };
+    adaptAll();
     let rewriteUsage = { input_tokens: 0, output_tokens: 0 };
     let rewrites = 0;
+    /** Appended to the layout stage's message when copy still does not fit. */
+    let fitReport = "";
     let rewriteAttribution: { provider: string; model: string; attempts: number } =
       { provider: "google", model: writer.writingModel, attempts: 0 };
 
@@ -1197,7 +1211,17 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
      * different source page after its words were written for this one's shapes.
      */
     if (mode !== "mock" && !isTemplate) {
-      for (let attempt = 0; attempt < 3; attempt += 1) {
+      /**
+       * One pass: adapt, measure, and rewrite whatever does not fit.
+       *
+       * A function rather than a loop body because it has to run again
+       * after the reseat below. Moving a slide to a different composition
+       * changes which boxes exist, which changes whether a list becomes a
+       * paragraph — and a paragraph nobody measured is how 1649 characters
+       * reached a box built for 578.
+       */
+      const fitPass = async (): Promise<number> => {
+        adaptAll();
         const failing: { index: number; problems: SlotProblem[] }[] = [];
 
         layoutPlan.slides.forEach((planned) => {
@@ -1214,7 +1238,7 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
           if (problems.length > 0) failing.push({ index: planned.index, problems });
         });
 
-        if (failing.length === 0) break;
+        if (failing.length === 0) return 0;
 
         const request = failing.map((entry) => ({
           slide: entry.index,
@@ -1298,6 +1322,11 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
           }
           writtenSlides[entry.slide] = next;
         }
+        return failing.length;
+      };
+
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        if (await fitPass() === 0) break;
       }
 
       /**
@@ -1325,6 +1354,45 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
       const moved = reseatOverflowing(jslayd.document, layoutPlan, stillWritten, {
         ...(jslayd.profiles ? { profiles: jslayd.profiles } : {}),
       });
+      /**
+       * What is still wrong when the loop gives up, recorded where it can be
+       * read afterwards.
+       *
+       * A rewrite that does not converge and a reseat that does not help both
+       * end here silently, and the deck goes out with copy that overflows its
+       * box. The stage row is the one place an operator — or a test — can see
+       * it without the edge logs.
+       */
+      /**
+       * The move changed the boxes, so measure again.
+       *
+       * `reseatOverflowing` picks a bigger composition for copy that would not
+       * fit the old one — but a bigger page can draw a paragraph where the old
+       * one drew a list, and the merged paragraph is longer than any of the
+       * lines that made it. Two passes here, and what survives them is what the
+       * stage row reports.
+       */
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        if (await fitPass() === 0) break;
+      }
+
+      const unresolved: string[] = [];
+      layoutPlan.slides.forEach((planned) => {
+        const brief = briefById.get(planned.archetypeId);
+        const current = writtenSlides[planned.index];
+        const written = current
+          ? { ...stillWritten.get(planned.index), ...current } as SemanticSlide
+          : stillWritten.get(planned.index);
+        if (!brief || !written) return;
+        for (const problem of findSlotProblems(brief, written as never)) {
+          if (problem.overBy > 0) unresolved.push(`${planned.index}:${problem.binding}+${problem.overBy}`);
+        }
+      });
+      if (unresolved.length > 0) {
+        fitReport = ` · sig'madi: ${unresolved.join(", ")}`;
+        console.log(JSON.stringify({ event: "slots_still_overflowing", job_id: input.jobId, slots: unresolved }));
+      }
+
       if (moved.reseats.length > 0) {
         // `layoutPlan.slides` is what the renderer is handed, so the move takes
         // effect by having happened; the briefs are refreshed because a later
@@ -1359,7 +1427,7 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
         // mood, era, texture — is untouched.
         visualDna: composeJslaydDna(outlineResult.data.visualDna, jslayd, prepared.presentation.palette_code),
       }),
-      () => `«${jslayd.document.design.name}» dizayni (v${jslayd.version}) qo‘llandi`,
+      () => `«${jslayd.document.design.name}» dizayni (v${jslayd.version}) qo‘llandi${fitReport}`,
     );
     const pricing = await providerPricing(input.service);
 

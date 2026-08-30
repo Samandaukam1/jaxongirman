@@ -16,11 +16,12 @@
  * outcome this mode exists to prevent.
  */
 
-import { clonePresentation, type CloneReport, type MediaEdit, type SlidePlan } from "./pptx-clone.ts";
+import { clonePresentation, readRelationships, resolveTarget, type CloneReport, type MediaEdit, type SlidePlan } from "./pptx-clone.ts";
+import type { ExportElement } from "./export-model.ts";
 import { orientationOf, readSlidePictures, replaceablePictures, type SlidePicture } from "./pptx-pictures.ts";
 import type { TextEdit } from "./pptx-text.ts";
 import { unzip } from "./unzip.ts";
-import { zip } from "./zip.ts";
+import { zip, type ZipFile } from "./zip.ts";
 
 /** Bytes to put on a page, and the shape they are. */
 export type PictureFill = {
@@ -37,8 +38,17 @@ export type SlideRow = {
 };
 
 export type ElementRow = {
+  id?: string;
   slide_id: string;
   type: string;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  rotation?: number;
+  z_index?: number;
+  opacity?: number;
+  style?: Record<string, unknown> | null;
   content: Record<string, unknown> | null;
 };
 
@@ -171,6 +181,195 @@ export type CloneExport =
   | { ok: true; bytes: Uint8Array; report: CloneReport }
   | { ok: false; reason: string; report?: CloneReport };
 
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+
+function relsFor(part: string): string {
+  const cut = part.lastIndexOf("/");
+  return `${part.slice(0, cut)}/_rels/${part.slice(cut + 1)}.rels`;
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function setFile(files: ZipFile[], name: string, bytes: Uint8Array): void {
+  const existing = files.find((file) => file.name === name);
+  if (existing) existing.bytes = bytes;
+  else files.push({ name, bytes });
+}
+
+function contentTypeTag(markup: string, part: string): string | null {
+  for (const match of markup.matchAll(/<Override\b[^>]*\/>/g)) {
+    const name = /\bPartName="([^"]+)"/.exec(match[0])?.[1]?.replace(/^\//, "");
+    if (name === part) return match[0];
+  }
+  const extension = part.split(".").pop()?.toLowerCase();
+  if (!extension) return null;
+  for (const match of markup.matchAll(/<Default\b[^>]*\/>/g)) {
+    if (/\bExtension="([^"]+)"/.exec(match[0])?.[1]?.toLowerCase() === extension) return match[0];
+  }
+  return null;
+}
+
+function addContentType(markup: string, donor: string, sourcePart: string, outputPart: string): string {
+  const tag = contentTypeTag(donor, sourcePart);
+  if (!tag) return markup;
+  if (tag.startsWith("<Default")) {
+    const extension = /\bExtension="([^"]+)"/.exec(tag)?.[1];
+    if (!extension || new RegExp(`<Default\\b[^>]*Extension="${escapeRegex(extension)}"`).test(markup)) return markup;
+    return markup.replace("</Types>", `${tag}</Types>`);
+  }
+  if (new RegExp(`<Override\\b[^>]*PartName="/${escapeRegex(outputPart)}"`).test(markup)) return markup;
+  const renamed = tag.replace(/\bPartName="[^"]+"/, `PartName="/${outputPart}"`);
+  return markup.replace("</Types>", `${renamed}</Types>`);
+}
+
+function validChartElement(element: ElementRow): boolean {
+  if (element.type !== "chart") return false;
+  const content = element.content ?? {};
+  const type = content.chartType;
+  const labels = content.labels;
+  const values = content.values;
+  return (type === "bar" || type === "donut")
+    && Array.isArray(labels) && Array.isArray(values)
+    && labels.length >= 2 && labels.length === values.length
+    && values.every((value) => typeof value === "number" && Number.isFinite(value));
+}
+
+/**
+ * Adds the real editable PowerPoint chart parts to a cloned template deck.
+ *
+ * PptxGenJS produces the chart XML and its embedded workbook once. We then
+ * transplant that standards-compliant object into the cloned source page,
+ * remapping relationship ids and part names so none of the template's own
+ * charts, media or ids can collide with it. The source slide, layout, master,
+ * theme and every existing object remain byte-for-byte apart from the one page
+ * and relationship file that now reference the new chart.
+ */
+async function injectVisualStatistic(
+  files: ZipFile[],
+  report: CloneReport,
+  slides: readonly SlideRow[],
+  elements: readonly ElementRow[],
+  chartDonor?: (element: ExportElement) => Promise<Uint8Array>,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const ordered = [...slides].sort((first, second) => first.position - second.position);
+  const chart = elements.find(validChartElement);
+  if (!chart) return { ok: true };
+  // The pure clone tests and older callers do not load an npm chart renderer.
+  // Production always supplies it from `export-presentation`; keeping the
+  // dependency at that boundary leaves this OOXML planner runnable in Node.
+  if (!chartDonor) return { ok: true };
+  const slideIndex = ordered.findIndex((slide) => slide.id === chart.slide_id);
+  const outputPart = report.slides[slideIndex]?.outputPart;
+  if (slideIndex < 0 || !outputPart) {
+    return { ok: false, reason: "Diagramma joylashadigan shablon sahifasi topilmadi." };
+  }
+
+  const donorBytes = await chartDonor({
+    id: chart.id ?? "visual-statistic",
+    slide_id: chart.slide_id,
+    presentation_id: "template-clone",
+    type: "chart",
+    x: chart.x ?? 500,
+    y: chart.y ?? 150,
+    width: chart.width ?? 420,
+    height: chart.height ?? 320,
+    rotation: chart.rotation ?? 0,
+    z_index: chart.z_index ?? 1,
+    opacity: chart.opacity ?? 1,
+    style: chart.style ?? {},
+    content: chart.content ?? {},
+  } as ExportElement);
+  const donor = await unzip(donorBytes);
+  const donorSlidePart = "ppt/slides/slide1.xml";
+  const donorSlide = donor.get(donorSlidePart);
+  const donorSlideRels = donor.get(relsFor(donorSlidePart));
+  const donorManifest = donor.get("[Content_Types].xml");
+  if (!donorSlide || !donorSlideRels || !donorManifest) {
+    return { ok: false, reason: "Diagramma PowerPoint paketi tayyorlanmadi." };
+  }
+
+  let payload = /<p:spTree\b[^>]*>([\s\S]*?)<\/p:spTree>/.exec(decoder.decode(donorSlide))?.[1] ?? "";
+  payload = payload
+    .replace(/<p:nvGrpSpPr\b[\s\S]*?<\/p:nvGrpSpPr>/, "")
+    .replace(/<p:grpSpPr\b[\s\S]*?<\/p:grpSpPr>/, "");
+  const donorChartRid = /<c:chart\b[^>]*r:id="([^"]+)"/.exec(payload)?.[1];
+  if (!payload.trim() || !donorChartRid) {
+    return { ok: false, reason: "Diagramma PowerPoint obyektiga aylantirilmadi." };
+  }
+
+  const slideRelationship = readRelationships(decoder.decode(donorSlideRels))
+    .find((relationship) => relationship.id === donorChartRid);
+  if (!slideRelationship || slideRelationship.external) {
+    return { ok: false, reason: "Diagramma PowerPoint bog‘lanishi topilmadi." };
+  }
+  const donorChartPart = resolveTarget(donorSlidePart, slideRelationship.target);
+  const donorChart = donor.get(donorChartPart);
+  if (!donorChart) return { ok: false, reason: "Diagramma PowerPoint qismi topilmadi." };
+
+  let suffix = 1;
+  const names = new Set(files.map((file) => file.name));
+  while (names.has(`ppt/charts/jaxongirmanChart${suffix}.xml`)) suffix += 1;
+  const chartBase = `jaxongirmanChart${suffix}`;
+  const outputChartPart = `ppt/charts/${chartBase}.xml`;
+  const outputChartRelsPart = relsFor(outputChartPart);
+  const donorChartRelsPart = relsFor(donorChartPart);
+  const donorChartRels = donor.get(donorChartRelsPart);
+  let outputChartRels = donorChartRels ? decoder.decode(donorChartRels) : "";
+
+  const donorTypes = decoder.decode(donorManifest);
+  let manifest = decoder.decode(files.find((file) => file.name === "[Content_Types].xml")?.bytes ?? new Uint8Array());
+  manifest = addContentType(manifest, donorTypes, donorChartPart, outputChartPart);
+  setFile(files, outputChartPart, donorChart);
+
+  if (donorChartRels) {
+    let dependency = 0;
+    for (const relationship of readRelationships(outputChartRels)) {
+      if (relationship.external) continue;
+      const sourceDependency = resolveTarget(donorChartPart, relationship.target);
+      const bytes = donor.get(sourceDependency);
+      if (!bytes) continue;
+      dependency += 1;
+      const slash = sourceDependency.lastIndexOf("/");
+      const extension = sourceDependency.includes(".") ? sourceDependency.slice(sourceDependency.lastIndexOf(".")) : "";
+      const outputDependency = `${sourceDependency.slice(0, slash + 1)}${chartBase}-${dependency}${extension}`;
+      const replacementTarget = relationship.target.replace(/[^/]+$/, outputDependency.slice(outputDependency.lastIndexOf("/") + 1));
+      outputChartRels = outputChartRels.replace(
+        new RegExp(`(\\bId="${escapeRegex(relationship.id)}"[^>]*\\bTarget=")${escapeRegex(relationship.target)}(")`),
+        `$1${replacementTarget}$2`,
+      );
+      setFile(files, outputDependency, bytes);
+      manifest = addContentType(manifest, donorTypes, sourceDependency, outputDependency);
+    }
+    setFile(files, outputChartRelsPart, encoder.encode(outputChartRels));
+  }
+
+  const outputSlideFile = files.find((file) => file.name === outputPart);
+  if (!outputSlideFile) return { ok: false, reason: "Diagramma sahifasi paketda topilmadi." };
+  let outputSlide = decoder.decode(outputSlideFile.bytes);
+  const largestId = Math.max(9000, ...[...outputSlide.matchAll(/<p:cNvPr\b[^>]*\bid="(\d+)"/g)].map((match) => Number(match[1])));
+  let nextId = largestId + 1;
+  const outputRid = `rIdJxChart${suffix}`;
+  payload = payload
+    .replace(new RegExp(`r:id="${escapeRegex(donorChartRid)}"`, "g"), `r:id="${outputRid}"`)
+    .replace(/(<p:cNvPr\b[^>]*\bid=")\d+("[^>]*>)/g, (_match, before, after) => `${before}${nextId++}${after}`);
+  outputSlide = outputSlide.replace("</p:spTree>", `${payload}</p:spTree>`);
+  setFile(files, outputPart, encoder.encode(outputSlide));
+
+  const outputSlideRelsPart = relsFor(outputPart);
+  const relation = `<Relationship Id="${outputRid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/${chartBase}.xml"/>`;
+  const currentRels = files.find((file) => file.name === outputSlideRelsPart);
+  const relationshipMarkup = currentRels
+    ? decoder.decode(currentRels.bytes).replace("</Relationships>", `${relation}</Relationships>`)
+    : `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${relation}</Relationships>`;
+  setFile(files, outputSlideRelsPart, encoder.encode(relationshipMarkup));
+  setFile(files, "[Content_Types].xml", encoder.encode(manifest));
+  report.parts = files.map((file) => file.name).sort();
+  return { ok: true };
+}
+
 /**
  * The finished file, built out of the template's own parts.
  *
@@ -191,6 +390,8 @@ export async function exportByCloning(
    * generator recorded and what the plan is ordered by.
    */
   pictures: ReadonlyMap<number, PictureFill> = new Map(),
+  /** Production's PptxGenJS donor; optional so the pure OOXML module stays dependency-free. */
+  chartDonor?: (element: ExportElement) => Promise<Uint8Array>,
 ): Promise<CloneExport> {
   const planned = planClone(slides, elements, profiles);
   if (!planned.ok) return { ok: false, reason: planned.reason };
@@ -212,6 +413,9 @@ export async function exportByCloning(
       report,
     };
   }
+
+  const charted = await injectVisualStatistic(files, report, slides, elements, chartDonor);
+  if (!charted.ok) return { ok: false, reason: charted.reason, report };
 
   return { ok: true, bytes: await zip(files), report };
 }

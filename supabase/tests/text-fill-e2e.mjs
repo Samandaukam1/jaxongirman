@@ -108,6 +108,10 @@ try {
     `the deck was generated in ${((Date.now() - started) / 1000).toFixed(0)}s${job?.error_message ? ` — ${job.error_message}` : ""}`);
   const generationSeconds = Number(((Date.now() - started) / 1000).toFixed(1));
 
+  const layoutStep = await service.from("generation_steps")
+    .select("key,message").eq("presentation_id", presentationId).eq("key", "visual_identity").maybeSingle();
+  if (layoutStep.data?.message) console.log(`\nLayout: ${layoutStep.data.message}`);
+
   const deck = await service.from("presentations").select("design_id").eq("id", presentationId).single();
   const design = await service.from("presentation_designs")
     .select("id,slug,published_version,compiled_config").eq("id", deck.data.design_id).single();
@@ -311,7 +315,9 @@ try {
     stuck_jobs: stuck.count ?? 0,
   }));
 } finally {
-  if (userId) {
+  // KEEP=1 leaves the deck in place for inspection. Off by default, because a
+  // test that runs against production and keeps what it made is a leak.
+  if (userId && !process.env.KEEP) {
     if (exportPaths.length > 0) {
       const removed = await service.storage.from("exports").remove(exportPaths);
       if (removed.error) cleanupStorageFailures += 1;
@@ -325,7 +331,10 @@ try {
   }
 }
 
-const left = await service.from("presentations").select("*", { count: "exact", head: true }).eq("id", presentationId);
+if (process.env.KEEP) console.log(`\nKEPT: presentation ${presentationId} owner ${userId}`);
+const left = process.env.KEEP
+  ? { count: 0 }
+  : await service.from("presentations").select("*", { count: "exact", head: true }).eq("id", presentationId);
 check((left.count ?? 0) === 0, `nothing temporary remains (${left.count ?? 0})`);
 const jobsLeft = await service.from("generation_jobs").select("id", { count: "exact", head: true }).eq("presentation_id", presentationId);
 const exportsLeft = await service.from("export_jobs").select("id", { count: "exact", head: true }).eq("presentation_id", presentationId);

@@ -216,6 +216,36 @@ function addTable(slide: PptxGenJS.Slide, element: ExportElement, style: JsonObj
   });
 }
 
+async function pptxBytes(pptx: PptxGenJS): Promise<Uint8Array> {
+  const output = await pptx.write({ outputType: "uint8array", compression: true });
+  if (output instanceof Uint8Array) return output;
+  if (output instanceof ArrayBuffer) return new Uint8Array(output);
+  if (output instanceof Blob) return new Uint8Array(await output.arrayBuffer());
+  throw new Error("PowerPoint generator returned an unsupported output type");
+}
+
+/**
+ * A tiny one-slide package used as a standards-compliant donor when an
+ * imported PowerPoint template needs the mandatory editable chart added to
+ * one of its cloned pages. The cloner copies the chart, its relationship and
+ * its embedded workbook; generating those OOXML parts here avoids hand-writing
+ * a second chart serializer.
+ */
+export async function renderChartPptx(element: ExportElement): Promise<Uint8Array> {
+  const pptx = new PptxGenJS();
+  pptx.layout = "LAYOUT_WIDE";
+  pptx.author = "Jaxongirman";
+  const slide = pptx.addSlide();
+  const style = object(element.style);
+  slide.addShape(pptx.ShapeType.roundRect, {
+    ...frame(element),
+    fill: { color: pptxColor(style.fill, "FFFFFF") },
+    line: { color: pptxColor(style.axisColor, "D7DEDB"), width: 0.75 },
+  });
+  addChart(pptx, slide, element, style, object(element.content));
+  return pptxBytes(pptx);
+}
+
 export async function renderPptx(deck: ExportDeck, assets: ExportAssetLoader): Promise<Uint8Array> {
   const pptx = new PptxGenJS();
   pptx.layout = "LAYOUT_WIDE";
@@ -242,9 +272,5 @@ export async function renderPptx(deck: ExportDeck, assets: ExportAssetLoader): P
     }
   }
 
-  const output = await pptx.write({ outputType: "uint8array", compression: true });
-  if (output instanceof Uint8Array) return output;
-  if (output instanceof ArrayBuffer) return new Uint8Array(output);
-  if (output instanceof Blob) return new Uint8Array(await output.arrayBuffer());
-  throw new Error("PowerPoint generator returned an unsupported output type");
+  return pptxBytes(pptx);
 }

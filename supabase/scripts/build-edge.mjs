@@ -59,6 +59,7 @@ export function buildEdgeModules() {
       path.join(shared, "academic.ts"),
       path.join(shared, "font-source.ts"),
       path.join(shared, "layout-brief.ts"),
+      path.join(shared, "visual-statistic.ts"),
       path.join(shared, "photo-query.ts"),
       path.join(shared, "unsplash-results.ts"),
       path.join(shared, "openverse-results.ts"),
