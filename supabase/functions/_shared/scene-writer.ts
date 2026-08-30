@@ -368,6 +368,7 @@ export function repairPrompt(scene: Scene, report: QualityReport): string {
     crowded: "sahifa juda to'la: kamroq element yoki ko'proq bo'sh joy",
     unbalanced: "og'irlik bir burchakka yig'ilgan, muvozanatlang",
     no_hierarchy: "ikkita element bir xil eng katta o'lchamda — bittasini kichraytiring",
+    repeats: "oldingi slayd bilan bir xil joylashuv — elementlarni boshqacha joylashtiring (masalan rasm chapga, matn o'ngga yoki to'liq boshqa struktura)",
     no_content: "sahifada mazmun yo'q — role=\"body\" matn qo'shing (sarlavha va caption hisoblanmaydi)",
   };
   return [

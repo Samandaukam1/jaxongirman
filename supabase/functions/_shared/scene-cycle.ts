@@ -24,12 +24,13 @@ export type Validation = {
   problems: SceneProblem[];
 };
 
-export function validateScene(raw: unknown, language = "uz"): Validation {
+export function validateScene(raw: unknown, language = "uz", previousSignature: string | null = null): Validation {
   const { scene, problems } = readScene(raw);
   if (!scene) return { scene: null, placed: [], report: null, problems };
   const placed = placeScene(scene);
   const report = scoreScene({
     scene,
+    previousSignature,
     placed,
     fits: measureText(placed, language),
     collisions: findCollisions(placed),
@@ -54,6 +55,8 @@ export type CycleOptions = {
   /** Including the first generation. */
   maxAttempts?: number;
   language?: string;
+  /** The slide before this one, so a repeat is repaired rather than reported. */
+  previousSignature?: string | null;
 };
 
 /**
@@ -77,7 +80,7 @@ export async function runSceneCycle(
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const raw = await generate(best);
-    const validation = validateScene(raw, options.language);
+    const validation = validateScene(raw, options.language, options.previousSignature ?? null);
 
     if (!validation.scene || !validation.report) {
       history.push({

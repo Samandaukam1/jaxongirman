@@ -16,7 +16,7 @@
 import { buildDNA, type DesignDNA, type DesignDirection, type LibraryFamily, MOODS, GROUNDS } from "./scene-dna.ts";
 import { runSceneCycle, validateScene, type CycleResult } from "./scene-cycle.ts";
 import { renderScene, imageIntents, type RenderedSlide, type ResolvedPicture } from "./scene-render.ts";
-import { findRepetition, sceneFromBrief, withRescuedContent } from "./scene-quality.ts";
+import { findRepetition, mirrorScene, sceneFromBrief, withRescuedContent } from "./scene-quality.ts";
 import {
   briefPrompt, briefSchema, directionPrompt, directionSchema, repairPrompt, scenePrompt, sceneSchema,
   type SemanticBrief,
@@ -60,6 +60,8 @@ export type GeneratedSlide = {
   accepted: boolean;
   /** True when the engine built the page from the brief because the model did not. */
   synthesised: boolean;
+  /** True when the engine flipped the composition to break a repetition. */
+  mirrored: boolean;
   attempts: number;
   faults: string[];
 };
@@ -76,6 +78,7 @@ export type GeneratedDeck = {
     repairCount: number;
     unacceptedSlides: number[];
     synthesisedSlides: number[];
+    mirroredSlides: number[];
     repeatedCompositions: number[];
     askCount: number;
   };
@@ -200,13 +203,18 @@ export async function generateDeck(deps: Deps, input: DeckInput): Promise<Genera
       return withRescuedContent(read.scene, brief?.mainMessage ?? "");
     };
 
-    const cycle: CycleResult = await runSceneCycle(async (previous) => {
+    const cycle: { -readonly [K in keyof CycleResult]: CycleResult[K] } = await runSceneCycle(async (previous) => {
       const prompt = previous
         ? repairPrompt(previous.scene, previous.report)
         : scenePrompt({ brief: brief!, topic: input.topic, fonts: dna.fonts, mood: direction.mood, used: signatures, language });
       if (previous) repairCount += 1;
       return rescue(await ask({ prompt, schema: sceneSchema(), schemaName: "slide_scene", maxOutputTokens: 3_000 }));
-    }, { threshold: input.threshold ?? 90, maxAttempts: input.maxAttempts ?? 3, language });
+    }, {
+      threshold: input.threshold ?? 90,
+      maxAttempts: input.maxAttempts ?? 3,
+      language,
+      previousSignature: signatures.at(-1) ?? null,
+    });
 
     /**
      * A page the model could not produce is built from its own brief.
@@ -216,8 +224,27 @@ export async function generateDeck(deps: Deps, input: DeckInput): Promise<Genera
      * rather than merely quiet.
      */
     let synthesised = false;
+    let mirrored = false;
     let scene = cycle.scene;
     let score = cycle.report?.score ?? 0;
+
+    /**
+     * A repeat the model would not fix, fixed by arithmetic.
+     *
+     * Two repairs and it still came back arranged like the slide before it.
+     * Mirroring keeps every element's size, treatment and words and puts the
+     * page the other way round — and it is only kept if it scores at least as
+     * well, so this can make a deck more varied and never worse.
+     */
+    if (scene && cycle.report?.faults.some((fault) => fault.code === "repeats")) {
+      const flipped = validateScene(mirrorScene(scene), language, signatures.at(-1) ?? null);
+      if (flipped.scene && flipped.report && flipped.report.score > score) {
+        scene = flipped.scene;
+        score = flipped.report.score;
+        mirrored = true;
+        cycle.report = flipped.report;
+      }
+    }
     if (!scene) {
       const fallback = sceneFromBrief({
         title: planned.title,
@@ -263,8 +290,9 @@ export async function generateDeck(deps: Deps, input: DeckInput): Promise<Genera
       scene,
       rendered,
       score,
-      accepted: cycle.accepted,
+      accepted: cycle.accepted || mirrored,
       synthesised,
+      mirrored,
       attempts: cycle.attempts,
       faults: cycle.report?.faults.map((fault) => fault.code) ?? cycle.history.at(-1)?.faults ?? [],
     });
@@ -280,7 +308,8 @@ export async function generateDeck(deps: Deps, input: DeckInput): Promise<Genera
       scores: slides.map((slide) => slide.score),
       repairCount,
       unacceptedSlides: slides.filter((slide) => !slide.accepted).map((slide) => slide.index),
-    synthesisedSlides: slides.filter((slide) => slide.synthesised).map((slide) => slide.index),
+      synthesisedSlides: slides.filter((slide) => slide.synthesised).map((slide) => slide.index),
+      mirroredSlides: slides.filter((slide) => slide.mirrored).map((slide) => slide.index),
       repeatedCompositions: findRepetition(signatures),
       askCount,
     },

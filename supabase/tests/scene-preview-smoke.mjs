@@ -37,6 +37,7 @@ const check = (ok, what) => {
 const email = `scene-preview-${randomUUID()}@example.test`;
 const password = `${randomUUID()}Aa1!`;
 let userId = "";
+let deckId = null;
 
 try {
   const created = await service.auth.admin.createUser({ email, password, email_confirm: true });
@@ -53,13 +54,14 @@ try {
 
   console.log(`«${topic}» — ${titles.length} slayd\n`);
   const started = Date.now();
-  const answer = await admin.functions.invoke("scene-preview", { body: { topic, titles } });
+  const answer = await admin.functions.invoke("scene-preview", { body: { topic, titles, persist: true } });
   if (answer.error) {
     let detail = null;
     try { detail = await answer.error.context?.json?.(); } catch { /* consumed */ }
     throw new Error(detail?.error ?? answer.error.message);
   }
   const deck = answer.data;
+  deckId = deck.presentationId ?? null;
   const seconds = ((Date.now() - started) / 1000).toFixed(0);
 
   console.log(`Vizual til: ${deck.dna.direction.mood} / ${deck.dna.direction.ground} / ${deck.dna.direction.brand}`);
@@ -107,8 +109,55 @@ try {
   check(deck.observability.repeatedCompositions.length === 0,
     `no slide repeats the composition before it (${deck.observability.repeatedCompositions.join(", ") || "none"})`);
 
+  /**
+   * The deck as the product sees it.
+   *
+   * Returning JSON proves the engine; reading the saved rows back proves the
+   * phone can draw them, the editor can open them and the exporter can read
+   * them — which is the only claim worth making.
+   */
+  console.log("\nSaqlangan deck:");
+  check(Boolean(deck.presentationId), "the deck was saved");
+  if (deck.presentationId) {
+    const saved = await service.from("presentations")
+      .select("design_engine,design_dna,generated_slide_count").eq("id", deck.presentationId).single();
+    check(saved.data?.design_engine === "generative_v1",
+      `the deck says which engine made it (${saved.data?.design_engine ?? "—"})`);
+    check(Boolean(saved.data?.design_dna?.fonts), "and the visual language it was made in");
+
+    const savedSlides = await service.from("slides").select("id,position,quality_score").eq("presentation_id", deck.presentationId).order("position");
+    const savedElements = await service.from("slide_elements").select("slide_id,type,x,y,width,height,z_index,style,content").eq("presentation_id", deck.presentationId);
+    check((savedSlides.data ?? []).length === titles.length, `every slide was stored (${(savedSlides.data ?? []).length})`);
+    check((savedElements.data ?? []).length > 0, `elements were stored (${(savedElements.data ?? []).length})`);
+
+    // The apps store a 1000-wide model; anything outside it draws off-screen.
+    const outside = (savedElements.data ?? []).filter((row) =>
+      row.x < -1 || row.y < -1 || row.x + row.width > 1001 || row.y + row.height > 564);
+    check(outside.length === 0, `nothing is stored outside the canvas the apps draw (${outside.length})`);
+
+    const ranks = (savedElements.data ?? []).map((row) => row.z_index);
+    check(ranks.every((rank) => Number.isInteger(rank)), "layers were ranked to integers the column can hold");
+
+    // A picture, a scrim over it, and the title over that: the order the
+    // renderer needs for text on a photograph to be readable.
+    const scrims = (savedElements.data ?? []).filter((row) => row.content?.kind === "scrim");
+    for (const scrim of scrims) {
+      const onSlide = (savedElements.data ?? []).filter((row) => row.slide_id === scrim.slide_id);
+      const image = onSlide.find((row) => row.type === "image");
+      const above = onSlide.filter((row) => row.type === "text" && row.z_index > scrim.z_index);
+      check(Boolean(image) && image.z_index < scrim.z_index && above.length > 0,
+        "a scrim sits over its photograph and under the words");
+    }
+
+    const exported = await admin.functions.invoke("export-presentation", {
+      body: { presentationId: deck.presentationId, format: "pptx" },
+    });
+    check(!exported.error, `the deck exports to PowerPoint${exported.error ? ` — ${exported.error.message}` : ""}`);
+  }
+
   console.log(JSON.stringify({
     engine: deck.engine,
+    presentation_id: deck.presentationId,
     seconds: Number(seconds),
     average_score: Number(average.toFixed(1)),
     minimum_score: worst,
@@ -119,6 +168,9 @@ try {
     repeated_compositions: deck.observability.repeatedCompositions.length,
   }));
 } finally {
+  if (deckId) {
+    await service.from("presentations").delete().eq("id", deckId);
+  }
   if (userId) {
     await service.from("user_roles").delete().eq("user_id", userId);
     await service.auth.admin.deleteUser(userId);

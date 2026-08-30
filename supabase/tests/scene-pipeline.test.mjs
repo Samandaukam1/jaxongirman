@@ -22,6 +22,16 @@ const sound = (title) => ({
   ],
 });
 
+/** A different arrangement, for decks that need a second slide. */
+const other = (title) => ({
+  purpose: title,
+  background: { kind: "solid", color: "surface" },
+  elements: [
+    { type: "text", role: "title", place: { column: 2, span: 8, row: 0, rows: 2 }, typography: { font: "display", step: "heading", color: "ink" }, text: title },
+    { type: "chart", place: { column: 2, span: 8, row: 2, rows: 5 }, chart: { kind: "bar", labels: ["a", "b", "c"], values: [3, 7, 5] } },
+  ],
+});
+
 const colliding = (title) => {
   const scene = sound(title);
   scene.elements[1].place = { column: 0, span: 7, row: 1, rows: 2 };
@@ -50,7 +60,10 @@ test("a deck is produced with a design language and one scene per slide", async 
   const { ask, calls } = model({
     design_direction: [{ mood: "editorial", ground: "near_black", brand: "#5A78F0", cornerLanguage: "soft", gradients: true, reason: "r" }],
     slide_brief: [{ slideGoal: "g", mainMessage: "m", supportingMessage: null, informationDensity: 0.6, visualPriority: 0.4, needs: { image: true, chart: false, statistic: false, quote: false, comparison: false, timeline: false, example: false } }],
-    slide_scene: (seen) => sound(`Slayd ${seen.filter((call) => call.schemaName === "slide_scene").length}`),
+    slide_scene: (seen) => {
+      const at = seen.filter((call) => call.schemaName === "slide_scene").length;
+      return at === 1 ? sound("Bir") : other("Ikki");
+    },
   });
   const deck = await generateDeck(deps({ ask }), { topic: "Suv", slides: [{ title: "Bir" }, { title: "Ikki" }] });
 
@@ -158,15 +171,66 @@ test("a malformed brand colour does not fail the deck", async () => {
   assert.match(deck.dna.colors.primary, /^#[0-9a-f]{6}$/i);
 });
 
-test("a deck repeating one composition says which slides repeat", async () => {
+test("a slide arranged like the one before it is repaired rather than kept", async () => {
+  let scenes = 0;
+  const { ask } = model({
+    design_direction: [{ mood: "civic", ground: "warm_white", brand: "#5A78F0", cornerLanguage: "soft", gradients: true }],
+    slide_brief: [{}],
+    // The same arrangement twice, then a different one when asked again.
+    slide_scene: () => { scenes += 1; return scenes <= 2 ? sound(`Slayd ${scenes}`) : other("Boshqacha"); },
+  });
+  const deck = await generateDeck(deps({ ask }), { topic: "T", slides: [{ title: "a" }, { title: "b" }] });
+  assert.equal(deck.slides[1].accepted, true);
+  assert.ok(deck.slides[1].attempts > 1, "the repeat was noticed while the slide was still being made");
+  assert.deepEqual(deck.observability.repeatedCompositions, []);
+});
+
+test("a repeat the mirror cannot break survives to the audit", async () => {
+  // A full-width composition has no side to flip: mirroring it changes
+  // nothing, which is exactly when the deck-wide detector has to speak up.
+  const centred = (title) => ({
+    purpose: title,
+    background: { kind: "solid", color: "background" },
+    elements: [
+      { type: "text", role: "title", place: { column: 0, span: 12, row: 0, rows: 2 }, typography: { font: "display", step: "title", color: "ink" }, text: title },
+      { type: "text", role: "body", place: { column: 0, span: 12, row: 2, rows: 5 }, typography: { font: "body", step: "body", color: "ink" }, text: "Jumla. ".repeat(30) },
+    ],
+  });
+  const { ask } = model({
+    design_direction: [{ mood: "civic", ground: "warm_white", brand: "#5A78F0", cornerLanguage: "soft", gradients: true }],
+    slide_brief: [{}],
+    slide_scene: () => centred("Bir"),
+  });
+  const deck = await generateDeck(deps({ ask }), { topic: "T", slides: [{ title: "a" }, { title: "b" }], maxAttempts: 1 });
+  assert.deepEqual(deck.observability.mirroredSlides, [], "there was nothing to gain by flipping it");
+  assert.deepEqual(deck.observability.repeatedCompositions, [1]);
+});
+
+test("a repeat the mirror can break is broken", async () => {
   const { ask } = model({
     design_direction: [{ mood: "civic", ground: "warm_white", brand: "#5A78F0", cornerLanguage: "soft", gradients: true }],
     slide_brief: [{}],
     slide_scene: () => sound("Bir"),
   });
-  const deck = await generateDeck(deps({ ask }), { topic: "T", slides: [{ title: "a" }, { title: "b" }, { title: "c" }] });
-  assert.deepEqual(deck.observability.repeatedCompositions, [1, 2]);
+  const deck = await generateDeck(deps({ ask }), { topic: "T", slides: [{ title: "a" }, { title: "b" }], maxAttempts: 1 });
+  assert.deepEqual(deck.observability.mirroredSlides, [1]);
+  assert.deepEqual(deck.observability.repeatedCompositions, []);
+  // Same words, same sizes, other way round.
+  const first = deck.slides[0].scene.elements.find((one) => one.type === "image");
+  const second = deck.slides[1].scene.elements.find((one) => one.type === "image");
+  assert.equal(first.place.span, second.place.span);
+  assert.notEqual(first.place.column, second.place.column);
+});
+
+test("every slide's score is kept, whatever happened to it", async () => {
+  const { ask } = model({
+    design_direction: [{ mood: "civic", ground: "warm_white", brand: "#5A78F0", cornerLanguage: "soft", gradients: true }],
+    slide_brief: [{}],
+    slide_scene: () => sound("Bir"),
+  });
+  const deck = await generateDeck(deps({ ask }), { topic: "T", slides: [{ title: "a" }, { title: "b" }, { title: "c" }], maxAttempts: 1 });
   assert.equal(deck.observability.scores.length, 3);
+  assert.ok(deck.observability.scores.every((score) => score > 0));
 });
 
 test("a slide the model could not produce is built from its own brief", async () => {

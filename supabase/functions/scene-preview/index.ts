@@ -25,6 +25,7 @@ import type { LibraryFamily } from "../_shared/scene-dna.ts";
 
 type Body = {
   probe?: boolean;
+  persist?: boolean;
   topic?: string;
   titles?: string[];
   threshold?: number;
@@ -189,7 +190,99 @@ Deno.serve(async (request) => {
       asks: deck.observability.askCount,
     }));
 
+    /**
+     * Saved, when asked — as a deck the app can open like any other.
+     *
+     * The point of persisting is that everything downstream is then testable
+     * for real: the phone renders these rows, the exporter reads them, the
+     * editor opens them. A preview that only ever returns JSON proves the
+     * engine and nothing about the product.
+     *
+     * Owned by the administrator who asked, marked with the engine that made
+     * it, and costing nothing: no job, no reservation, no credits. This is a
+     * diagnostic, not a customer's deck.
+     */
+    let presentationId: string | null = null;
+    if (body.persist === true) {
+      presentationId = crypto.randomUUID();
+      const created = await context.serviceClient.from("presentations").insert({
+        id: presentationId,
+        owner_id: context.user.id,
+        title: topic.slice(0, 120),
+        topic,
+        style: "super_professional",
+        status: "ready",
+        requested_slide_count: deck.slides.length,
+        generated_slide_count: deck.slides.length,
+        design_engine: deck.engine,
+        design_dna: { direction: deck.dna.direction, fonts: deck.dna.fonts, colors: deck.dna.colors, radius: deck.dna.radius },
+      });
+      if (created.error) throw new Error(`presentation not saved: ${created.error.message}`);
+
+      const slideRows = [];
+      const elementRows = [];
+      for (const slide of deck.slides) {
+        if (!slide.rendered) continue;
+        const slideId = crypto.randomUUID();
+        slideRows.push({
+          id: slideId,
+          presentation_id: presentationId,
+          owner_id: context.user.id,
+          position: slide.index,
+          title: slide.title,
+          layout: "title_content",
+          background: slide.rendered.background,
+          quality_score: slide.score,
+          quality_report: {
+            engine: deck.engine,
+            accepted: slide.accepted,
+            synthesised: slide.synthesised,
+        mirrored: slide.mirrored,
+            attempts: slide.attempts,
+            faults: slide.faults,
+            signature: slide.scene ? slide.scene.purpose : null,
+          },
+        });
+        for (const row of slide.rendered.elements) {
+          elementRows.push({
+            id: crypto.randomUUID(),
+            slide_id: slideId,
+            presentation_id: presentationId,
+            owner_id: context.user.id,
+            type: row.type,
+            x: row.x,
+            y: row.y,
+            width: row.width,
+            height: row.height,
+            rotation: row.rotation,
+            // The scene's layer, kept as it is for now; ranked to integers
+            // below, because a scrim sits at 3.5 and the column is an integer.
+            z_index: row.z_index,
+            opacity: row.opacity,
+            locked: row.locked,
+            style: row.style,
+            content: row.content,
+          });
+        }
+      }
+      /**
+       * Fractional layers become ranks.
+       *
+       * A scrim sits between an image and the title over it — 3.5 in the
+       * scene's terms — and the column only holds integers. Ranking preserves
+       * the order without the scene having to know that.
+       */
+      const ranked = [...elementRows].sort((a, b) => a.z_index - b.z_index);
+      ranked.forEach((row, at) => { row.z_index = at; });
+
+      const savedSlides = await context.serviceClient.from("slides").insert(slideRows);
+      if (savedSlides.error) throw new Error(`slides not saved: ${savedSlides.error.message}`);
+      const savedElements = await context.serviceClient.from("slide_elements").insert(elementRows);
+      if (savedElements.error) throw new Error(`elements not saved: ${savedElements.error.message}`);
+    }
+
     return json({
+      presentationId,
       engine: deck.engine,
       seconds: Math.round((Date.now() - started) / 1000),
       dna: { direction: deck.dna.direction, fonts: deck.dna.fonts, colors: deck.dna.colors, radius: deck.dna.radius },
@@ -202,6 +295,7 @@ Deno.serve(async (request) => {
         // brief. Left out of the first response, which made a check that
         // counted designed pages pass by looking at a field that was not there.
         synthesised: slide.synthesised,
+        mirrored: slide.mirrored,
         attempts: slide.attempts,
         faults: slide.faults,
         scene: slide.scene,

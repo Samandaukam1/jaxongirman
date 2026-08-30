@@ -21,6 +21,15 @@ import type { Collision, PlacedElement, TextFit } from "./scene-geometry.ts";
 
 export type QualityInput = {
   scene: Scene;
+  /**
+   * What the slide before this one looked like.
+   *
+   * Repetition was detected across the finished deck and reported, which is
+   * useful for an audit and too late for the deck. Scored here instead, a
+   * repeated composition is a fault like any other and the repair pass — which
+   * already works — fixes it while the slide is still being made.
+   */
+  previousSignature?: string | null;
   placed: readonly PlacedElement[];
   fits: readonly TextFit[];
   collisions: readonly Collision[];
@@ -147,13 +156,25 @@ export function scoreScene(input: QualityInput): QualityReport {
     faults.push({ code: "no_content", detail: "nothing on this page carries the slide's message", cost: 20 });
   }
 
+  const signature = compositionSignature(input.scene);
+  if (input.previousSignature) {
+    const alike = similarity(input.previousSignature, signature);
+    if (alike >= 0.8) {
+      faults.push({
+        code: "repeats",
+        detail: `${Math.round(alike * 100)}% the same arrangement as the slide before it`,
+        cost: 15,
+      });
+    }
+  }
+
   const score = Math.max(0, 100 - faults.reduce((total, fault) => total + fault.cost, 0));
   return {
     score,
     faults,
     density: Number(density.toFixed(3)),
     balance: Number(balance.toFixed(3)),
-    signature: compositionSignature(input.scene),
+    signature,
   };
 }
 
@@ -285,4 +306,29 @@ export function sceneFromBrief(input: { title: string; message: string; supporti
     });
   }
   return { purpose: input.title, background: { kind: "solid", color: "background" }, elements };
+}
+
+
+/**
+ * The same composition, the other way round.
+ *
+ * A model told its slide repeats the one before it returns something very
+ * similar again — twice, in a real run. Mirroring is the answer arithmetic can
+ * give: every element keeps its size, its treatment and its words, and the
+ * page reads left-to-right instead of right-to-left. A picture that was beside
+ * the text on the right is beside it on the left, which is a different
+ * composition by any measure a reader applies and by the signature's.
+ *
+ * Full-bleed elements are left alone: a photograph covering the page has no
+ * side to be on.
+ */
+export function mirrorScene(scene: Scene): Scene {
+  return {
+    ...scene,
+    elements: scene.elements.map((element) => {
+      if (element.place.bleed) return element;
+      const column = GRID.columns - (element.place.column + element.place.span);
+      return { ...element, place: { ...element.place, column: Math.max(0, column) } };
+    }),
+  };
 }
