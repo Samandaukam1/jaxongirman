@@ -2,7 +2,7 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js";
 import { elementSlotsFor, fillElementSlots, findIllustration, slidesWithElements } from "./jelement-visuals.ts";
 import { familyOf, type ArchetypeWritingBrief } from "./jslayd/index.ts";
 import {
-  adaptContentToBrief, applyRewrite, briefForPrompt, findSlotProblems, planDeckLayout, requiredContentForBrief,
+  adaptContentToBrief, applyRewrite, briefForArchetype, briefForPrompt, findSlotProblems, planDeckLayout, requiredContentForBrief,
   reseatOverflowing,
   type SlotProblem,
 } from "./layout-brief.ts";
@@ -1185,10 +1185,18 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
      * characters in a box measured for 578. The conversion is cheap and pure;
      * running it once was the mistake.
      */
+    const briefFor = (archetypeId: string) => {
+      const known = briefById.get(archetypeId);
+      if (known) return known;
+      const built = briefForArchetype(jslayd.document, archetypeId, { language: "uz" });
+      if (built) briefById.set(archetypeId, built);
+      return built ?? undefined;
+    };
+
     const adaptAll = () => {
       if (isTemplate) return;
       for (const planned of layoutPlan.slides) {
-        const brief = briefById.get(planned.archetypeId);
+        const brief = briefFor(planned.archetypeId);
         const written = writtenSlides[planned.index];
         if (brief && written) writtenSlides[planned.index] = adaptContentToBrief(written as never, brief) as never;
       }
@@ -1225,7 +1233,7 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
         const failing: { index: number; problems: SlotProblem[] }[] = [];
 
         layoutPlan.slides.forEach((planned) => {
-          const brief = briefById.get(planned.archetypeId);
+          const brief = briefFor(planned.archetypeId);
           const written = writtenSlides[planned.index];
           if (!brief || !written) return;
           const outlineSlide = outlineResult.data.slides[planned.index];
@@ -1376,9 +1384,60 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
         if (await fitPass() === 0) break;
       }
 
+      /**
+       * The last resort, and it is not the type size.
+       *
+       * Two rewrites and a reseat still leave the occasional paragraph over
+       * its box: a model asked to shorten sometimes returns the same sentence,
+       * and on a bad topic it does that twice. Shipping it means copy running
+       * off the slide, and the alternative the renderer used to reach for —
+       * smaller type — is what made one slide four points different from its
+       * neighbours for a reason no reader can see.
+       *
+       * So the text is cut, at a sentence boundary where there is one. A
+       * paragraph one sentence shorter is a composition the design already
+       * draws; text past the edge of the box is not.
+       */
+      layoutPlan.slides.forEach((planned) => {
+        const brief = briefFor(planned.archetypeId);
+        const written = writtenSlides[planned.index];
+        if (!brief || !written) return;
+        for (const problem of findSlotProblems(brief, { ...written, title: "", purpose: "", layout: planned.layout } as never)) {
+          if (problem.overBy <= 0 || problem.binding === "title") continue;
+          const limit = problem.maximumCharacters;
+          const sentences = problem.text.split(/(?<=[.!?…])\s+/);
+          let kept = "";
+          for (const sentence of sentences) {
+            const next = kept ? `${kept} ${sentence}` : sentence;
+            if (next.length > limit) break;
+            kept = next;
+          }
+          if (!kept) {
+            const cut = problem.text.slice(0, limit);
+            const boundary = cut.lastIndexOf(" ");
+            kept = (boundary > limit * 0.6 ? cut.slice(0, boundary) : cut).trimEnd();
+          }
+          if (kept && kept.length < problem.text.length) {
+            writtenSlides[planned.index] = applyRewrite(
+              writtenSlides[planned.index] as never,
+              problem.binding,
+              kept,
+            ) as never;
+            console.log(JSON.stringify({
+              event: "slot_trimmed",
+              job_id: input.jobId,
+              slide: planned.index,
+              binding: problem.binding,
+              from: problem.text.length,
+              to: kept.length,
+            }));
+          }
+        }
+      });
+
       const unresolved: string[] = [];
       layoutPlan.slides.forEach((planned) => {
-        const brief = briefById.get(planned.archetypeId);
+        const brief = briefFor(planned.archetypeId);
         const current = writtenSlides[planned.index];
         const written = current
           ? { ...stillWritten.get(planned.index), ...current } as SemanticSlide

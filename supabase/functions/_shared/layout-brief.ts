@@ -459,3 +459,26 @@ export function reseatOverflowing(
 
   return { reseats, briefs: [...briefs.values()] };
 }
+
+
+/**
+ * The brief for one archetype, built on demand.
+ *
+ * `planDeckLayout` returns briefs for the compositions it planned, and callers
+ * keep them in a map keyed by archetype id. A slide that ends up on an
+ * archetype missing from that map — a late move, a substitution — then silently
+ * skips every step that needs a budget: it is never adapted to the boxes it
+ * will actually be drawn in, and its copy is never measured. That is how a list
+ * of 991 characters reached a paragraph box built for 578.
+ *
+ * So the map gets a way to answer for any archetype in the document rather than
+ * only for the ones planned in advance.
+ */
+export function briefForArchetype(
+  document: JslaydDocument,
+  archetypeId: string,
+  options: { language?: string } = {},
+): ArchetypeWritingBrief | null {
+  const archetype = document.archetypes.find((entry) => entry.id === archetypeId);
+  return archetype ? buildWritingBrief(document, archetype, options) : null;
+}

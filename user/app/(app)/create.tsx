@@ -43,7 +43,17 @@ export default function CreatePresentationScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const [topic, setTopic] = useState("");
-  const [style, setStyle] = useState<PresentationStyle>("good");
+  /**
+   * Which styles exist is the operator's decision, not this screen's.
+   *
+   * The four tiers were hard-coded here, so a style the operator had switched
+   * off in `style_configs` was still offered — and a person could start a deck
+   * in a style the catalogue no longer publishes designs for. The list is read
+   * instead, and Super Professional is the fallback because it is the one this
+   * product is for.
+   */
+  const [offered, setOffered] = useState<PresentationStyle[]>(["super_professional"]);
+  const [style, setStyle] = useState<PresentationStyle>("super_professional");
   const [slideCount, setSlideCount] = useState(10);
   const [customCount, setCustomCount] = useState("");
   const [sources, setSources] = useState("");
@@ -75,6 +85,26 @@ export default function CreatePresentationScreen() {
 
   // The header's back button is the only way out of this screen, so Android's
   // system back must not quietly throw away a half-filled form either.
+  useEffect(() => {
+    let cancelled = false;
+    void supabase
+      .from("style_configs")
+      .select("style,is_active")
+      .eq("is_active", true)
+      .then(({ data }) => {
+        if (cancelled) return;
+        const active = (data ?? [])
+          .map((row) => row.style as PresentationStyle)
+          .filter((item) => item in styleDetails);
+        if (active.length === 0) return;
+        // Premium first, so the one this product is built around leads.
+        active.sort((a, b) => Number(b === "super_professional") - Number(a === "super_professional"));
+        setOffered(active);
+        setStyle((current) => (active.includes(current) ? current : active[0]!));
+      });
+    return () => { cancelled = true; };
+  }, []);
+
   useEffect(() => {
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => true);
     return () => subscription.remove();
@@ -260,10 +290,11 @@ export default function CreatePresentationScreen() {
         <View style={styles.group}>
           <Text style={styles.label}>Uslub</Text>
           <View style={styles.stylesGrid}>
-            {(Object.keys(styleDetails) as PresentationStyle[]).map((item) => {
+            {offered.map((item) => {
               const selected = style === item;
+              const alone = offered.length === 1;
               return (
-                <Pressable onPress={() => setStyle(item)} key={item} style={[styles.styleCard, selected && styles.styleCardSelected]}>
+                <Pressable onPress={() => setStyle(item)} key={item} style={[styles.styleCard, alone && styles.styleCardWide, selected && styles.styleCardSelected]}>
                   <IconChip icon={styleDetails[item].icon} gradient={styleDetails[item].gradient} size="md" style={styles.styleSwatch} />
                   {selected ? <View style={styles.styleCheck}><Check color={colors.onPrimary} size={12} strokeWidth={icon.strokeBold} /></View> : null}
                   <Text style={styles.styleTitle}>{STYLE_LABELS[item]}</Text>
@@ -465,6 +496,8 @@ const useStyles = makeStyles((colors) => ({
   fileName: { ...typography.caption, color: colors.ink, flex: 1 },
   stylesGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md },
   styleCard: { width: "48%", minHeight: 150, borderRadius: radius.lg, padding: spacing.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  // The only style on offer is the whole row rather than half of one.
+  styleCardWide: { width: "100%", minHeight: 0 },
   styleCardSelected: { borderColor: colors.primary, borderWidth: 2, padding: spacing.lg - 1, backgroundColor: colors.primarySoft, ...shadow },
   styleSwatch: { marginBottom: spacing.md },
   styleCheck: { position: "absolute", top: spacing.lg, right: spacing.lg, width: 22, height: 22, borderRadius: 11, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },

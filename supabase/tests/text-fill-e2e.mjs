@@ -252,6 +252,30 @@ try {
     && row.content.labels.length === row.content.values.length);
   check(chartRows.length >= 1, `the deck contains a visible bar/pie chart (${chartRows.length})`);
 
+  /**
+   * Two charts in a row should not be the same chart.
+   *
+   * Ordered by the slide they sit on, because a deck reads in that order and
+   * "two bars one slide apart" is what a reader sees. A repeat is allowed only
+   * where the numbers cannot be drawn the other way — a doughnut is parts of a
+   * whole, so a negative value keeps its bar.
+   */
+  const positionOf = new Map((slides.data ?? []).map((row) => [row.id, row.position]));
+  const inOrder = chartRows
+    .slice()
+    .sort((a, b) => (positionOf.get(a.slide_id) ?? 0) - (positionOf.get(b.slide_id) ?? 0));
+  const repeats = [];
+  for (let at = 1; at < inOrder.length; at += 1) {
+    const before = inOrder[at - 1];
+    const now = inOrder[at];
+    if (before.content.chartType !== now.content.chartType) continue;
+    const drawable = now.content.values.every((value) => value >= 0)
+      && now.content.values.some((value) => value > 0);
+    if (drawable) repeats.push(`${positionOf.get(before.slide_id)}→${positionOf.get(now.slide_id)}:${now.content.chartType}`);
+  }
+  check(repeats.length === 0, `no two consecutive charts share a shape (${repeats.join(", ") || "none"})`);
+  console.log(`  ℹ  chart tartibi: ${inOrder.map((row) => `${positionOf.get(row.slide_id)}:${row.content.chartType}`).join(", ") || "—"}`);
+
   // The database preview is not the product claim: the exported PowerPoint
   // must carry a real chart part. Generate the actual production .pptx, open
   // its ZIP package and require a native bar/doughnut chart node.
@@ -306,6 +330,7 @@ try {
     silent_slides: silent.length,
     overflowing: overflowing.length,
     charts: chartRows.length,
+    chart_shape_repeats: repeats.length,
     pptx_chart_parts: pptxChartParts,
     generation_seconds: generationSeconds,
     rewrite_passes: rewrites.count ?? 0,
