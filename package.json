@@ -40,7 +40,7 @@
     "telegram:webhook": "node scripts/set-image-bot-webhook.mjs",
     "test:photos:template": "DESIGN_SLUG=kardiologiya EXPECT_PROVIDER=any CHECK_EXPORT=1 node supabase/tests/photo-provider-smoke.mjs",
     "test:watchdog": "node supabase/tests/watchdog-smoke.mjs",
-    "test:photoorder": "node --test supabase/tests/image-intent.test.mjs supabase/tests/design-rotation.test.mjs supabase/tests/photo-order.test.mjs supabase/tests/unsplash.test.mjs supabase/tests/wikimedia.test.mjs supabase/tests/entity-match.test.mjs supabase/tests/writer.test.mjs supabase/tests/pptx-pictures.test.mjs",
+    "test:photoorder": "node --test supabase/tests/image-intent.test.mjs supabase/tests/scene-geometry.test.mjs supabase/tests/scene-dna.test.mjs supabase/tests/scene-quality.test.mjs supabase/tests/design-rotation.test.mjs supabase/tests/photo-order.test.mjs supabase/tests/unsplash.test.mjs supabase/tests/wikimedia.test.mjs supabase/tests/entity-match.test.mjs supabase/tests/writer.test.mjs supabase/tests/pptx-pictures.test.mjs",
     "test:pptx": "node supabase/tests/pptx-import-smoke.mjs",
     "test:pairing": "node supabase/tests/pairing-smoke.mjs",
     "dev:web": "npm run dev --workspace=@jaxongirman/web",
@@ -65,7 +65,8 @@
     "test:jelement:smoke": "node supabase/tests/jelement-smoke.mjs",
     "test:design": "node --test supabase/tests/pptx-safety.test.mjs supabase/tests/pptx-design.test.mjs supabase/tests/pptx-classify.test.mjs supabase/tests/design-select.test.mjs supabase/tests/font-source.test.mjs supabase/tests/pptx-endtoend.test.mjs supabase/tests/pptx-text.test.mjs supabase/tests/pptx-clone.test.mjs supabase/tests/pptx-slots.test.mjs supabase/tests/portrait-sheet.test.mjs",
     "test:game": "node --test supabase/tests/game-batches.test.mjs",
-    "test:docs": "node --test supabase/tests/objective.test.mjs supabase/tests/academic.test.mjs"
+    "test:docs": "node --test supabase/tests/objective.test.mjs supabase/tests/academic.test.mjs",
+    "test:scene": "node --test supabase/tests/scene-geometry.test.mjs supabase/tests/scene-dna.test.mjs supabase/tests/scene-quality.test.mjs"
   },
   "engines": {
     "node": ">=20"
