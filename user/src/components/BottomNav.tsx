@@ -14,6 +14,7 @@ import Animated, {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "@/components/Avatar";
+import { withAlpha } from "@/theme/color";
 import { profileInitials, useAccount } from "@/providers/AccountProvider";
 import { spacing } from "@/theme/tokens";
 import type { Palette } from "@/theme/palettes";
@@ -81,6 +82,17 @@ const BLUR_LINKED = (() => {
  */
 const sheenOf = (colors: Palette): readonly [string, string, string] =>
   (BLUR_LINKED ? colors.glassSheen : colors.glassSheenOpaque);
+
+/**
+ * The selected tab's own light.
+ *
+ * `primarySoft` alone is a rectangle of tint — correct, and flat. Running it
+ * from a brighter top edge into itself gives the pill a top-lit face, which is
+ * what the rest of the app's premium surfaces do and what makes this one look
+ * like it belongs to them rather than like a highlight the navigator drew.
+ */
+const indicatorSheen = (colors: Palette): readonly [string, string] =>
+  [withAlpha(colors.primaryBright, 0.22), colors.primarySoft];
 
 /** One spring, so the indicator and every icon move as a single mechanism. */
 const SPRING = { damping: 20, stiffness: 210, mass: 0.6 } as const;
@@ -203,7 +215,17 @@ export function BottomNav({ state, navigation }: TabBarProps) {
           />
 
           <View style={styles.row} onLayout={(event) => setBarWidth(event.nativeEvent.layout.width)}>
-            <Animated.View pointerEvents="none" style={[styles.indicator, indicatorStyle]} />
+            {/* A lit pill rather than a flat swatch: the wash gives the
+                selected tab a centre, and the rim keeps its edge legible on a
+                dark bar where a fill alone disappears into the glass. */}
+            <Animated.View pointerEvents="none" style={[styles.indicator, indicatorStyle]}>
+              <LinearGradient
+                colors={indicatorSheen(colors)}
+                start={{ x: 0.5, y: 0 }}
+                end={{ x: 0.5, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
+            </Animated.View>
             {items.map((route) => {
               const meta = LABELS[route.name];
               if (!meta) return null;
@@ -265,6 +287,10 @@ const useStyles = makeStyles((colors) => ({
     height: ITEM_HEIGHT,
     borderRadius: ITEM_HEIGHT / 2,
     backgroundColor: colors.primarySoft,
+    // The gradient inside is square until something clips it.
+    overflow: "hidden",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: withAlpha(colors.primary, 0.22),
   },
   item: { flex: 1, height: ITEM_HEIGHT, alignItems: "center", justifyContent: "center" },
   label: {
@@ -276,6 +302,17 @@ const useStyles = makeStyles((colors) => ({
     letterSpacing: 0.1,
     color: colors.primary,
   },
-  avatar: { borderWidth: 1.5, borderColor: colors.border, borderRadius: ICON_SIZE / 2 },
-  avatarActive: { borderWidth: 1.5, borderColor: colors.primary, borderRadius: ICON_SIZE / 2 },
+  avatar: { borderWidth: 1.5, borderColor: colors.borderStrong, borderRadius: ICON_SIZE / 2 },
+  // Selected, the ring is the brand and carries a glow of it — the same
+  // treatment the avatar gets on Profil, at a twelfth of the size.
+  avatarActive: {
+    borderWidth: 2,
+    borderColor: colors.primary,
+    borderRadius: ICON_SIZE / 2,
+    shadowColor: colors.primary,
+    shadowOpacity: 0.45,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
 }));

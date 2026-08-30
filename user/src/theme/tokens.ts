@@ -30,7 +30,49 @@ export const gradients = {
   create: ["#9A5CF5", "#5B21B6"] as const,
   join: ["#11A2B8", "#0A6E86"] as const,
   host: ["#CE8310", "#C2610C"] as const,
+
+  /**
+   * The accent set: one hue per thing a person can tap on Profil.
+   *
+   * A screen of identical violet glyphs is a screen you read by position
+   * rather than by sight — every row looks like the row above it, and finding
+   * "Daromadlar" means reading five labels. Giving each its own hue makes the
+   * list scannable, and keeps it a list rather than a light show, because the
+   * colour is spent on a 40-point tile and nowhere else.
+   *
+   * These live with the brand gradients rather than in the palette for the
+   * same reason those do: they are the ink of a coloured plate, they do not
+   * flip with the theme, and everything drawn on one takes `brandInk`. Which
+   * also means they are held to the same rule — white has to clear 3:1 on
+   * every stop, checked by `tests/theme-contrast`. Gold is the one that costs
+   * something: a gold bright enough to look like gold is a gold nobody can
+   * read white on, so it starts where amber already had to start.
+   */
+  gold: ["#CE8310", "#A65A08"] as const,
+  magenta: ["#D6489E", "#9B2270"] as const,
+  azure: ["#3B82F6", "#1D4ED8"] as const,
+  indigo: ["#6D5AE6", "#3B2C9E"] as const,
 } as const;
+
+/**
+ * What each hue is for, named once so two screens cannot disagree.
+ *
+ * The three that already existed are reused rather than re-stated: an emerald
+ * is an emerald whether it is confirming something on O‘yingoh or marking
+ * "Daromadlar", and a second copy of the same two hex values is only a chance
+ * for one of them to be corrected and the other not.
+ */
+export const accents = {
+  gold: gradients.gold,
+  magenta: gradients.magenta,
+  azure: gradients.azure,
+  indigo: gradients.indigo,
+  emerald: gradients.success,
+  teal: gradients.join,
+  violet: gradients.create,
+} as const;
+
+export type AccentName = keyof typeof accents;
 
 /**
  * The light each tool's artwork throws onto its own card.

@@ -447,6 +447,12 @@ verify_jwt = false
 [functions.purge-survey-responses]
 verify_jwt = false
 
+# Closing an account. The only identity it will act on is the one it reads back
+# from the caller's own token with `getUser()`, and it re-checks that itself —
+# the same asymmetric-key-compatible pattern as every function above.
+[functions.delete-account]
+verify_jwt = false
+
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
