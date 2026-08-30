@@ -78,6 +78,8 @@ Deno.serve(async (request) => {
         const automatic = await chooseDesign(context.serviceClient, {
           tier: body.style,
           topic: body.topic.trim(),
+          // So a person's own recent decks can step aside for a new one.
+          userId: context.user.id,
         });
         if (!automatic) {
           throw new HttpError(422, "Bu uslub uchun nashr qilingan dizayn topilmadi.", "no_design_available");
@@ -87,6 +89,8 @@ Deno.serve(async (request) => {
         // without re-running the ranking. Never the topic itself.
         console.log("design chosen automatically", JSON.stringify({
           tier: body.style, slug: automatic.slug, score: automatic.score, matched: automatic.matched,
+          // True only when every published design in the tier was used recently.
+          repeated: automatic.repeated,
         }));
       }
 

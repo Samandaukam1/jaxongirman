@@ -420,3 +420,30 @@ export function selectPages(
 
   return chosen;
 }
+
+
+/**
+ * The same subject should not come back wearing the same design.
+ *
+ * Ranking is deterministic, so a person generating two decks about one topic —
+ * which is exactly what somebody does when the first attempt was not quite
+ * right — got the identical composition twice, and reasonably concluded the app
+ * has one design.
+ *
+ * Their own recent decks step aside while anything else suitable exists. It is
+ * a preference rather than a rule: when every published design in the tier has
+ * been used recently the best match wins anyway, because refusing to make a
+ * deck over a small catalogue is a worse answer than a repeat. `repeated` says
+ * which of the two happened, so a surprising choice can be explained without
+ * re-running the ranking.
+ */
+export function pickWithRotation<T extends { id: string }>(
+  ranked: readonly T[],
+  recent: ReadonlySet<string>,
+): { chosen: T; repeated: boolean } | null {
+  const best = ranked[0];
+  if (!best) return null;
+  const fresh = ranked.find((entry) => !recent.has(entry.id));
+  const chosen = fresh ?? best;
+  return { chosen, repeated: recent.has(chosen.id) };
+}

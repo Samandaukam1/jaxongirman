@@ -16,9 +16,12 @@
 
 import type { SupabaseClient } from "npm:@supabase/supabase-js";
 
-import { matchTopics, rankDesigns, type DesignCandidate, type Topic } from "./design-select.ts";
+import { matchTopics, pickWithRotation, rankDesigns, type DesignCandidate, type Topic } from "./design-select.ts";
 
-export type ChosenDesign = { slug: string; score: number; matched: string[] };
+export type ChosenDesign = { slug: string; score: number; matched: string[]; repeated: boolean };
+
+/** How many of a person's recent decks a design has to sit out. */
+const RECENT_DECKS = 3;
 
 /**
  * The published designs of a tier, ranked against what the deck is about.
@@ -29,7 +32,7 @@ export type ChosenDesign = { slug: string; score: number; matched: string[] };
  */
 export async function chooseDesign(
   service: SupabaseClient,
-  input: { tier: string; topic: string },
+  input: { tier: string; topic: string; userId?: string | null },
 ): Promise<ChosenDesign | null> {
   const [designs, topics, synonyms] = await Promise.all([
     service
@@ -107,7 +110,44 @@ export async function chooseDesign(
 
   const wanted = matchTopics(input.topic, taxonomy);
   const ranked = rankDesigns(candidates, wanted);
-  const best = ranked[0];
-  if (!best) return null;
-  return { slug: best.id, score: best.score, matched: best.matched };
+  if (ranked.length === 0) return null;
+
+  /**
+   * The same subject should not come back wearing the same design.
+   *
+   * Ranking is deterministic, so a person generating two decks about one topic
+   * — which is exactly what somebody does when the first attempt was not quite
+   * right — got the identical composition twice, and reasonably concluded the
+   * app has one design. Their own recent decks are read and those designs step
+   * aside while anything else suitable exists.
+   *
+   * A fallback rather than a rule: if every published design in the tier has
+   * been used recently, the best match wins anyway. Refusing to make a deck
+   * because the catalogue is small would be a worse answer than a repeat.
+   */
+  const recent = new Set<string>();
+  if (input.userId) {
+    const bySlug = new Map((designs.data ?? []).map((row) => [row.id as string, row.slug as string]));
+    const history = await service
+      .from("presentations")
+      .select("design_id, created_at")
+      .eq("owner_id", input.userId)
+      .not("design_id", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(RECENT_DECKS);
+    if (history.error) console.error("design choice: history unreadable", history.error.message);
+    for (const row of history.data ?? []) {
+      const slug = bySlug.get(row.design_id as string);
+      if (slug) recent.add(slug);
+    }
+  }
+
+  const picked = pickWithRotation(ranked, recent);
+  if (!picked) return null;
+  return {
+    slug: picked.chosen.id,
+    score: picked.chosen.score,
+    matched: picked.chosen.matched,
+    repeated: picked.repeated,
+  };
 }
