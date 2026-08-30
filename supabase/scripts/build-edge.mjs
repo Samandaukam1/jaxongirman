@@ -56,6 +56,8 @@ export function buildEdgeModules() {
       path.join(shared, "scene-geometry.ts"),
       path.join(shared, "scene-dna.ts"),
       path.join(shared, "scene-quality.ts"),
+      path.join(shared, "scene-writer.ts"),
+      path.join(shared, "scene-cycle.ts"),
       path.join(shared, "defense.ts"),
       path.join(shared, "portrait-sheet.ts"),
       path.join(shared, "docx.ts"),
