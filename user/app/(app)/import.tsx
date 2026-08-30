@@ -1,13 +1,14 @@
+import * as Crypto from "expo-crypto";
 import * as DocumentPicker from "expo-document-picker";
 import { useRouter } from "expo-router";
 import { Coins, FileUp, Info } from "lucide-react-native";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { InlineError } from "@/components/StateBlocks";
-import { asErrorMessage } from "@/lib/format";
+import { asErrorMessage, asFunctionErrorMessage } from "@/lib/format";
 import { uploadLocalFile } from "@/lib/upload";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
@@ -35,6 +36,7 @@ export default function ImportScreen() {
   const styles = useStyles();
   const router = useRouter();
   const { user } = useAuth();
+  const running = useRef(false);
   const [file, setFile] = useState<Picked | null>(null);
   const [busy, setBusy] = useState(false);
   const [step, setStep] = useState<string | null>(null);
@@ -88,12 +90,26 @@ export default function ImportScreen() {
 
   async function run() {
     if (!file || !user) return;
+    /**
+     * A second tap must not start a second import.
+     *
+     * `busy` disables the button, but state lands a render later and two quick
+     * taps both pass the check — and each one creates its own presentation, so
+     * the idempotency key on the reservation is different and the person is
+     * charged twice. A ref changes on the same tick.
+     */
+    if (running.current) return;
+    running.current = true;
     setBusy(true);
     setError(null);
     setWarnings([]);
     try {
       setStep("Fayl yuklanmoqda…");
-      const storagePath = `${user.id}/imports/${crypto.randomUUID()}.pptx`;
+      // `expo-crypto`, not the global. Hermes has no `crypto` object, so the
+      // global form throws "Property 'crypto' doesn't exist" the moment an
+      // import starts — which is every import, on every device. Every other
+      // screen in the app already imports this module; this one did not.
+      const storagePath = `${user.id}/imports/${Crypto.randomUUID()}.pptx`;
       const uploaded = await uploadLocalFile({
         bucket: "user-uploads",
         path: storagePath,
@@ -118,12 +134,29 @@ export default function ImportScreen() {
         setStep(null);
         setBusy(false);
         setFile(null);
+        running.current = false;
         setTimeout(() => router.replace({ pathname: "/(app)/presentation/[id]", params: { id: result.presentationId } }), 2200);
         return;
       }
       router.replace({ pathname: "/(app)/presentation/[id]", params: { id: result.presentationId } });
     } catch (failure) {
-      setError(asErrorMessage(failure));
+      /**
+       * The server's sentence, or ours — never the runtime's.
+       *
+       * Our functions answer with an Uzbek sentence and a code, and that is
+       * what a person should read. A failure with no such body is a technical
+       * one — a missing runtime global, a transport error — and its message is
+       * developer text that means nothing to the author and alarms them:
+       * "Property 'crypto' doesn't exist" is what this screen used to show.
+       * The detail is kept in the log, where it is useful.
+       */
+      running.current = false;
+      const fromServer = await asFunctionErrorMessage(failure);
+      const technical = !(failure as { context?: unknown })?.context;
+      if (technical && __DEV__) console.warn("pptx import failed", failure);
+      setError(technical
+        ? "PowerPoint faylini import qilib bo‘lmadi. J Tanga yechilgan bo‘lsa, qaytariladi."
+        : fromServer);
       setBusy(false);
       setStep(null);
     }
