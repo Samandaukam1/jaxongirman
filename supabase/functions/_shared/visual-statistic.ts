@@ -79,3 +79,38 @@ export function isVisualStatistic(value: unknown): value is VisualStatistic {
 export function deckHasVisualStatistic(slides: readonly { chart?: unknown }[]): boolean {
   return slides.some((slide) => isVisualStatistic(slide.chart));
 }
+
+/**
+ * Two charts in a row should not be the same chart.
+ *
+ * The writer picks a type per slide with no memory of the one before it, so a
+ * deck that earns two charts usually draws two bars — the same shape, the same
+ * colours, one slide apart, which reads as a rendering mistake rather than as
+ * two findings. A bar next to a doughnut reads as two findings.
+ *
+ * Only the type is changed, never the numbers, and only when the data suits
+ * the other form: a doughnut is parts of a whole, so a series containing a
+ * negative or summing to nothing stays a bar. That means a deck can still
+ * legitimately carry two bars — when every alternative would misrepresent the
+ * figures, which is the one thing worse than a repeated shape.
+ */
+export function diversifyChartTypes<T extends { chart?: unknown }>(slides: readonly T[]): T[] {
+  let previous: VisualStatistic["type"] | null = null;
+  return slides.map((slide) => {
+    if (!isVisualStatistic(slide.chart)) return slide;
+    const chart = slide.chart;
+    if (previous !== chart.type) {
+      previous = chart.type;
+      return slide;
+    }
+    const flipped = { ...chart, type: chart.type === "bar" ? "donut" as const : "bar" as const };
+    if (!isVisualStatistic(flipped)) {
+      // The numbers cannot be drawn the other way. A repeat is the honest
+      // answer; misrepresenting them is not.
+      previous = chart.type;
+      return slide;
+    }
+    previous = flipped.type;
+    return { ...slide, chart: flipped };
+  });
+}

@@ -6,8 +6,7 @@ import { buildEdgeModules } from "../scripts/build-edge.mjs";
 
 const edge = buildEdgeModules();
 const {
-  deckHasVisualStatistic, isVisualStatistic, requireVisualStatistic,
-} = await import(`${edge}/visual-statistic.js`);
+  deckHasVisualStatistic, isVisualStatistic, requireVisualStatistic, diversifyChartTypes } = await import(`${edge}/visual-statistic.js`);
 const { slideSchema } = await import(`${edge}/plan-schema.js`);
 
 const slide = (title, layout = "title_body", purpose = "Mavzuni tushuntirish") => ({
@@ -75,4 +74,43 @@ test("every code-design corpus member has a visible chart archetype", () => {
       && archetype.elements?.some((element) => element.type === "chart")),
     `${document.design?.slug ?? "unknown"} must be able to render the mandatory chart`);
   }
+});
+
+test("two charts in a row are not the same chart", () => {
+  const slides = [
+    { chart: { type: "bar", labels: ["a", "b"], values: [3, 4] } },
+    { chart: { type: "bar", labels: ["c", "d"], values: [5, 6] } },
+  ];
+  const out = diversifyChartTypes(slides);
+  assert.equal(out[0].chart.type, "bar");
+  assert.equal(out[1].chart.type, "donut");
+  // The numbers are never touched, only the shape they are drawn in.
+  assert.deepEqual(out[1].chart.values, [5, 6]);
+});
+
+test("charts separated by text slides still alternate", () => {
+  const slides = [
+    { chart: { type: "donut", labels: ["a", "b"], values: [3, 4] } },
+    { chart: null },
+    { chart: { type: "donut", labels: ["c", "d"], values: [5, 6] } },
+  ];
+  const out = diversifyChartTypes(slides);
+  assert.equal(out[0].chart.type, "donut");
+  assert.equal(out[2].chart.type, "bar");
+});
+
+test("a series a doughnut cannot draw stays a bar", () => {
+  const slides = [
+    { chart: { type: "bar", labels: ["a", "b"], values: [3, 4] } },
+    { chart: { type: "bar", labels: ["c", "d"], values: [-2, 6] } },
+  ];
+  const out = diversifyChartTypes(slides);
+  // A negative share has no geometry. A repeated shape is the honest answer.
+  assert.equal(out[1].chart.type, "bar");
+});
+
+test("three charts alternate rather than settling on one shape", () => {
+  const slides = [1, 2, 3].map(() => ({ chart: { type: "bar", labels: ["a", "b"], values: [3, 4] } }));
+  const out = diversifyChartTypes(slides);
+  assert.deepEqual(out.map((slide) => slide.chart.type), ["bar", "donut", "bar"]);
 });

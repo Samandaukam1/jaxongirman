@@ -19,7 +19,7 @@ import {
   TEMPLATE_SCHEMA_NAME, type WritableSlot,
 } from "./pptx-writer.ts";
 import {
-  deckHasVisualStatistic, isVisualStatistic, requireVisualStatistic,
+  deckHasVisualStatistic, diversifyChartTypes, isVisualStatistic, requireVisualStatistic,
 } from "./visual-statistic.ts";
 
 type PipelineInput = { jobId: string; presentationId: string; ownerId: string; service: SupabaseClient };
@@ -1405,6 +1405,16 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
         }));
       }
     }
+
+    /**
+     * Alternate the chart shapes before the deck is assembled.
+     *
+     * After every rewrite, so a slide reseated or re-written late is included,
+     * and before `assembleDeck`, which is the last point anything may change
+     * what a slide says.
+     */
+    const diversified = diversifyChartTypes(writtenSlides as never) as typeof writtenSlides;
+    for (let at = 0; at < writtenSlides.length; at += 1) writtenSlides[at] = diversified[at]!;
 
     if (!deckHasVisualStatistic(writtenSlides)) {
       throw new Error("Taqdimot uchun majburiy bar yoki doira diagrammasi yaratilmagan.");
