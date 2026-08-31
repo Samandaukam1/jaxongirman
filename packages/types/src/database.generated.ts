@@ -3378,6 +3378,8 @@ export type Database = {
           author_name: string | null
           created_at: string
           current_version: number
+          design_dna: Json | null
+          design_engine: string | null
           design_id: string | null
           design_version: number | null
           error_message: string | null
@@ -3404,6 +3406,8 @@ export type Database = {
           author_name?: string | null
           created_at?: string
           current_version?: number
+          design_dna?: Json | null
+          design_engine?: string | null
           design_id?: string | null
           design_version?: number | null
           error_message?: string | null
@@ -3430,6 +3434,8 @@ export type Database = {
           author_name?: string | null
           created_at?: string
           current_version?: number
+          design_dna?: Json | null
+          design_engine?: string | null
           design_id?: string | null
           design_version?: number | null
           error_message?: string | null
@@ -4921,6 +4927,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      account_retention_reasons: { Args: { p_user: string }; Returns: string[] }
       admin_adjust_credits: {
         Args: {
           p_amount: number
@@ -5667,6 +5674,14 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      admin_set_design_engine: {
+        Args: {
+          p_generative: boolean
+          p_legacy_restricted: boolean
+          p_reason?: string
+        }
+        Returns: Json
       }
       admin_set_font_family: {
         Args: {
@@ -6617,6 +6632,8 @@ export type Database = {
           author_name: string | null
           created_at: string
           current_version: number
+          design_dna: Json | null
+          design_engine: string | null
           design_id: string | null
           design_version: number | null
           error_message: string | null
@@ -6804,6 +6821,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      purge_account_data: { Args: { p_user: string }; Returns: Json }
       purge_expired_game_sessions: { Args: never; Returns: number }
       purge_expired_presentation_sessions: { Args: never; Returns: number }
       purge_expired_survey_responses: {

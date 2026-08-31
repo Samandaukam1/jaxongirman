@@ -294,6 +294,42 @@ export function briefPrompt(input: {
   ].filter(Boolean).join("\n");
 }
 
+/**
+ * Two worked pages, because rules did not produce them.
+ *
+ * Told in prose to use the page, the model returned single-element slides that
+ * satisfied every rule and looked like nothing: half a real deck came back as
+ * the engine's own plain fallback. An example is the one instruction a model
+ * follows exactly — these show the density, the layering and the mix of
+ * elements a page is supposed to have, in the same schema it must answer in.
+ *
+ * Two, not six: they cost tokens on every slide of every deck, and a third
+ * would teach little the first two do not.
+ */
+const EXAMPLES = JSON.stringify([
+  {
+    background: { kind: "solid", color: "background" },
+    elements: [
+      { type: "text", role: "eyebrow", place: { column: 0, span: 4, row: 0, rows: 1 }, text: "01 — KONTEKST", font: "body", step: "micro", color: "inkMuted" },
+      { type: "text", role: "title", place: { column: 0, span: 7, row: 1, rows: 2 }, text: "Suv taqchilligi qanday paydo bo'ldi", font: "display", step: "title", color: "ink" },
+      { type: "text", role: "body", place: { column: 0, span: 6, row: 3, rows: 4 }, text: "To'rt-besh jumlalik izoh: sabab, mexanizm, natija va aniq misol.", font: "body", step: "body", color: "ink" },
+      { type: "image", place: { column: 7, span: 5, row: 1, rows: 6 }, treatment: "rounded", intent: { query: "Orol dengizi qurigan tubi", orientation: "portrait" } },
+    ],
+  },
+  {
+    background: { kind: "solid", color: "background" },
+    elements: [
+      { type: "text", role: "title", place: { column: 0, span: 12, row: 0, rows: 2 }, text: "Raqamlarda", font: "display", step: "heading", color: "ink" },
+      { type: "card", treatment: "glass", place: { column: 0, span: 4, row: 2, rows: 3 }, children: [
+        { role: "statistic", text: "73%", font: "data", step: "statistic", color: "primary" },
+        { role: "statistic_label", text: "suv qishloq xo'jaligiga ketadi", font: "body", step: "caption", color: "inkMuted" },
+      ] },
+      { type: "chart", place: { column: 4, span: 8, row: 2, rows: 3 }, chart: { kind: "bar", labels: ["1990", "2005", "2020"], values: [64, 41, 23] } },
+      { type: "text", role: "body", place: { column: 0, span: 12, row: 5, rows: 2 }, text: "Diagramma yonidagi izoh: raqam nimani anglatadi va nega muhim.", font: "body", step: "body", color: "ink" },
+    ],
+  },
+]);
+
 export function scenePrompt(input: {
   brief: SemanticBrief;
   topic: string;
@@ -312,6 +348,9 @@ export function scenePrompt(input: {
     "",
     "SLAYDNING MA'NOSI:",
     JSON.stringify(input.brief),
+    "",
+    "NAMUNALAR — shu zichlik va shu aralashmada quring (matnni ko'chirmang):",
+    EXAMPLES,
     "",
     "SETKA:",
     GRID_RULES,

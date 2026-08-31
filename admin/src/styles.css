@@ -1177,3 +1177,17 @@ td small { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; 
 .resolver-verified strong { display: block; font-size: 13px; color: var(--ink); }
 .resolver-verified small { font-size: 11px; color: var(--ink-soft); }
 .resolver-verified li > div { flex: 1; min-width: 0; }
+
+/* Two switches that decide how every deck after them looks. */
+.engine-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 20px; }
+.engine-card { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 20px; text-align: left;
+  border: 1px solid var(--border); border-radius: 14px; background: var(--surface); cursor: pointer; transition: border-color .15s, background .15s; }
+.engine-card:hover:not(:disabled) { border-color: var(--primary); }
+.engine-card:disabled { opacity: .6; cursor: default; }
+.engine-card-on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, var(--surface)); }
+.engine-title { font-weight: 600; }
+.engine-state { font-size: 13px; color: var(--primary); font-weight: 600; }
+.engine-detail { font-size: 13px; color: var(--ink-muted); }
+.engine-count { font-size: 12px; color: var(--ink-muted); margin-top: 4px; }
+.engine-note { margin-top: 16px; color: var(--primary); font-size: 14px; }
+.engine-warning { display: flex; align-items: center; gap: 8px; margin-top: 16px; font-size: 14px; color: var(--ink-muted); }
