@@ -145,6 +145,34 @@ async function openPage(session) {
   return { page, targetId };
 }
 
+/**
+ * Clicks the first element whose text matches, and answers whether it found one.
+ *
+ * react-native-web renders real DOM, so a button is findable by the words on
+ * it — which is also the only stable handle here: the styles are generated and
+ * the tree is deep.
+ */
+async function click({ page }, text) {
+  const { result } = await page("Runtime.evaluate", {
+    returnByValue: true,
+    expression: `(() => {
+      const wanted = ${JSON.stringify(text)};
+      const nodes = [...document.querySelectorAll("div,span,button")];
+      const hit = nodes.reverse().find((node) => node.textContent?.trim() === wanted);
+      if (!hit) return null;
+      const box = hit.getBoundingClientRect();
+      return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    })()`,
+  });
+  const point = result.value;
+  if (!point) return false;
+  for (const type of ["mousePressed", "mouseReleased"]) {
+    await page("Input.dispatchMouseEvent", { type, x: point.x, y: point.y, button: "left", clickCount: 1 });
+  }
+  await new Promise((resolve) => setTimeout(resolve, 900));
+  return true;
+}
+
 async function shoot({ page }, { route, width, height, dark, name, wait = 4200 }) {
   await page("Emulation.setDeviceMetricsOverride", {
     width, height, deviceScaleFactor: 2, mobile: true,
@@ -286,6 +314,30 @@ try {
       console.log(`  ✓ ${path.basename(file)}`);
     }
   }
+
+  // §19: the milestone, which only appears when a rung is actually reached.
+  // The rung is lowered rather than the votes faked — what is under test is the
+  // modal, and a thousand ledger rows would test the ledger.
+  await service.from("marathon_reward_tiers")
+    .update({ votes_required: 3, premium_required: 2 }).eq("campaign_id", campaignId).eq("position", 1);
+  for (const theme of [false, true]) {
+    const file = await shoot(page, {
+      route: "/marathon", width: 390, height: 844, dark: theme,
+      name: `milestone-${theme ? "dark" : "light"}`,
+    });
+    console.log(`  ✓ ${path.basename(file)}`);
+  }
+  // And the second question, which is the whole point of §19: continuing is
+  // irreversible, so it is asked twice.
+  if (await click(page, "50% uchun davom etish")) {
+    const { data } = await page.page("Page.captureScreenshot", { format: "png" });
+    writeFileSync(path.join(OUT, "milestone-confirm.png"), Buffer.from(data, "base64"));
+    console.log("  ✓ milestone-confirm.png");
+  } else {
+    console.log("  · davom etish tugmasi topilmadi");
+  }
+  await service.from("marathon_reward_tiers")
+    .update({ votes_required: 1000, premium_required: 300 }).eq("campaign_id", campaignId).eq("position", 1);
 
   // §32.15: the small screen, where the headers either fit or do not.
   for (const item of routes.slice(0, 5)) {

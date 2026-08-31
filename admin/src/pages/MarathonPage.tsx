@@ -59,6 +59,21 @@ function toLocalInput(value: string): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+/**
+ * A month from now, which is what §31's launch flow assumes a campaign is.
+ *
+ * Outside the component because the clock is not a render input: a lint rule
+ * that objects to reading it during render is right to, and the answer is to
+ * ask for it where the decision is made rather than to silence the rule.
+ */
+function defaultWindow(): { starts_at: string; ends_at: string } {
+  const now = new Date();
+  return {
+    starts_at: now.toISOString(),
+    ends_at: new Date(now.getTime() + 30 * 86_400_000).toISOString(),
+  };
+}
+
 function posterUrl(path: string | null): string | null {
   if (!path) return null;
   return supabase.storage.from("marathon-posters").getPublicUrl(path).data.publicUrl;
@@ -131,8 +146,7 @@ export function MarathonPage() {
       contract_cap: 10_000_000,
       min_free_price: 5000,
       min_premium_price: 15000,
-      starts_at: new Date().toISOString(),
-      ends_at: new Date(Date.now() + 30 * 86_400_000).toISOString(),
+      ...defaultWindow(),
     });
     setTiers(row && row.tiers.length > 0 ? row.tiers : DEFAULT_TIERS);
     setMessage(null);

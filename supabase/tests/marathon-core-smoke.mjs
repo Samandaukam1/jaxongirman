@@ -523,6 +523,44 @@ try {
     .upload(`${campaignId}/mine-${stamp}.txt`, new Blob(["yo‘q"], { type: "text/plain" }));
   check(Boolean(intruder.error), "but an ordinary account cannot put anything there");
   await service.storage.from("marathon-posters").remove([posterPath]);
+  console.log("\nSaqlanish qonuni:");
+  // §33: votes are not created. Every row in the ledger is either one of an
+  // account's two direct votes or a transfer of somebody else's — so the total
+  // can never exceed twice the number of accounts that have ever held an
+  // allowance in this campaign, and the direct half can never exceed two per
+  // account.
+  const allRows = await service.from("marathon_vote_ledger")
+    .select("voter_id,kind,source").eq("campaign_id", campaignId);
+  const ledger = allRows.data ?? [];
+  const voters = new Set(ledger.map((row) => row.voter_id));
+  const direct = ledger.filter((row) => row.source === "direct");
+  const perVoter = new Map();
+  for (const row of direct) {
+    const key = `${row.voter_id}:${row.kind}`;
+    perVoter.set(key, (perVoter.get(key) ?? 0) + 1);
+  }
+  check([...perVoter.values()].every((count) => count === 1),
+    "nobody cast the same kind of direct vote twice");
+  check(direct.length <= voters.size * 2,
+    `direct votes never exceed the allowance that produced them (${direct.length} ≤ ${voters.size * 2})`);
+  // The buyer's side of it: what a completed sale put in the ledger is exactly
+  // what was sold, no more. (The rows inserted directly above, to prove the
+  // unique index does not bind a transfer, have no sale behind them and are
+  // deliberately not counted here.)
+  const boughtRows = await service.from("marathon_vote_ledger")
+    .select("id", { count: "exact", head: true })
+    .eq("campaign_id", campaignId).eq("candidate_id", people.caster.id).eq("source", "marketplace");
+  const sold = await service.from("marathon_vote_sales")
+    .select("quantity").eq("campaign_id", campaignId).eq("buyer_id", people.caster.id).eq("status", "released");
+  const soldTotal = (sold.data ?? []).reduce((total, row) => total + Number(row.quantity), 0);
+  check((boughtRows.count ?? 0) === soldTotal,
+    `a completed sale puts exactly what was sold into the ledger (${boughtRows.count} = ${soldTotal})`);
+
+  const escrowed = await service.from("marathon_vote_sales")
+    .select("id", { count: "exact", head: true }).eq("campaign_id", campaignId).eq("status", "escrow");
+  check((escrowed.count ?? 0) === 0,
+    `no sale is left holding votes nobody paid for (${escrowed.count ?? 0})`);
+
   console.log("\nAdmin boshqaruvi:");
   const adminEntry = { email: `mar-admin-${randomUUID()}@example.test`, username: `adm${stamp}` };
   await makeUser(adminEntry);

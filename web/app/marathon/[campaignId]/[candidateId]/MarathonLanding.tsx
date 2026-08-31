@@ -120,7 +120,9 @@ export function MarathonLanding({ campaignId, candidateId }: { campaignId: strin
             <>
               <div className="marathon-person">
                 {candidate?.avatar_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- a Supabase avatar URL, not a bundled asset
+                  /* A plain <img>: this is a Supabase URL for one person's own
+                     picture, not a bundled asset, and next/image would want a
+                     configured remote pattern for a host that is already ours. */
                   <img className="marathon-avatar" src={candidate.avatar_url} alt="" />
                 ) : (
                   <span className="marathon-avatar is-initials">{candidate ? initialsOf(candidate) : "…"}</span>
