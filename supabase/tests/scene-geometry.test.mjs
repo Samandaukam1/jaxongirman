@@ -187,3 +187,13 @@ test("an empty card is dropped without taking the slide with it", () => {
   assert.equal(scene.elements.length, 1);
   assert.equal(scene.elements[0].type, "text");
 });
+
+test("a model's leading spaces are not an indent", () => {
+  const { scene } = readScene({
+    background: { kind: "solid", color: "background" },
+    elements: [{ ...title(), text: "    Amir Temur davlatining boshqaruv tizimi" }],
+  });
+  // Renderers preserve whitespace, so this arrived with its first line pushed
+  // right and the rest flush — a broken box rather than an indent.
+  assert.equal(scene.elements[0].text, "Amir Temur davlatining boshqaruv tizimi");
+});

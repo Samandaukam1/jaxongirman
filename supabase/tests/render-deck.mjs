@@ -128,7 +128,7 @@ for (const slide of slides.data ?? []) {
   execFileSync(CHROME, [
     "--headless", "--disable-gpu", "--hide-scrollbars", "--no-sandbox",
     `--screenshot=${shot}`,
-    `--window-size=${WIDTH * SCALE},${Math.round(HEIGHT * SCALE)}`,
+    `--window-size=${WIDTH},${Math.round(HEIGHT)}`,
     `--force-device-scale-factor=${SCALE}`,
     `file://${page}`,
   ], { stdio: "ignore", timeout: 60_000 });

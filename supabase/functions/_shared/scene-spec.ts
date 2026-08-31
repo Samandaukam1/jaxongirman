@@ -292,7 +292,14 @@ function readElement(input: unknown, path: string, problems: SceneProblem[]): Sc
        * the first real run. The type step is the same decision under another
        * name, so it answers for it.
        */
-      const text = typeof value.text === "string" ? value.text : "";
+      /**
+       * Trimmed, because a model's leading spaces are not a design decision.
+       *
+       * Renderers preserve whitespace, so "   Amir Temur…" arrived with its
+       * first line indented and the rest flush — which reads as a broken box
+       * rather than as an indent.
+       */
+      const text = typeof value.text === "string" ? value.text.replace(/^[ \t]+/gm, "").trim() : "";
       // Said before anything else about the element: an empty box is empty
       // whatever role it claims, and "no text" is the useful message.
       /**

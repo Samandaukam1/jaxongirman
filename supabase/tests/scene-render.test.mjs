@@ -202,3 +202,29 @@ test("a gradient card is filled the way a gradient card is drawn", () => {
   assert.ok(Array.isArray(card.style.gradientStops));
   assert.equal(card.style.gradient, undefined);
 });
+
+test("type over a photograph is white, whoever put the photograph there", () => {
+  // The model supplies the cover image itself more often than not, and the
+  // palette's ink was chosen against a ground this page does not have.
+  const scene = read({
+    purpose: "cover",
+    background: { kind: "solid", color: "background" },
+    elements: [
+      { type: "image", place: { column: 0, span: 12, row: 0, rows: 8, bleed: true }, treatment: "full_bleed", intent: { query: "x", orientation: "landscape" }, overlay: "scrim_bottom" },
+      { type: "text", role: "title", place: { column: 0, span: 9, row: 5, rows: 2 }, typography: { font: "display", step: "display", color: "ink" }, text: "Sarlavha" },
+    ],
+  });
+  const drawn = renderScene(scene, dna);
+  const title = drawn.elements.find((row) => row.content.role === "title");
+  assert.equal(title.style.color, dna.colors.onImage);
+});
+
+test("type on an ordinary page keeps the palette's ink", () => {
+  const scene = read({
+    purpose: "p",
+    background: { kind: "solid", color: "background" },
+    elements: [{ type: "text", role: "title", place: { column: 0, span: 9, row: 1, rows: 2 }, typography: { font: "display", step: "title", color: "ink" }, text: "Sarlavha" }],
+  });
+  const title = renderScene(scene, dna).elements[0];
+  assert.equal(title.style.color, dna.colors.ink);
+});

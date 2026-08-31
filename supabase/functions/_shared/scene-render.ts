@@ -153,8 +153,22 @@ export function renderScene(
     switch (element.type) {
       case "text": {
         const size = TYPE_SCALE[element.typography.step];
+        /**
+         * Over a photograph, the ink is white.
+         *
+         * The palette's colours were chosen against the deck's ground, and a
+         * page with a picture behind it does not have that ground. A cover
+         * whose photograph the model supplied itself kept the dark ink and
+         * arrived as black type on a dark painting — legible in the row data
+         * and unreadable on the slide.
+         */
+        const overPicture = scene.elements.some((other) =>
+          other.type === "image" && other.place.bleed) || scene.background.kind === "image";
+        const ink = overPicture && element.typography.color !== "onImage"
+          ? "onImage" as const
+          : element.typography.color;
         push(entry, inCard ? LAYER.child : LAYER.text, {
-          color: color(element.typography.color),
+          color: color(ink),
           fontSize: scale(size),
           lineHeight: scale(size * (element.typography.lineHeight ?? lineHeightFor(element.typography.step))),
           textAlign: element.typography.align === "center" ? "center" : element.typography.align === "end" ? "right" : "left",
