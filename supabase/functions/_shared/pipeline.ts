@@ -22,6 +22,7 @@ import {
   deckHasVisualStatistic, diversifyChartTypes, isVisualStatistic, requireVisualStatistic,
 } from "./visual-statistic.ts";
 import { composeGenerativeDeck, generativeEnabled } from "./scene-generation.ts";
+import { deckPagesFrom } from "./scene-rows.ts";
 
 type PipelineInput = { jobId: string; presentationId: string; ownerId: string; service: SupabaseClient };
 /** The model supplies narrative direction only — never colours or typography. */
@@ -2194,28 +2195,14 @@ async function runGenerative(params: {
         topic: presentation.topic,
         author: presentation.author_name,
         teacher: presentation.teacher_name,
-        /**
-         * The whole deck, not only its middle.
-         *
-         * The outline plans the content pages; the cover, the agenda, the
-         * bibliography and the closing page were added around them by the
-         * layout path this engine replaces. Composing them here too is the
-         * point — a cover designed for its own subject is most of what an
-         * author sees first, and the first run of this engine produced a deck
-         * with neither cover nor conclusion because nobody asked it to.
-         */
-        slides: [
-          { title: presentation.topic, research: null, kind: "cover" as const },
-          { title: AGENDA_TITLE, research: outline.slides.map((slide) => slide.title).join("; ") },
-          ...outline.slides.map((slide) => ({
-            title: slide.title,
-            // The whole research brief for every page: it is one document and
-            // the model is choosing which parts of it this page is about.
-            research: params.research || null,
-          })),
-          { title: REFERENCES_TITLE, research: params.research || null },
-          { title: THANKS_TITLE, research: null, kind: "closing" as const },
-        ],
+        slides: deckPagesFrom({
+          topic: presentation.topic,
+          outlineTitles: outline.slides.map((slide) => slide.title),
+          research: params.research || null,
+          agendaTitle: AGENDA_TITLE,
+          referencesTitle: REFERENCES_TITLE,
+          thanksTitle: THANKS_TITLE,
+        }),
         onUsage: (usage, model) => {
           const price = params.pricing.for(model);
           params.addCost(usageCost(usage, price));

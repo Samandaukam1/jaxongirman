@@ -80,3 +80,22 @@ test("validation refuses to score a scene it could not read", () => {
   assert.equal(validation.report, null);
   assert.ok(validation.problems.length > 0);
 });
+
+test("a model that refuses once costs one attempt, not the deck", async () => {
+  let calls = 0;
+  const result = await runSceneCycle(async () => {
+    calls += 1;
+    if (calls === 1) throw new Error("Gemini returned unparseable JSON");
+    return sound();
+  });
+  assert.equal(result.accepted, true);
+  assert.equal(result.attempts, 2);
+  assert.match(result.history[0].faults[0], /unparseable/);
+});
+
+test("a model that refuses every time still returns something to fall back from", async () => {
+  const result = await runSceneCycle(async () => { throw new Error("refused"); }, { maxAttempts: 2 });
+  assert.equal(result.accepted, false);
+  assert.equal(result.scene, null, "the caller decides what to do with nothing");
+  assert.equal(result.attempts, 2);
+});

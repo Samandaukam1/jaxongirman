@@ -74,3 +74,44 @@ export function deckToRows(deck: GeneratedDeck, input: { ownerId: string; presen
 
   return { slideRows, elementRows };
 }
+
+/**
+ * The pages a deck is made of, assembled from an outline.
+ *
+ * Pure, and here rather than in the pipeline, because this is the shape that
+ * has twice been assembled by hand and twice lost a field on the way — the
+ * author, the teacher, and which page was the cover. Edge functions are not
+ * typechecked by `verify`; this is, and the test below holds it.
+ *
+ * The outline plans the body. The cover, the agenda, the bibliography and the
+ * closing page are the deck's own furniture, and the engine composes them too
+ * — a cover designed for its subject is most of what an author sees first.
+ */
+export type DeckPage = {
+  title: string;
+  research: string | null;
+  kind: "cover" | "content" | "closing";
+};
+
+export function deckPagesFrom(input: {
+  topic: string;
+  outlineTitles: readonly string[];
+  research: string | null;
+  agendaTitle: string;
+  referencesTitle: string;
+  thanksTitle: string;
+}): DeckPage[] {
+  return [
+    { title: input.topic, research: null, kind: "cover" },
+    { title: input.agendaTitle, research: input.outlineTitles.join("; "), kind: "content" },
+    ...input.outlineTitles.map((title) => ({
+      title,
+      // The whole research brief for every page: it is one document and the
+      // model is choosing which parts of it this page is about.
+      research: input.research || null,
+      kind: "content" as const,
+    })),
+    { title: input.referencesTitle, research: input.research || null, kind: "content" },
+    { title: input.thanksTitle, research: null, kind: "closing" },
+  ];
+}

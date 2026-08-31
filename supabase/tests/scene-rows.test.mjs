@@ -7,7 +7,7 @@ const edge = buildEdgeModules();
 const { readScene } = await import(`${edge}/scene-spec.js`);
 const { buildDNA } = await import(`${edge}/scene-dna.js`);
 const { renderScene } = await import(`${edge}/scene-render.js`);
-const { deckToRows } = await import(`${edge}/scene-rows.js`);
+const { deckToRows, deckPagesFrom } = await import(`${edge}/scene-rows.js`);
 
 const dna = buildDNA(
   { mood: "editorial", ground: "near_black", brand: "#5A78F0", cornerLanguage: "soft", gradients: true },
@@ -93,4 +93,37 @@ test("a slide the engine could not render is skipped rather than stored empty", 
   const { slideRows, elementRows } = deckToRows(broken, { ownerId: "u", presentationId: "p", newId: () => "id" });
   assert.deepEqual(slideRows, []);
   assert.deepEqual(elementRows, []);
+});
+
+test("a deck is its outline plus its own furniture", () => {
+  const pages = deckPagesFrom({
+    topic: "Suv resurslari",
+    outlineTitles: ["Kirish", "Holat", "Yechim"],
+    research: "manba matni",
+    agendaTitle: "Mavzular rejasi",
+    referencesTitle: "Foydalanilgan adabiyotlar",
+    thanksTitle: "Rahmat",
+  });
+  assert.equal(pages.length, 6, "cover, agenda, three body pages, references, closing");
+  assert.deepEqual(pages.map((page) => page.kind), ["cover", "content", "content", "content", "content", "closing"]);
+  assert.equal(pages[0].title, "Suv resurslari");
+  assert.equal(pages[0].kind, "cover");
+  assert.equal(pages.at(-1).kind, "closing");
+});
+
+test("the agenda is told what the deck contains", () => {
+  const pages = deckPagesFrom({
+    topic: "T", outlineTitles: ["Bir", "Ikki"], research: null,
+    agendaTitle: "Reja", referencesTitle: "Manbalar", thanksTitle: "Rahmat",
+  });
+  assert.match(pages[1].research, /Bir; Ikki/);
+});
+
+test("body pages carry the research and the cover does not", () => {
+  const pages = deckPagesFrom({
+    topic: "T", outlineTitles: ["Bir"], research: "manba",
+    agendaTitle: "Reja", referencesTitle: "Manbalar", thanksTitle: "Rahmat",
+  });
+  assert.equal(pages[0].research, null, "a cover is about the whole deck, not a source");
+  assert.equal(pages[2].research, "manba");
 });

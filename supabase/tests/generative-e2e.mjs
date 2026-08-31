@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 
 import { createClient } from "@supabase/supabase-js";
 
+import { buildEdgeModules } from "../scripts/build-edge.mjs";
+
 /**
  * A deck a customer would get, made by the generative engine.
  *
@@ -26,6 +28,8 @@ if (!url || !serviceKey || !anonKey) {
   console.error("SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and an anon key are required.");
   process.exit(1);
 }
+
+const { unzip } = await import(`${buildEdgeModules()}/unzip.js`);
 
 const service = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
 let failures = 0;
@@ -187,6 +191,38 @@ try {
 
   const exported = await user.functions.invoke("export-presentation", { body: { presentationId, format: "pptx" } });
   check(!exported.error, `the deck exports to PowerPoint${exported.error ? ` — ${exported.error.message}` : ""}`);
+
+  /**
+   * What is actually in the file.
+   *
+   * "The export succeeded" is a claim about a job row. A deck whose pictures
+   * were not embedded and whose words were rasterised would satisfy it and be
+   * useless to the person who opens it in PowerPoint.
+   */
+  const exportJobId = exported.data?.exportJobId ?? exported.data?.id;
+  let exportJob = null;
+  for (let attempt = 0; attempt < 90 && exportJobId; attempt += 1) {
+    const result = await service.from("export_jobs").select("status,storage_path,error_message").eq("id", exportJobId).maybeSingle();
+    if (result.error) throw result.error;
+    exportJob = result.data;
+    if (exportJob && !["queued", "running"].includes(exportJob.status)) break;
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  if (exportJob?.status === "succeeded" && exportJob.storage_path) {
+    const file = await service.storage.from("exports").download(exportJob.storage_path);
+    if (!file.error && file.data) {
+      const parts = await unzip(new Uint8Array(await file.data.arrayBuffer()));
+      const decoder = new TextDecoder();
+      const media = [...parts].filter(([name]) => /^ppt\/media\//i.test(name));
+      const slideXml = [...parts].filter(([name]) => /^ppt\/slides\/slide\d+\.xml$/i.test(name));
+      const words = slideXml.map(([, bytes]) => decoder.decode(bytes)).join("");
+      check(media.length > 0, `the package embeds the pictures (${media.length})`);
+      check(slideXml.length === (slides.data ?? []).length, `one slide part per slide (${slideXml.length})`);
+      // Editable text, not a picture of text: the words are in the XML.
+      check(/<a:t>/.test(words), "and the words are editable text rather than an image");
+      await service.storage.from("exports").remove([exportJob.storage_path]);
+    }
+  }
 
   const [wallet2, stuck] = await Promise.all([
     service.from("credit_wallets").select("reserved").eq("user_id", userId).maybeSingle(),

@@ -128,14 +128,28 @@ export async function composeGenerativeDeck(input: {
   presentationId: string;
   topic: string;
   language?: string;
-  slides: Array<{ title: string; research?: string | null }>;
+  /** Whose deck it is, for the cover's own lines. */
+  author?: string | null;
+  teacher?: string | null;
+  slides: Array<{ title: string; research?: string | null; kind?: "cover" | "content" | "closing" }>;
   onUsage?: (usage: { input_tokens?: number; output_tokens?: number }, model: string) => void;
   beat?: (note: string) => void;
 }): Promise<ComposedDeck> {
-  const deck = await generateDeck(
-    dependencies(input),
-    { topic: input.topic, language: input.language, slides: input.slides },
-  );
+  /**
+   * Every field forwarded, by name.
+   *
+   * Listing three of them dropped the author, the teacher and which page was
+   * the cover — passed in by the caller, accepted by no type, and silently
+   * gone. Edge functions are not typechecked by `verify`, so this seam has to
+   * be written so there is nothing to forget.
+   */
+  const deck = await generateDeck(dependencies(input), {
+    topic: input.topic,
+    language: input.language,
+    author: input.author ?? null,
+    teacher: input.teacher ?? null,
+    slides: input.slides,
+  });
   const { slideRows, elementRows } = deckToRows(deck, {
     ownerId: input.ownerId,
     presentationId: input.presentationId,

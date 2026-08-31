@@ -79,7 +79,26 @@ export async function runSceneCycle(
   const history: CycleResult["history"] = [];
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const raw = await generate(best);
+    /**
+     * A refused or malformed answer is one attempt, not the end of the deck.
+     *
+     * Gemini returned unparseable JSON for a single slide and the exception
+     * travelled all the way out, failing a whole generation that was otherwise
+     * finished. This loop exists precisely so one bad answer costs one attempt
+     * — and if every attempt fails, the caller still gets a scene built from
+     * the brief rather than nothing.
+     */
+    let raw: unknown;
+    try {
+      raw = await generate(best);
+    } catch (failure) {
+      history.push({
+        attempt,
+        score: 0,
+        faults: [failure instanceof Error ? failure.message.slice(0, 120) : "model_refused"],
+      });
+      continue;
+    }
     const validation = validateScene(raw, options.language, options.previousSignature ?? null);
 
     if (!validation.scene || !validation.report) {
