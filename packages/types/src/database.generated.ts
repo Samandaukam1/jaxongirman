@@ -1766,6 +1766,147 @@ export type Database = {
           },
         ]
       }
+      marathon_campaigns: {
+        Row: {
+          contract_cap: number
+          created_at: string
+          created_by: string | null
+          description: string
+          ends_at: string
+          id: string
+          poster_path: string | null
+          rules: string
+          starts_at: string
+          status: Database["public"]["Enums"]["marathon_status"]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          contract_cap?: number
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          ends_at: string
+          id?: string
+          poster_path?: string | null
+          rules?: string
+          starts_at: string
+          status?: Database["public"]["Enums"]["marathon_status"]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          contract_cap?: number
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          ends_at?: string
+          id?: string
+          poster_path?: string | null
+          rules?: string
+          starts_at?: string
+          status?: Database["public"]["Enums"]["marathon_status"]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      marathon_participants: {
+        Row: {
+          campaign_id: string
+          joined_at: string
+          user_id: string
+        }
+        Insert: {
+          campaign_id: string
+          joined_at?: string
+          user_id: string
+        }
+        Update: {
+          campaign_id?: string
+          joined_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marathon_participants_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "marathon_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marathon_reward_tiers: {
+        Row: {
+          campaign_id: string
+          position: number
+          premium_required: number
+          reward_percent: number
+          votes_required: number
+        }
+        Insert: {
+          campaign_id: string
+          position: number
+          premium_required: number
+          reward_percent: number
+          votes_required: number
+        }
+        Update: {
+          campaign_id?: string
+          position?: number
+          premium_required?: number
+          reward_percent?: number
+          votes_required?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marathon_reward_tiers_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "marathon_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marathon_vote_ledger: {
+        Row: {
+          campaign_id: string
+          candidate_id: string
+          created_at: string
+          id: string
+          kind: Database["public"]["Enums"]["marathon_vote_kind"]
+          source: Database["public"]["Enums"]["marathon_vote_source"]
+          voter_id: string | null
+        }
+        Insert: {
+          campaign_id: string
+          candidate_id: string
+          created_at?: string
+          id?: string
+          kind: Database["public"]["Enums"]["marathon_vote_kind"]
+          source?: Database["public"]["Enums"]["marathon_vote_source"]
+          voter_id?: string | null
+        }
+        Update: {
+          campaign_id?: string
+          candidate_id?: string
+          created_at?: string
+          id?: string
+          kind?: Database["public"]["Enums"]["marathon_vote_kind"]
+          source?: Database["public"]["Enums"]["marathon_vote_source"]
+          voter_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marathon_vote_ledger_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "marathon_campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       marketplace_categories: {
         Row: {
           code: string
@@ -5716,6 +5857,10 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_set_student_marathon: {
+        Args: { p_enabled: boolean; p_reason?: string }
+        Returns: Json
+      }
       admin_set_subscription_plans: {
         Args: { p_currency?: string; p_plans: Json; p_reason?: string }
         Returns: Json
@@ -6214,6 +6359,25 @@ export type Database = {
       jelement_search: {
         Args: { p_limit?: number; p_query: string; p_slide_role?: string }
         Returns: Json
+      }
+      marathon_cast_vote: {
+        Args: {
+          p_candidate_id: string
+          p_kind: Database["public"]["Enums"]["marathon_vote_kind"]
+        }
+        Returns: Json
+      }
+      marathon_my_votes: { Args: never; Returns: Json }
+      marathon_search_candidates: {
+        Args: { p_limit?: number; p_offset?: number; p_query: string }
+        Returns: {
+          avatar_url: string
+          full_name: string
+          premium_votes: number
+          total_votes: number
+          user_id: string
+          username: string
+        }[]
       }
       mark_notifications_read: { Args: { p_id?: string }; Returns: number }
       marketplace_attach_file: {
@@ -7123,6 +7287,9 @@ export type Database = {
       jelement_status: "draft" | "published" | "archived"
       job_status: "queued" | "running" | "succeeded" | "failed" | "cancelled"
       jslayd_design_status: "draft" | "published" | "archived"
+      marathon_status: "draft" | "active" | "ended"
+      marathon_vote_kind: "free" | "premium"
+      marathon_vote_source: "direct" | "marketplace"
       marketplace_file_kind: "main" | "study_guide" | "preview"
       marketplace_product_status:
         | "draft"
@@ -7160,6 +7327,7 @@ export type Database = {
         | "game_result"
         | "order_paid"
         | "order_failed"
+        | "marathon_vote"
       order_purpose:
         | "subscription"
         | "jcoin"
@@ -7455,6 +7623,9 @@ export const Constants = {
       jelement_status: ["draft", "published", "archived"],
       job_status: ["queued", "running", "succeeded", "failed", "cancelled"],
       jslayd_design_status: ["draft", "published", "archived"],
+      marathon_status: ["draft", "active", "ended"],
+      marathon_vote_kind: ["free", "premium"],
+      marathon_vote_source: ["direct", "marketplace"],
       marketplace_file_kind: ["main", "study_guide", "preview"],
       marketplace_product_status: [
         "draft",
@@ -7494,6 +7665,7 @@ export const Constants = {
         "game_result",
         "order_paid",
         "order_failed",
+        "marathon_vote",
       ],
       order_purpose: [
         "subscription",
