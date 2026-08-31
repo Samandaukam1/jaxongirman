@@ -113,8 +113,8 @@ export default function GamesScreen() {
       >
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.eyebrow}>JAXONGIRMAN</Text>
-            <Text style={styles.title}>O‘yingoh</Text>
+            <Text numberOfLines={1} style={styles.eyebrow}>JAXONGIRMAN</Text>
+            <Text numberOfLines={1} style={styles.title}>O‘yingoh</Text>
           </View>
           <View style={styles.headerActions}>
             <MarathonVoteButton variant="compact" />

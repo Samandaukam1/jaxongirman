@@ -271,8 +271,8 @@ export default function ProjectsScreen() {
       <Animated.View style={[styles.header, shell]}>
         <View style={styles.titleRow}>
           <View style={styles.titleCopy}>
-            <Text style={styles.eyebrow}>JAXONGIRMAN</Text>
-            <Text style={styles.brand}>Loyihalar</Text>
+            <Text numberOfLines={1} style={styles.eyebrow}>JAXONGIRMAN</Text>
+            <Text numberOfLines={1} style={styles.brand}>Loyihalar</Text>
           </View>
           <View style={styles.titleActions}>
             <MarathonVoteButton variant="compact" />

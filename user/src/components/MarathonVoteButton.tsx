@@ -2,7 +2,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { Vote } from "lucide-react-native";
 import { useEffect } from "react";
-import { Text, View } from "react-native";
+import { Text, useWindowDimensions, View } from "react-native";
 import Animated, {
   cancelAnimation, Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming,
 } from "react-native-reanimated";
@@ -32,10 +32,21 @@ type Props = {
   variant?: "full" | "compact";
 };
 
+/**
+ * Below this the label is dropped whatever the caller asked for.
+ *
+ * Measured rather than guessed: on a 320-point screen the home header holds an
+ * avatar, a greeting, this button and the bell, and the full-width version
+ * takes so much of it that "Salom, Dilnoza" is cut to "S…". A person who
+ * cannot read their own name is worse off than one who sees an icon.
+ */
+const LABEL_NEEDS = 400;
+
 const AnimatedGradient = Animated.createAnimatedComponent(LinearGradient);
 
 export function MarathonVoteButton({ variant = "full" }: Props) {
   const enabled = useMarathonEnabled();
+  const { width } = useWindowDimensions();
   const styles = useStyles();
   const router = useRouter();
   const press = usePressScale();
@@ -64,6 +75,9 @@ export function MarathonVoteButton({ variant = "full" }: Props) {
 
   if (!enabled) return null;
 
+  // The caller says what it would like; the screen decides what fits.
+  const showLabel = variant === "full" && width >= LABEL_NEEDS;
+
   return (
     <View style={styles.wrap}>
       {/* The aura sits behind the pill and never intercepts a touch. */}
@@ -73,7 +87,7 @@ export function MarathonVoteButton({ variant = "full" }: Props) {
           colors={gradients.primary}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={[styles.pill, variant === "compact" && styles.pillCompact]}
+          style={[styles.pill, !showLabel && styles.pillCompact]}
         >
           <Animated.View
             {...press.handlers}
@@ -83,7 +97,7 @@ export function MarathonVoteButton({ variant = "full" }: Props) {
             style={styles.inner}
           >
             <Vote color={brandInk.strong} size={icon.sm} strokeWidth={icon.strokeBold} />
-            {variant === "full" ? <Text style={styles.label}>Ovoz berish</Text> : null}
+            {showLabel ? <Text style={styles.label}>Ovoz berish</Text> : null}
           </Animated.View>
         </AnimatedGradient>
       </Animated.View>

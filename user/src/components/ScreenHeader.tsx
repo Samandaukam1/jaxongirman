@@ -36,7 +36,10 @@ export function ScreenHeader({ title, subtitle, variant = "back", onLeave, actio
         <Text numberOfLines={1} style={styles.title}>{title}</Text>
         {subtitle ? <Text numberOfLines={1} style={styles.subtitle}>{subtitle}</Text> : null}
       </View>
-      {action ?? <View style={styles.button} />}
+      {/* A spacer, not a button: it balances the back button so the title
+          stays centred on the same grid, and it is invisible because an empty
+          bordered circle reads as a control that does nothing. */}
+      {action ?? <View style={styles.spacer} />}
     </View>
   );
 }
@@ -51,6 +54,7 @@ const useStyles = makeStyles((colors) => ({
     paddingBottom: spacing.md,
   },
   button: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  spacer: { width: 42, height: 42 },
   copy: { flex: 1 },
   title: { ...typography.heading, color: colors.ink },
   subtitle: { ...typography.caption, color: colors.inkMuted, marginTop: 1 },
