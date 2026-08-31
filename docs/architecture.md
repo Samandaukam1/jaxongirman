@@ -73,3 +73,31 @@ The admin flow is email/password auth → server role check → operational dash
 ## Release synchronization
 
 Database migrations are the source of truth. After schema changes, regenerate `packages/types/src/database.generated.ts`, typecheck both clients, test RLS/credit behavior, and deploy functions built against the same migration set. Remote deployment is forward-only.
+
+## Talabalar marafoni
+
+The marathon is a whole feature that ships switched off. `student_marathon_enabled`
+governs every user-facing surface — the vote button on four screens, the home
+poster, the profile section, the vote search, the vote mutation and the market —
+while an administrator writes campaigns, uploads posters, prices floors and
+rehearses the reward ladder behind it. Turning it on is one button in the console
+with one confirmation, and it is the only thing that turns it on: no migration,
+no deploy and no test may.
+
+The launch procedure is the console's own order: create the campaign, upload a
+2.35:1 poster (cropped in the browser, previewed at desktop and mobile widths),
+check the wording, set a 30-day window, check the ladder, decide whether the vote
+market opens with it, then press **Marafonni ishga tushirish**. The function
+refuses a campaign with no poster, no ladder, a date already past, or another
+marathon already running, and writes the launch to the audit log. Ending one
+takes the marathon off the app the same way.
+
+Money reuses the order engine rather than adding a second payment path: a vote
+purchase is an order with its own purpose, its own 12/12 commission scope, and a
+fulfilment branch that transfers the votes. What it cannot reuse is the design
+marketplace's settlement — those tables are bound to products and purchases — so
+marathon payouts are reconciled from `marathon_vote_sales` in the console.
+
+Countdowns are drawn against the server's clock. Every campaign read carries
+`now()`, the client measures its own error once per load and ticks from there, so
+a phone whose date is wrong is not told the marathon closed.

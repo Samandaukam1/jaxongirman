@@ -126,3 +126,70 @@ joins during question three ranks on the podium screen but was not priced into
 the hold, so they cannot enlarge it. Every movement carries an idempotency key
 derived from the session id, which is why a retried settlement is a no-op rather
 than a second payout.
+
+## Talabalar marafoni
+
+- Campaign: `marathon_campaigns`, `marathon_reward_tiers`, `marathon_participants`
+- Votes: `marathon_vote_ledger` (append-only), `marathon_milestone_decisions`
+- Market: `marathon_vote_listings`, `marathon_vote_sales`
+- Switches: `app_settings.student_marathon_enabled`,
+  `app_settings['marathon.vote_marketplace_enabled']` — both `false`, both
+  `public_read`, because the app has to read the switch it obeys
+
+Every account holds one free and one premium vote per campaign. There is no
+balance column: what is left is the allowance minus what the ledger says was
+spent, minus what is currently listed for sale. `marathon_one_direct_vote_per_kind`
+is the whole of the "one vote each" rule — a partial unique index over
+`source = 'direct'`, so a marketplace transfer, which is somebody else's
+allowance changing hands, is not bound by it.
+
+The ledger is append-only by trigger. A vote cannot be edited or deleted, which
+is what makes a reward decision months later checkable against the counts it was
+made on — `marathon_milestone_decisions` stores those counts rather than
+recomputing them.
+
+### Anonymity
+
+The marketplace is anonymous between users, and that is a property of what the
+schema *returns*, not of what a screen chooses to draw:
+
+- `marathon_vote_listings` has no read policy for anybody but its seller. Buyers
+  see the market through `marathon_vote_market()`, which cannot return a seller.
+- `marathon_vote_sales` has no read policy at all. Each side sees its own half
+  through a function that returns no counterpart.
+- A vote order carries **no** `seller_id`. `orders` is readable by the person it
+  belongs to, so a seller column on it would tell the buyer exactly what §23
+  says they may not know. The pairing lives on the sale row instead, which is
+  also why the order records only the buyer's side and the seller's 12% is
+  snapshotted on the sale.
+- `marathon_vote_ledger` grants SELECT on `voter_id = auth.uid()` only, so a
+  candidate cannot read who voted for them by any route.
+
+An operator can still see both sides: `admin_marathon_payouts()` names sellers,
+because money has to be reconciled to a person.
+
+### Escrow
+
+```mermaid
+stateDiagram-v2
+  [*] --> escrow: marathon_buy_votes (stock leaves the listing)
+  escrow --> released: order paid → marathon_fulfil_vote_sale
+  escrow --> refunded: order cancelled, expired, failed or refunded
+  released --> [*]: admin_settle_marathon_sales stamps settled_at
+  refunded --> [*]: stock returns to the listing
+```
+
+The votes leave the listing when payment starts and reach the ledger only when
+it lands — otherwise two buyers pay for the same vote and one of them is
+refunded a thing they thought they owned. The return path is a trigger on
+`orders`, not a line in three functions, because an order can end in four
+different states.
+
+### Conservation
+
+Votes are never created. Every ledger row is either one of an account's two
+direct votes (enforced by the unique index) or a transfer of somebody's
+allowance through a sale that checked their holdings first. `test:marathon`
+asserts this end to end: no account casts the same kind twice, direct votes
+never exceed the allowance behind them, a completed sale puts exactly what was
+sold into the ledger, and no sale is left holding votes nobody paid for.
