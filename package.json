@@ -32,6 +32,7 @@
     "test:photos": "node supabase/tests/photo-provider-smoke.mjs",
     "test:wikimedia": "node --test supabase/tests/wikimedia-live.test.mjs",
     "test:resolver": "node supabase/tests/image-resolver-smoke.mjs",
+    "test:marathon": "node supabase/tests/marathon-core-smoke.mjs",
     "test:autoimages": "node supabase/tests/auto-image-e2e.mjs",
     "test:textfill": "node supabase/tests/text-fill-e2e.mjs",
     "test:telegram": "node --test supabase/tests/telegram-image-bot.test.mjs",
