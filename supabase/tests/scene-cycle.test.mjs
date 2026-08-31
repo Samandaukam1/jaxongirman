@@ -11,7 +11,7 @@ const sound = () => ({
   background: { kind: "solid", color: "background" },
   elements: [
     { type: "text", role: "title", place: { column: 0, span: 7, row: 1, rows: 2 }, typography: { font: "display", step: "title", color: "ink" }, text: "Sarlavha" },
-    { type: "text", role: "body", place: { column: 0, span: 6, row: 3, rows: 4 }, typography: { font: "body", step: "body", color: "ink" }, text: "Mazmunli jumla. ".repeat(10) },
+    { type: "text", role: "body", place: { column: 0, span: 6, row: 3, rows: 4 }, typography: { font: "body", step: "body", color: "ink" }, text: "Mazmunli jumla bu yerda yozilgan. ".repeat(13) },
     { type: "image", place: { column: 7, span: 5, row: 1, rows: 6 }, treatment: "rounded", intent: { query: "Orol", orientation: "portrait" } },
   ],
 });

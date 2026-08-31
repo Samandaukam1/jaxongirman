@@ -299,7 +299,19 @@ export async function generateDeck(deps: Deps, input: DeckInput): Promise<Genera
         supporting: brief?.supportingMessage ?? null,
       });
       const checked = validateScene(fallback, language, signatures.at(-1) ?? null);
-      if (checked.scene && checked.report && checked.report.score > score) {
+      /**
+       * Judged on the faults a reader sees, not on the score.
+       *
+       * A page with two elements on top of each other and a plain page with
+       * little to say can score alike, and they are not alike: overlap and
+       * overflow are visible from the back of the room, thinness is a page
+       * that could have said more. So a rescue wins whenever it clears the
+       * hard faults the page it replaces did not.
+       */
+      const hard = new Set(["collision", "overflow", "out_of_bounds", "no_content"]);
+      const brokenBefore = (cycle.report?.faults ?? []).some((fault) => hard.has(fault.code));
+      const brokenAfter = (checked.report?.faults ?? []).some((fault) => hard.has(fault.code));
+      if (checked.scene && checked.report && (checked.report.score > score || (brokenBefore && !brokenAfter))) {
         scene = checked.scene;
         score = checked.report.score;
         synthesised = true;

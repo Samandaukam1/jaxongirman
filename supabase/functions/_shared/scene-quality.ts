@@ -41,6 +41,8 @@ export type QualityReport = {
   score: number;
   /** Named so a repair pass can act on the worst one rather than guessing. */
   faults: Array<{ code: string; detail: string; cost: number }>;
+  /** Characters written against what the boxes hold: how full the page reads. */
+  filled: number;
   density: number;
   balance: number;
   signature: string;
@@ -150,6 +152,32 @@ export function scoreScene(input: QualityInput): QualityReport {
   }
 
   /**
+   * How full the boxes are, rather than how big they are.
+   *
+   * Density counts rectangles, so a body box nine columns wide holding two
+   * lines of text is as dense as one holding twelve. Rendering a deck and
+   * looking at it showed exactly that: pages scoring 100 with a headline, a
+   * two-line paragraph and half the page empty.
+   *
+   * Measured as written characters against what the boxes hold. The floor is
+   * generous — an editorial page is allowed air, and a cover is mostly
+   * photograph — but a third is the line below which a slide is a note rather
+   * than a page.
+   */
+  const written = input.fits.reduce((total, fit) => total + fit.characters, 0);
+  const capacity = input.fits.reduce((total, fit) => total + fit.capacity, 0);
+  const filled = capacity > 0 ? written / capacity : 1;
+  const photographic = input.scene.elements.some((element) =>
+    element.type === "image" && element.place.bleed) || input.scene.background.kind === "image";
+  if (!photographic && capacity > 400 && filled < 0.33) {
+    faults.push({
+      code: "thin",
+      detail: `the boxes are ${Math.round(filled * 100)}% full`,
+      cost: 16,
+    });
+  }
+
+  /**
    * A page with no heading is a paragraph somebody left on a screen.
    *
    * The first deck through the real pipeline came back with pages of one
@@ -187,6 +215,7 @@ export function scoreScene(input: QualityInput): QualityReport {
   return {
     score,
     faults,
+    filled: Number(filled.toFixed(3)),
     density: Number(density.toFixed(3)),
     balance: Number(balance.toFixed(3)),
     signature,
@@ -315,10 +344,19 @@ export function sceneFromBrief(input: { title: string; message: string; supporti
   }];
   const body = [input.message, input.supporting].filter((one) => one && one.trim()).join(" ").trim();
   if (body) {
+    /**
+     * A box the size of the words in it.
+     *
+     * A fixed nine-by-four band around two sentences is the thin page this
+     * engine now refuses — and the fallback would have been refused by its own
+     * rule, leaving the broken page it was meant to replace. A designer given
+     * one paragraph draws one paragraph's worth of box.
+     */
+    const rows = body.length > 520 ? 4 : body.length > 260 ? 3 : 2;
     elements.push({
       type: "text",
       role: "body",
-      place: { column: 0, span: 9, row: 3, rows: 4 },
+      place: { column: 0, span: 8, row: 3, rows },
       typography: { font: "body", step: "body", color: "ink" },
       text: body,
     });

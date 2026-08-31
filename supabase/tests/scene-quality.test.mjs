@@ -244,11 +244,14 @@ test("the page built from a brief always fits its own box", () => {
   assert.ok(report.score >= 90, `scored ${report.score}: ${JSON.stringify(report.faults)}`);
 });
 
-test("a short brief still produces a page that reads", () => {
+test("a short brief produces a thin page and never a broken one", () => {
   const scene = sceneFromBrief({ title: "Xulosa", message: "Suv tejash hammaning ishi.", supporting: null });
   const placed = placeScene(scene);
   const report = scoreScene({ scene, placed, fits: measureText(placed), collisions: findCollisions(placed), outOfBounds: findOutOfBounds(placed) });
-  assert.ok(report.score >= 90, `scored ${report.score}: ${JSON.stringify(report.faults)}`);
+  // Thin is honest when there is little to say; what matters is that none of
+  // the faults a reader sees from the back of the room are present.
+  const hard = ["collision", "overflow", "out_of_bounds", "no_content", "no_heading"];
+  assert.deepEqual(report.faults.filter((fault) => hard.includes(fault.code)), []);
 });
 
 test("a page failing only on length keeps its composition", () => {
@@ -338,4 +341,36 @@ test("a page built from a long brief trims its title as well as its body", () =>
   });
   const placed = placeScene(scene);
   assert.ok(measureText(placed).every((fit) => fit.fits), "a replacement that overflows replaces nothing");
+});
+
+test("a big box holding two lines is a note, not a page", () => {
+  const report = judge({
+    ...healthy,
+    elements: [
+      { type: "text", role: "title", place: { column: 0, span: 8, row: 0, rows: 2 }, typography: { font: "display", step: "title", color: "ink" }, text: "Sarlavha" },
+      { type: "text", role: "body", place: { column: 0, span: 9, row: 3, rows: 4 }, typography: { font: "body", step: "body", color: "ink" }, text: "Ikki qator matn, katta qutida." },
+    ],
+  });
+  // Density counts rectangles and is satisfied; fullness counts what is in
+  // them and is not.
+  assert.ok(report.faults.some((fault) => fault.code === "thin"), JSON.stringify(report.faults));
+  assert.ok(report.filled < 0.33);
+});
+
+test("a page whose boxes are actually full is not thin", () => {
+  const report = judge(healthy);
+  assert.ok(!report.faults.some((fault) => fault.code === "thin"), JSON.stringify(report.faults));
+});
+
+test("a cover is mostly photograph and is not judged on its word count", () => {
+  const report = judge({
+    purpose: "cover",
+    background: { kind: "solid", color: "background" },
+    elements: [
+      { type: "image", place: { column: 0, span: 12, row: 0, rows: 8, bleed: true }, treatment: "full_bleed", intent: { query: "x", orientation: "landscape" }, overlay: "scrim_bottom" },
+      { type: "text", role: "title", place: { column: 0, span: 9, row: 5, rows: 2 }, typography: { font: "display", step: "display", color: "onImage" }, text: "Mavzu" },
+      { type: "text", role: "lead", place: { column: 0, span: 8, row: 7, rows: 1 }, typography: { font: "body", step: "lead", color: "onImage" }, text: "Qisqa izoh." },
+    ],
+  });
+  assert.ok(!report.faults.some((fault) => fault.code === "thin"), JSON.stringify(report.faults));
 });

@@ -453,6 +453,7 @@ export function scenePrompt(input: {
      * spans are something a model can obey and the compiler can check.
      */
     "- Har bir sahifada role=\"title\" bo'lsin (muqovada ham) — sahifa nima haqidaligini aytsin.",
+    "- MATN HAJMI: body/lead uchun 4–6 to'liq jumla yozing — bir-ikki jumla qutini bo'sh qoldiradi.",
     "- O'LCHAM: title kamida 6 ustun × 2 qator. body/bullets kamida 5 ustun × 3 qator.",
     "  Rasm kerak bo'lsa kamida 4 ustun × 4 qator. Elementlar sahifaning kamida yarmini egallasin.",
     "- Sahifada bitta eng katta element bo'lsin — ko'z avval qayerga tushishini bilsin.",
@@ -480,6 +481,7 @@ export function repairPrompt(scene: Scene, report: QualityReport): string {
     collision: "elementlarni boshqa kataklarga ko'chiring — ular ustma-ust tushyapti",
     out_of_bounds: "element setkadan chiqib ketgan, place ni tuzating",
     overflow: "matnni qisqartiring YOKI blokka ko'proq qator bering — shrift o'lchamini kichraytirmang",
+    thin: "qutilar bo'sh — matnni uzaytiring: body uchun 4–6 to'liq jumla, har bir fikrni rivojlantiring (sabab, natija, misol)",
     sparse: "sahifa juda bo'sh: elementlarning span va rows qiymatlarini kattalashtiring (body kamida 5×3, title 6×2)",
     crowded: "sahifa juda to'la: kamroq element yoki ko'proq bo'sh joy",
     unbalanced: "og'irlik bir burchakka yig'ilgan, muvozanatlang",

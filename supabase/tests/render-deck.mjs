@@ -68,11 +68,27 @@ async function slideHtml(slide, elements) {
     const box = `position:absolute;left:${row.x}px;top:${row.y}px;width:${row.width}px;height:${row.height}px;opacity:${row.opacity ?? 1};`;
 
     if (row.type === "text") {
-      drawn.push(`<div style="${box}display:flex;align-items:center;">
-        <div style="width:100%;color:${style.color ?? "#111"};font-size:${style.fontSize ?? 16}px;line-height:${style.lineHeight ?? 20}px;
-          text-align:${style.textAlign ?? "left"};font-weight:${style.fontWeight ?? 400};letter-spacing:${style.letterSpacing ?? 0}px;
-          font-family:'${String(style.fontFamily ?? "Helvetica").replace(/'/g, "")}',Helvetica,Arial,sans-serif;white-space:pre-wrap;overflow-wrap:break-word;">
-          ${escape(content.text)}</div></div>`);
+      /**
+       * The text sits flush against its tags.
+       *
+       * `pre-wrap` renders the indentation of the template itself, so the
+       * first line of every heading arrived pushed ten spaces to the right —
+       * a fault in the tool that reads exactly like a fault in the deck, which
+       * is the worst kind of tool.
+       */
+      const type = [
+        `width:100%`,
+        `color:${style.color ?? "#111"}`,
+        `font-size:${style.fontSize ?? 16}px`,
+        `line-height:${style.lineHeight ?? 20}px`,
+        `text-align:${style.textAlign ?? "left"}`,
+        `font-weight:${style.fontWeight ?? 400}`,
+        `letter-spacing:${style.letterSpacing ?? 0}px`,
+        `font-family:'${String(style.fontFamily ?? "Helvetica").replace(/'/g, "")}',Helvetica,Arial,sans-serif`,
+        "white-space:pre-wrap",
+        "overflow-wrap:break-word",
+      ].join(";");
+      drawn.push(`<div style="${box}display:flex;align-items:center;"><div style="${type}">${escape(content.text)}</div></div>`);
       continue;
     }
     if (row.type === "image") {
