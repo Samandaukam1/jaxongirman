@@ -81,6 +81,20 @@ const CHART_FALLBACK: Record<string, string> = {
   bar: "bar", line: "bar", area: "bar", pie: "pie", doughnut: "donut",
 };
 
+/**
+ * A gradient in the shape every renderer already reads.
+ *
+ * `gradientStops` and `gradientAngle`, because that is what the phone, the web
+ * preview and the exporter look for. Anything else is drawn as a flat fill and
+ * nothing says so.
+ */
+function gradientStyle(input: { from: string; to: string; angle: number }): Record<string, unknown> {
+  return {
+    gradientStops: [{ color: input.from, offset: 0 }, { color: input.to, offset: 100 }],
+    gradientAngle: input.angle,
+  };
+}
+
 export function renderScene(
   scene: Scene,
   dna: DesignDNA,
@@ -113,7 +127,26 @@ export function renderScene(
     });
   };
 
-  for (const entry of placeScene(scene)) {
+  /**
+   * A picture asked for as a background becomes the page's first element.
+   *
+   * Added before everything else so it sits underneath, and given the same
+   * overlay the background asked for — the scrim is what makes type over a
+   * photograph readable, and the palette cannot know what the photograph looks
+   * like.
+   */
+  const asBackground: SceneElement[] = scene.background.kind === "image"
+    ? [{
+      type: "image",
+      place: { column: 0, span: 12, row: 0, rows: 8, bleed: true },
+      treatment: "full_bleed",
+      intent: scene.background.intent,
+      overlay: scene.background.overlay ?? "scrim_bottom",
+      ...(scene.background.focus ? { focus: scene.background.focus } : {}),
+    }]
+    : [];
+
+  for (const entry of placeScene({ ...scene, elements: [...asBackground, ...scene.elements] })) {
     const element = entry.element as SceneElement;
     const inCard = entry.path.includes(".children");
 
@@ -159,10 +192,20 @@ export function renderScene(
             z_index: (bleed ? LAYER.bleed : LAYER.media) + 0.5,
             opacity: element.overlay === "veil" ? 0.55 : 0.72,
             locked: false,
+            /**
+             * In the renderers' own gradient vocabulary, not ours.
+             *
+             * They read `gradientStops` with a `gradientAngle`; a `gradient`
+             * object is simply not seen — which turned a scrim meant to fade
+             * from nothing into a flat black sheet at 72% over the whole
+             * photograph. The scene may describe a gradient however it likes;
+             * what is stored has to be what the phone already draws.
+             */
             style: {
               fill: "#000000",
-              ...(element.overlay === "scrim_bottom" ? { gradient: { from: "transparent", to: "#000000", angle: 180 } } : {}),
-              ...(element.overlay === "scrim_left" ? { gradient: { from: "#000000", to: "transparent", angle: 90 } } : {}),
+              ...gradientStyle(element.overlay === "scrim_left"
+                ? { from: "#000000", to: "#00000000", angle: 90 }
+                : { from: "#00000000", to: "#000000", angle: 180 }),
               borderRadius: element.treatment === "full_bleed" ? 0 : scale(element.radius ?? dna.radius),
             },
             content: { kind: "scrim" },
@@ -178,7 +221,7 @@ export function renderScene(
           borderWidth: treatment === "outline" ? 1 : 0,
           borderColor: color("inkMuted"),
           opacity: treatment === "glass" ? 0.86 : 1,
-          ...(treatment === "gradient" ? { gradient: { from: color("primary"), to: color("accent"), angle: 160 } } : {}),
+          ...(treatment === "gradient" ? gradientStyle({ from: color("primary"), to: color("accent"), angle: 160 }) : {}),
           padding: scale(CARD_PADDING),
         }, { kind: "card" }, "shape");
         break;
@@ -239,17 +282,23 @@ function renderBackground(
   const background = scene.background;
   switch (background.kind) {
     case "gradient":
-      return { color: dna.colors[background.from], gradient: { from: dna.colors[background.from], to: dna.colors[background.to], angle: background.angle } };
+      return {
+        color: dna.colors[background.from],
+        ...gradientStyle({ from: dna.colors[background.from], to: dna.colors[background.to], angle: background.angle }),
+      };
     case "panel_split":
       return { color: dna.colors[background.color], panel: { color: dna.colors[background.panel], at: background.at } };
-    case "image": {
-      const found = pictures.get(background.intent.query);
-      return {
-        color: dna.colors.background,
-        ...(found ? { image: "url" in found ? { url: found.url } : { bucket: found.bucket, path: found.path } } : {}),
-        overlay: background.overlay ?? "scrim_bottom",
-      };
-    }
+    case "image":
+      /**
+       * Handled as an element, not as a background.
+       *
+       * No renderer draws a photograph behind a slide — they draw elements. A
+       * background that named a picture therefore produced a flat colour and a
+       * cover with no cover on it, so `renderScene` turns it into the
+       * full-bleed image the renderers do draw, and what is left here is the
+       * ground behind it.
+       */
+      return { color: dna.colors.background };
     default:
       return { color: dna.colors[background.color] };
   }

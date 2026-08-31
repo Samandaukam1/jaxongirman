@@ -145,3 +145,60 @@ test("a picture that was never found leaves a placeholder rather than a broken s
   assert.equal(image.content.kind, "image");
   assert.equal(image.content.url, undefined);
 });
+
+test("a gradient is written the way the renderers read one", () => {
+  const scene = read({
+    purpose: "p",
+    background: { kind: "gradient", from: "background", to: "surface", angle: 160 },
+    elements: [{ type: "text", role: "title", place: { column: 0, span: 8, row: 1, rows: 2 }, typography: { font: "display", step: "title", color: "ink" }, text: "T" }],
+  });
+  const drawn = renderScene(scene, dna);
+  // `gradientStops` and `gradientAngle` — a `gradient` object is not seen, and
+  // a gradient nothing sees is a flat fill nobody asked for.
+  assert.ok(Array.isArray(drawn.background.gradientStops), JSON.stringify(drawn.background));
+  assert.equal(drawn.background.gradientStops.length, 2);
+  assert.equal(drawn.background.gradientStops[0].offset, 0);
+  assert.equal(drawn.background.gradientStops[1].offset, 100);
+  assert.equal(drawn.background.gradientAngle, 160);
+  assert.equal(drawn.background.gradient, undefined);
+});
+
+test("a picture asked for as a background becomes the page's first element", () => {
+  const scene = read({
+    purpose: "cover",
+    background: { kind: "image", intent: { query: "Samarqand", orientation: "landscape" }, overlay: "scrim_bottom" },
+    elements: [{ type: "text", role: "title", place: { column: 0, span: 9, row: 5, rows: 2 }, typography: { font: "display", step: "display", color: "onImage" }, text: "Samarqand" }],
+  });
+  const drawn = renderScene(scene, dna, new Map([["Samarqand", { bucket: "stock-images", path: "a.jpg" }]]));
+  const image = drawn.elements.find((row) => row.type === "image");
+  assert.ok(image, "no renderer draws a photograph behind a slide; they draw elements");
+  assert.equal(image.content.storagePath, "a.jpg");
+  assert.equal(image.width, 1000, "and it covers the page");
+  const title = drawn.elements.find((row) => row.content.role === "title");
+  assert.ok(image.z_index < title.z_index, "with the words over it");
+  const scrim = drawn.elements.find((row) => row.content.kind === "scrim");
+  assert.ok(scrim && Array.isArray(scrim.style.gradientStops), "and a scrim that actually fades");
+});
+
+test("the scrim fades rather than covering the photograph in flat black", () => {
+  const drawn = renderScene(cover, dna);
+  const scrim = drawn.elements.find((row) => row.content.kind === "scrim");
+  assert.ok(Array.isArray(scrim.style.gradientStops));
+  // One end is transparent: a scrim with two opaque ends is a black rectangle.
+  assert.ok(scrim.style.gradientStops.some((stop) => /00$/.test(stop.color)), JSON.stringify(scrim.style.gradientStops));
+});
+
+test("a gradient card is filled the way a gradient card is drawn", () => {
+  const scene = read({
+    purpose: "p",
+    background: { kind: "solid", color: "background" },
+    elements: [{
+      type: "card", treatment: "gradient", place: { column: 0, span: 5, row: 2, rows: 3 },
+      children: [{ role: "body", text: "Matn", font: "body", step: "body", color: "onImage" }],
+    }],
+  });
+  const drawn = renderScene(scene, dna);
+  const card = drawn.elements.find((row) => row.content.kind === "card");
+  assert.ok(Array.isArray(card.style.gradientStops));
+  assert.equal(card.style.gradient, undefined);
+});
