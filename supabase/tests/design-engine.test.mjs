@@ -26,6 +26,9 @@ const read = (relative) => readFileSync(path.join(repoRoot, relative), "utf8");
 const PIPELINE = read("supabase/functions/_shared/pipeline.ts");
 const ENTRY = read("supabase/functions/generate-presentation/index.ts");
 const MIGRATION = read("supabase/migrations/202609010001_generative_default.sql");
+const VISIBILITY = read("supabase/migrations/202609010002_generative_visible.sql");
+const CLIENT = read("user/src/lib/design-engine.ts");
+const CREATE_SCREEN = read("user/app/(app)/create.tsx");
 
 const edge = buildEdgeModules();
 const { engineSwitchOn, DESIGN_SETTINGS } = await import(`${edge}/design-engine.js`);
@@ -133,4 +136,34 @@ test("every run says which engine made it, in terms that can be grepped", () => 
   }
   assert.match(PIPELINE, /DESIGN_ENGINE: engine\.generative \? "generative_v1" : "jslayd"/,
     "the logged engine name is not derived from the decision");
+});
+
+test("the phone reads the switch the way the server does, and can actually read it", () => {
+  /**
+   * Two readers of one row, and they have to agree. If the phone decided the
+   * old engine were running it would offer a design catalogue for a deck the
+   * server composes anyway — a chooser whose value is discarded, which is worse
+   * than no chooser because the author believes they chose.
+   */
+  assert.match(CLIENT, /eq\("key", "design\.generative_enabled"\)/, "the phone reads a different key");
+  assert.match(CLIENT, /if \(error\) return true;/, "an unreadable setting sends the phone to the old catalogue");
+  assert.match(CLIENT, /data\?\.value !== false/, "the phone treats a missing row as the old engine");
+
+  // And it is readable at all: `app_settings` only shows rows whose
+  // `public_read` says so, so without this the phone always gets nothing.
+  assert.match(
+    VISIBILITY,
+    /update public\.app_settings\s*\n\s*set public_read = true\s*\n\s*where key = 'design\.generative_enabled';/,
+    "the setting is not made readable by the phone",
+  );
+});
+
+test("the create screen offers no design when there is no design to offer", () => {
+  assert.match(CREATE_SCREEN, /const \[generative, setGenerative\] = useState\(true\);/,
+    "the screen does not assume the engine the server assumes");
+  assert.match(CREATE_SCREEN, /\{generative \? \(/, "the design chooser is shown under both engines");
+  assert.match(CREATE_SCREEN, /if \(composed\) \{ setDesignsLoaded\(true\); return; \}/,
+    "the design catalogue is still fetched for a deck that cannot use it");
+  assert.match(CREATE_SCREEN, /\{!generative && families\.length > 1 \? \(/,
+    "the colour families of a design are still offered without a design");
 });

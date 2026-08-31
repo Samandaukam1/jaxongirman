@@ -15,6 +15,7 @@ import { FormField } from "@/components/FormField";
 import { IconChip } from "@/components/IconChip";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { DesignPicker } from "@/components/DesignPicker";
+import { generativeDesign } from "@/lib/design-engine";
 import { familiesOf, loadRemoteDesigns, type RemoteDesign } from "@/lib/jslayd-designs";
 import { asFunctionErrorMessage } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
@@ -127,10 +128,29 @@ export default function CreatePresentationScreen() {
   // answer here means there is genuinely nothing to choose and the screen says
   // so rather than offering something the server would not honour.
   const [designsLoaded, setDesignsLoaded] = useState(false);
+  /**
+   * Which engine will build this deck, asked before the catalogue is fetched.
+   *
+   * Under the generative engine there is no catalogue to show — the design is
+   * composed for this deck from its own subject — so the request is not made at
+   * all rather than made and discarded. `true` while the answer is in flight,
+   * because that is what the server assumes too: guessing the other way would
+   * flash a chooser onto the screen and take it away again.
+   */
+  const [generative, setGenerative] = useState(true);
   useEffect(() => {
     let active = true;
-    void loadRemoteDesigns()
-      .then((designs) => { if (active) { setRemoteDesigns(designs); setDesignsLoaded(true); } })
+    void generativeDesign()
+      .then(async (composed) => {
+        if (!active) return;
+        setGenerative(composed);
+        if (composed) { setDesignsLoaded(true); return; }
+        try {
+          const designs = await loadRemoteDesigns();
+          if (active) setRemoteDesigns(designs);
+        } catch { /* said on screen by designsLoaded */ }
+        if (active) setDesignsLoaded(true);
+      })
       .catch(() => { if (active) setDesignsLoaded(true); });
     return () => { active = false; };
   }, []);
@@ -305,6 +325,23 @@ export default function CreatePresentationScreen() {
           </View>
         </View>
 
+        {/* Nothing to choose, so nothing is offered.
+            The generative engine composes this deck's typography, palette and
+            every page from its subject. A catalogue here would be a control
+            whose value the server discards — and on a tier with no published
+            designs the old copy told the author to pick another tier, which
+            stopped being true the moment a deck no longer needed a design. */}
+        {generative ? (
+          <View style={styles.group}>
+            <View style={styles.labelRow}><Text style={styles.label}>Dizayn</Text></View>
+            <View style={styles.composedNote}>
+              <Text style={styles.composedTitle}>Mavzuga qarab yaratiladi</Text>
+              <Text style={styles.composedHint}>
+                Shrift, ranglar va har bir slayd kompozitsiyasi shu taqdimot uchun alohida quriladi.
+              </Text>
+            </View>
+          </View>
+        ) : (
         <View style={styles.group}>
           <View style={styles.labelRow}>
             <Text style={styles.label}>Dizayn</Text>
@@ -344,11 +381,12 @@ export default function CreatePresentationScreen() {
             </Text>
           )}
         </View>
+        )}
 
         {/* The families the chosen design defines — not a catalogue of its own.
             A family the design does not carry is a colour the renderer cannot
             produce, so offering one would be offering a result nobody can get. */}
-        {families.length > 1 ? (
+        {!generative && families.length > 1 ? (
           <View style={styles.group}>
             <View style={styles.labelRow}><Text style={styles.label}>Ranglar oilasi</Text><Text style={styles.hint}>{families.length} ta</Text></View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
@@ -456,6 +494,12 @@ const useStyles = makeStyles((colors) => ({
   // The switch that decides who picks the design. Drawn rather than taken from
   // `Switch`: the platform control is a different size and colour on each OS,
   // and this sits inside a card that has to read as one thing.
+  composedNote: {
+    borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg,
+    backgroundColor: colors.surface, padding: spacing.md, gap: 4,
+  },
+  composedTitle: { ...typography.body, fontWeight: "600", color: colors.ink },
+  composedHint: { ...typography.caption, color: colors.inkSoft },
   autoDesign: {
     flexDirection: "row",
     alignItems: "center",
