@@ -46,6 +46,7 @@ const people = {
 };
 const password = `${randomUUID()}Aa1!`;
 let previousFlag = null;
+let draftId = null;
 
 async function makeUser(entry) {
   const created = await service.auth.admin.createUser({ email: entry.email, password, email_confirm: true });
@@ -522,11 +523,80 @@ try {
     .upload(`${campaignId}/mine-${stamp}.txt`, new Blob(["yo‘q"], { type: "text/plain" }));
   check(Boolean(intruder.error), "but an ordinary account cannot put anything there");
   await service.storage.from("marathon-posters").remove([posterPath]);
+  console.log("\nAdmin boshqaruvi:");
+  const adminEntry = { email: `mar-admin-${randomUUID()}@example.test`, username: `adm${stamp}` };
+  await makeUser(adminEntry);
+  people.admin = adminEntry;
+  await service.from("user_roles").insert({ user_id: adminEntry.id, role: "admin" });
+  const admin = createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  const adminIn = await admin.auth.signInWithPassword({ email: adminEntry.email, password });
+  if (adminIn.error) throw adminIn.error;
+
+  const outsiderView = await voterClient.rpc("admin_marathon_overview");
+  check(outsiderView.data === null, "an ordinary account sees no console data");
+  const outsiderWrite = await voterClient.rpc("admin_save_marathon_campaign", { p_title: "Yo‘q" });
+  check(Boolean(outsiderWrite.error), "and cannot write a campaign");
+
+  // §30: everything editable while the feature is invisible.
+  await service.from("app_settings").update({ value: false }).eq("key", "student_marathon_enabled");
+  const draft = await admin.rpc("admin_save_marathon_campaign", {
+    p_title: `Qoralama ${stamp}`,
+    p_description: "Sinov",
+    p_starts_at: new Date(Date.now() - 60_000).toISOString(),
+    p_ends_at: new Date(Date.now() + 20 * 86_400_000).toISOString(),
+  });
+  check(!draft.error && draft.data?.status === "draft",
+    `an administrator writes a campaign while the marathon is switched off${draft.error ? ` — ${draft.error.message}` : ""}`);
+  draftId = draft.data?.id ?? null;
+
+  const ladder = await admin.rpc("admin_set_marathon_tiers", {
+    p_campaign_id: draftId,
+    p_tiers: [
+      { votes_required: 1000, premium_required: 300, reward_percent: 25 },
+      { votes_required: 2000, premium_required: 600, reward_percent: 50 },
+    ],
+  });
+  check(!ladder.error, `and its reward ladder${ladder.error ? ` — ${ladder.error.message}` : ""}`);
+
+  const stillDark = await service.from("app_settings").select("value").eq("key", "student_marathon_enabled").single();
+  check(stillDark.data?.value === false, "none of which turned the feature on");
+
+  const noPoster = await admin.rpc("admin_launch_marathon", { p_campaign_id: draftId });
+  check(Boolean(noPoster.error) && /Afisha/.test(noPoster.error?.message ?? ""),
+    `a campaign with no poster cannot be launched (${noPoster.error?.message?.slice(0, 32) ?? "allowed"})`);
+
+  await admin.rpc("admin_save_marathon_campaign", {
+    p_id: draftId, p_title: `Qoralama ${stamp}`, p_poster_path: `${draftId}/poster.jpg`,
+  });
+
+  const clash = await admin.rpc("admin_launch_marathon", { p_campaign_id: draftId });
+  check(Boolean(clash.error) && /davom etmoqda/.test(clash.error?.message ?? ""),
+    "and two marathons cannot run at once");
+
+  await service.from("marathon_campaigns").update({ status: "ended" }).eq("id", campaignId);
+  const launched = await admin.rpc("admin_launch_marathon", { p_campaign_id: draftId, p_reason: "smoke" });
+  check(!launched.error, `launching works once the way is clear${launched.error ? ` — ${launched.error.message}` : ""}`);
+
+  const nowVisible = await service.from("app_settings").select("value").eq("key", "student_marathon_enabled").single();
+  check(nowVisible.data?.value === true, "and that — an administrator pressing it — is what makes the app show the marathon");
+
+  const ended = await admin.rpc("admin_end_marathon", { p_campaign_id: draftId });
+  check(!ended.error, `ending works${ended.error ? ` — ${ended.error.message}` : ""}`);
+  const darkAgain = await service.from("app_settings").select("value").eq("key", "student_marathon_enabled").single();
+  check(darkAgain.data?.value === false, "and takes the marathon off the app with it");
+
+  const auditRows = await service.from("admin_audit_logs").select("action")
+    .in("action", ["marathon.launched", "marathon.ended", "marathon.campaign_saved"])
+    .eq("admin_id", adminEntry.id);
+  check((auditRows.data ?? []).length >= 3,
+    `every one of those is in the audit log (${(auditRows.data ?? []).length})`);
+
 } finally {
   if (previousFlag !== null) {
     await service.from("app_settings").update({ value: previousFlag }).eq("key", "student_marathon_enabled");
   }
   await service.from("marathon_campaigns").delete().eq("id", campaignId);
+  if (draftId) await service.from("marathon_campaigns").delete().eq("id", draftId);
   await service.from("marathon_campaigns").delete().like("title", "Ikkinchi");
   for (const entry of Object.values(people)) {
     if (entry.id) await service.auth.admin.deleteUser(entry.id);

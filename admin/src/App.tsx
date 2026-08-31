@@ -22,6 +22,7 @@ import { MarketplaceFinancePage } from "@/pages/MarketplaceFinancePage";
 import { MarketplacePage } from "@/pages/MarketplacePage";
 import { ModulesPage } from "@/pages/ModulesPage";
 import { OrdersPage } from "@/pages/OrdersPage";
+import { MarathonPage } from "@/pages/MarathonPage";
 import { PricingPage } from "@/pages/PricingPage";
 import { QrVideoPage } from "@/pages/QrVideoPage";
 import { TariffsPage } from "@/pages/TariffsPage";
@@ -53,6 +54,7 @@ const pages: Record<string, ReactNode> = {
   "/marketplace": <MarketplacePage />,
   "/marketplace-finance": <MarketplaceFinancePage />,
   "/games": <GamesPage />,
+  "/marafon": <MarathonPage />,
   "/orders": <OrdersPage />,
   "/app-store": <AppStorePage />,
 };

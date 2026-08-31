@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { asErrorMessage } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/providers/AuthProvider";
 
 /**
  * Whether the student marathon is showing.
@@ -180,6 +181,7 @@ export function useMarathonCampaign(): {
   joining: boolean;
 } {
   const enabled = useMarathonEnabled();
+  const { user } = useAuth();
   const [campaign, setCampaign] = useState<MarathonCampaign | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -207,6 +209,32 @@ export function useMarathonCampaign(): {
     void reload().finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [reload]);
+
+  /**
+   * A vote arriving moves these numbers without anybody pulling to refresh.
+   *
+   * Subscribed to the person's own notifications rather than to the ledger:
+   * the ledger is deliberately unreadable to the candidate — it would name who
+   * voted — so realtime would deliver them nothing. Every marathon event
+   * already writes a notification in the same transaction as the thing it
+   * announces, which makes it the one signal that is both visible and exactly
+   * as timely as the write.
+   */
+  useEffect(() => {
+    if (!enabled || !user) return;
+    const channel = supabase
+      .channel(`marathon-${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },
+        (payload) => {
+          const kind = (payload.new as { kind?: string }).kind ?? "";
+          if (kind.startsWith("marathon")) void reload();
+        },
+      )
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [enabled, reload, user]);
 
   const join = useCallback(async () => {
     setJoining(true);

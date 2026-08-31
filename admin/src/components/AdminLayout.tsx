@@ -1,7 +1,7 @@
 import {
   Sparkles,
   BadgeCheck,
-  Monitor, Moon, MonitorPlay, Blocks, ClipboardList, FileStack, Coins, Cpu, Gamepad2, Gift, Image as ImageIcon, LayoutDashboard, LogOut, Menu, Palette, Presentation, Receipt, ScrollText, Shapes, Smartphone, Store, Sun, TrendingUp, Type, Users, Wallet, X } from "lucide-react";
+  Monitor, Moon, MonitorPlay, Blocks, ClipboardList, FileStack, Coins, Cpu, Gamepad2, Gift, Image as ImageIcon, LayoutDashboard, LogOut, Menu, Palette, Presentation, Receipt, ScrollText, Shapes, Smartphone, Store, Sun, TrendingUp, Trophy, Type, Users, Wallet, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import { AppLink } from "@/lib/router";
@@ -22,6 +22,7 @@ const navigation = [
   { to: "/modules", label: "Modullar va tangalar", icon: Blocks },
   { to: "/surveys", label: "So‘rovnomalar", icon: ClipboardList },
   { to: "/games", label: "O‘yingoh", icon: Gamepad2 },
+  { to: "/marafon", label: "Talabalar marafoni", icon: Trophy },
   { to: "/marketplace", label: "Do‘kon", icon: Store },
   { to: "/marketplace-finance", label: "Do‘kon moliyasi", icon: TrendingUp },
   { to: "/orders", label: "Buyurtmalar", icon: Receipt },

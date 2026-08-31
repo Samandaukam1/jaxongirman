@@ -2,7 +2,7 @@ import { NOTIFICATION_FALLBACK_ROUTES, type NotificationKind, type Tables } from
 import { useRouter, type Href } from "expo-router";
 import {
   Bell, CalendarDays, CheckCheck, ClipboardCheck, ClipboardList, Gift, Layers, Send,
-  ShieldAlert, Sparkles, Store, Timer, Wallet, X, type LucideIcon,
+  ShieldAlert, Sparkles, Store, Timer, Trophy, Vote, Wallet, X, type LucideIcon,
 } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, FlatList, Platform, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
@@ -59,6 +59,8 @@ const KIND_ICONS: Record<string, LucideIcon> = {
   marketplace_sale: Store,
   marketplace_purchase: Store,
   subscription_expiry: ShieldAlert,
+  marathon_vote: Vote,
+  marathon_milestone: Trophy,
   system: Sparkles,
 };
 

@@ -5188,6 +5188,10 @@ export type Database = {
         Args: { p_design_id: string; p_name: string; p_slug: string }
         Returns: string
       }
+      admin_end_marathon: {
+        Args: { p_campaign_id: string; p_reason?: string }
+        Returns: Json
+      }
       admin_finance_overview: { Args: never; Returns: Json }
       admin_game_overview: { Args: { p_days?: number }; Returns: Json }
       admin_gift_credits: {
@@ -5229,6 +5233,10 @@ export type Database = {
           p_months?: number
           p_reason?: string
         }
+        Returns: Json
+      }
+      admin_launch_marathon: {
+        Args: { p_campaign_id: string; p_reason?: string }
         Returns: Json
       }
       admin_list_designs: {
@@ -5434,6 +5442,7 @@ export type Database = {
           user_id: string
         }[]
       }
+      admin_marathon_overview: { Args: never; Returns: Json }
       admin_mark_settlement_paid: {
         Args: {
           p_destination_note: string
@@ -5708,6 +5717,21 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      admin_save_marathon_campaign: {
+        Args: {
+          p_contract_cap?: number
+          p_description?: string
+          p_ends_at?: string
+          p_id?: string
+          p_min_free_price?: number
+          p_min_premium_price?: number
+          p_poster_path?: string
+          p_rules?: string
+          p_starts_at?: string
+          p_title?: string
+        }
+        Returns: Json
+      }
       admin_save_qr_video_experience: {
         Args: {
           p_glow?: number
@@ -5848,6 +5872,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      admin_set_marathon_tiers: {
+        Args: { p_campaign_id: string; p_tiers: Json }
+        Returns: Json
+      }
       admin_set_payment_test_mode: {
         Args: {
           p_emails?: string[]
@@ -5858,6 +5886,10 @@ export type Database = {
         Returns: Json
       }
       admin_set_student_marathon: {
+        Args: { p_enabled: boolean; p_reason?: string }
+        Returns: Json
+      }
+      admin_set_vote_marketplace: {
         Args: { p_enabled: boolean; p_reason?: string }
         Returns: Json
       }
