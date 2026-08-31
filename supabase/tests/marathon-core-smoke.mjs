@@ -349,6 +349,165 @@ try {
   check(whileDark.data === null, "while the marathon is off the link says nothing about anybody");
   await service.from("app_settings").update({ value: true }).eq("key", "student_marathon_enabled");
 
+  console.log("\nOvozlar bozori:");
+  let marketFlag = null;
+  const marketFlagRow = await service.from("app_settings").select("value").eq("key", "marathon.vote_marketplace_enabled").single();
+  marketFlag = marketFlagRow.data?.value ?? false;
+
+  await service.from("app_settings").update({ value: false }).eq("key", "marathon.vote_marketplace_enabled");
+  const shutMarket = await voterClient.rpc("marathon_list_votes", { p_kind: "free", p_quantity: 1, p_unit_price: 9000 });
+  check(Boolean(shutMarket.error), "nothing can be listed while the marketplace switch is off");
+
+  await service.from("app_settings").update({ value: true }).eq("key", "marathon.vote_marketplace_enabled");
+
+  // A seller who still holds both votes. The voters above have spent theirs.
+  const sellerEntry = { email: `mar-sell-${randomUUID()}@example.test`, username: `sell${stamp}` };
+  await makeUser(sellerEntry);
+  people.seller = sellerEntry;
+  const seller = createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  const sellerIn = await seller.auth.signInWithPassword({ email: sellerEntry.email, password });
+  if (sellerIn.error) throw sellerIn.error;
+
+  const tooCheap = await seller.rpc("marathon_list_votes", { p_kind: "premium", p_quantity: 1, p_unit_price: 100 });
+  check(Boolean(tooCheap.error) && /minimal bozor narxidan past/.test(tooCheap.error?.message ?? ""),
+    `a price under the floor is refused in words (${tooCheap.error?.message?.slice(0, 46) ?? "allowed"})`);
+
+  const tooMany = await seller.rpc("marathon_list_votes", { p_kind: "premium", p_quantity: 4, p_unit_price: 20000 });
+  check(Boolean(tooMany.error), "and nobody lists more votes than they hold");
+
+  const listed = await seller.rpc("marathon_list_votes", { p_kind: "premium", p_quantity: 1, p_unit_price: 20000 });
+  check(!listed.error, `a vote is listed${listed.error ? ` — ${listed.error.message}` : ""}`);
+  check(listed.data?.quote?.buyer_total === 22400 && listed.data?.quote?.seller_net === 17600,
+    `with 12% from each side (${JSON.stringify(listed.data?.quote ? {
+      total: listed.data.quote.buyer_total, net: listed.data.quote.seller_net } : null)})`);
+
+  const twiceListed = await seller.rpc("marathon_list_votes", { p_kind: "premium", p_quantity: 1, p_unit_price: 25000 });
+  check(Boolean(twiceListed.error), "the same vote cannot be listed a second time");
+
+  const walletWhileListed = await seller.rpc("marathon_my_votes");
+  check(walletWhileListed.data?.premium_available === 0 && walletWhileListed.data?.premium_listed === 1,
+    `a listed vote leaves the wallet and says where it went (${JSON.stringify(walletWhileListed.data)})`);
+
+  const spendListed = await seller.rpc("marathon_cast_vote", { p_candidate_id: people.candidate.id, p_kind: "premium" });
+  check(Boolean(spendListed.error) && /sotuvda/.test(spendListed.error?.message ?? ""),
+    `and it cannot also be given away (${spendListed.error?.message?.slice(0, 40) ?? "allowed"})`);
+
+  const freeStillThere = await seller.rpc("marathon_cast_vote", { p_candidate_id: people.candidate.id, p_kind: "free" });
+  check(!freeStillThere.error, "while the other vote is untouched by the listing");
+
+  console.log("\nBozor anonimligi:");
+  const browsing = await caster.rpc("marathon_vote_market", { p_kind: "premium" });
+  const lot = (browsing.data ?? [])[0];
+  check(!browsing.error && Boolean(lot), `a buyer sees the lot${browsing.error ? ` — ${browsing.error.message}` : ""}`);
+  check(!("seller_id" in (lot ?? {})) && !("username" in (lot ?? {})),
+    `and nothing about who is selling it (${Object.keys(lot ?? {}).join(",")})`);
+  check(lot?.buyer_total === 22400, `the price it quotes includes the buyer's 12% (${lot?.buyer_total})`);
+  check(lot?.is_mine === false, "a buyer is told it is not their own lot");
+
+  const rowRead = await caster.from("marathon_vote_listings").select("id,seller_id");
+  check((rowRead.data ?? []).length === 0,
+    `and the table itself is unreadable to anybody else (${(rowRead.data ?? []).length} rows)`);
+  const ownRead = await seller.from("marathon_vote_listings").select("id");
+  check((ownRead.data ?? []).length === 1, "while a seller can see their own");
+
+  const notMine = await caster.rpc("marathon_cancel_vote_listing", { p_listing_id: listed.data?.listing_id });
+  check(Boolean(notMine.error), "somebody else's listing cannot be taken down");
+
+  const cancelled = await seller.rpc("marathon_cancel_vote_listing", { p_listing_id: listed.data?.listing_id });
+  check(!cancelled.error, `a seller can withdraw their own${cancelled.error ? ` — ${cancelled.error.message}` : ""}`);
+  const walletBack = await seller.rpc("marathon_my_votes");
+  check(walletBack.data?.premium_available === 1 && walletBack.data?.premium_listed === 0,
+    `and the vote comes back to them (${JSON.stringify(walletBack.data)})`);
+  const emptyMarket = await caster.rpc("marathon_vote_market", { p_kind: "premium" });
+  check((emptyMarket.data ?? []).length === 0, "a withdrawn lot is off the market");
+
+  console.log("\nXarid va escrow:");
+  // A fresh lot to buy, since the one above was withdrawn.
+  const forSale = await seller.rpc("marathon_list_votes", { p_kind: "premium", p_quantity: 1, p_unit_price: 20000 });
+  if (forSale.error) throw forSale.error;
+  const listingId = forSale.data.listing_id;
+
+  const ownLot = await seller.rpc("marathon_buy_votes", { p_listing_id: listingId, p_quantity: 1 });
+  check(Boolean(ownLot.error), "nobody buys their own lot");
+
+  const started = await caster.rpc("marathon_buy_votes", { p_listing_id: listingId, p_quantity: 1 });
+  check(!started.error && started.data?.total_amount === 22400,
+    `a purchase creates an order for the buyer's total${started.error ? ` — ${started.error.message}` : ` (${started.data?.total_amount})`}`);
+
+  const heldOff = await voterClient.rpc("marathon_vote_market", { p_kind: "premium" });
+  check((heldOff.data ?? []).length === 0, "and takes the lot off the market while it is being paid for");
+
+  const reused = await caster.rpc("marathon_buy_votes", { p_listing_id: listingId, p_quantity: 1 });
+  check(reused.data?.reused === true, "a second attempt at the same lot is the same order, not a second hold");
+
+  const orderRow = await service.from("orders").select("id,seller_id,purpose,reference_code,total_amount")
+    .eq("id", started.data.order_id).single();
+  check(orderRow.data?.seller_id === null,
+    "the order carries no seller — a buyer reads their own order and must not learn who sold");
+  check(orderRow.data?.reference_code === listingId, "the listing is what the order points at");
+
+  const buyerSees = await caster.from("marathon_vote_sales").select("id,seller_id");
+  const sellerSees = await seller.from("marathon_vote_sales").select("id,buyer_id");
+  check((buyerSees.data ?? []).length === 0 && (sellerSees.data ?? []).length === 0,
+    `the sale row itself is readable by neither side (${(buyerSees.data ?? []).length}/${(sellerSees.data ?? []).length})`);
+
+  // Paying, the way the provider callback does.
+  const settled = await service.rpc("order_fulfil", { p_order_id: started.data.order_id });
+  check(!settled.error, `fulfilment transfers the votes${settled.error ? ` — ${settled.error.message}` : ""}`);
+
+  const again3 = await service.rpc("order_fulfil", { p_order_id: started.data.order_id });
+  check(again3.data?.already === true, "a retried callback transfers nothing a second time");
+
+  const transferred = await service.from("marathon_vote_ledger")
+    .select("kind,source,voter_id").eq("campaign_id", campaignId).eq("candidate_id", people.caster.id);
+  const arrived = (transferred.data ?? []).filter((row) => row.source === "marketplace");
+  check(arrived.length === 1 && arrived[0]?.kind === "premium",
+    `the buyer's tally gains exactly what was bought (${arrived.length})`);
+  check(arrived[0]?.voter_id === people.seller.id,
+    "recorded as the seller's allowance transferred, not as a vote out of nowhere");
+
+  const notes2 = await service.from("notifications").select("user_id,title,body,payload")
+    .in("user_id", [people.caster.id, people.seller.id]).eq("kind", "marathon_vote")
+    .order("created_at", { ascending: false }).limit(2);
+  const buyerNote = (notes2.data ?? []).find((row) => row.user_id === people.caster.id);
+  const sellerNote = (notes2.data ?? []).find((row) => row.user_id === people.seller.id);
+  check(Boolean(buyerNote) && Boolean(sellerNote), "both sides are told");
+  check(!`${buyerNote?.body ?? ""}${sellerNote?.body ?? ""}`.includes(people.seller.username)
+    && !`${buyerNote?.body ?? ""}${sellerNote?.body ?? ""}`.includes(people.caster.username),
+    `and neither message names the other party (${sellerNote?.body?.slice(0, 46) ?? "—"})`);
+
+  const sellerLedger = await seller.rpc("marathon_my_vote_sales");
+  const sale = (sellerLedger.data ?? [])[0];
+  check(sale?.seller_net === 17600 && sale?.status === "released",
+    `the seller's own record shows what they earned (${JSON.stringify(sale ?? null)})`);
+  check(!("buyer_id" in (sale ?? {})), "with no buyer in it");
+
+  console.log("\nTashlab ketilgan xarid:");
+  const spentAlready = await seller.rpc("marathon_list_votes", { p_kind: "free", p_quantity: 1, p_unit_price: 9000 });
+  check(Boolean(spentAlready.error), "a vote already given away cannot be listed afterwards");
+
+  // A fresh seller, to abandon a purchase against.
+  const quitterEntry = { email: `mar-quit-${randomUUID()}@example.test`, username: `quit${stamp}` };
+  await makeUser(quitterEntry);
+  people.quitter = quitterEntry;
+  const quitter = createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  const quitterIn = await quitter.auth.signInWithPassword({ email: quitterEntry.email, password });
+  if (quitterIn.error) throw quitterIn.error;
+  const abandoned = await quitter.rpc("marathon_list_votes", { p_kind: "free", p_quantity: 1, p_unit_price: 9000 });
+  if (abandoned.error) throw abandoned.error;
+
+  const startedThenLeft = await voterClient.rpc("marathon_buy_votes", { p_listing_id: abandoned.data.listing_id, p_quantity: 1 });
+  if (startedThenLeft.error) throw startedThenLeft.error;
+  await service.rpc("order_advance", { p_order_id: startedThenLeft.data.order_id, p_to: "cancelled" });
+
+  const backOnSale = await service.from("marathon_vote_listings").select("status,remaining").eq("id", abandoned.data.listing_id).single();
+  check(backOnSale.data?.status === "open" && backOnSale.data?.remaining === 1,
+    `an abandoned purchase puts the lot back on the market (${JSON.stringify(backOnSale.data)})`);
+  const escrowRow = await service.from("marathon_vote_sales").select("status").eq("order_id", startedThenLeft.data.order_id).single();
+  check(escrowRow.data?.status === "refunded", "and the escrow is marked refunded rather than left open");
+
+  await service.from("app_settings").update({ value: marketFlag }).eq("key", "marathon.vote_marketplace_enabled");
+
   console.log("\nAfisha:");
   const posterPath = `${campaignId}/poster-${stamp}.txt`;
   const uploaded = await service.storage.from("marathon-posters")
