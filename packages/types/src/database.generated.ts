@@ -6361,6 +6361,10 @@ export type Database = {
         Returns: Json
       }
       marathon_active_campaign: { Args: never; Returns: Json }
+      marathon_candidate: {
+        Args: { p_campaign_id: string; p_user_id: string }
+        Returns: Json
+      }
       marathon_cast_vote: {
         Args: {
           p_candidate_id: string

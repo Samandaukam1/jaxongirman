@@ -17,6 +17,10 @@
           {
             "/": "/game-pair/*",
             "comment": "A scanned O'yingoh host QR opens the app onto the match controls."
+          },
+          {
+            "/": "/marathon/*",
+            "comment": "A scanned candidate QR opens the app on that candidate's vote sheet."
           }
         ]
       }

@@ -1123,3 +1123,33 @@ body:has(.qrx-page) > .site-footer { display: none; }
 .arena-finish-chip i { font-style: normal; color: rgba(255,255,255,.6); font-variant-numeric: tabular-nums; }
 
 @media (prefers-reduced-motion: reduce) { .arena-crown { animation: none; } }
+
+/* ───────────────────────────────────────── marathon: candidate invite ── */
+
+/* Shares the join landing's shell — the same glassy panel over the same drift
+ * of violet — because they are the same moment in two features: a camera has
+ * just been pointed at something, and this is what came back. Only the parts
+ * that are about a person are new. */
+.marathon-person { display: grid; gap: 10px; justify-items: center; }
+.marathon-avatar {
+  width: 88px; height: 88px; border-radius: 50%; object-fit: cover;
+  border: 2px solid rgba(255,255,255,.28); background: rgba(255,255,255,.1);
+}
+.marathon-avatar.is-initials {
+  display: grid; place-items: center; font-size: 30px; font-weight: 800;
+  letter-spacing: .04em; color: rgba(255,255,255,.9);
+}
+.marathon-handle { margin: 0; color: rgba(255,255,255,.6); font-size: 15px; font-weight: 600; }
+.marathon-clock {
+  margin: 0; padding: 7px 16px; border-radius: 999px;
+  background: rgba(255,255,255,.1); color: rgba(255,255,255,.78);
+  font-size: 13px; font-weight: 700;
+}
+.marathon-open {
+  display: grid; place-items: center; width: 100%; padding: 16px 20px;
+  border-radius: 18px; text-decoration: none; color: #fff; font-weight: 800; font-size: 16px;
+  background: linear-gradient(135deg, rgba(124,58,237,.95), rgba(37,99,235,.85));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.22), 0 14px 34px rgba(37,16,90,.5);
+  transition: transform 160ms ease;
+}
+.marathon-open:active { transform: scale(.985); }

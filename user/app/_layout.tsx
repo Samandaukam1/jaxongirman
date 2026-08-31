@@ -69,6 +69,9 @@ function ThemedShell() {
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(app)" />
         <Stack.Screen name="auth/callback" />
+        {/* Reachable signed out: a scanned marathon QR has to be remembered
+            before the sign-in gate can throw the destination away. */}
+        <Stack.Screen name="marathon/[campaignId]/[candidateId]" />
       </Stack>
     </>
   );

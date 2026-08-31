@@ -1,4 +1,4 @@
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Check, Crown, Search, Sparkles } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
@@ -9,7 +9,7 @@ import { ScreenHeader } from "@/components/ScreenHeader";
 import { EmptyState, ErrorState } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
 import {
-  castVote, myVotes, searchCandidates, useMarathonEnabled,
+  castVote, invitedCandidate, myVotes, searchCandidates, useMarathonEnabled,
   type MarathonCandidate, type MarathonVoteKind, type MarathonVotes,
 } from "@/lib/marathon";
 import { formatNumber } from "@/lib/money";
@@ -27,8 +27,17 @@ import { makeStyles, useTheme } from "@/theme/ThemeProvider";
  * whoever is already winning; a search asks who you actually came to support,
  * which is what a marathon run on a student's own circle is decided by.
  */
+/**
+ * Who a vote is about to go to.
+ *
+ * Narrower than a search result on purpose: a candidate reached through a
+ * shared link carries a name and a picture and no vote counts, and the
+ * confirmation never showed counts anyway. One shape both can satisfy.
+ */
+type Choice = Pick<MarathonCandidate, "user_id" | "username" | "full_name" | "avatar_url">;
+
 /** Two letters, from whichever name the account actually has. */
-function initialsOf(row: MarathonCandidate): string {
+function initialsOf(row: Choice): string {
   const source = (row.full_name ?? row.username ?? "?").trim();
   const parts = source.split(/\s+/).filter(Boolean);
   const letters = parts.length > 1 ? `${parts[0]![0]}${parts[1]![0]}` : source.slice(0, 2);
@@ -46,15 +55,48 @@ export default function MarathonVoteScreen() {
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [votes, setVotes] = useState<MarathonVotes | null>(null);
-  const [chosen, setChosen] = useState<MarathonCandidate | null>(null);
-  const [kind, setKind] = useState<MarathonVoteKind>("free");
+  const [chosen, setChosen] = useState<Choice | null>(null);
+  /**
+   * Null until somebody actually picks.
+   *
+   * Which vote to spend has an obvious default — the free one, while there is
+   * one — but the default depends on a wallet that arrives after the screen
+   * does, and on a sheet that can be opened by a link before either. Deriving
+   * it below means the sheet is never sitting on a spent option, and a person
+   * who does choose is not overruled when the wallet reloads.
+   */
+  const [kind, setKind] = useState<MarathonVoteKind | null>(null);
   const [sending, setSending] = useState(false);
-  const [done, setDone] = useState<MarathonCandidate | null>(null);
+  const [done, setDone] = useState<Choice | null>(null);
+  const params = useLocalSearchParams<{ campaignId?: string; candidateId?: string }>();
 
   useEffect(() => {
     if (!enabled) return;
     void myVotes().then(setVotes).catch(() => setVotes(null));
   }, [enabled]);
+
+  /**
+   * Arriving from a scanned QR or a shared link.
+   *
+   * The person came here to vote for one specific candidate, and asking them to
+   * type the username they just scanned would be the app forgetting what it was
+   * told. The sheet opens on that candidate directly; a link whose campaign has
+   * finished says so rather than opening an empty one.
+   */
+  useEffect(() => {
+    const campaignId = typeof params.campaignId === "string" ? params.campaignId : "";
+    const candidateId = typeof params.candidateId === "string" ? params.candidateId : "";
+    if (!enabled || !campaignId || !candidateId) return;
+    let cancelled = false;
+    void invitedCandidate(campaignId, candidateId)
+      .then((row) => {
+        if (cancelled) return;
+        if (row) setChosen(row);
+        else setError("Havola eskirgan yoki bu marafon yakunlangan.");
+      })
+      .catch((failure) => { if (!cancelled) setError(asErrorMessage(failure)); });
+    return () => { cancelled = true; };
+  }, [enabled, params.campaignId, params.candidateId]);
 
   // The search waits for a pause rather than querying per keystroke.
   useEffect(() => {
@@ -79,11 +121,13 @@ export default function MarathonVoteScreen() {
     premium: votes?.premium_available ?? 0,
   }), [votes]);
 
+  const chosenKind: MarathonVoteKind = kind ?? (available.free > 0 ? "free" : "premium");
+
   async function send() {
     if (!chosen) return;
     setSending(true);
     try {
-      await castVote(chosen.user_id, kind);
+      await castVote(chosen.user_id, chosenKind);
       setDone(chosen);
       setChosen(null);
       setVotes(await myVotes());
@@ -92,7 +136,7 @@ export default function MarathonVoteScreen() {
         ? {
           ...row,
           total_votes: Number(row.total_votes) + 1,
-          premium_votes: Number(row.premium_votes) + (kind === "premium" ? 1 : 0),
+          premium_votes: Number(row.premium_votes) + (chosenKind === "premium" ? 1 : 0),
         }
         : row));
     } catch (failure) {
@@ -164,10 +208,7 @@ export default function MarathonVoteScreen() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`${row.username} ni tanlash`}
-              onPress={() => {
-                setKind(available.free > 0 ? "free" : "premium");
-                setChosen(row);
-              }}
+              onPress={() => { setKind(null); setChosen(row); }}
               style={styles.choose}
             >
               <Text style={styles.chooseText}>Tanlash</Text>
@@ -197,24 +238,24 @@ export default function MarathonVoteScreen() {
 
               <Pressable
                 accessibilityRole="radio"
-                accessibilityState={{ selected: kind === "free", disabled: available.free === 0 }}
+                accessibilityState={{ selected: chosenKind === "free", disabled: available.free === 0 }}
                 disabled={available.free === 0}
                 onPress={() => setKind("free")}
-                style={[styles.option, kind === "free" && styles.optionOn, available.free === 0 && styles.optionOff]}
+                style={[styles.option, chosenKind === "free" && styles.optionOn, available.free === 0 && styles.optionOff]}
               >
                 <View style={{ flex: 1 }}>
                   <Text style={styles.optionLabel}>Bepul ovoz</Text>
                   <Text style={styles.optionHint}>{available.free > 0 ? "1 ta mavjud" : "✓ Ishlatilgan"}</Text>
                 </View>
-                {kind === "free" && available.free > 0 ? <Check color={colors.primary} size={icon.sm} strokeWidth={icon.strokeBold} /> : null}
+                {chosenKind === "free" && available.free > 0 ? <Check color={colors.primary} size={icon.sm} strokeWidth={icon.strokeBold} /> : null}
               </Pressable>
 
               <Pressable
                 accessibilityRole="radio"
-                accessibilityState={{ selected: kind === "premium", disabled: available.premium === 0 }}
+                accessibilityState={{ selected: chosenKind === "premium", disabled: available.premium === 0 }}
                 disabled={available.premium === 0}
                 onPress={() => setKind("premium")}
-                style={[styles.option, kind === "premium" && styles.optionOn, available.premium === 0 && styles.optionOff]}
+                style={[styles.option, chosenKind === "premium" && styles.optionOn, available.premium === 0 && styles.optionOff]}
               >
                 <Crown color={available.premium > 0 ? colors.primary : colors.inkSoft} size={icon.sm} strokeWidth={icon.stroke} />
                 <View style={{ flex: 1 }}>
@@ -223,7 +264,7 @@ export default function MarathonVoteScreen() {
                     {available.premium > 0 ? "1 ta mavjud" : "Premium a’zolik bilan mavjud"}
                   </Text>
                 </View>
-                {kind === "premium" && available.premium > 0 ? <Check color={colors.primary} size={icon.sm} strokeWidth={icon.strokeBold} /> : null}
+                {chosenKind === "premium" && available.premium > 0 ? <Check color={colors.primary} size={icon.sm} strokeWidth={icon.strokeBold} /> : null}
               </Pressable>
 
               {available.free === 0 && available.premium === 0 ? (

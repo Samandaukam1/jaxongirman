@@ -4,6 +4,7 @@ import { RefreshControl, ScrollView, Text, View } from "react-native";
 
 import { MarathonPoster } from "@/components/MarathonPoster";
 import { MarathonRewards } from "@/components/MarathonRewards";
+import { MarathonShareRow } from "@/components/MarathonShareRow";
 import { MarathonVoteButton } from "@/components/MarathonVoteButton";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
@@ -12,6 +13,7 @@ import { countdownTo, formatCountdown, formatDate, useNow } from "@/lib/datetime
 import { nextTierOf, useMarathonCampaign } from "@/lib/marathon";
 import { formatNumber } from "@/lib/money";
 import { icon, radius, spacing, typography } from "@/theme/tokens";
+import { useAccount } from "@/providers/AccountProvider";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /**
@@ -31,6 +33,7 @@ export default function MarathonScreen() {
   const { colors } = useTheme();
   const { campaign, loading, error, skew, reload, join, joining } = useMarathonCampaign();
   const [refreshing, setRefreshing] = useState(false);
+  const { profile } = useAccount();
 
   // The device ticks between renders; the server's clock is what it is measured against.
   const now = useNow(Boolean(campaign)) + skew;
@@ -124,6 +127,12 @@ export default function MarathonScreen() {
             <MarathonRewards campaign={campaign} />
 
             <MarathonVoteButton />
+
+            {/* Sharing comes after voting and only for somebody who entered:
+                a link to a candidacy that does not exist is a dead QR. */}
+            {campaign.joined && profile ? (
+              <MarathonShareRow campaign={campaign} candidateId={profile.id} username={profile.username} />
+            ) : null}
 
             {campaign.rules ? (
               <View style={styles.rules}>

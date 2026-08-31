@@ -2,11 +2,13 @@ import { useRouter } from "expo-router";
 import { Clock, Trophy } from "lucide-react-native";
 import { Text, View } from "react-native";
 
+import { MarathonShareRow } from "@/components/MarathonShareRow";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { countdownTo, formatCountdown, useNow } from "@/lib/datetime";
 import { nextTierOf, useMarathonCampaign } from "@/lib/marathon";
 import { formatNumber, formatSom } from "@/lib/money";
 import { icon, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { useAccount } from "@/providers/AccountProvider";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /**
@@ -32,6 +34,7 @@ export function MarathonProfileCard() {
   const { colors } = useTheme();
   const router = useRouter();
   const { campaign, join, joining, skew } = useMarathonCampaign();
+  const { profile } = useAccount();
   const now = useNow(Boolean(campaign)) + skew;
 
   if (!campaign) return null;
@@ -96,6 +99,12 @@ export function MarathonProfileCard() {
             </View>
 
             <PrimaryButton label="Marafonni ochish" onPress={() => router.push("/(app)/marathon")} />
+
+            {/* A candidate's own link, which is the only way anybody finds them
+                to vote: the search asks for a username somebody has to know. */}
+            {profile ? (
+              <MarathonShareRow campaign={campaign} candidateId={profile.id} username={profile.username} />
+            ) : null}
           </>
         ) : (
           <>

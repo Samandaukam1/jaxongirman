@@ -231,3 +231,31 @@ export function tierReached(tier: MarathonTier, campaign: MarathonCampaign): boo
 export function nextTierOf(campaign: MarathonCampaign): MarathonTier | null {
   return campaign.tiers.find((tier) => !tierReached(tier, campaign)) ?? null;
 }
+
+/** A candidate as a share link identifies them: enough to recognise, no more. */
+export type MarathonInvitedCandidate = {
+  user_id: string;
+  username: string | null;
+  full_name: string | null;
+  avatar_url: string | null;
+  campaign_id: string;
+  campaign_title: string;
+  poster_path: string | null;
+  ends_at: string;
+  server_now: string;
+};
+
+/**
+ * Who a share link points at.
+ *
+ * Answers null for a link that has outlived its campaign, so a screen opened
+ * from an old QR can say the link is stale instead of drawing an empty card.
+ */
+export async function invitedCandidate(campaignId: string, candidateId: string): Promise<MarathonInvitedCandidate | null> {
+  const { data, error } = await supabase.rpc("marathon_candidate", {
+    p_campaign_id: campaignId,
+    p_user_id: candidateId,
+  });
+  if (error) throw error;
+  return (data ?? null) as MarathonInvitedCandidate | null;
+}

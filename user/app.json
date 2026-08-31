@@ -60,6 +60,16 @@
               "scheme": "https",
               "host": "jaxongirman.app",
               "pathPrefix": "/game-pair"
+            },
+            {
+              "scheme": "https",
+              "host": "jaxongirman.uz",
+              "pathPrefix": "/marathon"
+            },
+            {
+              "scheme": "https",
+              "host": "jaxongirman.app",
+              "pathPrefix": "/marathon"
             }
           ],
           "category": [

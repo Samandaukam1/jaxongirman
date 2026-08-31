@@ -255,6 +255,33 @@ try {
     .select("*", { count: "exact", head: true }).eq("campaign_id", campaignId).eq("user_id", people.caster.id);
   check((enrolled.count ?? 0) === 1, `joining twice leaves one row (${enrolled.count ?? 0})`);
 
+  console.log("\nUlashish havolasi:");
+  // The web landing page reads this with the anon key and nothing else.
+  const guest = createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  const invite = await guest.rpc("marathon_candidate", { p_campaign_id: campaignId, p_user_id: people.candidate.id });
+  const card = invite.data;
+  check(!invite.error && card?.user_id === people.candidate.id,
+    `a shared link resolves without signing in${invite.error ? ` — ${invite.error.message}` : ""}`);
+  check(card?.username === people.candidate.username && card?.campaign_title?.includes(stamp),
+    "and names the person and the campaign it was printed for");
+  // What a poster already says, and nothing else: no counts, no e-mail, no
+  // way to ask this endpoint who voted for whom.
+  check(!("total_votes" in (card ?? {})) && !("premium_votes" in (card ?? {})) && !("email" in (card ?? {})),
+    `it carries no vote counts and no contact details (${Object.keys(card ?? {}).join(",")})`);
+  const clockGap2 = Math.abs(new Date(card?.server_now ?? 0).getTime() - Date.now());
+  check(clockGap2 < 120_000, "and the deadline it draws is measured by the server's clock");
+
+  const strangerLink = await guest.rpc("marathon_candidate", { p_campaign_id: campaignId, p_user_id: people.outsider.id });
+  check(strangerLink.data === null, "a link to somebody who never entered resolves to nothing");
+
+  const wrongCampaign = await guest.rpc("marathon_candidate", { p_campaign_id: randomUUID(), p_user_id: people.candidate.id });
+  check(wrongCampaign.data === null, "and so does one whose campaign is not the one running");
+
+  await service.from("app_settings").update({ value: false }).eq("key", "student_marathon_enabled");
+  const whileDark = await guest.rpc("marathon_candidate", { p_campaign_id: campaignId, p_user_id: people.candidate.id });
+  check(whileDark.data === null, "while the marathon is off the link says nothing about anybody");
+  await service.from("app_settings").update({ value: true }).eq("key", "student_marathon_enabled");
+
   console.log("\nAfisha:");
   const posterPath = `${campaignId}/poster-${stamp}.txt`;
   const uploaded = await service.storage.from("marathon-posters")

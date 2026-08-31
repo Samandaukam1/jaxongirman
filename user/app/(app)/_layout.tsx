@@ -1,5 +1,6 @@
 import { Redirect, Stack } from "expo-router";
 
+import { useResumeMarathonInvite } from "@/lib/useResumeMarathonInvite";
 import { AccountProvider } from "@/providers/AccountProvider";
 import { PaymentPolicyProvider } from "@/providers/PaymentPolicyProvider";
 import { useAuth } from "@/providers/AuthProvider";
@@ -8,6 +9,9 @@ import { useTheme } from "@/theme/ThemeProvider";
 export default function AppLayout() {
   const { session, loading } = useAuth();
   const { colors } = useTheme();
+  // A marathon QR scanned before there was an account resumes here, on the
+  // first screen behind the gate.
+  useResumeMarathonInvite(Boolean(session));
   if (!loading && !session) return <Redirect href="/(auth)/sign-in" />;
   return (
     // Mounted inside the authenticated area so the wallet, profile and inbox
