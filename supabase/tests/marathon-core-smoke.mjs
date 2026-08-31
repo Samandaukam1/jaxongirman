@@ -153,6 +153,61 @@ try {
   const stranger = await voterClient.rpc("marathon_search_candidates", { p_query: people.outsider.username });
   check((stranger.data ?? []).length === 0, "an account that never entered is not a candidate");
 
+  console.log("\nOvoz berish:");
+  // A fresh voter, because the one above already spent both votes directly.
+  const casterEntry = { email: `mar-cast-${randomUUID()}@example.test`, username: `cast${stamp}` };
+  await makeUser(casterEntry);
+  people.caster = casterEntry;
+  const caster = createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  const casterIn = await caster.auth.signInWithPassword({ email: casterEntry.email, password });
+  if (casterIn.error) throw casterIn.error;
+
+  const before = await caster.rpc("marathon_my_votes");
+  check(before.data?.free_available === 1 && before.data?.premium_available === 1,
+    `a new voter holds both votes (${JSON.stringify(before.data)})`);
+
+  const cast1 = await caster.rpc("marathon_cast_vote", { p_candidate_id: people.candidate.id, p_kind: "free" });
+  check(!cast1.error, `a vote is cast${cast1.error ? ` — ${cast1.error.message}` : ""}`);
+
+  const again = await caster.rpc("marathon_cast_vote", { p_candidate_id: people.candidate.id, p_kind: "free" });
+  check(Boolean(again.error) && /allaqachon/.test(again.error?.message ?? ""),
+    `the same vote cannot be cast twice, and says so in words (${again.error?.message?.slice(0, 40) ?? "allowed"})`);
+
+  const spent = await caster.rpc("marathon_my_votes");
+  check(spent.data?.free_available === 0 && spent.data?.premium_available === 1,
+    `what is left is what the ledger says (${JSON.stringify(spent.data)})`);
+
+  const atSelf = await caster.rpc("marathon_cast_vote", { p_candidate_id: casterEntry.id, p_kind: "premium" });
+  check(Boolean(atSelf.error), "nobody votes for themselves through the function either");
+
+  const atStranger = await caster.rpc("marathon_cast_vote", { p_candidate_id: people.outsider.id, p_kind: "premium" });
+  check(Boolean(atStranger.error) && /ishtirokchisi emas/.test(atStranger.error?.message ?? ""),
+    "an account that never entered cannot be voted for");
+
+  const premiumCast = await caster.rpc("marathon_cast_vote", { p_candidate_id: people.candidate.id, p_kind: "premium" });
+  check(!premiumCast.error, "a premium vote is separate");
+
+  console.log("\nBildirishnoma:");
+  const notes = await service.from("notifications")
+    .select("kind,title,body,payload").eq("user_id", people.candidate.id).eq("kind", "marathon_vote")
+    .order("created_at", { ascending: false });
+  const rows = notes.data ?? [];
+  check(rows.length === 2, `the candidate was told about each vote (${rows.length})`);
+  const free = rows.find((row) => row.payload?.kind === "free");
+  const paid = rows.find((row) => row.payload?.kind === "premium");
+  check(Boolean(free) && free.body.includes(casterEntry.username),
+    `a direct vote names who cast it (${free?.body?.slice(0, 48) ?? "—"})`);
+  check(Boolean(paid) && paid.title.includes("Premium"),
+    `and a premium vote reads differently (${paid?.title ?? "—"})`);
+  check(rows.every((row) => row.payload?.source === "direct"),
+    "each one records how it arrived, so a marketplace vote can say less");
+
+  console.log("\nMarafon o‘chirilganda:");
+  await service.from("app_settings").update({ value: false }).eq("key", "student_marathon_enabled");
+  const whileClosed = await caster.rpc("marathon_cast_vote", { p_candidate_id: people.candidate.id, p_kind: "premium" });
+  check(Boolean(whileClosed.error), "no vote can be cast while the marathon is off");
+  await service.from("app_settings").update({ value: true }).eq("key", "student_marathon_enabled");
+
   console.log("\nMaxfiylik:");
   const candidateClient = createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
   const asCandidate = await candidateClient.auth.signInWithPassword({ email: people.candidate.email, password });
