@@ -1,4 +1,4 @@
-import { AlertTriangle, Image as ImageIcon, Trophy, Upload } from "lucide-react";
+import { AlertTriangle, Image as ImageIcon, ShieldAlert, Trophy, Upload, Wallet } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { EmptyState, ErrorState, Modal, PageHeader, StatusBadge } from "@/components/AdminUI";
@@ -43,6 +43,41 @@ type Campaign = {
 };
 
 type Overview = { marathon_enabled: boolean; market_enabled: boolean; campaigns: Campaign[] };
+
+/**
+ * What a candidate's votes look like, in the four ways they can look wrong.
+ *
+ * Counts, never a verdict. A real campaign brings real sign-ups, so fresh
+ * accounts are high for honest candidates too — the signals matter beside each
+ * other, and the decision is a person's.
+ */
+type Signal = {
+  candidate_id: string;
+  username: string | null;
+  full_name: string | null;
+  total: number;
+  premium: number;
+  direct: number;
+  bought: number;
+  distinct_voters: number;
+  fresh_voters: number;
+  burst: number;
+  top_seller_share: number;
+};
+
+/** What one seller is owed for votes that have already changed hands. */
+type Payout = {
+  seller_id: string;
+  username: string | null;
+  full_name: string | null;
+  sales: number;
+  votes: number;
+  gross: number;
+  fee: number;
+  net: number;
+};
+
+const som = (value: number) => `${new Intl.NumberFormat("ru-RU").format(value)} so‘m`;
 
 const DEFAULT_TIERS: Tier[] = [
   { position: 1, votes_required: 1000, premium_required: 300, reward_percent: 25 },
@@ -116,6 +151,8 @@ export function MarathonPage() {
   const [form, setForm] = useState<Partial<Campaign>>({});
   const [tiers, setTiers] = useState<Tier[]>(DEFAULT_TIERS);
   const [launching, setLaunching] = useState<Campaign | null>(null);
+  const [signals, setSignals] = useState<Signal[]>([]);
+  const [payouts, setPayouts] = useState<Payout[]>([]);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -134,6 +171,23 @@ export function MarathonPage() {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+
+  // The integrity half is read for whichever campaign is running: signals and
+  // money are about a campaign in flight, not about a draft nobody has voted in.
+  const running = overview?.campaigns.find((row) => row.status === "active") ?? null;
+  useEffect(() => {
+    if (!running) { setSignals([]); setPayouts([]); return; }
+    let cancelled = false;
+    void Promise.all([
+      supabase.rpc("admin_marathon_fraud", { p_campaign_id: running.id }),
+      supabase.rpc("admin_marathon_payouts", { p_campaign_id: running.id }),
+    ]).then(([fraud, owed]) => {
+      if (cancelled) return;
+      setSignals((fraud.data as unknown as Signal[]) ?? []);
+      setPayouts((owed.data as unknown as Payout[]) ?? []);
+    });
+    return () => { cancelled = true; };
+  }, [running]);
 
   const campaign = overview?.campaigns.find((row) => row.id === selected) ?? null;
 
@@ -224,6 +278,18 @@ export function MarathonPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function settle(seller: Payout) {
+    setBusy(true);
+    const { error: failure } = await supabase.rpc("admin_settle_marathon_sales", { p_seller_id: seller.seller_id });
+    if (failure) setError(errorMessage(failure));
+    else {
+      setError(null);
+      setMessage(`${som(seller.net)} to‘langan deb belgilandi.`);
+      setPayouts((current) => current.filter((row) => row.seller_id !== seller.seller_id));
+    }
+    setBusy(false);
   }
 
   async function launch(row: Campaign) {
@@ -454,6 +520,70 @@ export function MarathonPage() {
             <button className="primary-button" type="button" disabled={busy} onClick={() => void save()}>Saqlash</button>
             <button className="secondary-button" type="button" onClick={() => { setSelected(null); setForm({}); }}>Yopish</button>
           </div>
+        </section>
+      ) : null}
+
+      {running && signals.length > 0 ? (
+        <section className="panel">
+          <h3><ShieldAlert size={16} strokeWidth={1.9} /> Shubhali faoliyat</h3>
+          <p className="panel-hint">
+            Bular hukm emas, o‘lchov. Haqiqiy kampaniya ham yangi ro‘yxatdan o‘tganlarni
+            olib keladi — raqamlar bir-birining yonida ma’noga ega bo‘ladi. Hech kim
+            avtomatik bloklanmaydi.
+          </p>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Ishtirokchi</th><th>Jami</th><th>To‘g‘ridan</th><th>Sotib olingan</th>
+                <th>Yangi akkount</th><th>10 daqiqadagi eng ko‘p</th><th>Bir sotuvchidan</th>
+              </tr>
+            </thead>
+            <tbody>
+              {signals.slice(0, 25).map((row) => (
+                <tr key={row.candidate_id}>
+                  <td>{row.full_name ?? "—"}{row.username ? ` (@${row.username})` : ""}</td>
+                  <td>{row.total}</td>
+                  <td>{row.direct}</td>
+                  <td>{row.bought}</td>
+                  <td>{row.fresh_voters}</td>
+                  <td>{row.burst}</td>
+                  <td>{row.bought > 0 ? `${row.top_seller_share}%` : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      ) : null}
+
+      {payouts.length > 0 ? (
+        <section className="panel">
+          <h3><Wallet size={16} strokeWidth={1.9} /> To‘lanmagan savdolar</h3>
+          <p className="panel-hint">
+            Ovozlari sotilgan va puli hali chiqarilmagan foydalanuvchilar. Summa savdo
+            paytida yozilgan — komissiya keyin o‘zgarsa ham bu raqam o‘zgarmaydi.
+          </p>
+          <table className="data-table">
+            <thead>
+              <tr><th>Sotuvchi</th><th>Savdo</th><th>Ovoz</th><th>Jami</th><th>Komissiya</th><th>To‘lanadi</th><th /></tr>
+            </thead>
+            <tbody>
+              {payouts.map((row) => (
+                <tr key={row.seller_id}>
+                  <td>{row.full_name ?? "—"}{row.username ? ` (@${row.username})` : ""}</td>
+                  <td>{row.sales}</td>
+                  <td>{row.votes}</td>
+                  <td>{som(row.gross)}</td>
+                  <td>{som(row.fee)}</td>
+                  <td><strong>{som(row.net)}</strong></td>
+                  <td className="row-actions">
+                    <button className="secondary-button" type="button" disabled={busy} onClick={() => void settle(row)}>
+                      To‘landi
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </section>
       ) : null}
 

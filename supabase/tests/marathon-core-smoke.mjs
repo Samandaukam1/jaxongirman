@@ -629,6 +629,49 @@ try {
   check((auditRows.data ?? []).length >= 3,
     `every one of those is in the audit log (${(auditRows.data ?? []).length})`);
 
+  console.log("\nShubha signallari va to‘lovlar:");
+  const outsiderSignals = await voterClient.rpc("admin_marathon_fraud", { p_campaign_id: campaignId });
+  check(outsiderSignals.data === null, "an ordinary account cannot read the fraud signals");
+
+  const signals = await admin.rpc("admin_marathon_fraud", { p_campaign_id: campaignId });
+  const candidateRow = (signals.data ?? []).find((row) => row.candidate_id === people.candidate.id);
+  check(!signals.error && Boolean(candidateRow),
+    `the console can read them${signals.error ? ` — ${signals.error.message}` : ""}`);
+  // Seven votes reached this candidate over the run — five direct and two
+  // written straight into the ledger to prove a transfer is not bound by the
+  // one-per-kind index. The purchase further up went to the caster, not here.
+  check(Number(candidateRow?.total) === 7 && Number(candidateRow?.bought) === 2,
+    `and they count what the ledger holds (${candidateRow?.total}/${candidateRow?.bought})`);
+  // Six votes inside the minute this test takes: exactly the shape the burst
+  // signal exists to notice.
+  check(Number(candidateRow?.burst) >= 5, `a block of votes in one window is measured (${candidateRow?.burst})`);
+  check(Number(candidateRow?.fresh_voters) === 7,
+    `so is how many came from accounts made after the campaign began (${candidateRow?.fresh_voters})`);
+  check(Number(candidateRow?.top_seller_share) === 100,
+    `and how much of the bought half came from one seller (${candidateRow?.top_seller_share}%)`);
+  check(!("voter_id" in (candidateRow ?? {})),
+    "none of which names a voter — the signals are counts, not a list of who voted");
+
+  const owed = await admin.rpc("admin_marathon_payouts", { p_campaign_id: campaignId });
+  const payout = (owed.data ?? []).find((row) => row.seller_id === people.seller.id);
+  check(Boolean(payout) && Number(payout.net) === 17600,
+    `a seller's unpaid balance is what the sale snapshotted (${JSON.stringify(payout ?? null)})`);
+
+  const paidOut = await admin.rpc("admin_settle_marathon_sales", { p_seller_id: people.seller.id, p_reason: "smoke" });
+  check(!paidOut.error && Number(paidOut.data?.net) === 17600,
+    `marking it paid answers with what was paid${paidOut.error ? ` — ${paidOut.error.message}` : ""}`);
+
+  const owedAgain = await admin.rpc("admin_marathon_payouts", { p_campaign_id: campaignId });
+  check(!(owedAgain.data ?? []).some((row) => row.seller_id === people.seller.id),
+    "and it leaves the list");
+  const paidTwice = await admin.rpc("admin_settle_marathon_sales", { p_seller_id: people.seller.id });
+  check(Boolean(paidTwice.error), "paying the same seller twice is refused rather than repeated");
+
+  const stillThere = await service.from("marathon_vote_ledger")
+    .select("id", { count: "exact", head: true })
+    .eq("campaign_id", campaignId).eq("candidate_id", people.caster.id).eq("source", "marketplace");
+  check((stillThere.count ?? 0) === 1, "settling money never touches the votes it was paid for");
+
 } finally {
   if (previousFlag !== null) {
     await service.from("app_settings").update({ value: previousFlag }).eq("key", "student_marathon_enabled");

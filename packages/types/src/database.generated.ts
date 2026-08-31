@@ -5442,7 +5442,9 @@ export type Database = {
           user_id: string
         }[]
       }
+      admin_marathon_fraud: { Args: { p_campaign_id: string }; Returns: Json }
       admin_marathon_overview: { Args: never; Returns: Json }
+      admin_marathon_payouts: { Args: { p_campaign_id?: string }; Returns: Json }
       admin_mark_settlement_paid: {
         Args: {
           p_destination_note: string
@@ -5960,6 +5962,10 @@ export type Database = {
         }
       }
       admin_settle_ai_cost: { Args: { p_note?: string }; Returns: Json }
+      admin_settle_marathon_sales: {
+        Args: { p_reason?: string; p_seller_id: string }
+        Returns: Json
+      }
       admin_subscription_overview: { Args: never; Returns: Json }
       admin_terminate_game_session: {
         Args: { p_reason: string; p_session_id: string }
