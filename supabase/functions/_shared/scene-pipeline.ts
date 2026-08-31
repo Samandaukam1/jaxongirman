@@ -205,16 +205,14 @@ export async function generateDeck(deps: Deps, input: DeckInput): Promise<Genera
       if (!read.scene) return raw;
       const spoken = withRescuedContent(read.scene, brief?.mainMessage ?? "");
       // The cover's credit line, where the deck has names to put on it.
-      if (planned.kind !== "cover") return spoken;
-      // A cover is a photograph with the subject's name on it, whether or not
-      // the model remembered.
-      const covered = withCoverImage(spoken, input.topic);
-      const credit = [
-        input.author ? `Tayyorladi: ${input.author}` : null,
-        input.teacher ? `O'qituvchi: ${input.teacher}` : null,
-      ].filter(Boolean).join(" · ");
-      return withCoverCredit(covered, credit);
+      return spoken;
     };
+
+    /** The lines that name whose deck this is, where the deck has them. */
+    const coverCredit = [
+      input.author ? `Tayyorladi: ${input.author}` : null,
+      input.teacher ? `O'qituvchi: ${input.teacher}` : null,
+    ].filter(Boolean).join(" · ");
 
     const cycle: { -readonly [K in keyof CycleResult]: CycleResult[K] } = await runSceneCycle(async (previous) => {
       const prompt = previous
@@ -308,6 +306,24 @@ export async function generateDeck(deps: Deps, input: DeckInput): Promise<Genera
         // The faults of a page that was thrown away describe a page nobody
         // will see. What shipped is what the record should list; the attempt's
         // own faults stay in the history.
+        cycle.report = checked.report;
+      }
+    }
+
+    /**
+     * The cover's own two guarantees, applied to whatever finally shipped.
+     *
+     * They used to be applied to the model's answer, before the trim and the
+     * fallback could replace it — so a cover that failed and was rebuilt from
+     * the brief lost both its photograph and the names, which is precisely the
+     * cover most in need of them.
+     */
+    if (scene && planned.kind === "cover") {
+      const finished = withCoverCredit(withCoverImage(scene, input.topic), coverCredit);
+      const checked = validateScene(finished, language, signatures.at(-1) ?? null);
+      if (checked.scene && checked.report) {
+        scene = checked.scene;
+        score = checked.report.score;
         cycle.report = checked.report;
       }
     }

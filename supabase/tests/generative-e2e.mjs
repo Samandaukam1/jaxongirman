@@ -105,13 +105,15 @@ try {
     `the deck was generated in ${seconds}s${job?.error_message ? ` — ${job.error_message}` : ` (${job?.stage ?? "?"})`}`);
 
   const deck = await service.from("presentations")
-    .select("design_engine,design_dna,design_id,generated_slide_count,status").eq("id", presentationId).single();
+    .select("design_engine,design_dna,design_id,generated_slide_count,status,author_name,teacher_name").eq("id", presentationId).single();
   check(deck.data?.design_engine === "generative_v1", `the deck says which engine made it (${deck.data?.design_engine ?? "—"})`);
   // §37: no silent fallback. A deck that came from the old engine says so by
   // carrying a design; one made here carries none.
   check(deck.data?.design_id === null, "and no JSLAYD design was used");
   check(Boolean(deck.data?.design_dna?.fonts), "the visual language is recorded");
   check(deck.data?.status === "ready", `the deck is ready (${deck.data?.status})`);
+  // The cover can only name somebody the deck knows about.
+  check(deck.data?.author_name === "Ali Valiyev", `the deck stored who made it (${deck.data?.author_name ?? "—"})`);
 
   const slides = await service.from("slides").select("id,position,quality_score,quality_report").eq("presentation_id", presentationId).order("position");
   const elements = await service.from("slide_elements").select("slide_id,type,x,y,width,height,z_index,style,content").eq("presentation_id", presentationId);
@@ -215,6 +217,9 @@ try {
   check(exportJob?.status === "succeeded", `the export finished${exportJob?.error_message ? ` — ${exportJob.error_message}` : ` (${exportJob?.status ?? "?"})`}`);
   if (exportJob?.status === "succeeded" && exportJob.storage_path) {
     const file = await service.storage.from("exports").download(exportJob.storage_path);
+    // Said out loud. A download that quietly failed made three checks vanish
+    // and a run with no pictures in the file look exactly like one that passed.
+    check(!file.error && Boolean(file.data), `the exported file can be opened${file.error ? ` — ${file.error.message}` : ""}`);
     if (!file.error && file.data) {
       const parts = await unzip(new Uint8Array(await file.data.arrayBuffer()));
       const decoder = new TextDecoder();

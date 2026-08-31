@@ -337,14 +337,10 @@ export function sceneFromBrief(input: { title: string; message: string; supporti
    * boundary — the words are the brief's, so losing the tail of one costs
    * nothing a reader will miss.
    */
-  const fit = measureText(placeScene(scene)).find((one) => one.path.endsWith("[1]"));
-  if (!fit || fit.fits) return scene;
-  const room = Math.max(40, fit.capacity - 1);
-  const cut = body.slice(0, room);
-  const boundary = cut.lastIndexOf(" ");
-  const trimmed = (boundary > room * 0.6 ? cut.slice(0, boundary) : cut).trimEnd();
-  elements[1] = { ...elements[1]!, text: trimmed } as Scene["elements"][number];
-  return { ...scene, elements };
+  // Whatever overflows, not only the body: a long title in a two-line band
+  // overflows exactly as readily, and left alone it kept this page at 75 —
+  // which is the score the page was built to replace.
+  return withTrimmedText(scene);
 }
 
 
@@ -393,13 +389,47 @@ export function withCoverCredit(scene: Scene, line: string): Scene {
     element.type === "text" && element.text.includes(wanted.split(" · ")[0]!));
   if (already) return scene;
 
-  const taken = new Set<number>();
-  for (const element of scene.elements) {
-    if (element.place.bleed) continue;
-    for (let row = element.place.row; row < element.place.row + element.place.rows; row += 1) taken.add(row);
+  /**
+   * Room on the last band, by column rather than by row.
+   *
+   * Looking for an empty row gave up whenever the model had put anything at
+   * the foot of the cover — and then the deck went out with nobody's name on
+   * it. A credit line is narrow; what it needs is a gap, not a whole band.
+   */
+  const occupied = (row: number): Set<number> => {
+    const columns = new Set<number>();
+    for (const element of scene.elements) {
+      if (element.place.bleed) continue;
+      if (row < element.place.row || row >= element.place.row + element.place.rows) continue;
+      for (let column = element.place.column; column < element.place.column + element.place.span; column += 1) {
+        columns.add(column);
+      }
+    }
+    return columns;
+  };
+
+  let row = -1;
+  let column = 0;
+  let span = 0;
+  for (const candidate of [GRID.rows - 1, GRID.rows - 2, GRID.rows - 3]) {
+    const used = occupied(candidate);
+    let start = 0;
+    let run = 0;
+    for (let at = 0; at <= GRID.columns; at += 1) {
+      if (at < GRID.columns && !used.has(at)) {
+        if (run === 0) start = at;
+        run += 1;
+        continue;
+      }
+      if (run > span) { span = run; column = start; row = candidate; }
+      run = 0;
+    }
+    // Three columns is enough for a name at caption size and narrow enough to
+    // fit beside whatever the model put at the foot of the page.
+    if (span >= 3) break;
+    span = 0;
   }
-  const row = [GRID.rows - 1, GRID.rows - 2].find((candidate) => !taken.has(candidate));
-  if (row === undefined) return scene;
+  if (row < 0 || span < 3) return scene;
 
   /**
    * White, because a cover is a photograph.
@@ -413,7 +443,7 @@ export function withCoverCredit(scene: Scene, line: string): Scene {
     elements: [...scene.elements, {
       type: "text",
       role: "caption",
-      place: { column: 0, span: 8, row, rows: 1 },
+      place: { column, span: Math.min(span, 8), row, rows: 1 },
       typography: { font: "body", step: "caption", color: "onImage" },
       text: wanted,
     }],

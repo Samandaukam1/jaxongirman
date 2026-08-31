@@ -310,3 +310,32 @@ test("a cover the model already photographed is left alone", () => {
   assert.equal(withCoverImage(scene, "Orol").elements.length, 2);
   assert.equal(withCoverImage(scene, "Orol").elements[0].intent.query, "Orol");
 });
+
+test("the credit line finds a gap when the last band is not empty", () => {
+  const { scene } = readScene({
+    purpose: "cover",
+    background: { kind: "solid", color: "background" },
+    elements: [
+      { type: "image", place: { column: 0, span: 12, row: 0, rows: 8, bleed: true }, treatment: "full_bleed", intent: { query: "x", orientation: "landscape" }, overlay: "scrim_bottom" },
+      { type: "text", role: "title", place: { column: 0, span: 7, row: 4, rows: 2 }, typography: { font: "display", step: "display", color: "onImage" }, text: "Mavzu" },
+      // Something already at the foot of the page: the case that used to send
+      // a deck out with nobody's name on it.
+      { type: "text", role: "eyebrow", place: { column: 0, span: 5, row: 7, rows: 1 }, typography: { font: "body", step: "micro", color: "onImage" }, text: "2026" },
+    ],
+  });
+  const credited = withCoverCredit(scene, "Tayyorladi: Ali · O'qituvchi: Dilnoza");
+  const line = credited.elements.at(-1);
+  assert.match(line.text, /Ali/);
+  assert.ok(line.place.column >= 5, "it sits in the gap beside what was there");
+  assert.deepEqual(findCollisions(placeScene(credited)), []);
+});
+
+test("a page built from a long brief trims its title as well as its body", () => {
+  const scene = sceneFromBrief({
+    title: "Juda uzun sarlavha ".repeat(12),
+    message: "Uzun matn. ".repeat(40),
+    supporting: null,
+  });
+  const placed = placeScene(scene);
+  assert.ok(measureText(placed).every((fit) => fit.fits), "a replacement that overflows replaces nothing");
+});
