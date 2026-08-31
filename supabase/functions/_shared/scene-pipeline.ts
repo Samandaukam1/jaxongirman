@@ -44,7 +44,10 @@ export type Deps = {
 export type DeckInput = {
   topic: string;
   language?: string;
-  slides: Array<{ title: string; research?: string | null }>;
+  /** Whose deck it is, for the cover's own lines. */
+  author?: string | null;
+  teacher?: string | null;
+  slides: Array<{ title: string; research?: string | null; kind?: "cover" | "content" | "closing" }>;
   /** Below this a slide is repaired; a slide that never reaches it is reported. */
   threshold?: number;
   maxAttempts?: number;
@@ -206,7 +209,17 @@ export async function generateDeck(deps: Deps, input: DeckInput): Promise<Genera
     const cycle: { -readonly [K in keyof CycleResult]: CycleResult[K] } = await runSceneCycle(async (previous) => {
       const prompt = previous
         ? repairPrompt(previous.scene, previous.report)
-        : scenePrompt({ brief: brief!, topic: input.topic, fonts: dna.fonts, mood: direction.mood, used: signatures, language });
+        : scenePrompt({
+          brief: brief!,
+          topic: input.topic,
+          fonts: dna.fonts,
+          mood: direction.mood,
+          used: signatures,
+          language,
+          kind: planned.kind ?? "content",
+          author: input.author ?? null,
+          teacher: input.teacher ?? null,
+        });
       if (previous) repairCount += 1;
       return rescue(await ask({ prompt, schema: sceneSchema(), schemaName: "slide_scene", maxOutputTokens: 3_000 }));
     }, {

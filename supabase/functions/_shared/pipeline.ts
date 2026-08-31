@@ -2192,6 +2192,8 @@ async function runGenerative(params: {
         ownerId: input.ownerId,
         presentationId: input.presentationId,
         topic: presentation.topic,
+        author: presentation.author_name,
+        teacher: presentation.teacher_name,
         /**
          * The whole deck, not only its middle.
          *
@@ -2203,7 +2205,7 @@ async function runGenerative(params: {
          * with neither cover nor conclusion because nobody asked it to.
          */
         slides: [
-          { title: presentation.topic, research: null },
+          { title: presentation.topic, research: null, kind: "cover" as const },
           { title: AGENDA_TITLE, research: outline.slides.map((slide) => slide.title).join("; ") },
           ...outline.slides.map((slide) => ({
             title: slide.title,
@@ -2212,7 +2214,7 @@ async function runGenerative(params: {
             research: params.research || null,
           })),
           { title: REFERENCES_TITLE, research: params.research || null },
-          { title: THANKS_TITLE, research: null },
+          { title: THANKS_TITLE, research: null, kind: "closing" as const },
         ],
         onUsage: (usage, model) => {
           const price = params.pricing.for(model);

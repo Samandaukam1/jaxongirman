@@ -330,6 +330,36 @@ const EXAMPLES = JSON.stringify([
   },
 ]);
 
+/**
+ * What a cover has to do, which is not what a content page has to do.
+ *
+ * It is the page an author looks at first and the one they show a room, and it
+ * is the only page whose subject is the whole deck. Left to the same rules as
+ * everything else it came back as a heading on a plain ground — correct by
+ * every measure and not a cover.
+ *
+ * The metadata lines are given as text rather than described, because "add the
+ * student's name" produces a label reading "Talaba" and nothing after it.
+ */
+function coverRules(input: { topic: string; author: string | null; teacher: string | null }): string[] {
+  const lines = [
+    "BU — MUQOVA. Boshqa sahifalardan farq qiladi:",
+    `- Butun sahifani egallovchi fon rasmi: {"type":"image","place":{"column":0,"span":12,"row":0,"rows":8,"bleed":true},"treatment":"full_bleed","overlay":"scrim_bottom","intent":{"query":"<${input.topic} bilan bevosita bog'liq aniq sahna>","orientation":"landscape"}}`,
+    "- Sarlavha pastki qismda, step=\"display\", color=\"onImage\" — mavzu nomi sahifada eng katta narsa bo'lsin.",
+    "- Rasm so'rovi mavzuga aniq bog'liq bo'lsin: umumiy \"fon\" yoki \"abstrakt\" emas.",
+    "- Muqovada card, chart va uzun paragraf BO'LMASIN.",
+  ];
+  // Only what exists: a blank line is a line the author fills in by hand, and
+  // an empty label is worse than no label.
+  const meta: string[] = [];
+  if (input.author) meta.push(`Tayyorladi: ${input.author}`);
+  if (input.teacher) meta.push(`O'qituvchi: ${input.teacher}`);
+  if (meta.length > 0) {
+    lines.push(`- Pastki qismda kichik matn (step=\"caption\", color=\"onImage\"): "${meta.join(" · ")}"`);
+  }
+  return lines;
+}
+
 export function scenePrompt(input: {
   brief: SemanticBrief;
   topic: string;
@@ -338,6 +368,10 @@ export function scenePrompt(input: {
   /** Compositions already used in this deck, so the next one differs. */
   used: readonly string[];
   language?: string;
+  /** Covers and closing pages are not content pages and are told so. */
+  kind?: "cover" | "content" | "closing";
+  author?: string | null;
+  teacher?: string | null;
 }): string {
   return [
     "Siz shu slayd uchun kompozitsiyani NOLDAN quruvchi dizaynersiz. Shablon tanlamaysiz.",
@@ -358,6 +392,17 @@ export function scenePrompt(input: {
     "LUG'AT:",
     VOCABULARY,
     "",
+    ...(input.kind === "cover"
+      ? [...coverRules({ topic: input.topic, author: input.author ?? null, teacher: input.teacher ?? null }), ""]
+      : []),
+    ...(input.kind === "closing"
+      ? [
+        "BU — YAKUNIY SAHIFA. Bullet ro'yxati emas:",
+        "- Kuchli yakuniy fikr (step=\"heading\" yoki \"title\").",
+        "- Ostida 2–3 ta asosiy xulosa yoki bitta qisqa paragraf.",
+        "",
+      ]
+      : []),
     "QOIDALAR:",
     /**
      * First, because it is the rule the model actually broke.
