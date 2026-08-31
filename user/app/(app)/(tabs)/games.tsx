@@ -11,6 +11,7 @@ import coinIcon from "../../../assets/coin/coin-icon.png";
 import { Appear } from "@/components/Appear";
 import { Touchable } from "@/components/Touchable";
 import { BOTTOM_NAV_SPACE } from "@/components/BottomNav";
+import { MarathonVoteButton } from "@/components/MarathonVoteButton";
 import { EmptyState, InlineError, SkeletonCard } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
 import {
@@ -116,6 +117,7 @@ export default function GamesScreen() {
             <Text style={styles.title}>O‘yingoh</Text>
           </View>
           <View style={styles.headerActions}>
+            <MarathonVoteButton variant="compact" />
             <Pressable style={styles.coinPill} onPress={() => router.push("/coins/buy")} accessibilityLabel="J Coin balans">
               <Image source={coinIcon} resizeMode="contain" style={styles.coinIcon} />
               <Text style={styles.coinText}>{formatNumber(balance)}</Text>

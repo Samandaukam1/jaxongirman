@@ -25,6 +25,7 @@ import PowerPointArt from "../../../assets/icons/5.svg";
 import PresentArt from "../../../assets/icons/6.svg";
 import { Appear } from "@/components/Appear";
 import { BOTTOM_NAV_SPACE } from "@/components/BottomNav";
+import { MarathonVoteButton } from "@/components/MarathonVoteButton";
 
 import { ProjectRow } from "@/components/ProjectRow";
 import { EmptyState, ErrorState, SkeletonCard } from "@/components/StateBlocks";
@@ -274,6 +275,7 @@ export default function ProjectsScreen() {
             <Text style={styles.brand}>Loyihalar</Text>
           </View>
           <View style={styles.titleActions}>
+            <MarathonVoteButton variant="compact" />
             <Touchable
               accessibilityRole="button"
               accessibilityLabel={searching ? "Qidiruvni yopish" : "Qidirish"}

@@ -9,6 +9,7 @@ import coinIcon from "../../../assets/coin/coin-icon.png";
 import { Appear } from "@/components/Appear";
 import { Avatar } from "@/components/Avatar";
 import { BOTTOM_NAV_SPACE } from "@/components/BottomNav";
+import { MarathonVoteButton } from "@/components/MarathonVoteButton";
 import { SurveyCard, type SurveySummary } from "@/components/SurveyCard";
 import { EmptyState, ErrorState, Skeleton, SkeletonCard } from "@/components/StateBlocks";
 import { formatClock, formatLongDate, formatRemainingWindow } from "@/lib/datetime";
@@ -125,6 +126,8 @@ export default function HomeScreen() {
               )}
             </View>
           </Pressable>
+
+          <MarathonVoteButton />
 
           <Pressable
             accessibilityRole="button"

@@ -8,6 +8,7 @@ import { ActivityIndicator, FlatList, Image, Modal, Pressable, RefreshControl, S
 
 import { Appear } from "@/components/Appear";
 import { BOTTOM_NAV_SPACE } from "@/components/BottomNav";
+import { MarathonVoteButton } from "@/components/MarathonVoteButton";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { EmptyState, ErrorState, SkeletonCard } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
@@ -161,6 +162,8 @@ export default function MarketplaceScreen() {
             <Text style={styles.eyebrow}>JAXONGIRMAN</Text>
             <Text style={styles.title}>Do‘kon</Text>
           </View>
+          <View style={styles.headerActions}>
+          <MarathonVoteButton variant="compact" />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Mahsulot sotish"
@@ -170,6 +173,7 @@ export default function MarketplaceScreen() {
             <Plus color={colors.onPrimary} size={icon.sm} strokeWidth={icon.strokeBold} />
             <Text style={styles.sellText}>Sotish</Text>
           </Pressable>
+          </View>
         </View>
 
         <View style={styles.searchRow}>
@@ -386,6 +390,7 @@ const useStyles = makeStyles((colors) => ({
   headerTop: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" },
   eyebrow: { ...typography.caption, color: colors.accent, letterSpacing: 1.7 },
   title: { ...typography.title, color: colors.ink, marginTop: 2 },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   sellButton: { flexDirection: "row", alignItems: "center", gap: 6, height: 40, paddingHorizontal: spacing.lg, borderRadius: radius.pill, backgroundColor: colors.primary },
   sellText: { ...typography.bodyMedium, color: colors.onPrimary, fontSize: 14 },
 

@@ -21,6 +21,7 @@ import coinIcon from "../../../assets/coin/coin-icon.png";
 import SlideCreateArt from "../../../assets/icons/4.svg";
 import { AccentIcon } from "@/components/AccentIcon";
 import { BOTTOM_NAV_SPACE } from "@/components/BottomNav";
+import { useMarathonEnabled } from "@/lib/marathon";
 import { DeleteAccountSheet } from "@/components/DeleteAccountSheet";
 import { SegmentedSwitch, type Segment } from "@/components/SegmentedSwitch";
 import { Touchable } from "@/components/Touchable";
@@ -100,6 +101,7 @@ const APPEARANCE: readonly Segment<ThemeMode>[] = [
 export default function ProfileScreen() {
   const { colors, mode, setMode } = useTheme();
   const styles = useStyles();
+  const marathonEnabled = useMarathonEnabled();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user, signOut } = useAuth();
@@ -307,6 +309,35 @@ export default function ProfileScreen() {
           <SegmentedSwitch options={APPEARANCE} value={mode} onChange={setMode} />
         </View>
 
+        {/*
+          * The marathon gets a section of its own, before Sozlamalar.
+          *
+          * §15 is specific about this and it is right: a competition somebody
+          * is running for a contract discount is not a setting, and putting it
+          * inside Sozlamalar is how a person never finds it.
+          */}
+        {marathonEnabled ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>TALABALAR MARAFONI</Text>
+            <View style={styles.rows}>
+              <Touchable
+                accessibilityRole="button"
+                accessibilityLabel="Talabalar marafoni"
+                onPress={() => router.push("/(app)/marathon/vote")}
+                style={styles.row}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.rowLabel}>Talabalar marafoni</Text>
+                  <Text style={styles.marathonHint}>
+                    Kontrakt uchun 10 mln so‘mgacha mukofot yutish imkoniyati.
+                  </Text>
+                </View>
+                <ChevronRight color={colors.inkSoft} size={icon.md} strokeWidth={icon.stroke} />
+              </Touchable>
+            </View>
+          </View>
+        ) : null}
+
         {/* Sozlamalar: the marketplace surfaces a person owns. */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>SOZLAMALAR</Text>
@@ -462,6 +493,7 @@ const useStyles = makeStyles((colors) => ({
   },
   rowCopy: { flex: 1, gap: 1 },
   rowLabel: { ...typography.bodyMedium, color: colors.ink, fontSize: 15 },
+  marathonHint: { ...typography.caption, color: colors.inkSoft, marginTop: 2 },
   rowDetail: { ...typography.caption, fontSize: 11.5, color: colors.inkSoft },
   signOut: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm,
