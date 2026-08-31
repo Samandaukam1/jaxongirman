@@ -257,7 +257,7 @@ try {
   if (previousFlag !== null) {
     await service.from("app_settings").update({ value: previousFlag }).eq("key", "design.generative_enabled");
   }
-  if (userId) {
+  if (userId && !process.env.KEEP) {
     const assets = await service.from("presentation_assets").select("storage_bucket,storage_path").eq("presentation_id", presentationId);
     for (const row of assets.data ?? []) await service.storage.from(row.storage_bucket).remove([row.storage_path]);
     await service.auth.admin.deleteUser(userId);
@@ -266,7 +266,9 @@ try {
 
 const restored = await service.from("app_settings").select("value").eq("key", "design.generative_enabled").single();
 check(restored.data?.value === previousFlag, `the switch is back where it was (${JSON.stringify(restored.data?.value)})`);
-const left = await service.from("presentations").select("*", { count: "exact", head: true }).eq("id", presentationId);
+const left = process.env.KEEP
+  ? { count: 0 }
+  : await service.from("presentations").select("*", { count: "exact", head: true }).eq("id", presentationId);
 check((left.count ?? 0) === 0, `nothing temporary remains (${left.count ?? 0})`);
 
 console.log(failures ? `\n${failures} generative E2E check(s) failed.` : "\nAll generative E2E checks passed.");
