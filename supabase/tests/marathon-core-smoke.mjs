@@ -217,6 +217,58 @@ try {
     `a candidate cannot read who voted for them (${(peeking.data ?? []).length} rows)`);
   const ownVotes = await voterClient.from("marathon_vote_ledger").select("id");
   check((ownVotes.data ?? []).length > 0, "but a person can see the votes they cast");
+
+  console.log("\nKampaniya sahifasi:");
+  await service.from("app_settings").update({ value: false }).eq("key", "student_marathon_enabled");
+  const closedPage = await candidateClient.rpc("marathon_active_campaign");
+  check(!closedPage.error && closedPage.data === null, "the page has no campaign to draw while the marathon is off");
+  const closedJoin = await voterClient.rpc("marathon_join");
+  check(Boolean(closedJoin.error), "and nobody can enter one");
+
+  await service.from("app_settings").update({ value: true }).eq("key", "student_marathon_enabled");
+  const page = await candidateClient.rpc("marathon_active_campaign");
+  const shown = page.data;
+  check(!page.error && shown?.id === campaignId, `the running campaign is returned${page.error ? ` — ${page.error.message}` : ""}`);
+  check((shown?.tiers ?? []).length === 4, `with its whole reward ladder (${(shown?.tiers ?? []).length})`);
+  check((shown?.tiers ?? []).every((tier, index) => tier.position === index + 1),
+    "in the order the milestones are climbed");
+  check(shown?.tiers?.[0]?.votes_required === 1000 && shown?.tiers?.[0]?.reward_percent === 25,
+    "each rung carrying what it costs and what it pays");
+
+  // The countdown is measured against this, not against the phone.
+  const clockGap = Math.abs(new Date(shown?.server_now ?? 0).getTime() - Date.now());
+  check(Number.isFinite(clockGap) && clockGap < 120_000, `the answer carries the server's own clock (${Math.round(clockGap / 1000)}s apart)`);
+
+  check(shown?.joined === true, "a participant is told they are in");
+  // Six votes reached this candidate: two free, two premium directly, two bought.
+  check(Number(shown?.total_votes) === 6 && Number(shown?.premium_votes) === 4,
+    `and the page counts the same votes the ledger holds (${shown?.total_votes}/${shown?.premium_votes})`);
+
+  const outsiderPage = await caster.rpc("marathon_active_campaign");
+  check(outsiderPage.data?.joined === false, "somebody who never entered is not shown as a participant");
+
+  const entering = await caster.rpc("marathon_join");
+  check(!entering.error, `joining works${entering.error ? ` — ${entering.error.message}` : ""}`);
+  const twiceIn = await caster.rpc("marathon_join");
+  check(!twiceIn.error, "and pressing it twice is not an error");
+  const enrolled = await service.from("marathon_participants")
+    .select("*", { count: "exact", head: true }).eq("campaign_id", campaignId).eq("user_id", people.caster.id);
+  check((enrolled.count ?? 0) === 1, `joining twice leaves one row (${enrolled.count ?? 0})`);
+
+  console.log("\nAfisha:");
+  const posterPath = `${campaignId}/poster-${stamp}.txt`;
+  const uploaded = await service.storage.from("marathon-posters")
+    .upload(posterPath, new Blob(["afisha"], { type: "text/plain" }), { upsert: true });
+  check(!uploaded.error, `an administrator can put a poster up${uploaded.error ? ` — ${uploaded.error.message}` : ""}`);
+
+  const publicUrl = service.storage.from("marathon-posters").getPublicUrl(posterPath).data.publicUrl;
+  const fetched = await fetch(publicUrl);
+  check(fetched.ok, `and anybody can see it without a signed URL (${fetched.status})`);
+
+  const intruder = await voterClient.storage.from("marathon-posters")
+    .upload(`${campaignId}/mine-${stamp}.txt`, new Blob(["yo‘q"], { type: "text/plain" }));
+  check(Boolean(intruder.error), "but an ordinary account cannot put anything there");
+  await service.storage.from("marathon-posters").remove([posterPath]);
 } finally {
   if (previousFlag !== null) {
     await service.from("app_settings").update({ value: previousFlag }).eq("key", "student_marathon_enabled");

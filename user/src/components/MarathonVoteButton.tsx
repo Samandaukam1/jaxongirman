@@ -2,7 +2,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { Vote } from "lucide-react-native";
 import { useEffect } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import Animated, {
   cancelAnimation, Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming,
 } from "react-native-reanimated";

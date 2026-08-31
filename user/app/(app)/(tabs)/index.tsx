@@ -9,6 +9,7 @@ import coinIcon from "../../../assets/coin/coin-icon.png";
 import { Appear } from "@/components/Appear";
 import { Avatar } from "@/components/Avatar";
 import { BOTTOM_NAV_SPACE } from "@/components/BottomNav";
+import { MarathonSection } from "@/components/MarathonSection";
 import { MarathonVoteButton } from "@/components/MarathonVoteButton";
 import { SurveyCard, type SurveySummary } from "@/components/SurveyCard";
 import { EmptyState, ErrorState, Skeleton, SkeletonCard } from "@/components/StateBlocks";
@@ -201,6 +202,13 @@ export default function HomeScreen() {
             </Pressable>
           </View>
         </LinearGradient>
+
+        {/* ----------------------------------------------- marathon */}
+        {/* Directly under the account card, because the marathon is about the
+            money that card shows and about a deadline — both of which lose
+            their point at the bottom of a scroll. It draws nothing at all
+            unless a campaign is running. */}
+        <MarathonSection />
 
         {/* --------------------------------------------- data collection */}
         <Pressable

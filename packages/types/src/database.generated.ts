@@ -6360,6 +6360,7 @@ export type Database = {
         Args: { p_limit?: number; p_query: string; p_slide_role?: string }
         Returns: Json
       }
+      marathon_active_campaign: { Args: never; Returns: Json }
       marathon_cast_vote: {
         Args: {
           p_candidate_id: string
@@ -6367,6 +6368,7 @@ export type Database = {
         }
         Returns: Json
       }
+      marathon_join: { Args: never; Returns: Json }
       marathon_my_votes: { Args: never; Returns: Json }
       marathon_search_candidates: {
         Args: { p_limit?: number; p_offset?: number; p_query: string }
