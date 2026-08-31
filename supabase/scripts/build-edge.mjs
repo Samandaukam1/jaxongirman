@@ -61,6 +61,10 @@ export function buildEdgeModules() {
       path.join(shared, "scene-render.ts"),
       path.join(shared, "scene-pipeline.ts"),
       path.join(shared, "scene-rows.ts"),
+      // The rule that decides which engine builds a deck. Kept dependency-free
+      // precisely so the tests can hold it to what it does when the answer is
+      // missing, which is the case that used to be wrong.
+      path.join(shared, "design-engine.ts"),
       path.join(shared, "defense.ts"),
       path.join(shared, "portrait-sheet.ts"),
       path.join(shared, "docx.ts"),

@@ -3,6 +3,7 @@ import { chooseDesign } from "../_shared/design-choice.ts";
 import { preflight } from "../_shared/cors.ts";
 import { bodyJson, errorResponse, HttpError, json } from "../_shared/http.ts";
 import { runGenerationPipeline } from "../_shared/pipeline.ts";
+import { generativeEnabled } from "../_shared/scene-generation.ts";
 import type { PresentationStyle } from "../_shared/presentation-types.ts";
 
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void } | undefined;
@@ -83,33 +84,50 @@ Deno.serve(async (request) => {
       const sources = Array.isArray(body.sources) ? body.sources.map((source) => String(source).trim()).filter(Boolean).slice(0, 30) : [];
 
       /**
-       * The design, chosen here when the person did not choose one.
+       * The template selector, and the runs it must not run on.
        *
-       * "Jaxongir AI tanlaydi" is the default on the phone, so most decks
-       * arrive with a topic and no slug. Ranking happens before the RPC and the
-       * result is passed in as a slug, which keeps the rule the RPC exists to
-       * enforce — a deck is laid out by a published design and by nothing else
-       * — exactly as it was. Nothing downstream can tell who chose.
+       * `chooseDesign` ranks the published JSLAYD designs and returns the one a
+       * deck will be laid into. Under the generative engine there is nothing
+       * for it to choose: the deck is composed page by page and a slug pinned
+       * here would be a template the deck never uses, recorded as though it
+       * had. So the selector is skipped entirely rather than run and ignored —
+       * a bypass you can see in the log, not one you have to infer from a
+       * column that gets nulled later.
+       *
+       * Under JSLAYD it behaves exactly as before: "Jaxongir AI tanlaydi" is
+       * the default on the phone, so most decks arrive with a topic and no
+       * slug, and the ranking fills it in before the RPC.
        */
-      let chosenDesign = designSlug(body.designSlug);
-      if (!chosenDesign) {
-        const automatic = await chooseDesign(context.serviceClient, {
-          tier: body.style,
-          topic: body.topic.trim(),
-          // So a person's own recent decks can step aside for a new one.
-          userId: context.user.id,
-        });
-        if (!automatic) {
-          throw new HttpError(422, "Bu uslub uchun nashr qilingan dizayn topilmadi.", "no_design_available");
-        }
-        chosenDesign = automatic.slug;
-        // Which subjects decided it, so a surprising choice can be explained
-        // without re-running the ranking. Never the topic itself.
-        console.log("design chosen automatically", JSON.stringify({
-          tier: body.style, slug: automatic.slug, score: automatic.score, matched: automatic.matched,
-          // True only when every published design in the tier was used recently.
-          repeated: automatic.repeated,
+      const generative = await generativeEnabled(context.serviceClient);
+      let chosenDesign: string | null = null;
+      if (generative) {
+        console.log(JSON.stringify({
+          event: "design_selection_skipped",
+          presentation_id: body.presentationId,
+          DESIGN_ENGINE: "generative_v1",
+          LEGACY_TEMPLATE_USED: false,
         }));
+      } else {
+        chosenDesign = designSlug(body.designSlug);
+        if (!chosenDesign) {
+          const automatic = await chooseDesign(context.serviceClient, {
+            tier: body.style,
+            topic: body.topic.trim(),
+            // So a person's own recent decks can step aside for a new one.
+            userId: context.user.id,
+          });
+          if (!automatic) {
+            throw new HttpError(422, "Bu uslub uchun nashr qilingan dizayn topilmadi.", "no_design_available");
+          }
+          chosenDesign = automatic.slug;
+          // Which subjects decided it, so a surprising choice can be explained
+          // without re-running the ranking. Never the topic itself.
+          console.log("design chosen automatically", JSON.stringify({
+            tier: body.style, slug: automatic.slug, score: automatic.score, matched: automatic.matched,
+            // True only when every published design in the tier was used recently.
+            repeated: automatic.repeated,
+          }));
+        }
       }
 
       const { data, error } = await context.userClient.rpc("start_generation", {
@@ -124,9 +142,10 @@ Deno.serve(async (request) => {
         p_idempotency_key: body.idempotencyKey?.trim() || body.presentationId,
         p_template_code: null,
         p_palette_code: designCode(body.paletteCode),
-        // A deck is laid out by a published design and by nothing else. An
-        // unknown or unpublished slug is refused by the RPC before a credit is
-        // reserved; there is no built-in path left for it to fall to.
+        // Null under the generative engine, where no design is used and none
+        // may be recorded. Under JSLAYD it is a published slug: an unknown or
+        // unpublished one is refused by the RPC before a credit is reserved,
+        // and there is no built-in path left for it to fall to.
         p_design_slug: chosenDesign,
       });
       if (error) throw new HttpError(error.code === "P0001" ? 402 : 400, error.message, error.code ?? "generation_start_failed");

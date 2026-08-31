@@ -22,7 +22,9 @@ import { supabase } from "@/lib/supabase";
 type Engine = { generative: boolean; legacyRestricted: boolean };
 
 export function DesignEnginePage() {
-  const [engine, setEngine] = useState<Engine>({ generative: false, legacyRestricted: true });
+  // The defaults the product ships with, so the panel says what the backend
+  // does in the moment before the settings arrive.
+  const [engine, setEngine] = useState<Engine>({ generative: true, legacyRestricted: true });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,9 +45,17 @@ export function DesignEnginePage() {
       return;
     }
     const byKey = new Map((settings.data ?? []).map((row) => [row.key, row.value]));
+    /**
+     * Read the way the generation pipeline reads them.
+     *
+     * `=== true` would show a missing row as "off" while every deck was being
+     * built by the engine it says is off — a panel that reports the opposite of
+     * what is happening is worse than no panel. Only a stored `false` is off,
+     * here and in `design-engine.ts`, because they have to agree.
+     */
     setEngine({
-      generative: byKey.get("design.generative_enabled") === true,
-      legacyRestricted: byKey.get("design.legacy_restricted") === true,
+      generative: byKey.get("design.generative_enabled") !== false,
+      legacyRestricted: byKey.get("design.legacy_restricted") !== false,
     });
     // How many decks each engine has actually made. A switch with a number
     // beside it is a decision; without one it is a guess.

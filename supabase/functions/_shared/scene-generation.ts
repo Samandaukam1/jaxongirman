@@ -13,7 +13,8 @@
 
 import type { SupabaseClient } from "npm:@supabase/supabase-js";
 
-import { generateDeck, GenerativeFailure, type Deps } from "./scene-pipeline.ts";
+import { DESIGN_SETTINGS, engineSwitchOn } from "./design-engine.ts";
+import { generateDeck, GenerativeFailure, type Deps, type GeneratedDeck } from "./scene-pipeline.ts";
 import { deckToRows, type ElementRow, type SlideRow } from "./scene-rows.ts";
 import type { LibraryFamily } from "./scene-dna.ts";
 
@@ -35,15 +36,37 @@ type Writer = {
 };
 
 /** Whether the operator has the generative engine switched on. */
+/**
+ * Which way a missing answer falls.
+ *
+ * These two read a row that decides how every deck made afterwards looks, and
+ * the first version of them returned `value === true` — so a row that was
+ * absent, unreadable under RLS, or lost to a transport error meant `false`, and
+ * `false` meant the old template engine. That is a silent fallback wearing a
+ * setting's clothes: nothing logs, nothing fails, and the product quietly keeps
+ * shipping the engine it was supposed to have stopped shipping.
+ *
+ * So absence is not a vote. Only the value `false`, actually read back from the
+ * database, turns either of these off — an operator's deliberate choice, made
+ * in the admin panel and written to the audit log. Everything else is the
+ * default the brief asks for, and anything that went wrong on the way to
+ * finding out says so in the log rather than changing the answer.
+ */
+async function switchedOn(service: SupabaseClient, key: string): Promise<boolean> {
+  const { data, error } = await service.from("app_settings").select("value").eq("key", key).maybeSingle();
+  if (error) console.error(JSON.stringify({ event: "design_setting_unreadable", key, reason: error.message, assumed: true }));
+  else if (data == null) console.warn(JSON.stringify({ event: "design_setting_missing", key, assumed: true }));
+  return engineSwitchOn(data, Boolean(error));
+}
+
+/** Whether new decks are composed page by page rather than laid into a design. */
 export async function generativeEnabled(service: SupabaseClient): Promise<boolean> {
-  const { data } = await service.from("app_settings").select("value").eq("key", "design.generative_enabled").maybeSingle();
-  return data?.value === true;
+  return await switchedOn(service, DESIGN_SETTINGS.generative);
 }
 
 /** Whether pre-assigned JSLAYD designs and PPTX templates are held back. */
 export async function legacyRestricted(service: SupabaseClient): Promise<boolean> {
-  const { data } = await service.from("app_settings").select("value").eq("key", "design.legacy_restricted").maybeSingle();
-  return data?.value === true;
+  return await switchedOn(service, DESIGN_SETTINGS.legacyRestricted);
 }
 
 /**

@@ -21,7 +21,7 @@ import {
 import {
   deckHasVisualStatistic, diversifyChartTypes, isVisualStatistic, requireVisualStatistic,
 } from "./visual-statistic.ts";
-import { composeGenerativeDeck, generativeEnabled } from "./scene-generation.ts";
+import { composeGenerativeDeck, generativeEnabled, legacyRestricted } from "./scene-generation.ts";
 import { deckPagesFrom } from "./scene-rows.ts";
 
 type PipelineInput = { jobId: string; presentationId: string; ownerId: string; service: SupabaseClient };
@@ -857,18 +857,60 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
           ? `${value.citations.length} ta manba topildi va tekshirildi`
           : "Internetdan qo‘shimcha manba topilmadi");
 
-    // A deck is laid out by a published design and by nothing else, and the
-    // design is read here — before the outline — because everything downstream
-    // is written to fit it. There used to be a built-in blueprint behind this,
-    // so a deck with no design still produced slides; that fallback is what kept
+    /**
+     * Which engine lays this deck out — decided first, before anything is read.
+     *
+     * This used to be decided two hundred lines further down, after a JSLAYD
+     * design had already been loaded, named in the outline prompt, and made a
+     * hard precondition of the run. So a generative deck could not be made
+     * without a legacy template resolving first, and the plan it was composed
+     * from had been written against that template's description. The old engine
+     * was still the design authority even on the runs that never used it.
+     *
+     * The choice is a fact about the deck now, taken once, logged once, and
+     * everything below reads it rather than re-deciding.
+     */
+    const engine = {
+      generative: await generativeEnabled(input.service),
+      legacyRestricted: await legacyRestricted(input.service),
+    };
+    console.log(JSON.stringify({
+      event: "design_engine_selected",
+      job_id: input.jobId,
+      presentation_id: input.presentationId,
+      DESIGN_ENGINE: engine.generative ? "generative_v1" : "jslayd",
+      LEGACY_RESTRICTED: engine.legacyRestricted,
+      LEGACY_TEMPLATE_USED: !engine.generative,
+      JSLAYD_DESIGN_AUTHORITY: !engine.generative,
+    }));
+
+    /**
+     * The restriction, enforced where it means something.
+     *
+     * It existed as a setting the admin panel could toggle and no backend path
+     * consulted — a label on a switch wired to nothing. A run that would use a
+     * template while templates are restricted fails here, with a sentence
+     * saying which switch to change, rather than quietly producing the deck the
+     * restriction exists to prevent.
+     */
+    if (!engine.generative && engine.legacyRestricted) {
+      throw new Error(
+        "Eski shablon (JSLAYD) rejimi cheklangan, generativ dizayn engine esa o‘chirilgan. "
+        + "Administrator panelidan «Generativ dizayn»ni yoqing yoki «Eski shablonlar cheklovi»ni oching.",
+      );
+    }
+
+    // A deck laid out by a published design and by nothing else — and only when
+    // that is the engine. There used to be a built-in blueprint behind this, so
+    // a deck with no design still produced slides; that fallback is what kept
     // withdrawn designs alive in the product.
     //
     // Resolved before a credit is spent, so an unreadable design costs the job
     // nothing rather than costing it a deck's worth of imagery first.
-    const jslayd = await loadJslaydDesign(
+    const jslayd = engine.generative ? null : await loadJslaydDesign(
       input.service, prepared.presentation.design_id, prepared.presentation.design_version,
     );
-    if (!jslayd) {
+    if (!engine.generative && !jslayd) {
       throw new Error("Tanlangan dizayn topilmadi yoki nashr qilinmagan. Iltimos, boshqa dizayn tanlang.");
     }
 
@@ -878,8 +920,18 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
 
     const outlineResult = await runStage(input.service, input, "creating_outline", async () => {
       if (mode === "mock") return { data: mockOutline(prepared.presentation.topic, contentCount), usage: {}, requestId: null, provider: "google" as const, model: writer.writingModel, attempts: 1 };
-      const system = "You are Jaxongir AI, a senior presentation strategist. Produce academically usable Uzbek Latin content architecture grounded in the supplied research. Every slide must advance a specific, concrete idea — never a vague heading. The visual design is fixed by the chosen design, so never propose colours, fonts or decoration. Return only the required schema.";
-      const prompt = `Mavzu: ${prepared.presentation.topic}\nMazmun slaydlari soni: ${contentCount}\nUslub: ${prepared.presentation.style}\nTanlangan dizayn: ${jslayd.document.design.name} — ${jslayd.document.design.description}.\n\nSarlavha, mavzular rejasi, foydalanilgan adabiyotlar va yakuniy slaydlarni server o'zi qo'shadi — ularni rejalashtirmang. Faqat ${contentCount} ta mazmun slaydini rejalashtiring va ularni mantiqiy ketma-ketlikda joylashtiring: tushuncha → tahlil → dalillar → amaliyot → xulosa.\nHar bir sarlavha aniq bo'lsin: "Kirish" emas, mavzu haqida nima aytilishini ayting.\nKamida BITTA slayd layoutini chart qiling: u tekshirilgan raqamlarni bar yoki doira diagrammasida ko‘rsatadi. Diagramma uchun uydirma raqam ishlatmang.\nVisual prompt faqat matnsiz illyustratsiyani tasvirlaydi va yuqoridagi art directionga mos bo'lishi kerak.${researchBrief}`;
+      /**
+       * What the planner is told about the look, which depends on who decides
+       * it. Under JSLAYD the design is already chosen and the plan must not
+       * argue with it. Under the generative engine there is no design yet — the
+       * plan is the input the composition is built from — so naming a template
+       * or a layout here would be the plan choosing the design, which is the
+       * arrangement this engine exists to replace.
+       */
+      const system = jslayd
+        ? "You are Jaxongir AI, a senior presentation strategist. Produce academically usable Uzbek Latin content architecture grounded in the supplied research. Every slide must advance a specific, concrete idea — never a vague heading. The visual design is fixed by the chosen design, so never propose colours, fonts or decoration. Return only the required schema."
+        : "You are Jaxongir AI, a senior presentation strategist. Produce academically usable Uzbek Latin content architecture grounded in the supplied research. Every slide must advance a specific, concrete idea — never a vague heading. A design engine composes every page from this plan, so say what each slide must communicate and never name a template, layout, colour or font. Return only the required schema.";
+      const prompt = `Mavzu: ${prepared.presentation.topic}\nMazmun slaydlari soni: ${contentCount}\nUslub: ${prepared.presentation.style}${jslayd ? `\nTanlangan dizayn: ${jslayd.document.design.name} — ${jslayd.document.design.description}.` : ""}\n\nSarlavha, mavzular rejasi, foydalanilgan adabiyotlar va yakuniy slaydlarni server o'zi qo'shadi — ularni rejalashtirmang. Faqat ${contentCount} ta mazmun slaydini rejalashtiring va ularni mantiqiy ketma-ketlikda joylashtiring: tushuncha → tahlil → dalillar → amaliyot → xulosa.\nHar bir sarlavha aniq bo'lsin: "Kirish" emas, mavzu haqida nima aytilishini ayting.\nKamida BITTA slayd layoutini chart qiling: u tekshirilgan raqamlarni bar yoki doira diagrammasida ko‘rsatadi. Diagramma uchun uydirma raqam ishlatmang.\nVisual prompt faqat matnsiz illyustratsiyani tasvirlaydi va yuqoridagi art directionga mos bo'lishi kerak.${researchBrief}`;
       return writer.structured<Outline>({
         prompt: `${system}\n\n${prompt}`,
         system,
@@ -908,7 +960,7 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
      * of the old engine is a deck nobody can tell apart afterwards — and then
      * nobody knows which engine is actually running.
      */
-    if (await generativeEnabled(input.service)) {
+    if (engine.generative) {
       await runGenerative({
         input,
         writer,
@@ -924,6 +976,11 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
       });
       return;
     }
+
+    // Unreachable: a run that is not generative loaded its design above or
+    // threw. Stated so the compiler knows it too, since it cannot see that the
+    // two conditions are the same one.
+    if (!jslayd) throw new Error("Tanlangan dizayn topilmadi yoki nashr qilinmagan. Iltimos, boshqa dizayn tanlang.");
 
     /**
      * The composition each slide will be laid into, chosen before its copy is
