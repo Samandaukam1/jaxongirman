@@ -12,6 +12,7 @@ import { MarathonVoteButton } from "@/components/MarathonVoteButton";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { EmptyState, ErrorState, SkeletonCard } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
+import { useVoteMarketEnabled } from "@/lib/marathon-market";
 import {
   EMPTY_FILTERS, searchProducts, signPaths, toggleFavorite, useMaterialTypes,
   type SearchFilters,
@@ -49,6 +50,7 @@ export default function MarketplaceScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const voteMarketOpen = useVoteMarketEnabled();
   const [priceDraft, setPriceDraft] = useState({ min: "", max: "" });
   const policy = usePaymentPolicy();
 
@@ -205,6 +207,19 @@ export default function MarketplaceScreen() {
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+          {/* A door rather than a filter: votes are not `marketplace_products`
+              and cannot be filtered for here, so the chip that looks like a
+              category behaves like the link it actually is. Absent entirely
+              while the vote market is closed. */}
+          {voteMarketOpen ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push("/(app)/marathon/market")}
+              style={[styles.chip, styles.chipVotes]}
+            >
+              <Text style={[styles.chipText, styles.chipVotesText]}>⭐ Ovozlar</Text>
+            </Pressable>
+          ) : null}
           <Pressable
             onPress={() => setFilters((current) => ({ ...current, materialType: null }))}
             style={[styles.chip, filters.materialType === null && styles.chipActive]}
@@ -408,6 +423,8 @@ const useStyles = makeStyles((colors) => ({
   chips: { gap: 6, paddingVertical: 2, paddingRight: spacing.xl },
   chip: { paddingHorizontal: spacing.md, paddingVertical: 7, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
   chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipVotes: { backgroundColor: colors.primarySoft, borderColor: colors.primary },
+  chipVotesText: { color: colors.primaryDeep },
   chipText: { ...typography.caption, color: colors.inkMuted },
   chipTextActive: { color: colors.onPrimary },
 

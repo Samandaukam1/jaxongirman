@@ -1,6 +1,7 @@
-import { Clock, Sparkles } from "lucide-react-native";
+import { useRouter } from "expo-router";
+import { Clock, ShoppingBag, Sparkles, Store } from "lucide-react-native";
 import { useMemo, useState } from "react";
-import { RefreshControl, ScrollView, Text, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 
 import { MarathonMilestoneModal } from "@/components/MarathonMilestoneModal";
 import { MarathonPoster } from "@/components/MarathonPoster";
@@ -12,6 +13,7 @@ import { ScreenHeader } from "@/components/ScreenHeader";
 import { EmptyState, ErrorState, Skeleton, SkeletonCard } from "@/components/StateBlocks";
 import { countdownTo, formatCountdown, formatDate, useNow } from "@/lib/datetime";
 import { claimedTier, nextTierOf, pendingMilestone, useMarathonCampaign } from "@/lib/marathon";
+import { useVoteMarketEnabled } from "@/lib/marathon-market";
 import { formatNumber } from "@/lib/money";
 import { icon, radius, spacing, typography } from "@/theme/tokens";
 import { useAccount } from "@/providers/AccountProvider";
@@ -35,6 +37,8 @@ export default function MarathonScreen() {
   const { campaign, loading, error, skew, reload, join, joining } = useMarathonCampaign();
   const [refreshing, setRefreshing] = useState(false);
   const { profile } = useAccount();
+  const marketOpen = useVoteMarketEnabled();
+  const router = useRouter();
 
   // The device ticks between renders; the server's clock is what it is measured against.
   const now = useNow(Boolean(campaign)) + skew;
@@ -144,6 +148,29 @@ export default function MarathonScreen() {
               <MarathonShareRow campaign={campaign} candidateId={profile.id} username={profile.username} />
             ) : null}
 
+            {/* §14 puts the marketplace between sharing and the rules. It is
+                absent — not disabled — while its own switch is off. */}
+            {marketOpen ? (
+              <View style={styles.market}>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.push("/(app)/marathon/market")}
+                  style={({ pressed }) => [styles.marketButton, pressed && styles.marketPressed]}
+                >
+                  <ShoppingBag color={colors.primaryDeep} size={icon.sm} strokeWidth={icon.stroke} />
+                  <Text style={styles.marketLabel}>Ovoz marketplace</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.push("/(app)/marathon/sell")}
+                  style={({ pressed }) => [styles.marketButton, pressed && styles.marketPressed]}
+                >
+                  <Store color={colors.primaryDeep} size={icon.sm} strokeWidth={icon.stroke} />
+                  <Text style={styles.marketLabel}>Ovoz sotish</Text>
+                </Pressable>
+              </View>
+            ) : null}
+
             {campaign.rules ? (
               <View style={styles.rules}>
                 <Text style={styles.sectionTitle}>QOIDALAR</Text>
@@ -196,6 +223,14 @@ const useStyles = makeStyles((colors) => ({
     ...typography.caption, fontFamily: "Manrope_700Bold", color: colors.success,
     paddingVertical: spacing.xs,
   },
+  market: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm },
+  marketButton: {
+    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm,
+    height: 46, borderRadius: radius.md,
+    borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface,
+  },
+  marketPressed: { backgroundColor: colors.surfaceMuted },
+  marketLabel: { ...typography.bodyMedium, color: colors.ink },
   rules: { gap: spacing.sm },
   rulesText: { ...typography.body, color: colors.inkMuted },
 }));

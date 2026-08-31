@@ -6361,6 +6361,11 @@ export type Database = {
         Returns: Json
       }
       marathon_active_campaign: { Args: never; Returns: Json }
+      marathon_buy_votes: {
+        Args: { p_listing_id: string; p_platform?: string; p_quantity?: number }
+        Returns: Json
+      }
+      marathon_cancel_vote_listing: { Args: { p_listing_id: string }; Returns: Json }
       marathon_candidate: {
         Args: { p_campaign_id: string; p_user_id: string }
         Returns: Json
@@ -6377,6 +6382,34 @@ export type Database = {
         Returns: Json
       }
       marathon_join: { Args: never; Returns: Json }
+      marathon_list_votes: {
+        Args: {
+          p_kind: Database["public"]["Enums"]["marathon_vote_kind"]
+          p_quantity: number
+          p_unit_price: number
+        }
+        Returns: Json
+      }
+      marathon_min_vote_price: {
+        Args: {
+          p_campaign_id: string
+          p_kind: Database["public"]["Enums"]["marathon_vote_kind"]
+        }
+        Returns: number
+      }
+      marathon_my_vote_sales: {
+        Args: { p_limit?: number }
+        Returns: {
+          created_at: string
+          kind: Database["public"]["Enums"]["marathon_vote_kind"]
+          quantity: number
+          sale_id: string
+          seller_fee: number
+          seller_net: number
+          status: string
+          unit_price: number
+        }[]
+      }
       marathon_my_votes: { Args: never; Returns: Json }
       marathon_search_candidates: {
         Args: { p_limit?: number; p_offset?: number; p_query: string }
@@ -6388,6 +6421,26 @@ export type Database = {
           user_id: string
           username: string
         }[]
+      }
+      marathon_vote_market: {
+        Args: {
+          p_kind?: Database["public"]["Enums"]["marathon_vote_kind"]
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: {
+          buyer_fee: number
+          buyer_total: number
+          is_mine: boolean
+          kind: Database["public"]["Enums"]["marathon_vote_kind"]
+          listing_id: string
+          remaining: number
+          unit_price: number
+        }[]
+      }
+      marathon_vote_quote: {
+        Args: { p_quantity: number; p_unit_price: number }
+        Returns: Json
       }
       mark_notifications_read: { Args: { p_id?: string }; Returns: number }
       marketplace_attach_file: {

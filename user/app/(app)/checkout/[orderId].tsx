@@ -43,6 +43,7 @@ const PURPOSE_LABELS: Record<string, string> = {
   marketplace_independent_work: "Mustaqil ish",
   marketplace_game: "O‘yin",
   other_marketplace_product: "Material",
+  marathon_votes: "Marafon ovozlari",
 };
 
 /** Where a paid order sends you. */
@@ -50,6 +51,7 @@ const DESTINATIONS: Record<string, { label: string; path: string }> = {
   jcoin: { label: "Hamyonni ochish", path: "/(app)/(tabs)/profile" },
   subscription: { label: "Profilga o‘tish", path: "/(app)/(tabs)/profile" },
   data_collection: { label: "Modulni ochish", path: "/(app)/survey" },
+  marathon_votes: { label: "Marafonga o‘tish", path: "/(app)/marathon" },
 };
 
 /**
