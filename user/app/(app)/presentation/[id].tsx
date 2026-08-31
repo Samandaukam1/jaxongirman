@@ -1,11 +1,10 @@
 import type { Json, Tables } from "@jaxongirman/types";
 import * as Crypto from "expo-crypto";
 import * as ImagePicker from "expo-image-picker";
-import * as Linking from "expo-linking";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ArrowLeft, Check, Download, LoaderCircle, MessageSquareQuote, Redo2, Send, Sparkles, Undo2 } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, AppState, FlatList, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Alert, FlatList, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { runOnJS, runOnUI, useAnimatedKeyboard, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 
@@ -91,7 +90,6 @@ export default function PresentationEditorScreen() {
   const [toolPanel, setToolPanel] = useState<ToolPanel>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [telegramOpening, setTelegramOpening] = useState(false);
   const [dockHeight, setDockHeight] = useState(120);
 
   /**
@@ -328,39 +326,6 @@ export default function PresentationEditorScreen() {
   }, [hydrateImageUrls, presentationId, router]);
 
   useEffect(() => { void load(); }, [load]);
-
-  /** Telegram commits directly to the selected row; this keeps an open editor live. */
-  const refreshElements = useCallback(async () => {
-    if (!presentationId) return;
-    const result = await supabase.from("slide_elements").select("*").eq("presentation_id", presentationId).order("z_index");
-    if (result.error) return;
-    const hydrated = await hydrateImageUrls(result.data);
-    setElements(hydrated);
-    void loadFontsUsedBy(hydrated.map((row) => bag(row.style)));
-  }, [hydrateImageUrls, presentationId]);
-
-  useEffect(() => {
-    if (!presentationId) return;
-    const channel = supabase
-      .channel(`telegram-images-${presentationId}`)
-      .on("postgres_changes", {
-        event: "UPDATE",
-        schema: "public",
-        table: "slide_elements",
-        filter: `presentation_id=eq.${presentationId}`,
-      }, () => void refreshElements())
-      .subscribe();
-    return () => { void supabase.removeChannel(channel); };
-  }, [presentationId, refreshElements]);
-
-  // Realtime is primary; returning from Telegram also refetches after focus so
-  // a suspended phone never waits for a subscription event it could not hear.
-  useEffect(() => {
-    const subscription = AppState.addEventListener("change", (state) => {
-      if (state === "active") void refreshElements();
-    });
-    return () => subscription.remove();
-  }, [refreshElements]);
 
   async function persist(operation: Json, inverse: Json) {
     if (!presentationId || !currentSlideId) return;
@@ -748,36 +713,6 @@ export default function PresentationEditorScreen() {
     }
   }
 
-  async function chooseThroughTelegram(target: Element) {
-    if (!presentationId || !currentSlide || target.type !== "image") return;
-    setTelegramOpening(true);
-    try {
-      const content = jsonObject(target.content);
-      const suggested = typeof content.searchQuery === "string"
-        ? content.searchQuery
-        : currentSlide.title ?? presentation?.topic ?? null;
-      const { data, error } = await supabase.functions.invoke("telegram-image-bot", {
-        body: {
-          action: "create_session",
-          presentationId,
-          slideId: currentSlide.id,
-          imageElementId: target.id,
-          initialQuery: suggested,
-        },
-      });
-      if (error) throw error;
-      const deepLink = (data as { deepLink?: unknown } | null)?.deepLink;
-      if (typeof deepLink !== "string" || !deepLink.startsWith("https://t.me/JaxongirmanAppImagesBot?start=")) {
-        throw new Error("Telegram havolasi yaratilmadi");
-      }
-      await Linking.openURL(deepLink);
-    } catch (error) {
-      Alert.alert("Telegram ochilmadi", await asFunctionErrorMessage(error));
-    } finally {
-      setTelegramOpening(false);
-    }
-  }
-
   async function runAiEdit() {
     if (!aiCommand.trim() || !currentSlideId) return;
     setAiLoading(true);
@@ -911,14 +846,13 @@ export default function PresentationEditorScreen() {
             onContent={(content) => updateElement(selected.id, { content })}
             onElement={(patch) => updateElement(selected.id, patch)}
             onReplaceImage={() => void replaceMedia(selected)}
-            onChooseTelegramImage={() => void chooseThroughTelegram(selected)}
             zRange={zRange}
           />
         ) : null}
 
         <AddElementBar
           open={addOpen}
-          busy={uploading || telegramOpening}
+          busy={uploading}
           hint={selected ? null : "Tahrirlash uchun elementni tanlang va suring"}
           onToggle={() => setAddOpen((value) => !value)}
           onAdd={(kind) => void addElement(kind)}
