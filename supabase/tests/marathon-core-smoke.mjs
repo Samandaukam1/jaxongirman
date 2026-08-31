@@ -255,6 +255,73 @@ try {
     .select("*", { count: "exact", head: true }).eq("campaign_id", campaignId).eq("user_id", people.caster.id);
   check((enrolled.count ?? 0) === 1, `joining twice leaves one row (${enrolled.count ?? 0})`);
 
+  console.log("\nMarra qarori:");
+  // The candidate is nowhere near a milestone yet: six votes against a
+  // thousand. Nothing may be claimed on the strength of a screen saying so.
+  const candidateVoter = createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  const candidateIn = await candidateVoter.auth.signInWithPassword({ email: people.candidate.email, password });
+  if (candidateIn.error) throw candidateIn.error;
+
+  const tooEarly = await candidateVoter.rpc("marathon_decide_milestone", { p_position: 1, p_decision: "claim" });
+  check(Boolean(tooEarly.error) && /yetmadingiz/.test(tooEarly.error?.message ?? ""),
+    `a milestone cannot be claimed before it is reached (${tooEarly.error?.message?.slice(0, 44) ?? "allowed"})`);
+
+  // Lower the first two rungs to what this candidate actually has, rather than
+  // manufacturing a thousand votes: the rule under test is the decision, not
+  // the counting, which the ledger checks above already cover.
+  await service.from("marathon_reward_tiers")
+    .update({ votes_required: 3, premium_required: 2 }).eq("campaign_id", campaignId).eq("position", 1);
+  await service.from("marathon_reward_tiers")
+    .update({ votes_required: 5, premium_required: 3 }).eq("campaign_id", campaignId).eq("position", 2);
+
+  const madeUp = await candidateVoter.rpc("marathon_decide_milestone", { p_position: 9, p_decision: "claim" });
+  check(Boolean(madeUp.error), "a rung that does not exist cannot be answered");
+
+  const nonsense = await candidateVoter.rpc("marathon_decide_milestone", { p_position: 1, p_decision: "maybe" });
+  check(Boolean(nonsense.error), "and neither can a decision that is not one of the two");
+
+  const carriedOn = await candidateVoter.rpc("marathon_decide_milestone", { p_position: 1, p_decision: "continue" });
+  check(!carriedOn.error, `giving up a reward for the next one is recorded${carriedOn.error ? ` — ${carriedOn.error.message}` : ""}`);
+
+  const again2 = await candidateVoter.rpc("marathon_decide_milestone", { p_position: 1, p_decision: "claim" });
+  check(Boolean(again2.error) && /allaqachon/.test(again2.error?.message ?? ""),
+    "and cannot be reconsidered afterwards");
+
+  const written = await service.from("marathon_milestone_decisions")
+    .select("decision,total_votes_at,premium_votes_at").eq("campaign_id", campaignId).eq("user_id", people.candidate.id);
+  check((written.data ?? []).length === 1 && written.data?.[0]?.decision === "continue",
+    "the decision is a row on the server, not a closed modal");
+  check(Number(written.data?.[0]?.total_votes_at) === 6,
+    `with the count it was made on (${written.data?.[0]?.total_votes_at})`);
+
+  const decidedNote = await service.from("notifications")
+    .select("title,payload").eq("user_id", people.candidate.id).eq("kind", "marathon_milestone");
+  check((decidedNote.data ?? []).length === 1 && decidedNote.data?.[0]?.payload?.decision === "continue",
+    "and the candidate has a record of it in their inbox");
+
+  const claim = await candidateVoter.rpc("marathon_decide_milestone", { p_position: 2, p_decision: "claim" });
+  check(!claim.error, `the next rung can then be claimed${claim.error ? ` — ${claim.error.message}` : ""}`);
+
+  const afterClaim = await candidateVoter.rpc("marathon_decide_milestone", { p_position: 3, p_decision: "continue" });
+  check(Boolean(afterClaim.error) && /olgansiz/.test(afterClaim.error?.message ?? ""),
+    "a claim ends the ladder — nothing above it can be answered");
+
+  const shownAfter = await candidateVoter.rpc("marathon_active_campaign");
+  check((shownAfter.data?.decisions ?? []).length === 2,
+    `the campaign answer carries both decisions (${(shownAfter.data?.decisions ?? []).length})`);
+
+  const tampered = await candidateVoter.from("marathon_milestone_decisions").update({ decision: "continue" }).eq("campaign_id", campaignId);
+  const tamperedRows = await service.from("marathon_milestone_decisions")
+    .select("decision").eq("campaign_id", campaignId).eq("tier_position", 2).single();
+  check(tamperedRows.data?.decision === "claim",
+    `a candidate cannot rewrite their own decision (${tampered.error ? "refused" : "no rows changed"})`);
+
+  // Put the ladder back before the rest of the run reads it.
+  await service.from("marathon_reward_tiers")
+    .update({ votes_required: 1000, premium_required: 300 }).eq("campaign_id", campaignId).eq("position", 1);
+  await service.from("marathon_reward_tiers")
+    .update({ votes_required: 2000, premium_required: 600 }).eq("campaign_id", campaignId).eq("position", 2);
+
   console.log("\nUlashish havolasi:");
   // The web landing page reads this with the anon key and nothing else.
   const guest = createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });

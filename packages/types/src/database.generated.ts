@@ -6372,6 +6372,10 @@ export type Database = {
         }
         Returns: Json
       }
+      marathon_decide_milestone: {
+        Args: { p_decision: string; p_position: number }
+        Returns: Json
+      }
       marathon_join: { Args: never; Returns: Json }
       marathon_my_votes: { Args: never; Returns: Json }
       marathon_search_candidates: {

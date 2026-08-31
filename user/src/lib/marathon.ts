@@ -91,6 +91,13 @@ export async function castVote(candidateId: string, kind: MarathonVoteKind) {
   return data as { vote_id: string; kind: MarathonVoteKind; candidate_total: number; candidate_premium: number };
 }
 
+/** What a candidate answered at a milestone, and when. */
+export type MarathonDecision = {
+  position: number;
+  decision: "claim" | "continue";
+  decided_at: string;
+};
+
 export type MarathonTier = {
   position: number;
   votes_required: number;
@@ -114,6 +121,7 @@ export type MarathonCampaign = {
   total_votes: number;
   premium_votes: number;
   tiers: MarathonTier[];
+  decisions: MarathonDecision[];
 };
 
 export async function activeCampaign(): Promise<MarathonCampaign | null> {
@@ -258,4 +266,46 @@ export async function invitedCandidate(campaignId: string, candidateId: string):
   });
   if (error) throw error;
   return (data ?? null) as MarathonInvitedCandidate | null;
+}
+
+/**
+ * Taking a milestone's reward, or giving it up for the next one.
+ *
+ * Both are irreversible and both are checked again in SQL — the screen decides
+ * what to offer, never whether it was allowed.
+ */
+export async function decideMilestone(position: number, decision: "claim" | "continue"): Promise<void> {
+  const { error } = await supabase.rpc("marathon_decide_milestone", {
+    p_position: position,
+    p_decision: decision,
+  });
+  if (error) throw error;
+}
+
+/**
+ * The milestone a candidate owes an answer on, if any.
+ *
+ * Only rungs above the last one they answered, and the highest of those: a
+ * candidate who blew past two milestones without opening the app should be
+ * offered the better of them, not walked back through a reward they have
+ * already outgrown. A claim ends the ladder, so after one there is nothing
+ * left to ask.
+ */
+export function pendingMilestone(campaign: MarathonCampaign): MarathonTier | null {
+  if (!campaign.joined) return null;
+  if (campaign.decisions.some((decision) => decision.decision === "claim")) return null;
+  const answered = campaign.decisions.reduce((highest, decision) => Math.max(highest, decision.position), 0);
+  const open = campaign.tiers.filter((tier) => tier.position > answered && tierReached(tier, campaign));
+  return open.length > 0 ? open[open.length - 1]! : null;
+}
+
+/** The rung a candidate would be continuing toward, if there is one. */
+export function tierAfter(campaign: MarathonCampaign, position: number): MarathonTier | null {
+  return campaign.tiers.find((tier) => tier.position > position) ?? null;
+}
+
+/** The reward a candidate has already asked for, once they have asked. */
+export function claimedTier(campaign: MarathonCampaign): MarathonTier | null {
+  const claim = campaign.decisions.find((decision) => decision.decision === "claim");
+  return claim ? campaign.tiers.find((tier) => tier.position === claim.position) ?? null : null;
 }

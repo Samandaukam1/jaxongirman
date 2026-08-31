@@ -2,6 +2,7 @@ import { Clock, Sparkles } from "lucide-react-native";
 import { useMemo, useState } from "react";
 import { RefreshControl, ScrollView, Text, View } from "react-native";
 
+import { MarathonMilestoneModal } from "@/components/MarathonMilestoneModal";
 import { MarathonPoster } from "@/components/MarathonPoster";
 import { MarathonRewards } from "@/components/MarathonRewards";
 import { MarathonShareRow } from "@/components/MarathonShareRow";
@@ -10,7 +11,7 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { EmptyState, ErrorState, Skeleton, SkeletonCard } from "@/components/StateBlocks";
 import { countdownTo, formatCountdown, formatDate, useNow } from "@/lib/datetime";
-import { nextTierOf, useMarathonCampaign } from "@/lib/marathon";
+import { claimedTier, nextTierOf, pendingMilestone, useMarathonCampaign } from "@/lib/marathon";
 import { formatNumber } from "@/lib/money";
 import { icon, radius, spacing, typography } from "@/theme/tokens";
 import { useAccount } from "@/providers/AccountProvider";
@@ -41,6 +42,10 @@ export default function MarathonScreen() {
     () => (campaign ? countdownTo(campaign.ends_at, now) : null),
     [campaign, now]);
   const next = campaign ? nextTierOf(campaign) : null;
+  // A milestone owes an answer the moment both of its demands are met, and the
+  // question outlives a dismissed modal because nothing was written.
+  const pending = campaign ? pendingMilestone(campaign) : null;
+  const claimed = campaign ? claimedTier(campaign) : null;
 
   if (!loading && !campaign) {
     return (
@@ -107,6 +112,11 @@ export default function MarathonScreen() {
                       <Text style={styles.tallyLabel}>Premium ovoz</Text>
                     </View>
                   </View>
+                  {claimed ? (
+                    <Text style={styles.claimed}>
+                      {claimed.reward_percent}% mukofot so‘raldi — javobni kutmoqdasiz.
+                    </Text>
+                  ) : null}
                   <Text style={styles.cardHint}>
                     {next
                       ? `Keyingi bosqichgacha ${formatNumber(Math.max(0, next.votes_required - campaign.total_votes))} ta ovoz va ${formatNumber(Math.max(0, next.premium_required - campaign.premium_votes))} ta Premium ovoz qoldi.`
@@ -143,6 +153,10 @@ export default function MarathonScreen() {
           </>
         )}
       </ScrollView>
+
+      {campaign && pending ? (
+        <MarathonMilestoneModal campaign={campaign} tier={pending} onSettled={reload} />
+      ) : null}
     </View>
   );
 }
@@ -177,6 +191,10 @@ const useStyles = makeStyles((colors) => ({
   sectionTitle: {
     ...typography.caption, fontFamily: "Manrope_700Bold", color: colors.inkMuted,
     letterSpacing: 0.8, marginTop: spacing.md,
+  },
+  claimed: {
+    ...typography.caption, fontFamily: "Manrope_700Bold", color: colors.success,
+    paddingVertical: spacing.xs,
   },
   rules: { gap: spacing.sm },
   rulesText: { ...typography.body, color: colors.inkMuted },

@@ -31,6 +31,9 @@ export function MarathonRewards({ campaign }: { campaign: MarathonCampaign }) {
         const reached = tierReached(tier, campaign);
         const current = !reached && tier.position === next?.position;
         const progress = tierProgress(tier, campaign);
+        // What was decided about this rung, if anything. A forfeited reward
+        // stays on the ladder: it is what the rungs above it cost.
+        const decision = campaign.decisions.find((made) => made.position === tier.position);
         return (
           <View key={tier.position} style={[styles.tier, current && styles.tierCurrent]}>
             <View style={[styles.mark, reached && styles.markDone]}>
@@ -46,6 +49,11 @@ export function MarathonRewards({ campaign }: { campaign: MarathonCampaign }) {
               <Text style={styles.need}>
                 {formatNumber(tier.votes_required)} ovoz · {formatNumber(tier.premium_required)} Premium
               </Text>
+              {decision ? (
+                <Text style={decision.decision === "claim" ? styles.claimed : styles.forfeited}>
+                  {decision.decision === "claim" ? "Mukofot so‘raldi" : "Voz kechilgan"}
+                </Text>
+              ) : null}
               <View style={styles.track}>
                 <View style={[styles.fill, { width: `${Math.round(progress * 100)}%` }]} />
               </View>
@@ -77,6 +85,8 @@ const useStyles = makeStyles((colors) => ({
   reward: { ...typography.bodyMedium, color: colors.ink },
   amount: { ...typography.caption, color: colors.primaryDeep },
   need: { ...typography.caption, color: colors.inkMuted, marginTop: 2 },
+  claimed: { ...typography.caption, fontFamily: "Manrope_700Bold", color: colors.success, marginTop: 2 },
+  forfeited: { ...typography.caption, fontFamily: "Manrope_700Bold", color: colors.inkSoft, marginTop: 2 },
   track: { height: 6, borderRadius: 3, backgroundColor: colors.surfaceMuted, overflow: "hidden", marginTop: spacing.xs },
   fill: { height: "100%", borderRadius: 3, backgroundColor: colors.primary },
   cap: { ...typography.caption, color: colors.inkSoft, marginTop: spacing.xs },
