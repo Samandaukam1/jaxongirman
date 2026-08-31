@@ -6,7 +6,7 @@ import { buildEdgeModules } from "../scripts/build-edge.mjs";
 const edge = buildEdgeModules();
 const { readScene } = await import(`${edge}/scene-spec.js`);
 const { placeScene, findCollisions, findOutOfBounds, measureText } = await import(`${edge}/scene-geometry.js`);
-const { scoreScene, compositionSignature, similarity, findRepetition, speaks, freeBand, withRescuedContent, withCoverCredit } = await import(`${edge}/scene-quality.js`);
+const { scoreScene, compositionSignature, similarity, findRepetition, speaks, freeBand, withRescuedContent, withCoverCredit, sceneFromBrief, withTrimmedText } = await import(`${edge}/scene-quality.js`);
 
 const judge = (raw) => {
   const { scene, problems } = readScene(raw);
@@ -230,4 +230,52 @@ test("a deck with no names on it gets no empty label", () => {
     elements: [{ type: "text", role: "title", place: { column: 0, span: 9, row: 4, rows: 2 }, typography: { font: "display", step: "display", color: "ink" }, text: "Mavzu" }],
   });
   assert.equal(withCoverCredit(scene, "").elements.length, 1);
+});
+
+test("the page built from a brief always fits its own box", () => {
+  const wordy = "Suv resurslarini tejash bugungi kunda eng dolzarb masalalardan biridir. ".repeat(20);
+  const scene = sceneFromBrief({ title: "Xulosa", message: wordy, supporting: wordy });
+  const placed = placeScene(scene);
+  const fits = measureText(placed);
+  assert.ok(fits.every((one) => one.fits), JSON.stringify(fits));
+  const report = scoreScene({ scene, placed, fits, collisions: findCollisions(placed), outOfBounds: findOutOfBounds(placed) });
+  // A replacement that scores no better than what it replaces is not a
+  // replacement, which is how a page scoring 75 stayed in a deck.
+  assert.ok(report.score >= 90, `scored ${report.score}: ${JSON.stringify(report.faults)}`);
+});
+
+test("a short brief still produces a page that reads", () => {
+  const scene = sceneFromBrief({ title: "Xulosa", message: "Suv tejash hammaning ishi.", supporting: null });
+  const placed = placeScene(scene);
+  const report = scoreScene({ scene, placed, fits: measureText(placed), collisions: findCollisions(placed), outOfBounds: findOutOfBounds(placed) });
+  assert.ok(report.score >= 90, `scored ${report.score}: ${JSON.stringify(report.faults)}`);
+});
+
+test("a page failing only on length keeps its composition", () => {
+  const { scene } = readScene({
+    purpose: "p",
+    background: { kind: "solid", color: "background" },
+    elements: [
+      { type: "text", role: "title", place: { column: 0, span: 7, row: 0, rows: 2 }, typography: { font: "display", step: "title", color: "ink" }, text: "Sarlavha" },
+      { type: "text", role: "body", place: { column: 0, span: 6, row: 2, rows: 3 }, typography: { font: "body", step: "body", color: "ink" }, text: "Uzun jumla. ".repeat(80) },
+      { type: "image", place: { column: 7, span: 5, row: 0, rows: 6 }, treatment: "rounded", intent: { query: "x", orientation: "portrait" } },
+    ],
+  });
+  const before = scoreScene({ scene, placed: placeScene(scene), fits: measureText(placeScene(scene)), collisions: [], outOfBounds: [] });
+  assert.ok(before.faults.some((fault) => fault.code === "overflow"));
+
+  const trimmed = withTrimmedText(scene);
+  const placed = placeScene(trimmed);
+  const after = scoreScene({ scene: trimmed, placed, fits: measureText(placed), collisions: findCollisions(placed), outOfBounds: findOutOfBounds(placed) });
+  assert.ok(!after.faults.some((fault) => fault.code === "overflow"), JSON.stringify(after.faults));
+  assert.equal(trimmed.elements.length, 3, "the picture and the title are still there");
+  assert.ok(trimmed.elements[1].text.length < scene.elements[1].text.length);
+  // The type size is never the answer: that is the fix this engine exists to
+  // avoid.
+  assert.equal(trimmed.elements[1].typography.step, "body");
+});
+
+test("a page that fits is not cut", () => {
+  const { scene } = readScene(healthy);
+  assert.deepEqual(withTrimmedText(scene), scene);
 });

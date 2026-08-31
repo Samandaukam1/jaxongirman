@@ -16,7 +16,7 @@
 import { buildDNA, type DesignDNA, type DesignDirection, type LibraryFamily, MOODS, GROUNDS } from "./scene-dna.ts";
 import { runSceneCycle, validateScene, type CycleResult } from "./scene-cycle.ts";
 import { renderScene, imageIntents, type RenderedSlide, type ResolvedPicture } from "./scene-render.ts";
-import { findRepetition, mirrorScene, sceneFromBrief, withCoverCredit, withRescuedContent } from "./scene-quality.ts";
+import { findRepetition, mirrorScene, sceneFromBrief, withCoverCredit, withRescuedContent, withTrimmedText } from "./scene-quality.ts";
 import {
   briefPrompt, briefSchema, directionPrompt, directionSchema, repairPrompt, scenePrompt, sceneSchema,
   type SemanticBrief,
@@ -275,6 +275,22 @@ export async function generateDeck(deps: Deps, input: DeckInput): Promise<Genera
      * questions and only one of them had been asked. The page built from the
      * brief is plain, and plain beats broken.
      */
+    /**
+     * Copy cut to fit, before the page is given up on.
+     *
+     * A composition with five elements and a picture, failing only because one
+     * paragraph is too long, is worth more than the plain page that would
+     * replace it. Only the words change.
+     */
+    if (scene && score < threshold) {
+      const trimmed = validateScene(withTrimmedText(scene), language, signatures.at(-1) ?? null);
+      if (trimmed.scene && trimmed.report && trimmed.report.score > score) {
+        scene = trimmed.scene;
+        score = trimmed.report.score;
+        cycle.report = trimmed.report;
+      }
+    }
+
     if (!scene || score < threshold) {
       const fallback = sceneFromBrief({
         title: planned.title,

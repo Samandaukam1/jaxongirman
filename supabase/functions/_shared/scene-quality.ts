@@ -17,6 +17,7 @@ import {
   CANVAS, GRID, TYPE_SCALE,
   type Scene, type SceneElement,
 } from "./scene-spec.ts";
+import { measureText, placeScene } from "./scene-geometry.ts";
 import type { Collision, PlacedElement, TextFit } from "./scene-geometry.ts";
 
 export type QualityInput = {
@@ -322,7 +323,28 @@ export function sceneFromBrief(input: { title: string; message: string; supporti
       text: body,
     });
   }
-  return { purpose: input.title, background: { kind: "solid", color: "background" }, elements };
+
+  const scene: Scene = { purpose: input.title, background: { kind: "solid", color: "background" }, elements };
+  if (!body) return scene;
+
+  /**
+   * Cut to what the box holds.
+   *
+   * This page exists to replace one that scored badly, and a replacement that
+   * overflows is not a replacement: the caller keeps whichever scores higher,
+   * so a fallback overflowing by the same amount left a broken page in the
+   * deck. Measured against the band it was just placed in, and cut at a word
+   * boundary — the words are the brief's, so losing the tail of one costs
+   * nothing a reader will miss.
+   */
+  const fit = measureText(placeScene(scene)).find((one) => one.path.endsWith("[1]"));
+  if (!fit || fit.fits) return scene;
+  const room = Math.max(40, fit.capacity - 1);
+  const cut = body.slice(0, room);
+  const boundary = cut.lastIndexOf(" ");
+  const trimmed = (boundary > room * 0.6 ? cut.slice(0, boundary) : cut).trimEnd();
+  elements[1] = { ...elements[1]!, text: trimmed } as Scene["elements"][number];
+  return { ...scene, elements };
 }
 
 
@@ -396,4 +418,38 @@ export function withCoverCredit(scene: Scene, line: string): Scene {
       text: wanted,
     }],
   };
+}
+
+
+/**
+ * Copy cut to the boxes it was put in.
+ *
+ * The last resort before giving up on a page the model designed. Three repairs
+ * asked it to shorten and it returned the same sentence each time, so the page
+ * scored 75 and was replaced by a plain two-element fallback — a correct trade
+ * and a poor one, because the composition it threw away had five elements and
+ * a picture.
+ *
+ * Cutting is arithmetic: the box's capacity is known, the words are the
+ * model's own, and a sentence one clause shorter is not a page anybody
+ * notices. The type size is never touched — that is the fix this whole engine
+ * exists to avoid.
+ */
+export function withTrimmedText(scene: Scene): Scene {
+  const placed = placeScene(scene);
+  const overflowing = measureText(placed).filter((fit) => !fit.fits);
+  if (overflowing.length === 0) return scene;
+
+  const byPath = new Map(overflowing.map((fit) => [fit.path, fit]));
+  const elements = scene.elements.map((element, index) => {
+    const fit = byPath.get(`elements[${index}]`);
+    if (!fit || element.type !== "text") return element;
+    const room = Math.max(24, fit.capacity - 1);
+    if (element.text.length <= room) return element;
+    const cut = element.text.slice(0, room);
+    const sentence = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("! "), cut.lastIndexOf("? "));
+    const boundary = sentence > room * 0.5 ? sentence + 1 : cut.lastIndexOf(" ");
+    return { ...element, text: (boundary > room * 0.4 ? cut.slice(0, boundary) : cut).trimEnd() };
+  });
+  return { ...scene, elements };
 }
