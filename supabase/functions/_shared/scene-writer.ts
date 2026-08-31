@@ -343,7 +343,15 @@ const EXAMPLES = JSON.stringify([
     elements: [
       { type: "text", role: "eyebrow", place: { column: 0, span: 4, row: 0, rows: 1 }, text: "01 — KONTEKST", font: "body", step: "micro", color: "inkMuted" },
       { type: "text", role: "title", place: { column: 0, span: 7, row: 1, rows: 2 }, text: "Suv taqchilligi qanday paydo bo'ldi", font: "display", step: "title", color: "ink" },
-      { type: "text", role: "body", place: { column: 0, span: 6, row: 3, rows: 4 }, text: "To'rt-besh jumlalik izoh: sabab, mexanizm, natija va aniq misol.", font: "body", step: "body", color: "ink" },
+      /**
+       * A real paragraph, not a description of one.
+       *
+       * The example said "four or five sentences of explanation" in one
+       * sentence, and the model copied the length rather than the
+       * instruction — pages came back a third full. An example teaches by
+       * being what it asks for.
+       */
+      { type: "text", role: "body", place: { column: 0, span: 6, row: 3, rows: 4 }, text: "Mintaqada suv zaxiralari so'nggi o'ttiz yilda keskin kamaydi. Asosiy sabab — sug'orish tizimlarining eskirgani va suvning yo'lda yo'qolishi. Natijada ekin maydonlari qisqardi va qishloq xo'jaligi daromadi pasaydi. Masalan, Orol bo'yidagi tumanlarda paxta hosildorligi yigirma foizga tushdi. Bu holat suvni tejaydigan texnologiyalarga o'tishni kechiktirib bo'lmaydigan vazifaga aylantirdi.", font: "body", step: "body", color: "ink" },
       { type: "image", place: { column: 7, span: 5, row: 1, rows: 6 }, treatment: "rounded", intent: { query: "Orol dengizi qurigan tubi", orientation: "portrait" } },
     ],
   },
@@ -356,7 +364,7 @@ const EXAMPLES = JSON.stringify([
         { role: "statistic_label", text: "suv qishloq xo'jaligiga ketadi", font: "body", step: "caption", color: "inkMuted" },
       ] },
       { type: "chart", place: { column: 4, span: 8, row: 2, rows: 3 }, chart: { kind: "bar", labels: ["1990", "2005", "2020"], values: [64, 41, 23] } },
-      { type: "text", role: "body", place: { column: 0, span: 12, row: 5, rows: 2 }, text: "Diagramma yonidagi izoh: raqam nimani anglatadi va nega muhim.", font: "body", step: "body", color: "ink" },
+      { type: "text", role: "body", place: { column: 0, span: 12, row: 5, rows: 2 }, text: "Diagramma suv iste'molining tarmoqlar bo'yicha taqsimotini ko'rsatadi. Qishloq xo'jaligi ulushi hamon uchdan ikkidan yuqori, sanoat va maishiy iste'mol esa birgalikda choragini tashkil qiladi. Bu nisbat tejash choralari qayerdan boshlanishi kerakligini aniq aytadi.", font: "body", step: "body", color: "ink" },
     ],
   },
 ]);

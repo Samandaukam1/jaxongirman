@@ -211,11 +211,10 @@ test("a repeat the mirror cannot break survives to the audit", async () => {
   });
   const deck = await generateDeck(deps({ ask }), { topic: "T", slides: [{ title: "a" }, { title: "b" }], maxAttempts: 1 });
   assert.deepEqual(deck.observability.mirroredSlides, [], "there was nothing to gain by flipping it");
-  // The repeat cost it fifteen points, which put it under the line, so the
-  // plain page built from the brief shipped instead — and that page is not a
-  // repeat of anything.
-  assert.equal(deck.slides[1].synthesised, true);
-  assert.deepEqual(deck.observability.repeatedCompositions, []);
+  // A repeat is not a broken page, so it is reported rather than replaced —
+  // the plain page built from the brief could not fix it anyway.
+  assert.equal(deck.slides[1].synthesised, false);
+  assert.deepEqual(deck.observability.repeatedCompositions, [1]);
 });
 
 test("a repeat the mirror can break is broken", async () => {

@@ -292,7 +292,17 @@ export async function generateDeck(deps: Deps, input: DeckInput): Promise<Genera
       }
     }
 
-    if (!scene || score < threshold) {
+    /**
+     * A rescue is for a broken page, not a quiet one.
+     *
+     * Thinness cost sixteen points, which put a page under the line, which
+     * replaced it with the plain page built from the brief — and that page is
+     * thinner still. A rescue cannot fix a page for having little to say; it
+     * can only fix one a reader cannot use.
+     */
+    const hardFaults = new Set(["collision", "overflow", "out_of_bounds", "no_content", "no_heading"]);
+    const broken = !scene || (cycle.report?.faults ?? []).some((fault) => hardFaults.has(fault.code));
+    if (broken) {
       const fallback = sceneFromBrief({
         title: planned.title,
         message: brief?.mainMessage ?? "",
@@ -308,10 +318,8 @@ export async function generateDeck(deps: Deps, input: DeckInput): Promise<Genera
        * that could have said more. So a rescue wins whenever it clears the
        * hard faults the page it replaces did not.
        */
-      const hard = new Set(["collision", "overflow", "out_of_bounds", "no_content"]);
-      const brokenBefore = (cycle.report?.faults ?? []).some((fault) => hard.has(fault.code));
-      const brokenAfter = (checked.report?.faults ?? []).some((fault) => hard.has(fault.code));
-      if (checked.scene && checked.report && (checked.report.score > score || (brokenBefore && !brokenAfter))) {
+      const brokenAfter = (checked.report?.faults ?? []).some((fault) => hardFaults.has(fault.code));
+      if (checked.scene && checked.report && (checked.report.score > score || !brokenAfter)) {
         scene = checked.scene;
         score = checked.report.score;
         synthesised = true;
