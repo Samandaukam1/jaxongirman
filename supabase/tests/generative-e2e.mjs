@@ -199,7 +199,11 @@ try {
    * were not embedded and whose words were rasterised would satisfy it and be
    * useless to the person who opens it in PowerPoint.
    */
-  const exportJobId = exported.data?.exportJobId ?? exported.data?.id;
+  // `jobId`, which is what the function actually returns. Reading a field that
+  // is not there made this whole block skip in silence — a check that does not
+  // run is worse than none, because the run says nothing and looks fine.
+  const exportJobId = exported.data?.jobId;
+  check(Boolean(exportJobId), "the export was queued and named");
   let exportJob = null;
   for (let attempt = 0; attempt < 90 && exportJobId; attempt += 1) {
     const result = await service.from("export_jobs").select("status,storage_path,error_message").eq("id", exportJobId).maybeSingle();
@@ -208,6 +212,7 @@ try {
     if (exportJob && !["queued", "running"].includes(exportJob.status)) break;
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
+  check(exportJob?.status === "succeeded", `the export finished${exportJob?.error_message ? ` — ${exportJob.error_message}` : ` (${exportJob?.status ?? "?"})`}`);
   if (exportJob?.status === "succeeded" && exportJob.storage_path) {
     const file = await service.storage.from("exports").download(exportJob.storage_path);
     if (!file.error && file.data) {

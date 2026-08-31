@@ -453,3 +453,42 @@ export function withTrimmedText(scene: Scene): Scene {
   });
   return { ...scene, elements };
 }
+
+
+/**
+ * A cover without a photograph on it.
+ *
+ * Asked for in the prompt with the JSON spelled out, and produced two runs in
+ * three. The third came back as type on a plain ground — correct, and not what
+ * anybody means by a cover. So the engine adds the picture when the model does
+ * not, with the deck's own subject as the intent: the image service decides
+ * what that means and refuses if it cannot prove one, exactly as everywhere
+ * else.
+ *
+ * Added first so it sits underneath, with a scrim, because the type already on
+ * the page was written to be read against something.
+ */
+export function withCoverImage(scene: Scene, topic: string): Scene {
+  const already = scene.elements.some((element) => element.type === "image" && element.place.bleed)
+    || scene.background.kind === "image";
+  if (already || !topic.trim()) return scene;
+
+  return {
+    ...scene,
+    elements: [
+      {
+        type: "image",
+        place: { column: 0, span: 12, row: 0, rows: 8, bleed: true },
+        treatment: "full_bleed",
+        overlay: "scrim_bottom",
+        intent: { query: topic.trim(), orientation: "landscape" },
+      },
+      ...scene.elements.map((element) =>
+        // Type over a photograph is white; the palette's ink was chosen for a
+        // ground this page no longer has.
+        element.type === "text"
+          ? { ...element, typography: { ...element.typography, color: "onImage" as const } }
+          : element),
+    ],
+  };
+}

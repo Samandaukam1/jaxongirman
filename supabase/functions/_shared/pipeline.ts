@@ -915,6 +915,10 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
         presentation: prepared.presentation,
         outline: outlineResult.data,
         research: research.text,
+        sources: [
+          ...prepared.sources,
+          ...research.citations.map((citation) => citation.url ? `${citation.title} — ${citation.url}` : citation.title),
+        ],
         addCost: (amount) => { totalCost += amount; },
         pricing: await providerPricing(input.service),
       });
@@ -2180,6 +2184,8 @@ async function runGenerative(params: {
   presentation: { topic: string; style: string; requested_slide_count: number; author_name: string | null; teacher_name: string | null };
   outline: Outline;
   research: string;
+  /** What the deck cites, for the page that has to list them. */
+  sources: readonly string[];
   addCost: (amount: number) => void;
   pricing: { for(model: string): { inputPerMillion: number; outputPerMillion: number } };
 }): Promise<void> {
@@ -2199,6 +2205,7 @@ async function runGenerative(params: {
           topic: presentation.topic,
           outlineTitles: outline.slides.map((slide) => slide.title),
           research: params.research || null,
+          sources: params.sources,
           agendaTitle: AGENDA_TITLE,
           referencesTitle: REFERENCES_TITLE,
           thanksTitle: THANKS_TITLE,

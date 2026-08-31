@@ -16,7 +16,7 @@
 import { buildDNA, type DesignDNA, type DesignDirection, type LibraryFamily, MOODS, GROUNDS } from "./scene-dna.ts";
 import { runSceneCycle, validateScene, type CycleResult } from "./scene-cycle.ts";
 import { renderScene, imageIntents, type RenderedSlide, type ResolvedPicture } from "./scene-render.ts";
-import { findRepetition, mirrorScene, sceneFromBrief, withCoverCredit, withRescuedContent, withTrimmedText } from "./scene-quality.ts";
+import { findRepetition, mirrorScene, sceneFromBrief, withCoverCredit, withCoverImage, withRescuedContent, withTrimmedText } from "./scene-quality.ts";
 import {
   briefPrompt, briefSchema, directionPrompt, directionSchema, repairPrompt, scenePrompt, sceneSchema,
   type SemanticBrief,
@@ -206,11 +206,14 @@ export async function generateDeck(deps: Deps, input: DeckInput): Promise<Genera
       const spoken = withRescuedContent(read.scene, brief?.mainMessage ?? "");
       // The cover's credit line, where the deck has names to put on it.
       if (planned.kind !== "cover") return spoken;
+      // A cover is a photograph with the subject's name on it, whether or not
+      // the model remembered.
+      const covered = withCoverImage(spoken, input.topic);
       const credit = [
         input.author ? `Tayyorladi: ${input.author}` : null,
         input.teacher ? `O'qituvchi: ${input.teacher}` : null,
       ].filter(Boolean).join(" · ");
-      return withCoverCredit(spoken, credit);
+      return withCoverCredit(covered, credit);
     };
 
     const cycle: { -readonly [K in keyof CycleResult]: CycleResult[K] } = await runSceneCycle(async (previous) => {

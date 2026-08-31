@@ -97,6 +97,15 @@ export function deckPagesFrom(input: {
   topic: string;
   outlineTitles: readonly string[];
   research: string | null;
+  /**
+   * What the deck actually cites.
+   *
+   * The bibliography page was given the research brief and asked to write
+   * about it, which produces a page describing sources rather than listing
+   * them. A graded deck is marked on this page; it has to carry the citations
+   * themselves.
+   */
+  sources: readonly string[];
   agendaTitle: string;
   referencesTitle: string;
   thanksTitle: string;
@@ -111,7 +120,13 @@ export function deckPagesFrom(input: {
       research: input.research || null,
       kind: "content" as const,
     })),
-    { title: input.referencesTitle, research: input.research || null, kind: "content" },
+    {
+      title: input.referencesTitle,
+      research: input.sources.length > 0
+        ? `Shu manbalarni ro'yxat qilib yozing, o'zgartirmang va qo'shmang:\n${input.sources.map((one, at) => `${at + 1}. ${one}`).join("\n")}`
+        : input.research || null,
+      kind: "content",
+    },
     { title: input.thanksTitle, research: null, kind: "closing" },
   ];
 }

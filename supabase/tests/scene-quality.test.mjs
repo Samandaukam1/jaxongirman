@@ -6,7 +6,7 @@ import { buildEdgeModules } from "../scripts/build-edge.mjs";
 const edge = buildEdgeModules();
 const { readScene } = await import(`${edge}/scene-spec.js`);
 const { placeScene, findCollisions, findOutOfBounds, measureText } = await import(`${edge}/scene-geometry.js`);
-const { scoreScene, compositionSignature, similarity, findRepetition, speaks, freeBand, withRescuedContent, withCoverCredit, sceneFromBrief, withTrimmedText } = await import(`${edge}/scene-quality.js`);
+const { scoreScene, compositionSignature, similarity, findRepetition, speaks, freeBand, withRescuedContent, withCoverCredit, sceneFromBrief, withTrimmedText, withCoverImage } = await import(`${edge}/scene-quality.js`);
 
 const judge = (raw) => {
   const { scene, problems } = readScene(raw);
@@ -278,4 +278,35 @@ test("a page failing only on length keeps its composition", () => {
 test("a page that fits is not cut", () => {
   const { scene } = readScene(healthy);
   assert.deepEqual(withTrimmedText(scene), scene);
+});
+
+test("a cover with no photograph gets one, and its type turns white", () => {
+  const { scene } = readScene({
+    purpose: "cover",
+    background: { kind: "solid", color: "background" },
+    elements: [
+      { type: "text", role: "title", place: { column: 0, span: 9, row: 4, rows: 2 }, typography: { font: "display", step: "display", color: "ink" }, text: "Suv resurslari" },
+    ],
+  });
+  const covered = withCoverImage(scene, "Suv resurslari");
+  const image = covered.elements[0];
+  assert.equal(image.type, "image");
+  assert.equal(image.place.bleed, true, "it fills the page");
+  assert.equal(image.intent.query, "Suv resurslari");
+  assert.equal(image.overlay, "scrim_bottom");
+  // The palette's ink was chosen for a ground this page no longer has.
+  assert.equal(covered.elements[1].typography.color, "onImage");
+});
+
+test("a cover the model already photographed is left alone", () => {
+  const { scene } = readScene({
+    purpose: "cover",
+    background: { kind: "solid", color: "background" },
+    elements: [
+      { type: "image", place: { column: 0, span: 12, row: 0, rows: 8, bleed: true }, treatment: "full_bleed", intent: { query: "Orol", orientation: "landscape" }, overlay: "veil" },
+      { type: "text", role: "title", place: { column: 0, span: 9, row: 4, rows: 2 }, typography: { font: "display", step: "display", color: "onImage" }, text: "Orol" },
+    ],
+  });
+  assert.equal(withCoverImage(scene, "Orol").elements.length, 2);
+  assert.equal(withCoverImage(scene, "Orol").elements[0].intent.query, "Orol");
 });

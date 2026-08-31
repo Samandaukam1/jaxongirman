@@ -100,12 +100,14 @@ test("a deck is its outline plus its own furniture", () => {
     topic: "Suv resurslari",
     outlineTitles: ["Kirish", "Holat", "Yechim"],
     research: "manba matni",
+    sources: [],
     agendaTitle: "Mavzular rejasi",
     referencesTitle: "Foydalanilgan adabiyotlar",
     thanksTitle: "Rahmat",
   });
-  assert.equal(pages.length, 6, "cover, agenda, three body pages, references, closing");
-  assert.deepEqual(pages.map((page) => page.kind), ["cover", "content", "content", "content", "content", "closing"]);
+  assert.equal(pages.length, 7, "cover, agenda, three body pages, references, closing");
+  assert.deepEqual(pages.map((page) => page.kind),
+    ["cover", "content", "content", "content", "content", "content", "closing"]);
   assert.equal(pages[0].title, "Suv resurslari");
   assert.equal(pages[0].kind, "cover");
   assert.equal(pages.at(-1).kind, "closing");
@@ -113,7 +115,7 @@ test("a deck is its outline plus its own furniture", () => {
 
 test("the agenda is told what the deck contains", () => {
   const pages = deckPagesFrom({
-    topic: "T", outlineTitles: ["Bir", "Ikki"], research: null,
+    topic: "T", outlineTitles: ["Bir", "Ikki"], research: null, sources: [],
     agendaTitle: "Reja", referencesTitle: "Manbalar", thanksTitle: "Rahmat",
   });
   assert.match(pages[1].research, /Bir; Ikki/);
@@ -121,9 +123,32 @@ test("the agenda is told what the deck contains", () => {
 
 test("body pages carry the research and the cover does not", () => {
   const pages = deckPagesFrom({
-    topic: "T", outlineTitles: ["Bir"], research: "manba",
+    topic: "T", outlineTitles: ["Bir"], research: "manba", sources: [],
     agendaTitle: "Reja", referencesTitle: "Manbalar", thanksTitle: "Rahmat",
   });
   assert.equal(pages[0].research, null, "a cover is about the whole deck, not a source");
   assert.equal(pages[2].research, "manba");
+});
+
+test("the bibliography page is given the citations themselves", () => {
+  const pages = deckPagesFrom({
+    topic: "T", outlineTitles: ["Bir"], research: "uzun tadqiqot matni",
+    sources: ["Kitob A", "Maqola B — https://example.test/b"],
+    agendaTitle: "Reja", referencesTitle: "Manbalar", thanksTitle: "Rahmat",
+  });
+  const references = pages.find((page) => page.title === "Manbalar");
+  assert.match(references.research, /1\. Kitob A/);
+  assert.match(references.research, /https:\/\/example\.test\/b/);
+  // Listed, not described: a page written *about* the sources is not a
+  // bibliography, and this page is what a deck is marked on.
+  assert.match(references.research, /ro'yxat qilib yozing/);
+  assert.doesNotMatch(references.research, /uzun tadqiqot matni/);
+});
+
+test("a deck with no citations falls back to the research brief", () => {
+  const pages = deckPagesFrom({
+    topic: "T", outlineTitles: ["Bir"], research: "tadqiqot", sources: [],
+    agendaTitle: "Reja", referencesTitle: "Manbalar", thanksTitle: "Rahmat",
+  });
+  assert.equal(pages.find((page) => page.title === "Manbalar").research, "tadqiqot");
 });
