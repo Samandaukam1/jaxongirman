@@ -9,7 +9,7 @@ const { readScene } = spec;
 const { placeScene, findCollisions, findOutOfBounds, measureText } = await import(`${edge}/scene-geometry.js`);
 const { scoreScene } = await import(`${edge}/scene-quality.js`);
 const { MOODS, GROUNDS } = await import(`${edge}/scene-dna.js`);
-const { sceneSchema, directionSchema, briefSchema, scenePrompt, repairPrompt, directionPrompt, briefPrompt } =
+const { sceneSchema, directionSchema, briefSchema, scenePrompt, repairPrompt, directionPrompt, briefPrompt, registerFor } =
   await import(`${edge}/scene-writer.js`);
 
 const schema = sceneSchema();
@@ -177,4 +177,22 @@ test("the direction prompt asks for one colour and a reason, not a palette", () 
   const prompt = directionPrompt("Sun'iy intellekt");
   assert.match(prompt, /bitta #RRGGBB/);
   assert.match(prompt, /palitra yozmang/);
+});
+
+test("the body of a deck moves through registers rather than repeating one", () => {
+  const body = [2, 3, 4, 5, 6].map((position) => registerFor(position, 10));
+  assert.equal(new Set(body).size, 5, "five body pages, five registers");
+  assert.ok(body.every(Boolean));
+});
+
+test("the fixed pages have their own jobs and take no register", () => {
+  assert.equal(registerFor(0, 10), null, "the cover");
+  assert.equal(registerFor(1, 10), null, "the agenda");
+  assert.equal(registerFor(8, 10), null, "the bibliography");
+  assert.equal(registerFor(9, 10), null, "the closing page");
+});
+
+test("a long deck cycles rather than running out", () => {
+  assert.equal(registerFor(2, 20), registerFor(7, 20));
+  assert.notEqual(registerFor(2, 20), registerFor(3, 20));
 });

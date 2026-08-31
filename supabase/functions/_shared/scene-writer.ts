@@ -271,6 +271,31 @@ export function directionPrompt(topic: string, language = "uz"): string {
   ].join("\n");
 }
 
+/**
+ * What this page is for, in the deck's arc rather than on its own.
+ *
+ * Every brief was written independently, so a ten-page deck came out as ten
+ * explanations: each one sound, the sequence flat. A reader needs the register
+ * to change — context, then evidence, then a case, then what it means, then
+ * what follows — and the model cannot see that from one slide's title.
+ *
+ * Assigned by position rather than asked for, because it is a property of the
+ * deck and the model is only ever shown one page of it.
+ */
+const REGISTERS = [
+  "KONTEKST — nima va nega muhim",
+  "DALIL — raqam, ulush yoki manba",
+  "MISOL — aniq holat yoki amaliyot",
+  "TAHLIL — sabab va natija",
+  "ISTIQBOL — kelajak, tavsiya yoki xulosa",
+] as const;
+
+export function registerFor(position: number, total: number): string | null {
+  // The fixed pages have their own jobs; only the body carries the arc.
+  if (position === 0 || position === 1 || position >= total - 2) return null;
+  return REGISTERS[(position - 2) % REGISTERS.length]!;
+}
+
 export function briefPrompt(input: {
   topic: string;
   title: string;
@@ -282,6 +307,12 @@ export function briefPrompt(input: {
     "Siz slaydning MA'NOSINI aniqlaysiz. Hali dizayn yo'q.",
     `Taqdimot mavzusi: ${input.topic}`,
     `Slayd ${input.position + 1}/${input.total}: ${input.title}`,
+    (() => {
+      const register = registerFor(input.position, input.total);
+      return register
+        ? `Bu sahifaning registri: ${register}. Oldingi sahifadan boshqacha ohangda yozing.`
+        : null;
+    })(),
     input.research ? `Manba:\n${input.research}` : null,
     "",
     "slideGoal: bu sahifa nima uchun kerak.",

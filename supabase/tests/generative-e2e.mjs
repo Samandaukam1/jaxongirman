@@ -68,6 +68,8 @@ try {
       title: topic,
       style: "super_professional",
       slideCount,
+      authorName: "Ali Valiyev",
+      teacherName: "Dilnoza Karimova",
       sources: ["Jaxongirman generative E2E"],
       idempotencyKey: `generative:${presentationId}`,
     },
@@ -108,7 +110,7 @@ try {
   check(deck.data?.status === "ready", `the deck is ready (${deck.data?.status})`);
 
   const slides = await service.from("slides").select("id,position,quality_score,quality_report").eq("presentation_id", presentationId).order("position");
-  const elements = await service.from("slide_elements").select("slide_id,type,x,y,width,height,z_index,content").eq("presentation_id", presentationId);
+  const elements = await service.from("slide_elements").select("slide_id,type,x,y,width,height,z_index,style,content").eq("presentation_id", presentationId);
   console.log("");
   for (const slide of slides.data ?? []) {
     const report = slide.quality_report ?? {};
@@ -125,6 +127,30 @@ try {
   check(outside.length === 0, `nothing is stored outside the canvas the apps draw (${outside.length})`);
   const designed = (slides.data ?? []).filter((slide) => !slide.quality_report?.synthesised).length;
   check(designed * 2 >= (slides.data ?? []).length, `most pages were designed (${designed}/${(slides.data ?? []).length})`);
+
+  /**
+   * The cover, checked as its own thing.
+   *
+   * It is the page an author sees first and the only one whose subject is the
+   * whole deck, so "the deck scored well" says nothing about whether it has a
+   * cover on it.
+   */
+  console.log("Muqova:");
+  const first = (slides.data ?? []).find((slide) => slide.position === 0);
+  const onCover = (elements.data ?? []).filter((row) => row.slide_id === first?.id);
+  const bleed = onCover.find((row) => row.type === "image" && row.width >= 999);
+  check(Boolean(bleed), "a photograph fills the page");
+  check(Boolean(bleed?.content?.storagePath || bleed?.content?.url), "and it is a picture that was actually found");
+  const scrim = onCover.find((row) => row.content?.kind === "scrim");
+  check(Boolean(scrim), "with a scrim between it and the words");
+  check(Array.isArray(scrim?.style?.gradientStops), "that fades rather than covering it in flat black");
+  const coverText = onCover.filter((row) => row.type === "text");
+  const biggest = coverText.reduce((top, row) => (row.style?.fontSize ?? 0) > (top?.style?.fontSize ?? 0) ? row : top, null);
+  check(Boolean(biggest) && (biggest.style?.fontSize ?? 0) >= 40, `the title dominates (${biggest?.style?.fontSize ?? 0}px)`);
+  const words = coverText.map((row) => String(row.content?.text ?? "")).join(" ");
+  check(words.includes("Ali Valiyev"), "the author is named");
+  check(words.includes("Dilnoza Karimova"), "and so is the teacher");
+  console.log("");
 
   const exported = await user.functions.invoke("export-presentation", { body: { presentationId, format: "pptx" } });
   check(!exported.error, `the deck exports to PowerPoint${exported.error ? ` — ${exported.error.message}` : ""}`);
