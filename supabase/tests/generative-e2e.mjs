@@ -152,6 +152,39 @@ try {
   check(words.includes("Dilnoza Karimova"), "and so is the teacher");
   console.log("");
 
+  /**
+   * Overlap, measured on the rows that were stored.
+   *
+   * The engine checks the scene; this checks what came out of the conversion,
+   * which is a different thing and the place two bugs have already hidden. A
+   * photograph filling the page and the scrim over it are the ground every
+   * cover is built on, so they are excluded — everything else has to keep out
+   * of everything else's way.
+   */
+  const overlapping = [];
+  for (const slide of slides.data ?? []) {
+    const drawn = (elements.data ?? []).filter((row) =>
+      row.slide_id === slide.id
+      && row.content?.kind !== "scrim"
+      && !(row.type === "image" && row.width >= 999));
+    for (let i = 0; i < drawn.length; i += 1) {
+      for (let j = i + 1; j < drawn.length; j += 1) {
+        const a = drawn[i];
+        const b = drawn[j];
+        // A card holds what is inside it; that is not an overlap.
+        const inside = (outer, box) =>
+          box.x >= outer.x - 1 && box.y >= outer.y - 1
+          && box.x + box.width <= outer.x + outer.width + 1
+          && box.y + box.height <= outer.y + outer.height + 1;
+        if (inside(a, b) || inside(b, a)) continue;
+        const width = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
+        const height = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+        if (width > 2 && height > 2) overlapping.push(`${slide.position}:${a.type}×${b.type}`);
+      }
+    }
+  }
+  check(overlapping.length === 0, `nothing overlaps in the stored rows (${overlapping.join(", ") || "none"})`);
+
   const exported = await user.functions.invoke("export-presentation", { body: { presentationId, format: "pptx" } });
   check(!exported.error, `the deck exports to PowerPoint${exported.error ? ` — ${exported.error.message}` : ""}`);
 

@@ -6,7 +6,7 @@ import { buildEdgeModules } from "../scripts/build-edge.mjs";
 const edge = buildEdgeModules();
 const { readScene } = await import(`${edge}/scene-spec.js`);
 const { placeScene, findCollisions, findOutOfBounds, measureText } = await import(`${edge}/scene-geometry.js`);
-const { scoreScene, compositionSignature, similarity, findRepetition, speaks, freeBand, withRescuedContent } = await import(`${edge}/scene-quality.js`);
+const { scoreScene, compositionSignature, similarity, findRepetition, speaks, freeBand, withRescuedContent, withCoverCredit } = await import(`${edge}/scene-quality.js`);
 
 const judge = (raw) => {
   const { scene, problems } = readScene(raw);
@@ -192,4 +192,42 @@ test("an eyebrow is heading enough for an editorial page", () => {
     ],
   });
   assert.ok(!report.faults.some((fault) => fault.code === "no_heading"), JSON.stringify(report.faults));
+});
+
+test("a cover with no credit line gets one", () => {
+  const { scene } = readScene({
+    purpose: "cover",
+    background: { kind: "solid", color: "background" },
+    elements: [
+      { type: "image", place: { column: 0, span: 12, row: 0, rows: 8, bleed: true }, treatment: "full_bleed", intent: { query: "x", orientation: "landscape" }, overlay: "scrim_bottom" },
+      { type: "text", role: "title", place: { column: 0, span: 9, row: 4, rows: 2 }, typography: { font: "display", step: "display", color: "onImage" }, text: "Mavzu" },
+    ],
+  });
+  const credited = withCoverCredit(scene, "Tayyorladi: Ali · O'qituvchi: Dilnoza");
+  const line = credited.elements.at(-1);
+  assert.equal(line.role, "caption");
+  assert.match(line.text, /Ali/);
+  assert.equal(line.typography.color, "onImage", "readable over a photograph nobody has seen");
+  assert.deepEqual(findCollisions(placeScene(credited)), [], "and it lands where nothing else is");
+});
+
+test("a cover that already names its author is left alone", () => {
+  const { scene } = readScene({
+    purpose: "cover",
+    background: { kind: "solid", color: "background" },
+    elements: [
+      { type: "text", role: "title", place: { column: 0, span: 9, row: 4, rows: 2 }, typography: { font: "display", step: "display", color: "ink" }, text: "Mavzu" },
+      { type: "text", role: "caption", place: { column: 0, span: 6, row: 7, rows: 1 }, typography: { font: "body", step: "caption", color: "ink" }, text: "Tayyorladi: Ali" },
+    ],
+  });
+  assert.equal(withCoverCredit(scene, "Tayyorladi: Ali · O'qituvchi: Dilnoza").elements.length, 2);
+});
+
+test("a deck with no names on it gets no empty label", () => {
+  const { scene } = readScene({
+    purpose: "cover",
+    background: { kind: "solid", color: "background" },
+    elements: [{ type: "text", role: "title", place: { column: 0, span: 9, row: 4, rows: 2 }, typography: { font: "display", step: "display", color: "ink" }, text: "Mavzu" }],
+  });
+  assert.equal(withCoverCredit(scene, "").elements.length, 1);
 });

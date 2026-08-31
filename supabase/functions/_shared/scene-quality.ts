@@ -349,3 +349,51 @@ export function mirrorScene(scene: Scene): Scene {
     }),
   };
 }
+
+
+/**
+ * The line naming who made the deck, put on the cover when the model left it
+ * out.
+ *
+ * Asked for in the prompt and omitted anyway — twice, with the names supplied
+ * as finished text. It is not a design decision: an academic deck carries the
+ * student's and the teacher's names, and a cover without them is one the
+ * author has to fix by hand every time.
+ *
+ * Placed on the last band, which on a cover is under the title by
+ * construction, and only where nothing is there already.
+ */
+export function withCoverCredit(scene: Scene, line: string): Scene {
+  const wanted = line.trim();
+  if (!wanted) return scene;
+
+  const already = scene.elements.some((element) =>
+    element.type === "text" && element.text.includes(wanted.split(" · ")[0]!));
+  if (already) return scene;
+
+  const taken = new Set<number>();
+  for (const element of scene.elements) {
+    if (element.place.bleed) continue;
+    for (let row = element.place.row; row < element.place.row + element.place.rows; row += 1) taken.add(row);
+  }
+  const row = [GRID.rows - 1, GRID.rows - 2].find((candidate) => !taken.has(candidate));
+  if (row === undefined) return scene;
+
+  /**
+   * White, because a cover is a photograph.
+   *
+   * `onImage` is the one colour that does not follow the palette: what is
+   * underneath is a picture nobody has seen, and the scrim is what makes this
+   * readable.
+   */
+  return {
+    ...scene,
+    elements: [...scene.elements, {
+      type: "text",
+      role: "caption",
+      place: { column: 0, span: 8, row, rows: 1 },
+      typography: { font: "body", step: "caption", color: "onImage" },
+      text: wanted,
+    }],
+  };
+}
