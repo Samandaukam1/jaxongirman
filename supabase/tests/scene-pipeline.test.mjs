@@ -109,16 +109,21 @@ test("a faulty composition is repaired, and the repair is counted", async () => 
   assert.equal(deck.observability.repairCount, 1);
 });
 
-test("a slide that never passes is reported rather than called ready", async () => {
+test("a slide that never passes is replaced, and says so", async () => {
   const { ask } = model({
     design_direction: [{ mood: "civic", ground: "warm_white", brand: "#5A78F0", cornerLanguage: "soft", gradients: true }],
     slide_brief: [{}],
     slide_scene: () => colliding("Bir"),
   });
   const deck = await generateDeck(deps({ ask }), { topic: "T", slides: [{ title: "Bir" }], maxAttempts: 2 });
+  // Not accepted — the model never produced a sound page — but what ships is
+  // the plain one built from the brief rather than the broken one.
   assert.equal(deck.slides[0].accepted, false);
+  assert.equal(deck.slides[0].synthesised, true);
   assert.deepEqual(deck.observability.unacceptedSlides, [0]);
-  assert.ok(deck.slides[0].faults.includes("collision"));
+  assert.ok(deck.slides[0].score >= 90, `shipped a page scoring ${deck.slides[0].score}`);
+  // The attempt's own faults stay in the history, where an audit can see them.
+  assert.ok(deck.slides[0].attempts >= 2);
 });
 
 test("pictures are asked for once, and only for a composition that was kept", async () => {
@@ -203,7 +208,11 @@ test("a repeat the mirror cannot break survives to the audit", async () => {
   });
   const deck = await generateDeck(deps({ ask }), { topic: "T", slides: [{ title: "a" }, { title: "b" }], maxAttempts: 1 });
   assert.deepEqual(deck.observability.mirroredSlides, [], "there was nothing to gain by flipping it");
-  assert.deepEqual(deck.observability.repeatedCompositions, [1]);
+  // The repeat cost it fifteen points, which put it under the line, so the
+  // plain page built from the brief shipped instead — and that page is not a
+  // repeat of anything.
+  assert.equal(deck.slides[1].synthesised, true);
+  assert.deepEqual(deck.observability.repeatedCompositions, []);
 });
 
 test("a repeat the mirror can break is broken", async () => {
@@ -262,4 +271,18 @@ test("a slide the model produced is never overwritten by the fallback", async ()
   const deck = await generateDeck(deps({ ask }), { topic: "T", slides: [{ title: "Bir" }] });
   assert.equal(deck.slides[0].synthesised, false);
   assert.deepEqual(deck.observability.synthesisedSlides, []);
+});
+
+test("a page that never reaches the line is replaced rather than shipped", async () => {
+  const { ask } = model({
+    design_direction: [{ mood: "civic", ground: "warm_white", brand: "#5A78F0", cornerLanguage: "soft", gradients: true }],
+    slide_brief: [{ slideGoal: "g", mainMessage: "Suv tejash muhim.", supportingMessage: null, informationDensity: 0.5, visualPriority: 0.3, needs: { image: false, chart: false, statistic: false, quote: false, comparison: false, timeline: false, example: false } }],
+    // Two elements on top of each other, every time: a page scoring 40.
+    slide_scene: () => colliding("Bir"),
+  });
+  const deck = await generateDeck(deps({ ask }), { topic: "T", slides: [{ title: "Bir" }], maxAttempts: 2 });
+  const slide = deck.slides[0];
+  assert.equal(slide.synthesised, true, "the broken page was replaced");
+  assert.equal(slide.score, 100, "and what replaced it is sound");
+  assert.deepEqual(slide.faults, [], "with nothing left wrong");
 });

@@ -148,6 +148,20 @@ export function scoreScene(input: QualityInput): QualityReport {
     }
   }
 
+  /**
+   * A page with no heading is a paragraph somebody left on a screen.
+   *
+   * The first deck through the real pipeline came back with pages of one
+   * element: a body, scoring full marks, with nothing saying what it was
+   * about. Density and balance were both happy, because a single large block
+   * is well balanced and uses the page — which is how a measure can be right
+   * and still miss the point.
+   */
+  const headed = texts.some((element) => ["title", "subtitle", "eyebrow"].includes(element.role));
+  if (texts.length > 0 && !headed) {
+    faults.push({ code: "no_heading", detail: "nothing on this page says what it is about", cost: 16 });
+  }
+
   // A page that says nothing is not a page, whatever it scores elsewhere.
   const speaks = input.scene.elements.some((element) =>
     (element.type === "text" && ["body", "bullets", "lead", "quote", "statistic"].includes(element.role))
@@ -291,7 +305,10 @@ export function sceneFromBrief(input: { title: string; message: string; supporti
   const elements: Scene["elements"] = [{
     type: "text",
     role: "title",
-    place: { column: 0, span: 8, row: 1, rows: 2 },
+    // Wide, because a page of two elements has to earn the space it is on:
+    // the first fallback pages scored as sparse, which is a plain page and a
+    // thin one rather than a plain page that reads.
+    place: { column: 0, span: 10, row: 1, rows: 2 },
     typography: { font: "display", step: "title", color: "ink" },
     text: input.title.trim() || "Xulosa",
   }];
@@ -300,7 +317,7 @@ export function sceneFromBrief(input: { title: string; message: string; supporti
     elements.push({
       type: "text",
       role: "body",
-      place: { column: 0, span: 7, row: 3, rows: 4 },
+      place: { column: 0, span: 9, row: 3, rows: 4 },
       typography: { font: "body", step: "body", color: "ink" },
       text: body,
     });

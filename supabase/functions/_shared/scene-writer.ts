@@ -337,6 +337,7 @@ export function scenePrompt(input: {
      * overlap, no overflow, and a third of the page doing any work. Concrete
      * spans are something a model can obey and the compiler can check.
      */
+    "- Har bir sahifada role=\"title\" bo'lsin (muqovada ham) — sahifa nima haqidaligini aytsin.",
     "- O'LCHAM: title kamida 6 ustun × 2 qator. body/bullets kamida 5 ustun × 3 qator.",
     "  Rasm kerak bo'lsa kamida 4 ustun × 4 qator. Elementlar sahifaning kamida yarmini egallasin.",
     "- Sahifada bitta eng katta element bo'lsin — ko'z avval qayerga tushishini bilsin.",
@@ -369,6 +370,7 @@ export function repairPrompt(scene: Scene, report: QualityReport): string {
     unbalanced: "og'irlik bir burchakka yig'ilgan, muvozanatlang",
     no_hierarchy: "ikkita element bir xil eng katta o'lchamda — bittasini kichraytiring",
     repeats: "oldingi slayd bilan bir xil joylashuv — elementlarni boshqacha joylashtiring (masalan rasm chapga, matn o'ngga yoki to'liq boshqa struktura)",
+    no_heading: "sahifada sarlavha yo'q — role=\"title\" matn qo'shing",
     no_content: "sahifada mazmun yo'q — role=\"body\" matn qo'shing (sarlavha va caption hisoblanmaydi)",
   };
   return [

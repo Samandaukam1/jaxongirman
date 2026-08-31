@@ -227,6 +227,7 @@ export async function generateDeck(deps: Deps, input: DeckInput): Promise<Genera
     let mirrored = false;
     let scene = cycle.scene;
     let score = cycle.report?.score ?? 0;
+    const threshold = input.threshold ?? 90;
 
     /**
      * A repeat the model would not fix, fixed by arithmetic.
@@ -245,17 +246,30 @@ export async function generateDeck(deps: Deps, input: DeckInput): Promise<Genera
         cycle.report = flipped.report;
       }
     }
-    if (!scene) {
+    /**
+     * A page that never reached the line is replaced, not shipped.
+     *
+     * The cycle returns its best attempt so the caller can decide; this is the
+     * decision. A deck went out with a page scoring 40 — two elements on top of
+     * each other — because "best attempt" and "good enough" are different
+     * questions and only one of them had been asked. The page built from the
+     * brief is plain, and plain beats broken.
+     */
+    if (!scene || score < threshold) {
       const fallback = sceneFromBrief({
         title: planned.title,
         message: brief?.mainMessage ?? "",
         supporting: brief?.supportingMessage ?? null,
       });
-      const checked = validateScene(fallback, language);
-      if (checked.scene && checked.report) {
+      const checked = validateScene(fallback, language, signatures.at(-1) ?? null);
+      if (checked.scene && checked.report && checked.report.score > score) {
         scene = checked.scene;
         score = checked.report.score;
         synthesised = true;
+        // The faults of a page that was thrown away describe a page nobody
+        // will see. What shipped is what the record should list; the attempt's
+        // own faults stay in the history.
+        cycle.report = checked.report;
       }
     }
 

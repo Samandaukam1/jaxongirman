@@ -21,6 +21,7 @@ import {
 import {
   deckHasVisualStatistic, diversifyChartTypes, isVisualStatistic, requireVisualStatistic,
 } from "./visual-statistic.ts";
+import { composeGenerativeDeck, generativeEnabled } from "./scene-generation.ts";
 
 type PipelineInput = { jobId: string; presentationId: string; ownerId: string; service: SupabaseClient };
 /** The model supplies narrative direction only — never colours or typography. */
@@ -891,6 +892,33 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
     // the chart, deterministically assign the most numeric slide (or a middle
     // content slide) before its archetype and writing budget are chosen.
     outlineResult.data.slides = requireVisualStatistic(outlineResult.data.slides) as Outline["slides"];
+
+    /**
+     * The generative engine, where the operator has switched it on.
+     *
+     * Everything above this line is shared — a deck still needs its topic
+     * understood, its sources found and its outline planned, whichever engine
+     * lays it out. Below it the two paths diverge completely: this one composes
+     * each page for its own content, and the JSLAYD path below chooses from
+     * designs somebody authored.
+     *
+     * There is no silent fallback between them. A generative run that fails
+     * fails the job with its own message, because a deck that quietly came out
+     * of the old engine is a deck nobody can tell apart afterwards — and then
+     * nobody knows which engine is actually running.
+     */
+    if (await generativeEnabled(input.service)) {
+      await runGenerative({
+        input,
+        writer,
+        presentation: prepared.presentation,
+        outline: outlineResult.data,
+        research: research.text,
+        addCost: (amount) => { totalCost += amount; },
+        pricing: await providerPricing(input.service),
+      });
+      return;
+    }
 
     /**
      * The composition each slide will be laid into, chosen before its copy is
@@ -2132,4 +2160,177 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
       p_job_id: input.jobId, p_error_code: code, p_error_message: message,
     });
   }
+}
+
+/* ------------------------------------------------- the generative engine */
+
+/**
+ * A deck composed page by page, and the stages that report it.
+ *
+ * The same stage keys as the JSLAYD path, because the phone draws a progress
+ * bar from them and an author watching it should not be able to tell which
+ * engine is running from the labels. What differs is what happens inside:
+ * there is no layout to choose, no archetype to fit copy into and no template
+ * to clone.
+ */
+async function runGenerative(params: {
+  input: PipelineInput;
+  writer: ReturnType<typeof geminiWriter>;
+  presentation: { topic: string; style: string; requested_slide_count: number; author_name: string | null; teacher_name: string | null };
+  outline: Outline;
+  research: string;
+  addCost: (amount: number) => void;
+  pricing: { for(model: string): { inputPerMillion: number; outputPerMillion: number } };
+}): Promise<void> {
+  const { input, presentation, outline } = params;
+
+  const composed = await withDeadline(
+    runStage(input.service, input, "writing_content", async () => {
+      return await composeGenerativeDeck({
+        service: input.service,
+        writer: params.writer,
+        ownerId: input.ownerId,
+        presentationId: input.presentationId,
+        topic: presentation.topic,
+        /**
+         * The whole deck, not only its middle.
+         *
+         * The outline plans the content pages; the cover, the agenda, the
+         * bibliography and the closing page were added around them by the
+         * layout path this engine replaces. Composing them here too is the
+         * point — a cover designed for its own subject is most of what an
+         * author sees first, and the first run of this engine produced a deck
+         * with neither cover nor conclusion because nobody asked it to.
+         */
+        slides: [
+          { title: presentation.topic, research: null },
+          { title: AGENDA_TITLE, research: outline.slides.map((slide) => slide.title).join("; ") },
+          ...outline.slides.map((slide) => ({
+            title: slide.title,
+            // The whole research brief for every page: it is one document and
+            // the model is choosing which parts of it this page is about.
+            research: params.research || null,
+          })),
+          { title: REFERENCES_TITLE, research: params.research || null },
+          { title: THANKS_TITLE, research: null },
+        ],
+        onUsage: (usage, model) => {
+          const price = params.pricing.for(model);
+          params.addCost(usageCost(usage, price));
+        },
+        /**
+         * A heartbeat per slide, so the watchdog can tell a long run from a
+         * dead one. Composing a page takes seconds and a deck takes minutes;
+         * without this the job looks stalled halfway through.
+         */
+        beat: (note) => {
+          console.log(JSON.stringify({ event: "scene_progress", job_id: input.jobId, note }));
+          void input.service.from("generation_jobs")
+            .update({ heartbeat_at: new Date().toISOString() }).eq("id", input.jobId);
+        },
+      });
+    }, (value) => `${value.deck.slides.length} ta slayd noldan dizayn qilindi`),
+    280_000,
+    "writing_content",
+  );
+
+  /**
+   * Pictures are already found and stored by the time the scenes exist, so the
+   * image stage has nothing left to do but say what happened.
+   */
+  await runStage(input.service, input, "generating_images", async () => {
+    const drawn = composed.deck.slides.reduce((total, slide) =>
+      total + (slide.rendered?.elements.filter((row) => row.type === "image").length ?? 0), 0);
+    return drawn;
+  }, (value) => value > 0 ? `${value} ta rasm kompozitsiyaga joylashtirildi` : "Ushbu deck uchun rasm talab qilinmadi");
+
+  await runStage(input.service, input, "building_layouts", async () => composed.deck.slides,
+    (value) => `${value.length} ta kompozitsiya qurildi`);
+
+  const built = await runStage(input.service, input, "building_slides", async () => {
+    const cleared = await input.service.from("slides").delete().eq("presentation_id", input.presentationId);
+    if (cleared.error) throw cleared.error;
+    const slides = await input.service.from("slides").insert(composed.slideRows);
+    if (slides.error) throw slides.error;
+    const elements = await input.service.from("slide_elements").insert(composed.elementRows);
+    if (elements.error) throw elements.error;
+    return composed;
+  }, (value) => `${value.slideRows.length} ta slayd va ${value.elementRows.length} ta tahrirlanadigan element saqlandi`);
+
+  await runStage(input.service, input, "quality_checking", async () => {
+    const scores = composed.deck.observability.scores;
+    /**
+     * A page the engine had to build from the brief is not a failed deck, but
+     * a deck made mostly of them is. Half is the line: below it the model is
+     * not designing, and shipping that quietly would hide the fact.
+     */
+    const designed = composed.deck.slides.filter((slide) => !slide.synthesised).length;
+    if (designed * 2 < composed.deck.slides.length) {
+      throw new Error("Dizayn engine slaydlarning yarmidan ko‘pini qura olmadi.");
+    }
+    return scores.reduce((sum, score) => sum + score, 0) / Math.max(1, scores.length);
+  }, (value) => `O‘rtacha sifat bahosi ${Math.round(value)}/100`);
+
+  await runStage(input.service, input, "finalizing", async () => {
+    const { data: styleConfig, error: styleError } = await input.service
+      .from("style_configs")
+      .select("base_credits,credits_per_slide,credits_per_image")
+      .eq("style", presentation.style as PresentationStyle)
+      .single();
+    if (styleError) throw styleError;
+    const pictures = composed.deck.slides.reduce((total, slide) =>
+      total + (slide.rendered?.elements.filter((row) => row.type === "image").length ?? 0), 0);
+    const actualCredits = Math.ceil(
+      styleConfig.base_credits
+      + presentation.requested_slide_count * Number(styleConfig.credits_per_slide)
+      + pictures * styleConfig.credits_per_image,
+    );
+
+    const updated = await input.service.from("presentations").update({
+      generated_slide_count: composed.slideRows.length,
+      // Which engine, and the language it was made in — so a deck can be
+      // explained, and re-rendered, long after the run.
+      design_engine: composed.deck.engine,
+      design_dna: {
+        direction: composed.deck.dna.direction,
+        fonts: composed.deck.dna.fonts,
+        colors: composed.deck.dna.colors,
+        radius: composed.deck.dna.radius,
+      },
+      // Left alone deliberately: no JSLAYD design was used, so pinning one
+      // would say something untrue about how this deck was made.
+      design_id: null,
+      design_version: null,
+    }).eq("id", input.presentationId);
+    if (updated.error) throw updated.error;
+
+    const { error } = await input.service.rpc("settle_generation", {
+      p_job_id: input.jobId,
+      p_actual_credits: actualCredits,
+      p_provider_cost_usd: 0,
+    });
+    if (error) throw error;
+    return actualCredits;
+  }, (value) => `${value} kredit bo‘yicha hisob yakunlandi`);
+
+  await input.service.from("generation_steps").update({
+    status: "succeeded",
+    progress: 100,
+    started_at: new Date().toISOString(),
+    completed_at: new Date().toISOString(),
+    message: "Taqdimot tayyor",
+  }).eq("job_id", input.jobId).eq("key", "ready");
+
+  console.log(JSON.stringify({
+    event: "generative_deck_finished",
+    job_id: input.jobId,
+    engine: composed.deck.engine,
+    scores: composed.deck.observability.scores,
+    repairs: composed.deck.observability.repairCount,
+    synthesised: composed.deck.observability.synthesisedSlides.length,
+    mirrored: composed.deck.observability.mirroredSlides.length,
+    asks: composed.deck.observability.askCount,
+  }));
+
+  void writeDefenseScript(input).catch(() => { /* the deck is already somebody's */ });
 }

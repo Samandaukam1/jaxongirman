@@ -172,3 +172,24 @@ test("a full page cannot be rescued and is not damaged trying", () => {
   assert.equal(freeBand(scene), null);
   assert.equal(withRescuedContent(scene, "Fikr.").elements.length, 2);
 });
+
+test("a page of one paragraph and no heading is not a finished page", () => {
+  const report = judge({
+    ...healthy,
+    elements: [
+      { type: "text", role: "body", place: { column: 0, span: 8, row: 1, rows: 5 }, typography: { font: "body", step: "body", color: "ink" }, text: "Uzun matn. ".repeat(20) },
+    ],
+  });
+  assert.ok(report.faults.some((fault) => fault.code === "no_heading"), JSON.stringify(report.faults));
+});
+
+test("an eyebrow is heading enough for an editorial page", () => {
+  const report = judge({
+    ...healthy,
+    elements: [
+      { type: "text", role: "eyebrow", place: { column: 0, span: 4, row: 0, rows: 1 }, typography: { font: "body", step: "micro", color: "inkMuted" }, text: "01 — KIRISH" },
+      { type: "text", role: "body", place: { column: 0, span: 8, row: 1, rows: 5 }, typography: { font: "body", step: "body", color: "ink" }, text: "Uzun matn. ".repeat(20) },
+    ],
+  });
+  assert.ok(!report.faults.some((fault) => fault.code === "no_heading"), JSON.stringify(report.faults));
+});
