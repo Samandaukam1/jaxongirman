@@ -25,3 +25,13 @@ admin/packages/
 # `node supabase/scripts/import-google-fonts.mjs`, and the shelf is in Supabase
 # where the app can reach it.
 font-library/
+
+# Head reconstruction: the master .blend, the GLB and the validation sheets are
+# committed as deliverables. These two are large intermediates that
+# scripts/mascot regenerates on the way to them.
+output/likeness_fit.blend
+output/likeness_features.blend
+output/*.blend1
+
+__pycache__/
+*.pyc

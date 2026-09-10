@@ -30,3 +30,8 @@ declare module "*.webp" {
   const asset: ImageRequireSource;
   export default asset;
 }
+
+declare module "*.glb" {
+  const asset: number;
+  export default asset;
+}

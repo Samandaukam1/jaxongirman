@@ -19,6 +19,9 @@ config.transformer.babelTransformerPath = require.resolve("react-native-svg-tran
 config.resolver.assetExts = config.resolver.assetExts.filter((extension) => extension !== "svg");
 config.resolver.sourceExts = [...config.resolver.sourceExts, "svg"];
 
+/** glTF binaries ship as app assets, so Metro has to treat `.glb` as one. */
+config.resolver.assetExts = [...config.resolver.assetExts, "glb"];
+
 config.resolver.nodeModulesPaths = [
   path.resolve(projectRoot, "node_modules"),
   path.resolve(workspaceRoot, "node_modules"),
