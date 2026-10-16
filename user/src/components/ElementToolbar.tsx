@@ -5,6 +5,7 @@ import {
   Underline, WandSparkles, type LucideIcon,
 } from "lucide-react-native";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { ChartDataEditor, TableDataEditor } from "@/components/DataEditor";
@@ -44,14 +45,6 @@ const ALIGN_ICONS: Record<Alignment, LucideIcon> = {
   justify: TextAlignJustify,
 };
 
-const ALIGN_LABELS: Record<Alignment, string> = {
-  left: "Chapga",
-  center: "Markazga",
-  right: "O‘ngga",
-  justify: "Kenglik bo‘yicha",
-};
-
-const CASE_LABELS = { none: "Odatiy", uppercase: "BOSH HARF", lowercase: "kichik harf" } as const;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
@@ -68,6 +61,7 @@ export function ElementToolbar({ element, swatches, panel, onPanel, onStyle, onC
   useEffect(() => { if (pickerOpen) void recentFonts().then(setRecent); }, [pickerOpen]);
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation("editor");
   const style = bag(element.style);
   const content = bag(element.content);
   const isText = element.type === "text";
@@ -116,12 +110,12 @@ export function ElementToolbar({ element, swatches, panel, onPanel, onStyle, onC
                   draw without a download, and everything else is behind here. */}
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Barcha shriftlar"
+                accessibilityLabel={t("toolbar.allFonts")}
                 onPress={() => setPickerOpen(true)}
                 style={[styles.fontCard, styles.fontCardLibrary]}
               >
                 <Type color={colors.primary} size={20} strokeWidth={2} />
-                <Text numberOfLines={1} style={styles.fontName}>Kutubxona</Text>
+                <Text numberOfLines={1} style={styles.fontName}>{t("toolbar.library")}</Text>
               </Pressable>
               {FONTS.map((option) => {
                 const active = option.key === fontOption.key;
@@ -149,13 +143,13 @@ export function ElementToolbar({ element, swatches, panel, onPanel, onStyle, onC
 
           {panel === "spacing" ? (
             <View style={styles.panelColumn}>
-              <PanelRow label="Qator oralig‘i" value={lineHeightRatio(style).toFixed(2)}>
+              <PanelRow label={t("toolbar.lineHeight")} value={lineHeightRatio(style).toFixed(2)}>
                 <Stepper
                   onMinus={() => patch(withLineHeightRatio(style, lineHeightRatio(style) - 0.05))}
                   onPlus={() => patch(withLineHeightRatio(style, lineHeightRatio(style) + 0.05))}
                 />
               </PanelRow>
-              <PanelRow label="Harf oralig‘i" value={formatSize(num(style.letterSpacing, 0))}>
+              <PanelRow label={t("toolbar.letterSpacing")} value={formatSize(num(style.letterSpacing, 0))}>
                 <Stepper
                   onMinus={() => patch({ ...style, letterSpacing: Math.round((num(style.letterSpacing, 0) - 0.5) * 10) / 10 })}
                   onPlus={() => patch({ ...style, letterSpacing: Math.round((num(style.letterSpacing, 0) + 0.5) * 10) / 10 })}
@@ -166,7 +160,7 @@ export function ElementToolbar({ element, swatches, panel, onPanel, onStyle, onC
 
           {panel === "opacity" ? (
             <View style={styles.panelColumn}>
-              <PanelRow label="Shaffoflik" value={`${Math.round(element.opacity * 100)}%`}>
+              <PanelRow label={t("toolbar.opacity")} value={`${Math.round(element.opacity * 100)}%`}>
                 <Stepper
                   onMinus={() => onElement({ opacity: clamp(Math.round((element.opacity - 0.05) * 100) / 100, 0.05, 1) })}
                   onPlus={() => onElement({ opacity: clamp(Math.round((element.opacity + 0.05) * 100) / 100, 0.05, 1) })}
@@ -189,7 +183,7 @@ export function ElementToolbar({ element, swatches, panel, onPanel, onStyle, onC
                 return (
                   <Pressable key={option.key} onPress={() => patch({ ...style, textEffect: option.key })} style={[styles.fontCard, active && styles.fontCardActive]}>
                     <Text style={[styles.effectSample, effectTextStyle(option.key, colors.primary)]}>Aa</Text>
-                    <Text numberOfLines={1} style={[styles.fontName, active && styles.activeText]}>{option.label}</Text>
+                    <Text numberOfLines={1} style={[styles.fontName, active && styles.activeText]}>{t(`toolbar.effect.${option.key}`)}</Text>
                   </Pressable>
                 );
               })}
@@ -198,13 +192,13 @@ export function ElementToolbar({ element, swatches, panel, onPanel, onStyle, onC
 
           {panel === "corner" ? (
             <View style={styles.panelColumn}>
-              <PanelRow label="Burchak radiusi" value={String(cornerRadius)}>
+              <PanelRow label={t("toolbar.radius")} value={String(cornerRadius)}>
                 <Stepper onMinus={() => setRadius(cornerRadius - 4)} onPlus={() => setRadius(cornerRadius + 4)} />
               </PanelRow>
               <View style={styles.panelRow}>
-                {[{ label: "To‘g‘ri", value: 0 }, { label: "Yumshoq", value: 12 }, { label: "Dumaloq", value: 32 }, { label: "To‘liq", value: maxRadius }].map((preset) => (
+                {([{ label: "square", value: 0 }, { label: "soft", value: 12 }, { label: "round", value: 32 }, { label: "full", value: maxRadius }] as const).map((preset) => (
                   <Pressable key={preset.label} onPress={() => setRadius(preset.value)} style={[styles.chip, cornerRadius === Math.min(preset.value, maxRadius) && styles.chipActive]}>
-                    <Text style={[styles.chipText, cornerRadius === Math.min(preset.value, maxRadius) && styles.activeText]}>{preset.label}</Text>
+                    <Text style={[styles.chipText, cornerRadius === Math.min(preset.value, maxRadius) && styles.activeText]}>{t(`toolbar.corner.${preset.label}`)}</Text>
                   </Pressable>
                 ))}
               </View>
@@ -213,10 +207,10 @@ export function ElementToolbar({ element, swatches, panel, onPanel, onStyle, onC
 
           {panel === "layer" ? (
             <View style={styles.panelRow}>
-              <LayerButton icon={ChevronsUp} label="Eng oldinga" onPress={() => onElement({ z_index: zRange.max + 1 })} />
-              <LayerButton icon={ChevronsUp} label="Oldinga" onPress={() => onElement({ z_index: element.z_index + 1 })} />
-              <LayerButton icon={ChevronsDown} label="Orqaga" onPress={() => onElement({ z_index: element.z_index - 1 })} />
-              <LayerButton icon={ChevronsDown} label="Eng orqaga" onPress={() => onElement({ z_index: zRange.min - 1 })} />
+              <LayerButton icon={ChevronsUp} label={t("toolbar.front")} onPress={() => onElement({ z_index: zRange.max + 1 })} />
+              <LayerButton icon={ChevronsUp} label={t("toolbar.forward")} onPress={() => onElement({ z_index: element.z_index + 1 })} />
+              <LayerButton icon={ChevronsDown} label={t("toolbar.backward")} onPress={() => onElement({ z_index: element.z_index - 1 })} />
+              <LayerButton icon={ChevronsDown} label={t("toolbar.back")} onPress={() => onElement({ z_index: zRange.min - 1 })} />
             </View>
           ) : null}
         </View>
@@ -226,7 +220,7 @@ export function ElementToolbar({ element, swatches, panel, onPanel, onStyle, onC
         {hasData ? (
           <Tool
             icon={Sheet}
-            label={element.type === "chart" ? "Diagramma ma’lumoti" : "Jadval ma’lumoti"}
+            label={element.type === "chart" ? t("toolbar.chartData") : t("toolbar.tableData")}
             active={panel === "data"}
             onPress={() => toggle("data")}
           />
@@ -234,33 +228,33 @@ export function ElementToolbar({ element, swatches, panel, onPanel, onStyle, onC
 
         {isText ? (
           <>
-            <Tool icon={Type} label="Matnni tahrirlash" active={panel === "text"} onPress={() => toggle("text")} />
+            <Tool icon={Type} label={t("toolbar.editText")} active={panel === "text"} onPress={() => toggle("text")} />
             <Pressable onPress={() => toggle("font")} style={[styles.chip, panel === "font" && styles.chipActive]}>
               <Text numberOfLines={1} style={[styles.chipText, styles.fontChipText]}>{fontOption.label}</Text>
               <ChevronDown color={colors.inkMuted} size={icon.sm} strokeWidth={icon.stroke} />
             </Pressable>
             <View style={styles.sizeChip}>
-              <Pressable accessibilityLabel="Kichraytirish" hitSlop={6} onPress={() => patch(withFontSize(style, fontSize - 1))} style={styles.sizeButton}>
+              <Pressable accessibilityLabel={t("toolbar.smaller")} hitSlop={6} onPress={() => patch(withFontSize(style, fontSize - 1))} style={styles.sizeButton}>
                 <Minus color={colors.ink} size={icon.sm} strokeWidth={icon.strokeBold} />
               </Pressable>
               <Text style={styles.sizeValue}>{formatSize(fontSize)}</Text>
-              <Pressable accessibilityLabel="Kattalashtirish" hitSlop={6} onPress={() => patch(withFontSize(style, fontSize + 1))} style={styles.sizeButton}>
+              <Pressable accessibilityLabel={t("toolbar.bigger")} hitSlop={6} onPress={() => patch(withFontSize(style, fontSize + 1))} style={styles.sizeButton}>
                 <Plus color={colors.ink} size={icon.sm} strokeWidth={icon.strokeBold} />
               </Pressable>
             </View>
-            <Pressable accessibilityLabel="Rang" onPress={() => toggle("color")} style={[styles.tool, panel === "color" && styles.toolActive]}>
+            <Pressable accessibilityLabel={t("toolbar.color")} onPress={() => toggle("color")} style={[styles.tool, panel === "color" && styles.toolActive]}>
               <Text style={styles.colorGlyph}>A</Text>
               <View style={[styles.colorBar, { backgroundColor: colorValue }]} />
             </Pressable>
 
             <View style={styles.divider} />
 
-            <Tool icon={Bold} label="Qalin" active={bold} disabled={fontOption.regular === fontOption.bold} onPress={() => patch(withFont(style, fontOption, !bold))} />
-            <Tool icon={Italic} label="Kursiv" active={isItalic(style)} onPress={() => patch({ ...style, fontStyle: isItalic(style) ? "normal" : "italic" })} />
-            <Tool icon={Underline} label="Tagi chizilgan" active={isUnderline(style)} onPress={() => patch({ ...style, underline: !isUnderline(style) })} />
-            <Tool icon={Strikethrough} label="O‘chirilgan" active={isStrikethrough(style)} onPress={() => patch({ ...style, strikethrough: !isStrikethrough(style) })} />
+            <Tool icon={Bold} label={t("toolbar.bold")} active={bold} disabled={fontOption.regular === fontOption.bold} onPress={() => patch(withFont(style, fontOption, !bold))} />
+            <Tool icon={Italic} label={t("toolbar.italic")} active={isItalic(style)} onPress={() => patch({ ...style, fontStyle: isItalic(style) ? "normal" : "italic" })} />
+            <Tool icon={Underline} label={t("toolbar.underline")} active={isUnderline(style)} onPress={() => patch({ ...style, underline: !isUnderline(style) })} />
+            <Tool icon={Strikethrough} label={t("toolbar.strike")} active={isStrikethrough(style)} onPress={() => patch({ ...style, strikethrough: !isStrikethrough(style) })} />
             <Pressable
-              accessibilityLabel={`Harf holati: ${CASE_LABELS[textCase]}`}
+              accessibilityLabel={t("toolbar.caseLabel", { value: t(`toolbar.case.${textCase}`) })}
               onPress={() => patch({ ...style, textTransform: nextTextCase(textCase) })}
               style={[styles.tool, textCase !== "none" && styles.toolActive]}
             >
@@ -271,41 +265,41 @@ export function ElementToolbar({ element, swatches, panel, onPanel, onStyle, onC
 
             <Tool
               icon={ALIGN_ICONS[alignment]}
-              label={`Tekislash: ${ALIGN_LABELS[alignment]}`}
+              label={t("toolbar.alignLabel", { value: t(`toolbar.align.${alignment}`) })}
               active={alignment !== "left"}
               onPress={() => patch({ ...style, textAlign: nextAlignment(alignment) })}
             />
-            <Tool icon={List} label="Ro‘yxat" active={hasBullets(text)} onPress={() => onContent({ ...content, text: toggleBullets(text) })} />
-            <Tool icon={ArrowUpDown} label="Oraliqlar" active={panel === "spacing"} onPress={() => toggle("spacing")} />
+            <Tool icon={List} label={t("toolbar.list")} active={hasBullets(text)} onPress={() => onContent({ ...content, text: toggleBullets(text) })} />
+            <Tool icon={ArrowUpDown} label={t("toolbar.spacing")} active={panel === "spacing"} onPress={() => toggle("spacing")} />
           </>
         ) : null}
 
         {!isText && canColor ? (
-          <Pressable accessibilityLabel="Rang" onPress={() => toggle("color")} style={[styles.chip, panel === "color" && styles.chipActive]}>
+          <Pressable accessibilityLabel={t("toolbar.color")} onPress={() => toggle("color")} style={[styles.chip, panel === "color" && styles.chipActive]}>
             <View style={[styles.colorDot, { backgroundColor: colorValue }]} />
-            <Text style={styles.chipText}>Rang</Text>
+            <Text style={styles.chipText}>{t("toolbar.color")}</Text>
           </Pressable>
         ) : null}
 
         {element.type === "image" ? (
           <Pressable onPress={onReplaceImage} style={styles.chip}>
             <ImageIcon color={colors.primary} size={icon.sm} strokeWidth={icon.stroke} />
-            <Text style={styles.chipText}>{isVideo ? "Videoni almashtirish" : "Rasmni almashtirish"}</Text>
+            <Text style={styles.chipText}>{isVideo ? t("toolbar.replaceVideo") : t("toolbar.replaceImage")}</Text>
           </Pressable>
         ) : null}
 
-        {canRound ? <Tool icon={SquareRoundCorner} label="Burchak radiusi" active={panel === "corner"} onPress={() => toggle("corner")} /> : null}
+        {canRound ? <Tool icon={SquareRoundCorner} label={t("toolbar.radius")} active={panel === "corner"} onPress={() => toggle("corner")} /> : null}
 
         {isText ? <View style={styles.divider} /> : null}
 
-        <Tool icon={Blend} label="Shaffoflik" active={panel === "opacity"} onPress={() => toggle("opacity")} />
+        <Tool icon={Blend} label={t("toolbar.opacity")} active={panel === "opacity"} onPress={() => toggle("opacity")} />
         {isText ? (
           <Pressable onPress={() => toggle("effects")} style={[styles.chip, panel === "effects" && styles.chipActive]}>
             <WandSparkles color={colors.primary} size={icon.sm} strokeWidth={icon.stroke} />
-            <Text style={styles.chipText}>Effektlar</Text>
+            <Text style={styles.chipText}>{t("toolbar.effects")}</Text>
           </Pressable>
         ) : null}
-        <Tool icon={Layers} label="Qatlam" active={panel === "layer"} onPress={() => toggle("layer")} />
+        <Tool icon={Layers} label={t("toolbar.layer")} active={panel === "layer"} onPress={() => toggle("layer")} />
       </ScrollView>
 
       {/**
@@ -355,12 +349,13 @@ function Tool({ icon: Icon, label, active = false, disabled = false, onPress }: 
 function Stepper({ onMinus, onPlus }: { onMinus: () => void; onPlus: () => void }) {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation("editor");
   return (
     <View style={styles.stepper}>
-      <Pressable accessibilityLabel="Kamaytirish" hitSlop={6} onPress={onMinus} style={styles.sizeButton}>
+      <Pressable accessibilityLabel={t("toolbar.less")} hitSlop={6} onPress={onMinus} style={styles.sizeButton}>
         <Minus color={colors.ink} size={icon.sm} strokeWidth={icon.strokeBold} />
       </Pressable>
-      <Pressable accessibilityLabel="Oshirish" hitSlop={6} onPress={onPlus} style={styles.sizeButton}>
+      <Pressable accessibilityLabel={t("toolbar.more")} hitSlop={6} onPress={onPlus} style={styles.sizeButton}>
         <Plus color={colors.ink} size={icon.sm} strokeWidth={icon.strokeBold} />
       </Pressable>
     </View>
@@ -393,6 +388,7 @@ function LayerButton({ icon: Icon, label, onPress }: { icon: LucideIcon; label: 
 function TextPanel({ value, onChange, onDone }: { value: string; onChange: (next: string) => void; onDone: () => void }) {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation("editor");
   const [draft, setDraft] = useState(value);
   return (
     <View style={styles.panelColumn}>
@@ -400,7 +396,7 @@ function TextPanel({ value, onChange, onDone }: { value: string; onChange: (next
         autoFocus
         multiline
         onChangeText={setDraft}
-        placeholder="Matnni yozing…"
+        placeholder={t("toolbar.typeText")}
         placeholderTextColor={colors.inkSoft}
         style={styles.textEditor}
         value={draft}
@@ -410,7 +406,7 @@ function TextPanel({ value, onChange, onDone }: { value: string; onChange: (next
         style={styles.doneButton}
       >
         <Check color={colors.onPrimary} size={icon.sm} strokeWidth={icon.strokeBold} />
-        <Text style={styles.doneText}>Tayyor</Text>
+        <Text style={styles.doneText}>{t("done")}</Text>
       </Pressable>
     </View>
 

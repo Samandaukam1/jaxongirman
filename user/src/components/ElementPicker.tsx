@@ -1,5 +1,6 @@
 import { Search, Shapes, X } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Image, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { candidateImage, searchElements, type ElementCandidate } from "@/lib/jelement";
@@ -30,6 +31,7 @@ export function ElementPicker({
 }) {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation(["editor", "common"]);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ElementCandidate[]>([]);
   const [searching, setSearching] = useState(false);
@@ -52,12 +54,12 @@ export function ElementPicker({
       setTouched(true);
       void searchElements(needle, slideRole)
         .then((found) => { if (active) { setResults(found); setError(null); } })
-        .catch((failure) => { if (active) setError(failure instanceof Error ? failure.message : "Qidiruv ishlamadi."); })
+        .catch((failure) => { if (active) setError(failure instanceof Error ? failure.message : t("picker.failed")); })
         .finally(() => { if (active) setSearching(false); });
     }, 350);
 
     return () => { active = false; clearTimeout(timer); };
-  }, [query, slideRole]);
+  }, [query, slideRole, t]);
 
   /**
    * Grouped by section where there is one, and by family where there is not.
@@ -82,8 +84,8 @@ export function ElementPicker({
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={styles.sheet}>
         <View style={styles.head}>
-          <Text style={styles.title}>Element qo‘shish</Text>
-          <Pressable accessibilityRole="button" accessibilityLabel="Yopish" onPress={onClose} style={styles.close}>
+          <Text style={styles.title}>{t("addElement")}</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("common:close")} onPress={onClose} style={styles.close}>
             <X color={colors.ink} size={icon.md} strokeWidth={2} />
           </Pressable>
         </View>
@@ -93,7 +95,7 @@ export function ElementPicker({
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder="Ekskavator, dron, diagramma…"
+            placeholder={t("picker.placeholder")}
             placeholderTextColor={colors.inkSoft}
             autoFocus
             autoCapitalize="none"
@@ -107,7 +109,7 @@ export function ElementPicker({
 
           {!touched && !error ? (
             <Text style={styles.hint}>
-              Slaydga qo‘ymoqchi bo‘lgan narsani yozing. O‘zbekcha ham, inglizcha ham topadi.
+              {t("picker.hint")}
             </Text>
           ) : null}
 
@@ -115,7 +117,7 @@ export function ElementPicker({
             // Said plainly rather than left as an empty sheet: an element that
             // does not exist is a real answer, and the library is young.
             <Text style={styles.hint}>
-              «{query.trim()}» bo‘yicha element topilmadi. Boshqa so‘z bilan urinib ko‘ring.
+              {t("picker.none", { query: query.trim() })}
             </Text>
           ) : null}
 

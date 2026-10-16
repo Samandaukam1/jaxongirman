@@ -2,8 +2,10 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { Platform } from "react-native";
 
+import { i18n } from "@/i18n";
+import { localizeError } from "@/lib/errors";
 import { asFunctionErrorMessage } from "@/lib/format";
-import { supabase } from "@/lib/supabase";
+import { changesChannel, supabase } from "@/lib/supabase";
 
 export type PresentationExportFormat = "pdf" | "pptx";
 export type ExportPhase = "queued" | "running" | "succeeded" | "failed" | "cancelled";
@@ -50,7 +52,7 @@ function fallbackFileName(title: string, format: PresentationExportFormat): stri
 }
 
 function abortError(): Error {
-  const error = new Error("Eksport bekor qilindi");
+  const error = new Error(i18n.t("deck:export.cancelled"));
   error.name = "AbortError";
   return error;
 }
@@ -100,10 +102,10 @@ async function waitForJob(
       if (!job || job.id !== jobId) return;
       onProgress?.(Math.max(0, Math.min(1, job.progress / 100)));
       if (job.status === "succeeded") {
-        if (!job.storage_path) finish(() => reject(new Error("Eksport fayli topilmadi")));
+        if (!job.storage_path) finish(() => reject(new Error(i18n.t("deck:export.missing"))));
         else finish(() => resolve(job));
       } else if (job.status === "failed" || job.status === "cancelled") {
-        finish(() => reject(new Error(job.error_message ?? "Eksport amalga oshmadi")));
+        finish(() => reject(new Error(job.error_message ? localizeError(job.error_message) : i18n.t("deck:export.failed"))));
       }
     };
     const poll = async () => {
@@ -119,8 +121,7 @@ async function waitForJob(
       if (result.data) accept(result.data);
     };
     const onAbort = () => finish(() => reject(abortError()));
-    const channel = supabase
-      .channel(`export-job-${jobId}`)
+    const channel = changesChannel(`export-job-${jobId}`)
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "export_jobs", filter: `id=eq.${jobId}` }, (payload) => accept(payload.new))
       .subscribe();
     const timer = setInterval(() => { void poll(); }, 1_250);
@@ -131,9 +132,9 @@ async function waitForJob(
 }
 
 async function signedDownloadUrl(job: PresentationExportJob, fileName: string): Promise<string> {
-  if (!job.storage_path) throw new Error("Eksport fayli topilmadi");
+  if (!job.storage_path) throw new Error(i18n.t("deck:export.missing"));
   const result = await supabase.storage.from("exports").createSignedUrl(job.storage_path, SIGNED_URL_SECONDS, { download: fileName });
-  if (result.error || !result.data?.signedUrl) throw result.error ?? new Error("Yuklab olish havolasi olinmadi");
+  if (result.error || !result.data?.signedUrl) throw result.error ?? new Error(i18n.t("deck:export.noLink"));
   return result.data.signedUrl;
 }
 
@@ -143,7 +144,7 @@ async function downloadNative(
   url: string,
   onProgress?: (value: number) => void,
 ): Promise<DownloadedPresentationExport> {
-  if (!FileSystem.cacheDirectory) throw new Error("Qurilma xotirasi mavjud emas");
+  if (!FileSystem.cacheDirectory) throw new Error(i18n.t("deck:export.noStorage"));
   const target = `${FileSystem.cacheDirectory}${fileName}`;
   await FileSystem.deleteAsync(target, { idempotent: true });
   const resumable = FileSystem.createDownloadResumable(url, target, {}, (update) => {
@@ -151,7 +152,7 @@ async function downloadNative(
     if (total > 0) onProgress?.(Math.max(0, Math.min(1, update.totalBytesWritten / total)));
   });
   const result = await resumable.downloadAsync();
-  if (!result?.uri) throw new Error("Fayl yuklab olinmadi");
+  if (!result?.uri) throw new Error(i18n.t("deck:export.notDownloaded"));
   onProgress?.(1);
   return { jobId: job.id, format: job.format, fileName, mimeType: mimeType(job.format), uri: result.uri, sizeBytes: job.size_bytes, objectUrl: false };
 }
@@ -163,7 +164,7 @@ async function downloadWeb(
   onProgress?: (value: number) => void,
 ): Promise<DownloadedPresentationExport> {
   const response = await fetch(url);
-  if (!response.ok) throw new Error("Fayl yuklab olinmadi");
+  if (!response.ok) throw new Error(i18n.t("deck:export.notDownloaded"));
   const blob = await response.blob();
   onProgress?.(1);
   return { jobId: job.id, format: job.format, fileName, mimeType: mimeType(job.format), uri: URL.createObjectURL(blob), sizeBytes: blob.size, objectUrl: true };
@@ -181,7 +182,7 @@ export async function createPresentationExport(
   const invoked = await supabase.functions.invoke("export-presentation", { body: { presentationId, format } });
   if (invoked.error) throw new Error(await asFunctionErrorMessage(invoked.error));
   const jobId = (invoked.data as { jobId?: unknown } | null)?.jobId;
-  if (typeof jobId !== "string") throw new Error("Eksport vazifasi yaratilmadi");
+  if (typeof jobId !== "string") throw new Error(i18n.t("deck:export.noJob"));
   const job = await waitForJob(jobId, signal, callbacks.onGenerationProgress);
   if (signal.aborted) throw abortError();
   const fileName = job.file_name ?? fallbackFileName(presentationTitle, format);
@@ -207,11 +208,11 @@ export async function openPresentationExport(file: DownloadedPresentationExport)
     window.open(file.uri, "_blank", "noopener,noreferrer");
     return;
   }
-  if (!(await Sharing.isAvailableAsync())) throw new Error("Fayl ochish oynasi mavjud emas");
+  if (!(await Sharing.isAvailableAsync())) throw new Error(i18n.t("deck:export.noOpener"));
   await Sharing.shareAsync(file.uri, {
     mimeType: file.mimeType,
     UTI: file.format === "pdf" ? "com.adobe.pdf" : "org.openxmlformats.presentationml.presentation",
-    dialogTitle: file.format === "pdf" ? "PDF faylni ochish" : "PowerPoint faylni ochish",
+    dialogTitle: file.format === "pdf" ? i18n.t("deck:export.openPdfDialog") : i18n.t("deck:export.openPptxDialog"),
   });
 }
 
@@ -220,11 +221,11 @@ export async function savePresentationExport(file: DownloadedPresentationExport)
     triggerWebDownload(file);
     return;
   }
-  if (!(await Sharing.isAvailableAsync())) throw new Error("Faylni saqlash oynasi mavjud emas");
+  if (!(await Sharing.isAvailableAsync())) throw new Error(i18n.t("deck:export.noSaver"));
   await Sharing.shareAsync(file.uri, {
     mimeType: file.mimeType,
     UTI: file.format === "pdf" ? "com.adobe.pdf" : "org.openxmlformats.presentationml.presentation",
-    dialogTitle: "Faylni saqlash",
+    dialogTitle: i18n.t("deck:export.saveDialog"),
   });
 }
 
@@ -241,11 +242,11 @@ export async function sharePresentationExport(file: DownloadedPresentationExport
     triggerWebDownload(file);
     return;
   }
-  if (!(await Sharing.isAvailableAsync())) throw new Error("Ulashish oynasi mavjud emas");
+  if (!(await Sharing.isAvailableAsync())) throw new Error(i18n.t("deck:export.noSharer"));
   await Sharing.shareAsync(file.uri, {
     mimeType: file.mimeType,
     UTI: file.format === "pdf" ? "com.adobe.pdf" : "org.openxmlformats.presentationml.presentation",
-    dialogTitle: "Taqdimotni ulashish",
+    dialogTitle: i18n.t("deck:export.shareDialog"),
   });
 }
 

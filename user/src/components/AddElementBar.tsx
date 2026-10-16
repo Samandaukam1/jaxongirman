@@ -1,4 +1,5 @@
 import { Frame, Image as ImageIcon, Library, Plus, Shapes, Type, Video, X, type LucideIcon } from "lucide-react-native";
+import { useTranslation } from "react-i18next";
 import { Pressable, ScrollView, Text, View } from "react-native";
 
 import { icon, radius, shadow, spacing, typography } from "@/theme/tokens";
@@ -6,15 +7,16 @@ import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 export type AddKind = "text" | "shape" | "image" | "video" | "frame" | "element";
 
-const OPTIONS: { kind: AddKind; label: string; icon: LucideIcon }[] = [
-  { kind: "text", label: "Matn", icon: Type },
-  { kind: "shape", label: "Shakl", icon: Shapes },
-  { kind: "image", label: "Rasm", icon: ImageIcon },
-  { kind: "video", label: "Video", icon: Video },
-  { kind: "frame", label: "Ramka", icon: Frame },
+/** What can be added; names are in the `editor` table under `insert`. */
+const OPTIONS: { kind: AddKind; icon: LucideIcon }[] = [
+  { kind: "text", icon: Type },
+  { kind: "shape", icon: Shapes },
+  { kind: "image", icon: ImageIcon },
+  { kind: "video", icon: Video },
+  { kind: "frame", icon: Frame },
   // The library. Last in the row because it opens a search rather than adding
   // something immediately, and the four before it are one tap each.
-  { kind: "element", label: "Kutubxona", icon: Library },
+  { kind: "element", icon: Library },
 ];
 
 /**
@@ -37,6 +39,7 @@ export function AddElementBar({
 }) {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation(["editor", "common"]);
   return (
     <View style={styles.card}>
       {open ? (
@@ -46,19 +49,19 @@ export function AddElementBar({
               <View style={styles.optionGlyph}>
                 <option.icon color={colors.primary} size={icon.md} strokeWidth={icon.stroke} />
               </View>
-              <Text style={styles.optionLabel}>{option.label}</Text>
+              <Text style={styles.optionLabel}>{t(`insert.${option.kind}`)}</Text>
             </Pressable>
           ))}
         </ScrollView>
       ) : null}
 
       <View style={styles.row}>
-        <Pressable accessibilityLabel={open ? "Yopish" : "Element qo‘shish"} onPress={onToggle} style={styles.button}>
+        <Pressable accessibilityLabel={open ? t("common:close") : t("addElement")} onPress={onToggle} style={styles.button}>
           {open
             ? <X color={colors.onPrimary} size={icon.md} strokeWidth={icon.strokeBold} />
             : <Plus color={colors.onPrimary} size={icon.md} strokeWidth={icon.strokeBold} />}
         </Pressable>
-        <Text numberOfLines={1} style={styles.hint}>{hint ?? (open ? "Qo‘shiladigan elementni tanlang" : "Element qo‘shish")}</Text>
+        <Text numberOfLines={1} style={styles.hint}>{hint ?? (open ? t("pickElement") : t("addElement"))}</Text>
       </View>
     </View>
   );

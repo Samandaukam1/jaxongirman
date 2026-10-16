@@ -1,10 +1,37 @@
+import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import * as LucideIcons from "lucide-react-native";
 import { Image as ImageGlyph, Play, Video as VideoGlyph, type LucideIcon } from "lucide-react-native";
-import { StyleSheet, Text, View } from "react-native";
-import Svg, { Circle, Path, Polyline, Rect, Text as SvgText } from "react-native-svg";
+import { useId } from "react";
+import { Platform, StyleSheet, Text, UIManager, View } from "react-native";
+import Svg, { Circle, Defs, Ellipse, G, LinearGradient as SvgLinearGradient, Path, Polyline, RadialGradient, Rect, Stop, Text as SvgText } from "react-native-svg";
 
-import { borderOf, cornersOf, faceOf, gradientOf, num, shadowOf, str } from "@/lib/slideStyle";
+import { bag, borderOf, cornersOf, faceOf, gradientOf, list, num, paintOf, shadowOf, str } from "@/lib/slideStyle";
+
+/**
+ * Whether real backdrop blur is in this binary and worth drawing.
+ *
+ * iOS only: there the blur is a system material and samples whatever the slide
+ * has drawn underneath — which is what makes a translucent card read as glass.
+ * Android's implementation needs a separate blur target per surface and is
+ * costly at slide scale, so there the card keeps its translucent fill, which
+ * over a soft gradient already reads as frosted. Checked against the module
+ * registry so a JS-only update on an old binary never draws a red box.
+ */
+/**
+ * The system material that matches the card: a faint glass on a dark slide
+ * stays dark, a milky one on a light slide stays light. Read from the card's
+ * own fill alpha, which is the engine's statement of how much glass it wants.
+ */
+function materialFor(style: Style): "systemUltraThinMaterialDark" | "systemUltraThinMaterialLight" {
+  return paintOf(str(style.fill, "#FFFFFF00")).opacity < 0.35 ? "systemUltraThinMaterialDark" : "systemUltraThinMaterialLight";
+}
+
+const BACKDROP_BLUR = Platform.OS === "ios" && (() => {
+  const registry = (globalThis as { expo?: { modules?: Record<string, unknown> } }).expo?.modules;
+  if (registry) return "ExpoBlur" in registry;
+  return UIManager.hasViewManagerConfig?.("ExpoBlurView") ?? false;
+})();
 
 /**
  * Renderers for the element vocabulary the template engine emits. Kept apart
@@ -23,6 +50,7 @@ type Style = Record<string, unknown>;
 export function ShapeElement({ style, width, height }: { style: Style; width: number; height: number }) {
   const box = { ...cornersOf(style), ...borderOf(style), ...shadowOf(style) };
   const gradient = gradientOf(style);
+  const id = `g${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
 
   /**
    * A library element's outline, when it has one.
@@ -38,6 +66,87 @@ export function ShapeElement({ style, width, height }: { style: Style; width: nu
       <Svg width={width} height={height} viewBox={str(style.viewBox, "0 0 100 100")} preserveAspectRatio="none">
         <Path d={outline} fill={str(style.fill, "#EEEEEE")} />
       </Svg>
+    );
+  }
+
+  /**
+   * Ellipses and radial light, drawn as vectors.
+   *
+   * The Liquid Glass engine builds every background out of these: a glow is a
+   * radial gradient fading to nothing, a glass sphere is the same with its rim
+   * stroked. A radial fill cannot be expressed as a View, so both go through
+   * SVG, which also keeps an ellipse an ellipse at any aspect ratio.
+   */
+  const radial = str(style.gradientType) === "radial";
+  if (str(style.shape) === "ellipse" || radial) {
+    const stops = list(style.gradientStops);
+    const strokeWidth = typeof style.stroke === "string" ? num(style.strokeWidth, 1) : 0;
+    const stroke = strokeWidth > 0 ? paintOf(str(style.stroke)) : null;
+    const fill = paintOf(str(style.fill, stops.length ? "#00000000" : "#EEEEEE"));
+    const inset = strokeWidth / 2;
+    const ellipse = str(style.shape) === "ellipse";
+    const blur = BACKDROP_BLUR && num(style.backdropBlur, 0) > 0 && ellipse;
+    return (
+      <View style={[StyleSheet.absoluteFill, shadowOf(style)]}>
+        {blur ? (
+          <BlurView intensity={Math.min(40, num(style.backdropBlur, 0) * 1.4)} tint={materialFor(style)} style={[StyleSheet.absoluteFill, { borderRadius: Math.min(width, height) / 2, overflow: "hidden" }]} />
+        ) : null}
+        <Svg width={width} height={height}>
+          {stops.length >= 2 ? (
+            <Defs>
+              <RadialGradient id={id} cx="50%" cy="50%" rx="50%" ry="50%" fx="50%" fy="50%" gradientUnits="objectBoundingBox">
+                {stops.map((stop, index) => {
+                  const paint = paintOf(str(stop.color, "#000000"));
+                  return <Stop key={index} offset={Math.min(1, Math.max(0, num(stop.offset, 0) / 100))} stopColor={paint.color} stopOpacity={paint.opacity} />;
+                })}
+              </RadialGradient>
+            </Defs>
+          ) : null}
+          {ellipse ? (
+            <Ellipse
+              cx={width / 2}
+              cy={height / 2}
+              rx={Math.max(0, width / 2 - inset)}
+              ry={Math.max(0, height / 2 - inset)}
+              fill={stops.length >= 2 ? `url(#${id})` : fill.color}
+              fillOpacity={stops.length >= 2 ? 1 : fill.opacity}
+              stroke={stroke?.color}
+              strokeOpacity={stroke?.opacity}
+              strokeWidth={strokeWidth}
+            />
+          ) : (
+            <Rect x={0} y={0} width={width} height={height} rx={num(style.borderRadius, 0)} fill={`url(#${id})`} />
+          )}
+        </Svg>
+      </View>
+    );
+  }
+
+  /**
+   * Glass: the system's own blur under a translucent, lit face.
+   *
+   * The blur samples the slide beneath the card — the light the engine drew —
+   * and the gradient on top is the sheen and the tint. Clipped to the card's
+   * corners by a wrapper, because the blur view itself ignores border radii.
+   */
+  if (BACKDROP_BLUR && num(style.backdropBlur, 0) > 0) {
+    const corners = cornersOf(style);
+    return (
+      <View style={[StyleSheet.absoluteFill, shadowOf(style), corners]}>
+        <View style={[StyleSheet.absoluteFill, corners, { overflow: "hidden" }]}>
+          <BlurView intensity={Math.min(40, num(style.backdropBlur, 0) * 1.4)} tint={materialFor(style)} style={StyleSheet.absoluteFill} />
+          {gradient ? (
+            <LinearGradient
+              colors={gradient.colors as [string, string, ...string[]]}
+              locations={gradient.locations as [number, number, ...number[]]}
+              start={gradient.start}
+              end={gradient.end}
+              style={StyleSheet.absoluteFill}
+            />
+          ) : <View style={[StyleSheet.absoluteFill, { backgroundColor: str(style.fill, "transparent") }]} />}
+        </View>
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, corners, borderOf(style)]} />
+      </View>
     );
   }
 
@@ -127,7 +236,57 @@ export function TableElement({ style, content, width, height }: { style: Style; 
   );
 }
 
+/**
+ * An icon the deck carries as outlines (`content.vector`): filled with the
+ * row's colour or gradient, on its soft shadow. iOS draws that shadow for
+ * real, blurred from the glyph's own shape; Android has no such shadow for a
+ * vector, so there it is one offset copy in the shadow's colour.
+ */
+function VectorIcon({ style, vector, width, height }: { style: Style; vector: Style; width: number; height: number }) {
+  const id = `icon${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+  const box = num(vector.box, 256);
+  const paths = list(vector.paths);
+  const stops = list(style.gradientStops);
+  const shadow = bag(style.iconShadow);
+  const hasShadow = typeof shadow.color === "string";
+  const size = Math.min(width, height);
+  const radians = (num(style.gradientAngle, 135) * Math.PI) / 180;
+  const dx = Math.sin(radians) / 2;
+  const dy = -Math.cos(radians) / 2;
+  const fill = stops.length >= 2 ? `url(#${id})` : str(style.color, "#000000");
+  const lift = hasShadow && Platform.OS === "ios" ? {
+    shadowColor: str(shadow.color),
+    shadowOpacity: num(shadow.opacity, 0.3),
+    shadowRadius: num(shadow.blur, 4) / 2,
+    shadowOffset: { width: num(shadow.dx, 0), height: num(shadow.dy, 2) },
+  } : null;
+  const unit = box / Math.max(1, size);
+  return (
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.center, lift]}>
+      <Svg width={size} height={size} viewBox={`0 0 ${box} ${box}`}>
+        {stops.length >= 2 ? (
+          <Defs>
+            <SvgLinearGradient id={id} x1={0.5 - dx} y1={0.5 - dy} x2={0.5 + dx} y2={0.5 + dy}>
+              {stops.map((stop, index) => <Stop key={index} offset={`${num(stop.offset, 0)}%`} stopColor={str(stop.color, "#000000")} />)}
+            </SvgLinearGradient>
+          </Defs>
+        ) : null}
+        {hasShadow && Platform.OS !== "ios" ? (
+          <G transform={`translate(${num(shadow.dx, 0) * unit} ${num(shadow.dy, 2) * unit})`}>
+            {paths.map((path, index) => (
+              <Path key={index} d={str(path.d)} fill={str(shadow.color)} opacity={num(shadow.opacity, 0.3) * num(path.opacity, 1) * 0.7} />
+            ))}
+          </G>
+        ) : null}
+        {paths.map((path, index) => <Path key={index} d={str(path.d)} fill={fill} opacity={num(path.opacity, 1)} />)}
+      </Svg>
+    </View>
+  );
+}
+
 export function IconElement({ style, content, width, height }: { style: Style; content: Style; width: number; height: number }) {
+  const vector = bag(content.vector);
+  if (list(vector.paths).length) return <VectorIcon style={style} vector={vector} width={width} height={height} />;
   const name = str(content.icon, "Sparkles");
   const registry = LucideIcons as unknown as Record<string, LucideIcon | undefined>;
   const Glyph = registry[name] ?? registry.Sparkles;

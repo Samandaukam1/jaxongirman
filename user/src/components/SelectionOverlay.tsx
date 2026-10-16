@@ -4,6 +4,7 @@
 import type { Json, Tables } from "@jaxongirman/types";
 import { Copy, Move, RotateCw, Trash2 } from "lucide-react-native";
 import { useMemo, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { PanResponder, Pressable, StyleSheet, View } from "react-native";
 
 import { MODEL_HEIGHT, MODEL_WIDTH } from "@/components/SlideCanvas";
@@ -104,6 +105,7 @@ export function SelectionOverlay({
 }: Props) {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation("editor");
   const isText = element.type === "text";
   const radians = (element.rotation * Math.PI) / 180;
   const cos = Math.abs(Math.cos(radians));
@@ -317,11 +319,11 @@ export function SelectionOverlay({
       </View>
 
       <View style={[styles.pill, { left: pillLeft, top: pillTop }]}>
-        <Pressable accessibilityLabel="Nusxa olish" hitSlop={6} onPress={onDuplicate} style={styles.pillButton}>
+        <Pressable accessibilityLabel={t("duplicate")} hitSlop={6} onPress={onDuplicate} style={styles.pillButton}>
           <Copy color={colors.onPrimary} size={icon.md} strokeWidth={icon.stroke} />
         </Pressable>
         <View style={styles.pillDivider} />
-        <Pressable accessibilityLabel="O‘chirish" hitSlop={6} onPress={onDelete} style={styles.pillButton}>
+        <Pressable accessibilityLabel={t("remove")} hitSlop={6} onPress={onDelete} style={styles.pillButton}>
           <Trash2 color={colors.onPrimary} size={icon.md} strokeWidth={icon.stroke} />
         </Pressable>
       </View>

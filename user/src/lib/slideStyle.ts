@@ -31,6 +31,22 @@ export function list(value: unknown): Bag[] {
 }
 
 /**
+ * A colour as SVG wants it: six-digit hex and a separate opacity.
+ *
+ * The style bag stores eight-digit hex, which every View reads, but SVG paint
+ * on some platforms ignores a hex alpha and draws the colour solid — a glow
+ * meant to fade to nothing would end as a hard disc.
+ */
+export function paintOf(value: string): { color: string; opacity: number } {
+  const body = value.replace("#", "");
+  if (!/^[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/.test(body)) {
+    return value === "transparent" ? { color: "#000000", opacity: 0 } : { color: value || "#000000", opacity: 1 };
+  }
+  const opacity = body.length === 8 ? Number.parseInt(body.slice(6, 8), 16) / 255 : 1;
+  return { color: `#${body.slice(0, 6)}`, opacity: Math.round(opacity * 1000) / 1000 };
+}
+
+/**
  * The face to draw a row in.
  *
  * React Native takes a single family name rather than a stack, so the choice

@@ -1,6 +1,7 @@
 import type { Json } from "@jaxongirman/types";
 import { Check, Plus, Trash2 } from "lucide-react-native";
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { icon, radius, spacing, typography } from "@/theme/tokens";
@@ -17,11 +18,8 @@ import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type Bag = { [key: string]: Json | undefined };
 
-const CHART_KINDS = [
-  { key: "bar", label: "Ustun" },
-  { key: "line", label: "Chiziq" },
-  { key: "donut", label: "Doira" },
-] as const;
+/** Chart kinds a reader can switch between; named in the `editor` table under `data.kind`. */
+const CHART_KINDS = [{ key: "bar" }, { key: "line" }, { key: "donut" }] as const;
 
 /** At least two points, or a chart is a single bar and says nothing. */
 const MIN_POINTS = 2;
@@ -38,6 +36,7 @@ function valuesOf(content: Bag): number[] {
 export function ChartDataEditor({ content, onChange }: { content: Bag; onChange: (next: Bag) => void }) {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation("editor");
   const labels = labelsOf(content);
   const values = valuesOf(content);
   const rows = useMemo(
@@ -72,15 +71,15 @@ export function ChartDataEditor({ content, onChange }: { content: Bag; onChange:
               onPress={() => onChange({ ...content, chartType: option.key })}
               style={[styles.kindChip, active && styles.kindChipActive]}
             >
-              <Text style={[styles.kindText, active && styles.activeText]}>{option.label}</Text>
+              <Text style={[styles.kindText, active && styles.activeText]}>{t(`data.kind.${option.key}`)}</Text>
             </Pressable>
           );
         })}
       </View>
 
       <View style={styles.headerRow}>
-        <Text style={[styles.headerCell, styles.grow]}>Kategoriya</Text>
-        <Text style={[styles.headerCell, styles.valueColumn]}>Qiymat</Text>
+        <Text style={[styles.headerCell, styles.grow]}>{t("data.category")}</Text>
+        <Text style={[styles.headerCell, styles.valueColumn]}>{t("data.value")}</Text>
         <View style={styles.actionColumn} />
       </View>
 
@@ -107,7 +106,7 @@ export function ChartDataEditor({ content, onChange }: { content: Bag; onChange:
               style={[styles.input, styles.valueColumn]}
             />
             <Pressable
-              accessibilityLabel="Qatorni o‘chirish"
+              accessibilityLabel={t("data.removeRow")}
               disabled={rows.length <= MIN_POINTS}
               onPress={() => commit(rows.filter((_, at) => at !== index))}
               style={[styles.iconButton, rows.length <= MIN_POINTS && styles.disabled]}
@@ -124,7 +123,7 @@ export function ChartDataEditor({ content, onChange }: { content: Bag; onChange:
         style={[styles.addButton, rows.length >= MAX_POINTS && styles.disabled]}
       >
         <Plus color={colors.primary} size={16} strokeWidth={icon.strokeBold} />
-        <Text style={styles.addText}>Qator qo‘shish</Text>
+        <Text style={styles.addText}>{t("data.addRow")}</Text>
       </Pressable>
     </View>
   );
@@ -151,6 +150,7 @@ function gridOf(content: Bag): { columns: string[]; rows: string[][]; header: bo
 export function TableDataEditor({ content, onChange }: { content: Bag; onChange: (next: Bag) => void }) {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation("editor");
   const grid = useMemo(() => gridOf(content), [content]);
   const width = grid.columns.length;
 
@@ -176,7 +176,7 @@ export function TableDataEditor({ content, onChange }: { content: Bag; onChange:
           style={[styles.kindChip, grid.header && styles.kindChipActive]}
         >
           {grid.header ? <Check color={colors.onPrimary} size={13} strokeWidth={icon.strokeBold} /> : null}
-          <Text style={[styles.kindText, grid.header && styles.activeText]}>Sarlavha qatori</Text>
+          <Text style={[styles.kindText, grid.header && styles.activeText]}>{t("data.headerRow")}</Text>
         </Pressable>
         <Pressable
           disabled={width >= MAX_COLUMNS}
@@ -187,7 +187,7 @@ export function TableDataEditor({ content, onChange }: { content: Bag; onChange:
           style={[styles.kindChip, width >= MAX_COLUMNS && styles.disabled]}
         >
           <Plus color={colors.primary} size={14} strokeWidth={icon.strokeBold} />
-          <Text style={styles.kindText}>Ustun</Text>
+          <Text style={styles.kindText}>{t("data.column")}</Text>
         </Pressable>
         <Pressable
           disabled={width <= 1}
@@ -198,7 +198,7 @@ export function TableDataEditor({ content, onChange }: { content: Bag; onChange:
           style={[styles.kindChip, width <= 1 && styles.disabled]}
         >
           <Trash2 color={colors.inkMuted} size={14} strokeWidth={icon.stroke} />
-          <Text style={styles.kindText}>Ustun</Text>
+          <Text style={styles.kindText}>{t("data.column")}</Text>
         </Pressable>
       </View>
 
@@ -235,7 +235,7 @@ export function TableDataEditor({ content, onChange }: { content: Bag; onChange:
                   />
                 ))}
                 <Pressable
-                  accessibilityLabel="Qatorni o‘chirish"
+                  accessibilityLabel={t("data.removeRow")}
                   disabled={grid.rows.length <= 1}
                   onPress={() => commit({ rows: grid.rows.filter((_, at) => at !== rowIndex) })}
                   style={[styles.iconButton, grid.rows.length <= 1 && styles.disabled]}
@@ -254,7 +254,7 @@ export function TableDataEditor({ content, onChange }: { content: Bag; onChange:
         style={[styles.addButton, grid.rows.length >= MAX_ROWS && styles.disabled]}
       >
         <Plus color={colors.primary} size={16} strokeWidth={icon.strokeBold} />
-        <Text style={styles.addText}>Qator qo‘shish</Text>
+        <Text style={styles.addText}>{t("data.addRow")}</Text>
       </Pressable>
     </View>
   );

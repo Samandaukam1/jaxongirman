@@ -1,5 +1,6 @@
 import { Download, ExternalLink, FileText, Presentation, Share2, X } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Alert, Modal, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 
 import {
@@ -32,6 +33,7 @@ function ProgressBar({ value }: { value: number }) {
 export function ExportSheet({ visible, presentationId, presentationTitle, onClose }: Props) {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation(["deck", "common"]);
   const [format, setFormat] = useState<PresentationExportFormat>("pdf");
   const [phase, setPhase] = useState<Phase>("idle");
   const [generationProgress, setGenerationProgress] = useState(0);
@@ -86,7 +88,7 @@ export function ExportSheet({ visible, presentationId, presentationTitle, onClos
       else if (action === "save") await savePresentationExport(file);
       else await sharePresentationExport(file);
     } catch (nextError) {
-      Alert.alert("Fayl ochilmadi", asErrorMessage(nextError));
+      Alert.alert(t("export.openFailed"), asErrorMessage(nextError));
     }
   }
 
@@ -96,7 +98,7 @@ export function ExportSheet({ visible, presentationId, presentationTitle, onClos
   }
 
   const busy = phase === "generating" || phase === "downloading";
-  const readyLabel = format === "pdf" ? "PDF tayyor" : "PowerPoint tayyor";
+  const readyLabel = format === "pdf" ? t("export.pdfReady") : t("export.pptxReady");
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={close}>
@@ -105,32 +107,32 @@ export function ExportSheet({ visible, presentationId, presentationTitle, onClos
         <View style={styles.sheet}>
           <View style={styles.handle} />
           <View style={styles.header}>
-            <View><Text style={styles.title}>Eksport</Text><Text style={styles.subtitle}>Taqdimot formatini tanlang</Text></View>
-            <Pressable accessibilityLabel="Yopish" onPress={close} style={styles.close}><X color={colors.inkMuted} size={icon.md} strokeWidth={icon.stroke} /></Pressable>
+            <View><Text style={styles.title}>{t("export.title")}</Text><Text style={styles.subtitle}>{t("export.subtitle")}</Text></View>
+            <Pressable accessibilityLabel={t("common:close")} onPress={close} style={styles.close}><X color={colors.inkMuted} size={icon.md} strokeWidth={icon.stroke} /></Pressable>
           </View>
 
           {phase === "idle" || phase === "failed" ? (
             <View style={styles.formats}>
               <Pressable disabled={busy} onPress={() => setFormat("pdf")} style={[styles.formatCard, format === "pdf" && styles.formatSelected]}>
                 <View style={[styles.formatIcon, format === "pdf" && styles.formatIconSelected]}><FileText color={format === "pdf" ? colors.onPrimary : colors.primary} size={icon.lg} strokeWidth={icon.stroke} /></View>
-                <View style={styles.formatCopy}><Text style={styles.formatTitle}>PDF</Text><Text style={styles.formatDescription}>Ko‘rish va ulashish uchun</Text></View>
+                <View style={styles.formatCopy}><Text style={styles.formatTitle}>PDF</Text><Text style={styles.formatDescription}>{t("export.pdfNote")}</Text></View>
                 <View style={[styles.radio, format === "pdf" && styles.radioSelected]}>{format === "pdf" ? <View style={styles.radioDot} /> : null}</View>
               </Pressable>
               <Pressable disabled={busy} onPress={() => setFormat("pptx")} style={[styles.formatCard, format === "pptx" && styles.formatSelected]}>
                 <View style={[styles.formatIcon, format === "pptx" && styles.formatIconSelected]}><Presentation color={format === "pptx" ? colors.onPrimary : colors.primary} size={icon.lg} strokeWidth={icon.stroke} /></View>
-                <View style={styles.formatCopy}><Text style={styles.formatTitle}>PowerPoint (.pptx)</Text><Text style={styles.formatDescription}>PowerPoint’da ochish va tahrirlash uchun</Text></View>
+                <View style={styles.formatCopy}><Text style={styles.formatTitle}>{t("export.pptx")}</Text><Text style={styles.formatDescription}>{t("export.pptxNote")}</Text></View>
                 <View style={[styles.radio, format === "pptx" && styles.radioSelected]}>{format === "pptx" ? <View style={styles.radioDot} /> : null}</View>
               </Pressable>
               {error ? <Text style={styles.error}>{error}</Text> : null}
-              <Pressable onPress={() => void start()} style={styles.primaryButton}><Download color={colors.onPrimary} size={icon.md} strokeWidth={icon.strokeBold} /><Text style={styles.primaryText}>Yuklab olish</Text></Pressable>
+              <Pressable onPress={() => void start()} style={styles.primaryButton}><Download color={colors.onPrimary} size={icon.md} strokeWidth={icon.strokeBold} /><Text style={styles.primaryText}>{t("download")}</Text></Pressable>
             </View>
           ) : null}
 
           {busy ? (
             <View style={styles.status}>
               <View style={styles.statusIcon}><ActivityIndicator color={colors.primary} size="large" /></View>
-              <Text style={styles.statusTitle}>{phase === "generating" ? "Eksport qilinmoqda…" : "Fayl yuklab olinmoqda…"}</Text>
-              <Text style={styles.statusCopy}>{format === "pdf" ? "Slaydlar PDF faylga joylanmoqda" : "Tahrirlanadigan PowerPoint tayyorlanmoqda"}</Text>
+              <Text style={styles.statusTitle}>{phase === "generating" ? t("export.generating") : t("export.downloading")}</Text>
+              <Text style={styles.statusCopy}>{format === "pdf" ? t("export.pdfWork") : t("export.pptxWork")}</Text>
               <ProgressBar value={phase === "generating" ? generationProgress : downloadProgress} />
               <Text style={styles.percent}>{Math.round((phase === "generating" ? generationProgress : downloadProgress) * 100)}%</Text>
             </View>
@@ -142,11 +144,11 @@ export function ExportSheet({ visible, presentationId, presentationTitle, onClos
               <Text style={styles.statusTitle}>{readyLabel}</Text>
               <Text numberOfLines={1} style={styles.fileName}>{file.fileName}</Text>
               <View style={styles.actions}>
-                <Pressable onPress={() => void perform("open")} style={styles.actionButton}><ExternalLink color={colors.primary} size={icon.sm} strokeWidth={icon.stroke} /><Text style={styles.actionText}>{format === "pdf" ? "Ochish" : "PowerPoint’da ochish"}</Text></Pressable>
-                <Pressable onPress={() => void perform("save")} style={styles.actionButton}><Download color={colors.primary} size={icon.sm} strokeWidth={icon.stroke} /><Text style={styles.actionText}>Yuklab olish</Text></Pressable>
-                <Pressable onPress={() => void perform("share")} style={styles.actionButton}><Share2 color={colors.primary} size={icon.sm} strokeWidth={icon.stroke} /><Text style={styles.actionText}>Ulashish</Text></Pressable>
+                <Pressable onPress={() => void perform("open")} style={styles.actionButton}><ExternalLink color={colors.primary} size={icon.sm} strokeWidth={icon.stroke} /><Text style={styles.actionText}>{format === "pdf" ? t("export.open") : t("export.openPptx")}</Text></Pressable>
+                <Pressable onPress={() => void perform("save")} style={styles.actionButton}><Download color={colors.primary} size={icon.sm} strokeWidth={icon.stroke} /><Text style={styles.actionText}>{t("download")}</Text></Pressable>
+                <Pressable onPress={() => void perform("share")} style={styles.actionButton}><Share2 color={colors.primary} size={icon.sm} strokeWidth={icon.stroke} /><Text style={styles.actionText}>{t("export.share")}</Text></Pressable>
               </View>
-              <Text style={styles.expiry}>Yuklab olish havolasi 1 soat amal qiladi.</Text>
+              <Text style={styles.expiry}>{t("export.expiry")}</Text>
             </View>
           ) : null}
         </View>

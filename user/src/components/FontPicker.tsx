@@ -1,5 +1,6 @@
 import { Check, Search, X } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, FlatList, Modal, Pressable, Text, TextInput, View } from "react-native";
 
 import { Appear } from "@/components/Appear";
@@ -38,6 +39,7 @@ function FontRow({
   onPick: (picked: PickedFont) => void;
 }) {
   const styles = useStyles();
+  const { t } = useTranslation("editor");
   const { colors } = useTheme();
   const face = useMemo(() => faceFor(family, weight, italic), [family, italic, weight]);
   const [faceName, setFaceName] = useState<string | null>(
@@ -74,7 +76,7 @@ function FontRow({
           {family.name}
         </Text>
         <Text numberOfLines={1} style={styles.meta}>
-          {family.category}{family.variable ? " · variable" : ""} · {family.faces.length} ta ko‘rinish
+          {family.category}{family.variable ? " · variable" : ""} · {t("fonts.faces", { count: family.faces.length })}
         </Text>
       </View>
       {selected ? <Check color={colors.primary} size={icon.sm} strokeWidth={2.4} /> : null}
@@ -95,6 +97,7 @@ export function FontPicker({
   onPick: (picked: PickedFont) => void;
 }) {
   const styles = useStyles();
+  const { t } = useTranslation(["editor", "common"]);
   const { colors } = useTheme();
   const [query, setQuery] = useState("");
   const [families, setFamilies] = useState<FontFamily[]>([]);
@@ -112,10 +115,10 @@ export function FontPicker({
       setDone(rows.length < PAGE);
       setError(null);
     } catch {
-      setError("Shriftlar ro‘yxati olinmadi.");
+      setError(t("fonts.listFailed"));
     }
     setLoading(false);
-  }, [query]);
+  }, [query, t]);
 
   useEffect(() => {
     if (!visible) return;
@@ -133,10 +136,10 @@ export function FontPicker({
 
   const searching = query.trim().length > 0;
   const sections = useMemo(() => ([
-    ...(searching || recents.length === 0 ? [] : [{ title: "Oxirgi ishlatilgan", rows: recents }]),
-    ...(searching || featured.length === 0 ? [] : [{ title: "Tavsiya etilgan", rows: featured }]),
-    { title: searching ? "Topilganlar" : "Barcha shriftlar", rows: families },
-  ]), [families, featured, recents, searching]);
+    ...(searching || recents.length === 0 ? [] : [{ title: t("fonts.recent"), rows: recents }]),
+    ...(searching || featured.length === 0 ? [] : [{ title: t("fonts.featured"), rows: featured }]),
+    { title: searching ? t("fonts.found") : t("fonts.all"), rows: families },
+  ]), [families, featured, recents, searching, t]);
 
   const flat = useMemo(() => sections.flatMap((section) => (
     [{ heading: section.title } as const, ...section.rows.map((family) => ({ family }))]
@@ -146,8 +149,8 @@ export function FontPicker({
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={styles.sheet}>
         <View style={styles.header}>
-          <Text style={styles.title}>Shrift</Text>
-          <Pressable accessibilityLabel="Yopish" onPress={onClose} hitSlop={10} style={styles.close}>
+          <Text style={styles.title}>{t("fonts.title")}</Text>
+          <Pressable accessibilityLabel={t("common:close")} onPress={onClose} hitSlop={10} style={styles.close}>
             <X color={colors.ink} size={icon.md} strokeWidth={2.2} />
           </Pressable>
         </View>
@@ -157,14 +160,14 @@ export function FontPicker({
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder="Shrift nomi"
+            placeholder={t("fonts.search")}
             placeholderTextColor={colors.inkSoft}
             autoCorrect={false}
             autoCapitalize="none"
             style={styles.searchInput}
           />
           {query ? (
-            <Pressable accessibilityLabel="Tozalash" onPress={() => setQuery("")} hitSlop={8}>
+            <Pressable accessibilityLabel={t("fonts.clear")} onPress={() => setQuery("")} hitSlop={8}>
               <X color={colors.inkSoft} size={15} strokeWidth={2.2} />
             </Pressable>
           ) : null}

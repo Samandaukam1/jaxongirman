@@ -14,6 +14,7 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 
 import { SlideCanvas } from "@/components/SlideCanvas";
+import { loadFontsUsedBy } from "@/lib/fontCache";
 import { radius } from "@/theme/tokens";
 
 const NETWORK_EVERY_N_FRAMES = 3;
@@ -39,6 +40,16 @@ export const PresentationPreview = forwardRef<PresentationPreviewHandle, Props>(
   ref,
 ) {
   const [displayScale, setDisplayScale] = useState(1);
+  // The deck's faces, fetched for the presenter too: a session opened before
+  // the editor ever was would otherwise run in the fallback face. Bumping state
+  // when they land is what redraws the slide in them.
+  const [, setFontsReady] = useState(0);
+  useEffect(() => {
+    let active = true;
+    void loadFontsUsedBy(elements.map((element) => (element.style && typeof element.style === "object" ? element.style : {}) as { fontFamily?: unknown }))
+      .then(() => { if (active) setFontsReady((count) => count + 1); });
+    return () => { active = false; };
+  }, [elements]);
   const scale = useSharedValue(1);
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);

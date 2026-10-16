@@ -1,15 +1,17 @@
 import type { Tables } from "@jaxongirman/types";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { AlertCircle, ArrowLeft, Check, ChevronRight, Clock3, Gamepad2, LoaderCircle, RefreshCw, Sparkles } from "lucide-react-native";
+import { AlertCircle, ArrowLeft, Check, ChevronRight, Clock3, LoaderCircle, RefreshCw, Sparkles } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { IconChip } from "@/components/IconChip";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { localizeError } from "@/lib/errors";
 import { asErrorMessage, asFunctionErrorMessage } from "@/lib/format";
-import { generateGame } from "@/lib/games";
-import { supabase } from "@/lib/supabase";
+import { changesChannel, supabase } from "@/lib/supabase";
 import { brandInk, gradients, icon, radius, shadow, shadowLifted, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
@@ -29,11 +31,10 @@ export default function GenerationScreen() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
-  /** null while the deck is still being written, then the linked game's id. */
-  const [gameId, setGameId] = useState<string | null>(null);
-  const [gameError, setGameError] = useState<string | null>(null);
+  const insets = useSafeAreaInsets();
+  const { t, i18n } = useTranslation("generation");
   const wantsGame = params.withGame === "1";
-  const gameStarted = useRef(false);
+  const handedOff = useRef(false);
 
   const load = useCallback(async () => {
     if (!presentationId) return;
@@ -62,8 +63,7 @@ export default function GenerationScreen() {
   useEffect(() => {
     void load();
     if (!presentationId) return;
-    const channel = supabase
-      .channel(`generation:${presentationId}`)
+    const channel = changesChannel(`generation:${presentationId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "generation_jobs", filter: `presentation_id=eq.${presentationId}` }, () => void load())
       .on("postgres_changes", { event: "*", schema: "public", table: "generation_steps", filter: `presentation_id=eq.${presentationId}` }, () => void load())
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "presentations", filter: `id=eq.${presentationId}` }, () => void load())
@@ -72,31 +72,27 @@ export default function GenerationScreen() {
     return () => { clearInterval(poll); void supabase.removeChannel(channel); };
   }, [load, presentationId]);
 
-  /**
-   * The deck finishing is what makes an O‘yingoh possible: the questions come
-   * from the slides, so generation cannot start before they exist. Guarded by a
-   * ref rather than by state so a re-render mid-request cannot bill twice.
-   */
-  useEffect(() => {
-    if (!wantsGame || !presentationId || gameStarted.current) return;
-    if (presentation?.status !== "ready") return;
-    gameStarted.current = true;
-    void (async () => {
-      try {
-        const result = await generateGame({ mode: "presentation", presentationId });
-        setGameId(result.gameId);
-      } catch (failure) {
-        setGameError(await asFunctionErrorMessage(failure));
-      }
-    })();
-  }, [presentation?.status, presentationId, wantsGame]);
-
   const progress = job?.progress ?? (presentation?.status === "ready" ? 100 : 0);
   const state = useMemo(() => {
     if (presentation?.status === "ready" || job?.status === "succeeded") return "ready";
     if (presentation?.status === "failed" || job?.status === "failed") return "failed";
     return "working";
   }, [job?.status, presentation?.status]);
+
+  const openDeck = useCallback(() => {
+    if (!presentationId) return;
+    handedOff.current = true;
+    // The finished deck opens on its own page; an O‘yingoh, if asked for, is
+    // made there — its questions come from the slides that now exist.
+    router.replace({ pathname: "/(app)/presentation/[id]", params: wantsGame ? { id: presentationId, withGame: "1" } : { id: presentationId } });
+  }, [presentationId, router, wantsGame]);
+
+  // A finished deck is shown, not announced: the moment it is ready, go to it.
+  useEffect(() => {
+    if (state !== "ready" || handedOff.current) return;
+    const timer = setTimeout(openDeck, 650);
+    return () => clearTimeout(timer);
+  }, [openDeck, state]);
 
   async function retry() {
     setRetrying(true);
@@ -105,11 +101,29 @@ export default function GenerationScreen() {
       if (error) throw error;
       await load();
     } catch (error) {
-      Alert.alert("Qayta boshlanmadi", await asFunctionErrorMessage(error));
+      Alert.alert(t("retryFailed"), await asFunctionErrorMessage(error));
     } finally {
       setRetrying(false);
     }
   }
+
+  /** A stage named in the app's language; a stage this build does not know keeps the server's name. */
+  function stageLabel(key: string, fallback?: string): string {
+    return i18n.exists(`generation:stage.${key}`) ? t(`stage.${key as "preparing"}`) : fallback ?? key.replaceAll("_", " ");
+  }
+
+  /**
+   * A step's note. The server writes them in Uzbek, so other languages see a
+   * failed step's reason (through the error table) and not the progress notes.
+   */
+  function stepNote(step: Tables<"generation_steps">): string | null {
+    if (!step.message) return null;
+    if (step.status === "failed") return localizeError(step.message, step.error_code ?? undefined);
+    return i18n.language === "uz" ? step.message : null;
+  }
+
+  const failureMessage = job?.error_message ?? presentation?.error_message ?? null;
+  const failure = failureMessage ? localizeError(failureMessage, job?.error_code ?? undefined) : loadError;
 
   if (loading) {
     return <View style={styles.loading}><ActivityIndicator color={colors.primary} size="large" /></View>;
@@ -117,9 +131,9 @@ export default function GenerationScreen() {
 
   return (
     <View style={styles.screen}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <Pressable onPress={() => router.replace("/(app)/(tabs)/projects")} style={styles.back}><ArrowLeft color={colors.ink} size={icon.lg} strokeWidth={icon.stroke} /></Pressable>
-        <View style={styles.headerText}><Text style={styles.eyebrow}>JAXONGIR AI</Text><Text numberOfLines={1} style={styles.headerTitle}>{presentation?.title ?? "Taqdimot"}</Text></View>
+        <View style={styles.headerText}><Text style={styles.eyebrow}>JAXONGIR AI</Text><Text numberOfLines={1} style={styles.headerTitle}>{presentation?.title ?? t("fallbackTitle")}</Text></View>
       </View>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <LinearGradient
@@ -135,18 +149,18 @@ export default function GenerationScreen() {
             bold={state === "ready"}
             style={styles.heroIcon}
           />
-          <Text style={styles.heroEyebrow}>{state === "working" ? "TAQDIMOT YARATILMOQDA" : state === "ready" ? "TAYYOR" : "GENERATION TO‘XTADI"}</Text>
-          <Text style={styles.heroTitle}>{state === "working" ? "Jaxongir AI ishlayapti" : state === "ready" ? "Taqdimotingiz tayyor" : "Texnik xatolik yuz berdi"}</Text>
+          <Text style={styles.heroEyebrow}>{t(`eyebrow.${state}`)}</Text>
+          <Text style={styles.heroTitle}>{t(`title.${state}`)}</Text>
           <Text style={styles.heroCopy}>
-            {state === "working" ? "Har bir ko‘rsatkich haqiqiy backend bosqichidan keladi. Ilovani yopishingiz mumkin — ish serverda davom etadi." : state === "ready" ? "Slaydlarni ko‘ring, elementlarni tahrirlang yoki PDF formatida eksport qiling." : job?.error_message ?? presentation?.error_message ?? loadError ?? "Qayta urinish mumkin."}
+            {state === "failed" ? failure ?? t("copy.failed") : t(`copy.${state}`)}
           </Text>
-          <View style={styles.progressHeader}><Text style={styles.progressStage}>{job?.stage?.replaceAll("_", " ") ?? "preparing"}</Text><Text style={styles.progressValue}>{progress}%</Text></View>
+          <View style={styles.progressHeader}><Text style={styles.progressStage}>{stageLabel(job?.stage ?? "preparing")}</Text><Text style={styles.progressValue}>{progress}%</Text></View>
           <View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${Math.max(2, progress)}%` }]} /></View>
         </LinearGradient>
 
-        <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Jarayon</Text><View style={styles.live}><View style={[styles.liveDot, state !== "working" && styles.liveDotDone]} /><Text style={styles.liveText}>{state === "working" ? "Jonli" : "Yakunlandi"}</Text></View></View>
+        <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>{t("process")}</Text><View style={styles.live}><View style={[styles.liveDot, state !== "working" && styles.liveDotDone]} /><Text style={styles.liveText}>{state === "working" ? t("live") : t("finished")}</Text></View></View>
         <View style={styles.steps}>
-          {steps.length === 0 ? <View style={styles.emptyStep}><Clock3 color={colors.inkSoft} size={icon.md} strokeWidth={icon.stroke} /><Text style={styles.emptyStepText}>Birinchi backend yangilanishi kutilmoqda…</Text></View> : null}
+          {steps.length === 0 ? <View style={styles.emptyStep}><Clock3 color={colors.inkSoft} size={icon.md} strokeWidth={icon.stroke} /><Text style={styles.emptyStepText}>{t("waiting")}</Text></View> : null}
           {steps.map((step, index) => {
             const done = step.status === "succeeded" || step.status === "skipped";
             const failed = step.status === "failed";
@@ -159,7 +173,7 @@ export default function GenerationScreen() {
                   </View>
                   {index < steps.length - 1 ? <View style={[styles.timelineLine, done && styles.timelineLineDone]} /> : null}
                 </View>
-                <View style={styles.stepBody}><Text style={[styles.stepTitle, !running && !done && !failed && styles.stepTitlePending]}>{step.label}</Text>{step.message ? <Text style={styles.stepMessage}>{step.message}</Text> : null}</View>
+                <View style={styles.stepBody}><Text style={[styles.stepTitle, !running && !done && !failed && styles.stepTitlePending]}>{stageLabel(step.key, step.label)}</Text>{stepNote(step) ? <Text style={styles.stepMessage}>{stepNote(step)}</Text> : null}</View>
                 {done ? <Text style={styles.stepPercent}>100%</Text> : running ? <Text style={styles.stepPercent}>{step.progress}%</Text> : null}
               </View>
             );
@@ -167,35 +181,10 @@ export default function GenerationScreen() {
         </View>
 
         {state === "ready" ? (
-          <PrimaryButton
-            icon={Sparkles}
-            trailingIcon={ChevronRight}
-            label="Editorni ochish"
-            style={styles.action}
-            onPress={() => router.replace({ pathname: "/(app)/presentation/[id]", params: { id: presentationId } })}
-          />
-        ) : null}
-        {state === "ready" && wantsGame ? (
-          gameError ? (
-            <Text style={styles.gameNote}>O‘yingoh yaratilmadi: {gameError}</Text>
-          ) : gameId ? (
-            <PrimaryButton
-              tone="secondary"
-              icon={Gamepad2}
-              trailingIcon={ChevronRight}
-              label="O‘yingoh savollarini ko‘rish"
-              style={styles.action}
-              onPress={() => router.push({ pathname: "/(app)/oyingoh/[id]", params: { id: gameId } })}
-            />
-          ) : (
-            <View style={styles.gameWaiting}>
-              <ActivityIndicator color={colors.primary} size="small" />
-              <Text style={styles.gameNote}>O‘yingoh tayyorlanmoqda…</Text>
-            </View>
-          )
+          <PrimaryButton icon={Sparkles} trailingIcon={ChevronRight} label={t("open")} style={styles.action} onPress={openDeck} />
         ) : null}
         {state === "failed" ? (
-          <PrimaryButton tone="secondary" icon={RefreshCw} label="Qayta urinish" loading={retrying} style={styles.action} onPress={() => void retry()} />
+          <PrimaryButton tone="secondary" icon={RefreshCw} label={t("retry")} loading={retrying} style={styles.action} onPress={() => void retry()} />
         ) : null}
       </ScrollView>
     </View>
@@ -204,10 +193,8 @@ export default function GenerationScreen() {
 
 const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
-  gameWaiting: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, marginTop: spacing.md },
-  gameNote: { ...typography.caption, color: colors.inkMuted, textAlign: "center", marginTop: spacing.sm },
   loading: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.canvas },
-  header: { paddingTop: 58, paddingHorizontal: spacing.xl, paddingBottom: spacing.lg, flexDirection: "row", alignItems: "center", gap: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
+  header: { paddingHorizontal: spacing.xl, paddingBottom: spacing.lg, flexDirection: "row", alignItems: "center", gap: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
   back: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   headerText: { flex: 1 },
   eyebrow: { ...typography.caption, color: colors.accent, letterSpacing: 1.4 },

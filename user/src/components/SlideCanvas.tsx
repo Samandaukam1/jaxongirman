@@ -1,6 +1,3 @@
-/* eslint-disable react-hooks/refs -- PanResponder handlers only ever run from a
-   touch, never during render. The ref is what lets a drag keep measuring from
-   the position the finger started at while React re-renders every frame. */
 import {
   SLIDE_MODEL_HEIGHT,
   SLIDE_MODEL_WIDTH,
@@ -9,7 +6,7 @@ import {
   type RenderableSlideElement,
 } from "@jaxongirman/types";
 import { LinearGradient } from "expo-linear-gradient";
-import { forwardRef, useMemo, useRef, useState } from "react";
+import { forwardRef, memo, useMemo, useRef, useState } from "react";
 import { Image, PanResponder, StyleSheet, Text, View, type LayoutChangeEvent, type ViewStyle } from "react-native";
 
 import { ChartElement, IconElement, MediaPlaceholder, PlayBadge, ShapeElement, TableElement } from "@/components/SlideElements";
@@ -60,17 +57,25 @@ type ElementViewProps = {
   element: Element;
   gestureScale: number;
   interactive: boolean;
+  /** Bumped when fonts land, so a memoised row redraws in its real face. */
+  revision: number;
   onSelect?: (id: string) => void;
   onDragStart?: () => void;
-  onDrag?: (x: number, y: number) => void;
-  onDragEnd?: (x: number, y: number) => void;
+  onDrag?: (id: string, x: number, y: number) => void;
+  onDragEnd?: (id: string, x: number, y: number) => void;
   onRequestEdit?: (id: string) => void;
   onTextMeasure?: (id: string, height: number) => void;
 };
 
 const DOUBLE_TAP_MS = 280;
 
-function ElementView(props: ElementViewProps) {
+/**
+ * One element. Memoised on the row itself: while one caption is dragged, the
+ * forty other rows on a slide — glows, glass, type — are not redrawn sixty
+ * times a second. Callbacks are read through a ref and take the element's id,
+ * so a stale closure can never act on the wrong row.
+ */
+const ElementView = memo(function ElementView(props: ElementViewProps) {
   const element = props.element;
   // Gesture callbacks read through a ref so a re-render mid-drag never swaps in
   // a stale origin — the drag would otherwise accelerate away from the finger.
@@ -101,10 +106,13 @@ function ElementView(props: ElementViewProps) {
       const x = clamp(start.x + gesture.dx / current.gestureScale, KEEP_VISIBLE - current.element.width, MODEL_WIDTH - KEEP_VISIBLE);
       const y = clamp(start.y + gesture.dy / current.gestureScale, KEEP_VISIBLE - current.element.height, MODEL_HEIGHT - KEEP_VISIBLE);
       moved.current = { x, y };
-      current.onDrag?.(x, y);
+      current.onDrag?.(current.element.id, x, y);
     },
-    onPanResponderRelease: () => latest.current.onDragEnd?.(moved.current.x, moved.current.y),
-    onPanResponderTerminate: () => latest.current.onDragEnd?.(moved.current.x, moved.current.y),
+    // A drag on the slide is the slide's: nothing scrolling around it may take
+    // the finger away half way through a move.
+    onPanResponderTerminationRequest: () => false,
+    onPanResponderRelease: () => latest.current.onDragEnd?.(latest.current.element.id, moved.current.x, moved.current.y),
+    onPanResponderTerminate: () => latest.current.onDragEnd?.(latest.current.element.id, moved.current.x, moved.current.y),
   }), []);
 
   const style = object(element.style);
@@ -195,7 +203,10 @@ function ElementView(props: ElementViewProps) {
   // The selection frame lives in SelectionOverlay, above the clipped canvas, so
   // handles stay crisp at any zoom and never land in an exported image.
   return <View {...pan.panHandlers} style={frame}>{visual}</View>;
-}
+}, (before, after) => before.element === after.element
+  && before.gestureScale === after.gestureScale
+  && before.interactive === after.interactive
+  && before.revision === after.revision);
 
 type Props = {
   slide: Slide;
@@ -210,10 +221,12 @@ type Props = {
   /** Reports how tall a text element's wrapped copy actually is, in model units. */
   onTextMeasure?: (id: string, height: number) => void;
   onLayout?: (event: LayoutChangeEvent) => void;
+  /** Bump to redraw every row — when a deck's fonts finish downloading. */
+  revision?: number;
 };
 
 export const SlideCanvas = forwardRef<View, Props>(function SlideCanvas(
-  { slide, elements, displayScale = 1, interactive = false, onSelect, onDragStart, onDrag, onDragEnd, onRequestEdit, onTextMeasure, onLayout },
+  { slide, elements, displayScale = 1, interactive = false, onSelect, onDragStart, onDrag, onDragEnd, onRequestEdit, onTextMeasure, onLayout, revision = 0 },
   ref,
 ) {
   const background = object(slide.background);
@@ -246,10 +259,11 @@ export const SlideCanvas = forwardRef<View, Props>(function SlideCanvas(
           element={element}
           gestureScale={displayScale}
           interactive={interactive}
-          onSelect={onSelect}
+          revision={revision}
+          onSelect={onSelect ?? undefined}
           onDragStart={onDragStart}
-          onDrag={(x, y) => onDrag?.(element.id, x, y)}
-          onDragEnd={(x, y) => onDragEnd?.(element.id, x, y)}
+          onDrag={onDrag}
+          onDragEnd={onDragEnd}
           onRequestEdit={onRequestEdit}
           onTextMeasure={onTextMeasure}
         />
