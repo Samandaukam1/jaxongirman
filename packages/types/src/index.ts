@@ -1,5 +1,6 @@
 import type { Json } from "./database.generated";
 
+export * from "./avatars";
 export * from "./payment-cards";
 
 /**
@@ -11,13 +12,16 @@ export * from "./payment-cards";
  * appears, string comparisons scattered across the apps go quietly stale —
  * these helpers are the single place that has to change.
  */
-export type AppRole = "user" | "admin" | "super_admin";
+export type AppRole = "user" | "support_agent" | "support_manager" | "admin" | "super_admin";
 
 /** Higher wins. Used to pick the strongest role a person holds. */
-const ROLE_RANK: Record<AppRole, number> = { user: 0, admin: 1, super_admin: 2 };
+/** The support desk sits between a user and an administrator: it opens the console, but only its Support page. */
+const ROLE_RANK: Record<AppRole, number> = { user: 0, support_agent: 1, support_manager: 2, admin: 3, super_admin: 4 };
 
 export const ROLE_LABELS: Record<AppRole, string> = {
   user: "Foydalanuvchi",
+  support_agent: "Support xodimi",
+  support_manager: "Support menejeri",
   admin: "Administrator",
   super_admin: "Bosh administrator",
 };
@@ -29,6 +33,16 @@ export function isAppRole(value: unknown): value is AppRole {
 /** True for anyone who may open the admin console at all. */
 export function isAdminRole(role: unknown): boolean {
   return isAppRole(role) && ROLE_RANK[role] >= ROLE_RANK.admin;
+}
+
+/** True for anyone who works the support desk — its two roles, and every administrator. */
+export function isSupportRole(role: unknown): boolean {
+  return isAppRole(role) && ROLE_RANK[role] >= ROLE_RANK.support_agent;
+}
+
+/** True for those who may hand a ticket to someone else. */
+export function isSupportManagerRole(role: unknown): boolean {
+  return isAppRole(role) && ROLE_RANK[role] >= ROLE_RANK.support_manager;
 }
 
 /** True only for the top of the ladder. */
@@ -569,204 +583,10 @@ export interface GameLeaderboardPlayer {
   rank: number;
 }
 
-/**
- * The forty faces. Twenty read as girls, twenty as boys, and the grid shows
- * all forty at once — nobody is asked to declare anything to pick a face.
- */
-export const GAME_AVATAR_COUNT = 40;
-
 /** The reward plan the host configures; whole coins, all fields optional. */
 export interface GameRewardPlan {
   first?: number;
   second?: number;
   third?: number;
   participant?: number;
-}
-
-/**
- * The avatar wardrobe. Each of the forty faces is a fixed recipe over one
- * parametric bust — skin, hair style and colour, shirt, backdrop, accessory —
- * rendered by react-native-svg in the app and inline SVG on the web from this
- * same data, so a player looks identical on a phone and on the projector.
- * Indexes 0–19 read as girls, 20–39 as boys; the grid always shows all forty.
- */
-export type GameAvatarHair =
-  | "long" | "bob" | "ponytail" | "braids" | "bun" | "curly" | "wavy" | "headscarf"
-  | "short" | "spiky" | "fade" | "crew" | "afro" | "sideswept" | "cap";
-
-export type GameAvatarAccessory = "none" | "glasses" | "roundGlasses" | "headband" | "earrings" | "freckles";
-
-export interface GameAvatarSpec {
-  skin: string;
-  hair: string;
-  style: GameAvatarHair;
-  shirt: string;
-  bg: string;
-  accessory: GameAvatarAccessory;
-}
-
-const SKINS = ["#FFD9B8", "#F2B98C", "#DE9A66", "#B97A4C", "#8C5A33"] as const;
-
-export const GAME_AVATARS: readonly GameAvatarSpec[] = [
-  // 0–19: qiz xarakterlar
-  { skin: SKINS[0], hair: "#4A2C17", style: "long", shirt: "#8B54E8", bg: "#F0E9FC", accessory: "none" },
-  { skin: SKINS[1], hair: "#1F1712", style: "bob", shirt: "#0F9D74", bg: "#E4F6F0", accessory: "earrings" },
-  { skin: SKINS[2], hair: "#0E0A08", style: "braids", shirt: "#E8618C", bg: "#FDEBF1", accessory: "none" },
-  { skin: SKINS[0], hair: "#B4690E", style: "ponytail", shirt: "#2E6FE8", bg: "#E8F0FD", accessory: "freckles" },
-  { skin: SKINS[3], hair: "#0E0A08", style: "bun", shirt: "#E8A13A", bg: "#FCF3E4", accessory: "none" },
-  { skin: SKINS[1], hair: "#5C3A21", style: "curly", shirt: "#12A5BC", bg: "#E3F5F8", accessory: "roundGlasses" },
-  { skin: SKINS[4], hair: "#1F1712", style: "headscarf", shirt: "#6C34C9", bg: "#F0E9FC", accessory: "none" },
-  { skin: SKINS[0], hair: "#8A4A1F", style: "wavy", shirt: "#C43552", bg: "#FCEBEF", accessory: "none" },
-  { skin: SKINS[2], hair: "#3A2413", style: "long", shirt: "#0F9D74", bg: "#E4F6F0", accessory: "headband" },
-  { skin: SKINS[1], hair: "#0E0A08", style: "bun", shirt: "#8B54E8", bg: "#F0E9FC", accessory: "earrings" },
-  { skin: SKINS[3], hair: "#2A1A10", style: "braids", shirt: "#12A5BC", bg: "#E3F5F8", accessory: "none" },
-  { skin: SKINS[0], hair: "#1F1712", style: "bob", shirt: "#E8A13A", bg: "#FCF3E4", accessory: "glasses" },
-  { skin: SKINS[2], hair: "#4A2C17", style: "ponytail", shirt: "#6C34C9", bg: "#F0E9FC", accessory: "none" },
-  { skin: SKINS[4], hair: "#0E0A08", style: "curly", shirt: "#E8618C", bg: "#FDEBF1", accessory: "none" },
-  { skin: SKINS[1], hair: "#6B4423", style: "headscarf", shirt: "#2E6FE8", bg: "#E8F0FD", accessory: "none" },
-  { skin: SKINS[0], hair: "#0E0A08", style: "long", shirt: "#12A5BC", bg: "#E3F5F8", accessory: "freckles" },
-  { skin: SKINS[3], hair: "#1F1712", style: "wavy", shirt: "#8B54E8", bg: "#F0E9FC", accessory: "earrings" },
-  { skin: SKINS[2], hair: "#0E0A08", style: "bun", shirt: "#C43552", bg: "#FCEBEF", accessory: "roundGlasses" },
-  { skin: SKINS[1], hair: "#8A4A1F", style: "braids", shirt: "#0F9D74", bg: "#E4F6F0", accessory: "none" },
-  { skin: SKINS[4], hair: "#1F1712", style: "ponytail", shirt: "#E8A13A", bg: "#FCF3E4", accessory: "headband" },
-  // 20–39: o‘g‘il xarakterlar
-  { skin: SKINS[0], hair: "#4A2C17", style: "short", shirt: "#2E6FE8", bg: "#E8F0FD", accessory: "none" },
-  { skin: SKINS[1], hair: "#1F1712", style: "spiky", shirt: "#0F9D74", bg: "#E4F6F0", accessory: "none" },
-  { skin: SKINS[2], hair: "#0E0A08", style: "fade", shirt: "#8B54E8", bg: "#F0E9FC", accessory: "glasses" },
-  { skin: SKINS[3], hair: "#0E0A08", style: "afro", shirt: "#E8A13A", bg: "#FCF3E4", accessory: "none" },
-  { skin: SKINS[0], hair: "#B4690E", style: "crew", shirt: "#C43552", bg: "#FCEBEF", accessory: "freckles" },
-  { skin: SKINS[1], hair: "#5C3A21", style: "sideswept", shirt: "#12A5BC", bg: "#E3F5F8", accessory: "none" },
-  { skin: SKINS[4], hair: "#0E0A08", style: "short", shirt: "#6C34C9", bg: "#F0E9FC", accessory: "none" },
-  { skin: SKINS[2], hair: "#1F1712", style: "cap", shirt: "#0F9D74", bg: "#E4F6F0", accessory: "none" },
-  { skin: SKINS[0], hair: "#1F1712", style: "crew", shirt: "#8B54E8", bg: "#F0E9FC", accessory: "roundGlasses" },
-  { skin: SKINS[3], hair: "#2A1A10", style: "fade", shirt: "#2E6FE8", bg: "#E8F0FD", accessory: "none" },
-  { skin: SKINS[1], hair: "#0E0A08", style: "spiky", shirt: "#E8618C", bg: "#FDEBF1", accessory: "none" },
-  { skin: SKINS[2], hair: "#4A2C17", style: "sideswept", shirt: "#E8A13A", bg: "#FCF3E4", accessory: "glasses" },
-  { skin: SKINS[4], hair: "#1F1712", style: "afro", shirt: "#12A5BC", bg: "#E3F5F8", accessory: "none" },
-  { skin: SKINS[0], hair: "#8A4A1F", style: "cap", shirt: "#6C34C9", bg: "#F0E9FC", accessory: "none" },
-  { skin: SKINS[1], hair: "#0E0A08", style: "crew", shirt: "#0F9D74", bg: "#E4F6F0", accessory: "freckles" },
-  { skin: SKINS[3], hair: "#0E0A08", style: "short", shirt: "#C43552", bg: "#FCEBEF", accessory: "none" },
-  { skin: SKINS[2], hair: "#1F1712", style: "spiky", shirt: "#2E6FE8", bg: "#E8F0FD", accessory: "none" },
-  { skin: SKINS[0], hair: "#4A2C17", style: "fade", shirt: "#E8A13A", bg: "#FCF3E4", accessory: "roundGlasses" },
-  { skin: SKINS[4], hair: "#0E0A08", style: "sideswept", shirt: "#8B54E8", bg: "#F0E9FC", accessory: "none" },
-  { skin: SKINS[1], hair: "#5C3A21", style: "cap", shirt: "#12A5BC", bg: "#E3F5F8", accessory: "none" },
-];
-
-/** A safe lookup: any out-of-range id lands on the first face, never crashes. */
-export function gameAvatar(id: number): GameAvatarSpec {
-  return GAME_AVATARS[id >= 0 && id < GAME_AVATARS.length ? id : 0]!;
-}
-
-/**
- * One avatar, as ordered vector shapes in a 0–100 viewBox. Pure data: the app
- * maps these onto react-native-svg elements, the web onto inline <svg>, and
- * both draw the identical face. Renderers stay dumb on purpose — every design
- * decision lives here, once.
- */
-export type GameAvatarShape =
-  | { kind: "circle"; cx: number; cy: number; r: number; fill: string }
-  | { kind: "ellipse"; cx: number; cy: number; rx: number; ry: number; fill: string }
-  | { kind: "rect"; x: number; y: number; w: number; h: number; rx: number; fill: string }
-  | { kind: "path"; d: string; fill?: string; stroke?: string; strokeWidth?: number };
-
-export function gameAvatarShapes(id: number): readonly GameAvatarShape[] {
-  const spec = gameAvatar(id);
-  const dark = "#241A33";
-  const shapes: GameAvatarShape[] = [
-    { kind: "circle", cx: 50, cy: 50, r: 50, fill: spec.bg },
-  ];
-
-  // Hair that sits behind the head.
-  if (spec.style === "long" || spec.style === "wavy") {
-    shapes.push({ kind: "path", d: "M28 42 a22 22 0 0 1 44 0 l1 28 a5 5 0 0 1 -5 5 l-36 0 a5 5 0 0 1 -5 -5 z", fill: spec.hair });
-  }
-  if (spec.style === "afro") {
-    shapes.push({ kind: "circle", cx: 50, cy: 34, r: 25, fill: spec.hair });
-  }
-  if (spec.style === "braids") {
-    shapes.push({ kind: "rect", x: 26, y: 40, w: 8, h: 26, rx: 4, fill: spec.hair });
-    shapes.push({ kind: "rect", x: 66, y: 40, w: 8, h: 26, rx: 4, fill: spec.hair });
-  }
-  if (spec.style === "ponytail") {
-    shapes.push({ kind: "ellipse", cx: 72, cy: 52, rx: 7, ry: 13, fill: spec.hair });
-  }
-
-  // Shoulders, then the head over them.
-  shapes.push({ kind: "ellipse", cx: 50, cy: 92, rx: 26, ry: 18, fill: spec.shirt });
-  shapes.push({ kind: "circle", cx: 30, cy: 44, r: 4, fill: spec.skin });
-  shapes.push({ kind: "circle", cx: 70, cy: 44, r: 4, fill: spec.skin });
-  shapes.push({ kind: "circle", cx: 50, cy: 42, r: 21, fill: spec.skin });
-
-  // Hair that sits on the head.
-  switch (spec.style) {
-    case "long": case "wavy": case "bob":
-      shapes.push({ kind: "path", d: "M29 44 a21 21 0 0 1 42 0 c-2 -10 -8 -14 -21 -14 s-19 4 -21 14 z", fill: spec.hair });
-      if (spec.style === "bob") {
-        shapes.push({ kind: "path", d: "M29 42 a21 21 0 0 1 42 0 l0 10 a4 4 0 0 1 -6 3 l0 -8 a26 26 0 0 0 -30 0 l0 8 a4 4 0 0 1 -6 -3 z", fill: spec.hair });
-      }
-      break;
-    case "ponytail": case "bun": case "braids": case "sideswept":
-      shapes.push({ kind: "path", d: "M29 44 a21 21 0 0 1 42 0 c-1 -11 -8 -15 -21 -15 s-20 4 -21 15 z", fill: spec.hair });
-      if (spec.style === "bun") shapes.push({ kind: "circle", cx: 50, cy: 20, r: 8, fill: spec.hair });
-      if (spec.style === "sideswept") {
-        shapes.push({ kind: "path", d: "M31 40 c4 -12 14 -15 24 -13 c-4 6 -14 10 -24 13 z", fill: spec.hair });
-      }
-      break;
-    case "curly": {
-      for (const [cx, cy, r] of [[34, 32, 8], [43, 26, 9], [53, 24, 9], [63, 28, 8], [69, 36, 7]] as const) {
-        shapes.push({ kind: "circle", cx, cy, r, fill: spec.hair });
-      }
-      break;
-    }
-    case "headscarf":
-      shapes.push({ kind: "path", d: "M27 46 a23 23 0 0 1 46 0 l-2 4 a21 21 0 0 0 -42 0 z", fill: spec.hair });
-      shapes.push({ kind: "path", d: "M27 46 c-1 10 2 16 8 20 c-3 -7 -3 -13 -1 -18 z", fill: spec.hair });
-      shapes.push({ kind: "path", d: "M73 46 c1 10 -2 16 -8 20 c3 -7 3 -13 1 -18 z", fill: spec.hair });
-      break;
-    case "short": case "crew": case "fade":
-      shapes.push({ kind: "path", d: spec.style === "crew"
-        ? "M31 38 a21 21 0 0 1 38 0 c-4 -7 -10 -10 -19 -10 s-15 3 -19 10 z"
-        : "M29 42 a21 21 0 0 1 42 0 c-3 -9 -9 -13 -21 -13 s-18 4 -21 13 z", fill: spec.hair });
-      break;
-    case "spiky":
-      shapes.push({ kind: "path", d: "M30 40 c0 -6 3 -10 6 -12 l1 6 l5 -8 l3 7 l5 -9 l4 8 l5 -6 l2 7 l6 -4 c2 3 3 7 3 11 c-6 -6 -13 -8 -20 -8 s-14 2 -20 8 z", fill: spec.hair });
-      break;
-    case "afro":
-      break; // drawn behind already
-    case "cap":
-      shapes.push({ kind: "path", d: "M29 40 a21 21 0 0 1 42 0 z", fill: spec.hair });
-      shapes.push({ kind: "rect", x: 27, y: 38, w: 56, h: 6, rx: 3, fill: spec.hair });
-      break;
-  }
-
-  // The face.
-  shapes.push({ kind: "circle", cx: 43, cy: 45, r: 2.4, fill: dark });
-  shapes.push({ kind: "circle", cx: 57, cy: 45, r: 2.4, fill: dark });
-  shapes.push({ kind: "path", d: "M44 52 Q50 57 56 52", stroke: dark, strokeWidth: 2 });
-
-  switch (spec.accessory) {
-    case "glasses":
-      shapes.push({ kind: "path", d: "M37 44 h10 v7 h-10 z M53 44 h10 v7 h-10 z M47 46 h6", stroke: dark, strokeWidth: 1.8 });
-      break;
-    case "roundGlasses":
-      shapes.push({ kind: "path", d: "M38 45 a5 5 0 1 0 10 0 a5 5 0 1 0 -10 0 M52 45 a5 5 0 1 0 10 0 a5 5 0 1 0 -10 0 M48 45 h4", stroke: dark, strokeWidth: 1.8 });
-      break;
-    case "headband":
-      shapes.push({ kind: "rect", x: 30, y: 30, w: 40, h: 5, rx: 2.5, fill: spec.shirt });
-      break;
-    case "earrings":
-      shapes.push({ kind: "circle", cx: 30, cy: 49, r: 2, fill: "#E8A13A" });
-      shapes.push({ kind: "circle", cx: 70, cy: 49, r: 2, fill: "#E8A13A" });
-      break;
-    case "freckles":
-      shapes.push({ kind: "circle", cx: 40, cy: 50, r: 1, fill: "#D89B72" });
-      shapes.push({ kind: "circle", cx: 44, cy: 51.5, r: 1, fill: "#D89B72" });
-      shapes.push({ kind: "circle", cx: 56, cy: 51.5, r: 1, fill: "#D89B72" });
-      shapes.push({ kind: "circle", cx: 60, cy: 50, r: 1, fill: "#D89B72" });
-      break;
-    case "none":
-      break;
-  }
-
-  return shapes;
 }
