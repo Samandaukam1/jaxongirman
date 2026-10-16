@@ -1,0 +1,17 @@
+# The public site is web/ and the packages it builds from. Everything else in
+# this monorepo — 2.8 GB of font sources, 3D mascot work, the apps' native
+# projects — stays off a site upload. The two workspace manifests stay, because
+# `npm install` reads every workspace the root package.json names.
+/font-library
+/output
+/docs
+/scripts
+/supabase
+/user/*
+!/user/package.json
+/admin/*
+!/admin/package.json
+/web/.next
+/web/.vercel
+/web/tests
+/web/tsconfig.tsbuildinfo

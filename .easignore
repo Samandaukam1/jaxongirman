@@ -1,0 +1,54 @@
+# What EAS uploads for a build of `user/`.
+#
+# EAS reads this file at the repository root and, when it exists, uses it in
+# place of .gitignore — so the rules below repeat .gitignore's and then add the
+# folders a phone build never needs. Without it the archive carried the 2.8 GB
+# font checkout's neighbours, the mascot renders and every local build output.
+
+# --- from .gitignore ------------------------------------------------------
+node_modules/
+**/node_modules/
+.DS_Store
+*.log
+.cache/
+.external-*-link
+.expo/
+**/.expo/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+!**/.env.example
+supabase/.branches/
+supabase/.temp/
+.vercel/
+.vercel
+admin/packages/
+font-library/
+__pycache__/
+*.pyc
+
+# --- local build outputs ----------------------------------------------------
+**/ios/Pods/
+**/ios/build/
+**/android/build/
+**/android/.gradle/
+web/.next/
+admin/dist/
+*.ipa
+*.apk
+*.aab
+
+# --- material that is not the app ------------------------------------------
+output/
+docs/
+scripts/mascot/
+supabase/tests/
+*.blend
+*.blend1
+gozal-normurodova-sherlar.txt
+
+# Credentials kept beside the app for local scripts; the build reads its
+# variables from the EAS environment instead.
+**/*KEYS*.txt
