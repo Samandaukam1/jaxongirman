@@ -1,5 +1,5 @@
 import type { Database, Json } from "@jaxongirman/types";
-import { Check, Eye, EyeOff, Flag, Search, X } from "lucide-react";
+import { Check, Eye, EyeOff, Flag, History, Search, X } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
 import { EmptyState, ErrorState, Modal, PageHeader, StatusBadge, TableSkeleton } from "@/components/AdminUI";
@@ -16,6 +16,28 @@ const TABS = [
   { key: "rejected", label: "Qaytarilgan" },
   { key: "all", label: "Barchasi" },
 ] as const;
+
+/** Actions that need a reason the seller will read. */
+const REASONED_ACTIONS = {
+  reject: { label: "Rad etish", hint: "Mahsulot qaytariladi; sotuvchi tuzatib qayta yuborishi mumkin." },
+  request_changes: { label: "O‘zgartirish so‘rash", hint: "Sotuvchi “O‘zgartirish kerak: …” xabarini oladi." },
+  suspend: { label: "To‘xtatish", hint: "Mahsulot sotuvdan olinadi; sotuvchining keyingi e’lonlari 30 kun davomida tekshiruvdan o‘tadi." },
+} as const;
+type ReasonedAction = keyof typeof REASONED_ACTIONS;
+
+/** Where a listing came from: its deck's revision trail and every publish decision. */
+type Provenance = {
+  source_presentation_id: string | null;
+  approval_source: string | null;
+  state: { user_edits: number; admin_edits: number; system_edits: number; imported: boolean; tracked_since: string } | null;
+  trail: { kind: string; source: string; at: string; actor: string | null }[];
+  decisions: { decision: string; reasons: { code: string; message: string }[]; at: string }[];
+};
+
+const TRAIL_LABELS: Record<string, string> = {
+  ai_generation: "AI generatsiya", system_repair: "Tizim", user_edit: "Foydalanuvchi tahriri",
+  external_import: "Tashqi import", admin_modification: "Administrator",
+};
 
 const REASON_LABELS: Record<string, string> = {
   copyright: "Mualliflik huquqi",
@@ -49,6 +71,8 @@ export function MarketplacePage() {
   const [message, setMessage] = useState<string | null>(null);
 
   const [rejecting, setRejecting] = useState<ProductRow | null>(null);
+  const [rejectAction, setRejectAction] = useState<ReasonedAction>("reject");
+  const [provenance, setProvenance] = useState<{ product: ProductRow; data: Provenance | null; error: string | null } | null>(null);
   const [reason, setReason] = useState("");
   const [resolving, setResolving] = useState<ReportRow | null>(null);
   const [note, setNote] = useState("");
@@ -115,11 +139,19 @@ export function MarketplacePage() {
     if (reason.trim() === "") { setModalError("Qaytarish sababini yozing — u sotuvchiga ko‘rsatiladi."); return; }
     setBusy(rejecting.id); setModalError(null);
     const { error: rejectError } = await supabase.rpc("admin_moderate_product", {
-      p_product_id: rejecting.id, p_action: "reject", p_reason: reason.trim(),
+      p_product_id: rejecting.id, p_action: rejectAction, p_reason: reason.trim(),
     });
     if (rejectError) setModalError(errorMessage(rejectError));
-    else { setMessage(`“${rejecting.title}” qaytarildi.`); setRejecting(null); setReason(""); await load(); }
+    else { setMessage(`“${rejecting.title}”: ${REASONED_ACTIONS[rejectAction].label.toLowerCase()} — sotuvchiga xabar berildi.`); setRejecting(null); setReason(""); await load(); }
     setBusy(null);
+  }
+
+  async function showProvenance(product: ProductRow) {
+    setProvenance({ product, data: null, error: null });
+    // Untyped: newer than the types this panel was vendored with.
+    const { data, error: provenanceError } = await (supabase.rpc as unknown as (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>)(
+      "admin_listing_provenance", { p_product_id: product.id });
+    setProvenance({ product, data: (data as Provenance | null) ?? null, error: provenanceError ? provenanceError.message : null });
   }
 
   async function resolve(status: "upheld" | "dismissed") {
@@ -302,13 +334,16 @@ export function MarketplacePage() {
                         <button
                           className="icon-button"
                           type="button"
-                          title="Qaytarish (sabab bilan)"
+                          title="Rad etish, o‘zgartirish so‘rash yoki to‘xtatish"
                           disabled={busy === product.id}
-                          onClick={() => { setRejecting(product); setReason(""); setModalError(null); }}
+                          onClick={() => { setRejecting(product); setRejectAction(product.status === "approved" ? "suspend" : "reject"); setReason(""); setModalError(null); }}
                         >
                           <X size={16} />
                         </button>
                       )}
+                      <button className="icon-button" type="button" title="Kelib chiqishi va tahrir tarixi" onClick={() => void showProvenance(product)}>
+                        <History size={16} />
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -321,15 +356,59 @@ export function MarketplacePage() {
 
     {rejecting && (
       <Modal
-        title="Mahsulotni qaytarish"
-        description={`“${rejecting.title}” sotuvchiga qaytariladi. Sabab unga xabarnoma orqali ko‘rsatiladi.`}
+        title="Moderatsiya qarori"
+        description={`“${rejecting.title}”. Sabab sotuvchiga xabarnoma orqali ko‘rsatiladi va jurnalga yoziladi.`}
         onClose={() => setRejecting(null)}
       >
         <form className="finance-form" onSubmit={(event) => void reject(event)}>
+          <label>Amal
+            <select value={rejectAction} onChange={(event) => setRejectAction(event.target.value as ReasonedAction)}>
+              {(Object.keys(REASONED_ACTIONS) as ReasonedAction[]).map((key) => <option key={key} value={key}>{REASONED_ACTIONS[key].label}</option>)}
+            </select>
+          </label>
+          <p className="muted">{REASONED_ACTIONS[rejectAction].hint}</p>
           <label>Sabab<input required value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Masalan: fayl mazmuni nomga mos emas" /></label>
           {modalError && <p className="cell-error">{modalError}</p>}
-          <button className="primary-button" type="submit" disabled={busy === rejecting.id}>Qaytarish</button>
+          <button className="primary-button" type="submit" disabled={busy === rejecting.id}>{REASONED_ACTIONS[rejectAction].label}</button>
         </form>
+      </Modal>
+    )}
+
+    {provenance && (
+      <Modal
+        title="Kelib chiqishi"
+        description={`“${provenance.product.title}” — qanday tasdiqlangani va taqdimotning tahrir tarixi (server yozuvi).`}
+        onClose={() => setProvenance(null)}
+      >
+        {provenance.error ? <p className="cell-error">{provenance.error}</p> : null}
+        {!provenance.data && !provenance.error ? <p className="muted">Yuklanmoqda…</p> : null}
+        {provenance.data ? (
+          <div className="provenance">
+            <p><strong>Tasdiqlash:</strong> {provenance.data.approval_source === "auto" ? "avtomatik (qoidalar bo‘yicha)" : provenance.data.approval_source === "manual" ? "moderator" : "—"}</p>
+            {provenance.data.source_presentation_id ? (
+              provenance.data.state ? (
+                <p><strong>Tahrirlar:</strong> foydalanuvchi {provenance.data.state.user_edits}, administrator {provenance.data.state.admin_edits}, tizim {provenance.data.state.system_edits}
+                  {provenance.data.state.imported ? " · import qilingan" : ""} · kuzatuv {new Date(provenance.data.state.tracked_since).toLocaleString("uz-UZ")} dan</p>
+              ) : <p><strong>Tahrirlar:</strong> taqdimot kuzatuvdan oldin yaratilgan</p>
+            ) : <p className="muted">Bu mahsulot ilovadagi taqdimotdan emas — qo‘lda yuklangan.</p>}
+            {provenance.data.decisions.length ? (
+              <>
+                <h4>Qarorlar</h4>
+                <ul>{provenance.data.decisions.map((item, index) => (
+                  <li key={index}>{new Date(item.at).toLocaleString("uz-UZ")} — <strong>{item.decision}</strong>{item.reasons.length ? `: ${item.reasons.map((reasonItem) => reasonItem.message).join("; ")}` : ""}</li>
+                ))}</ul>
+              </>
+            ) : null}
+            {provenance.data.trail.length ? (
+              <>
+                <h4>Tahrir tarixi</h4>
+                <ul>{provenance.data.trail.map((item, index) => (
+                  <li key={index}>{new Date(item.at).toLocaleString("uz-UZ")} — {TRAIL_LABELS[item.kind] ?? item.kind}{item.actor ? ` (${item.actor})` : ""} · {item.source}</li>
+                ))}</ul>
+              </>
+            ) : null}
+          </div>
+        ) : null}
       </Modal>
     )}
 

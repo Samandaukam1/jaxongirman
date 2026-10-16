@@ -1,4 +1,4 @@
-import { can, isAdminRole, isAppRole, isSuperAdminRole, type AdminPermission, type AppRole } from "@jaxongirman/types";
+import { can, isAdminRole, isAppRole, isSuperAdminRole, isSupportManagerRole, isSupportRole, type AdminPermission, type AppRole } from "@jaxongirman/types";
 import type { Session } from "@supabase/supabase-js";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from "react";
 
@@ -12,6 +12,9 @@ type AuthState = {
   /** Admin or super admin — the gate for the console itself. */
   isAdmin: boolean;
   isSuperAdmin: boolean;
+  /** Works the support desk: an agent, a manager or any administrator. */
+  isSupport: boolean;
+  isSupportManager: boolean;
   /**
    * Whether this account may perform a named action. Rendering only: the
    * database re-checks every privileged call, so hiding a control is a courtesy
@@ -81,6 +84,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
       role,
       isAdmin: isAdminRole(role),
       isSuperAdmin: isSuperAdminRole(role),
+      isSupport: isSupportRole(role),
+      isSupportManager: isSupportManagerRole(role),
       can: (permission: AdminPermission) => can(role, permission),
       accessChecked,
       refreshAccess: () => checkAccess(session),

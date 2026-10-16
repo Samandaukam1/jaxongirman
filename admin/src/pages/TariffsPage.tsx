@@ -51,11 +51,12 @@ function toDraft(row: PlanRow): Draft {
  * The capabilities an admin can shape, grouped as somebody pricing a plan
  * thinks about them rather than as the database stores them.
  */
-const GROUPS: { title: string; items: { key: string; label: string; kind: "limit" | "toggle" | "cost"; unit?: string }[] }[] = [
+const GROUPS: { title: string; items: { key: string; label: string; kind: "limit" | "toggle" | "cost"; unit?: string; periodic?: boolean }[] }[] = [
   {
     title: "AI prezentatsiya",
     items: [
-      { key: "presentation_weekly", label: "Haftalik limit", kind: "limit", unit: "ta / hafta" },
+      // The key predates periods; what it counts per is the period stored beside it.
+      { key: "presentation_weekly", label: "Prezentatsiya limiti", kind: "limit", unit: "ta", periodic: true },
       { key: "presentation_max_slides", label: "Maksimal slayd", kind: "limit", unit: "slayd" },
     ],
   },
@@ -281,6 +282,17 @@ function Builder({ draft, busy, onChange, onSave, onClose }: {
                             onChange={(e) => setFeature(item.key, { limit: Number(e.target.value) })}
                           />
                           <em>{item.unit}</em>
+                          {item.periodic ? (
+                            <select
+                              aria-label="Davr"
+                              value={feature.period ?? "week"}
+                              onChange={(e) => setFeature(item.key, { period: e.target.value as PlanFeature["period"] })}
+                            >
+                              <option value="day">/ kun</option>
+                              <option value="week">/ hafta</option>
+                              <option value="month">/ oy</option>
+                            </select>
+                          ) : null}
                         </span>
                       ) : null}
                     </>
