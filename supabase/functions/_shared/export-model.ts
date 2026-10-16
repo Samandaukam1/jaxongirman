@@ -154,3 +154,106 @@ export function interpolateHex(from: unknown, to: unknown, progress: number): st
   return `${byte(start.red, finish.red)}${byte(start.green, finish.green)}${byte(start.blue, finish.blue)}`.toUpperCase();
 }
 
+
+/* --------------------------------------------------------------- gradients */
+
+/** One colour stop, unpacked: six-digit hex, its alpha, and where it sits (0–1). */
+export type Stop = { hex: string; alpha: number; at: number };
+
+/**
+ * A shape's fill as stops, from either vocabulary.
+ *
+ * `gradientStops` (with eight-digit hex, so each stop can carry its own
+ * alpha) is what the Liquid Glass engine and JSLAYD write; `fill`/`gradientTo`
+ * is the older pair. A flat fill comes back as a single stop.
+ */
+export function stopsOf(style: JsonObject, fallback = "#EEEEEE"): Stop[] {
+  const raw = Array.isArray(style.gradientStops) ? style.gradientStops : [];
+  const stops = raw
+    .map((entry) => object(entry))
+    .filter((entry) => typeof entry.color === "string")
+    .map((entry) => {
+      const color = rgba(entry.color, fallback);
+      return { hex: pptxColor(entry.color, fallback), alpha: color.alpha, at: clamp(number(entry.offset, 0) / 100, 0, 1) };
+    })
+    .sort((left, right) => left.at - right.at);
+  if (stops.length >= 2) return stops;
+  const fill = rgba(style.fill, fallback);
+  const first = { hex: pptxColor(style.fill, fallback), alpha: fill.alpha, at: 0 };
+  const to = string(style.gradientTo);
+  if (to) return [first, { hex: pptxColor(to, fallback), alpha: rgba(to, fallback).alpha, at: 1 }];
+  return [first];
+}
+
+/** The colour and alpha a gradient has at `t` (0–1). */
+export function colorAt(stops: readonly Stop[], t: number): { hex: string; alpha: number } {
+  if (stops.length === 0) return { hex: "EEEEEE", alpha: 1 };
+  if (stops.length === 1 || t <= stops[0]!.at) return { hex: stops[0]!.hex, alpha: stops[0]!.alpha };
+  for (let index = 1; index < stops.length; index += 1) {
+    const right = stops[index]!;
+    if (t <= right.at) {
+      const left = stops[index - 1]!;
+      const span = right.at - left.at || 1;
+      const progress = (t - left.at) / span;
+      return { hex: interpolateHex(`#${left.hex}`, `#${right.hex}`, progress), alpha: left.alpha + (right.alpha - left.alpha) * progress };
+    }
+  }
+  const last = stops[stops.length - 1]!;
+  return { hex: last.hex, alpha: last.alpha };
+}
+
+/**
+ * A radial gradient as concentric layers a vector format can draw.
+ *
+ * Neither pdf-lib nor pptxgenjs has a radial fill, so the gradient is drawn as
+ * nested ellipses from the rim inwards. Each layer's own alpha is solved so
+ * that the layers stacked over any point add up to the gradient's alpha at
+ * that radius — `1 − ∏(1 − aᵢ) = A(r)` — which is why a glow exported this way
+ * fades the way it does on the phone instead of banding into rings of grey.
+ */
+export function radialBands(stops: readonly Stop[], steps = 18): { scale: number; hex: string; alpha: number }[] {
+  const bands: { scale: number; hex: string; alpha: number }[] = [];
+  let covered = 0;
+  for (let index = 0; index < steps; index += 1) {
+    const scale = 1 - index / steps;
+    // Sample in the middle of the ring this layer is the outermost cover for.
+    const { hex, alpha } = colorAt(stops, clamp(scale - 0.5 / steps, 0, 1));
+    const target = clamp(alpha, 0, 0.999);
+    const own = covered >= 0.999 ? 0 : clamp(1 - (1 - target) / (1 - covered), 0, 1);
+    if (own > 0.002) bands.push({ scale, hex, alpha: own });
+    covered = 1 - (1 - covered) * (1 - own);
+  }
+  return bands;
+}
+
+/**
+ * A linear gradient as strips across its direction.
+ *
+ * Returned in the shape's own unit square: each strip is `[from, to)` along
+ * the dominant axis, so a caller lays them across whatever box it is drawing.
+ */
+export function linearBands(stops: readonly Stop[], angle: number, steps = 24): { vertical: boolean; reverse: boolean; from: number; to: number; hex: string; alpha: number }[] {
+  const normal = ((angle % 360) + 360) % 360;
+  // CSS angles: 0 points up, 90 right, 180 down. Strips run across the axis
+  // the gradient travels along.
+  const horizontalTravel = (normal >= 45 && normal < 135) || (normal >= 225 && normal < 315);
+  const reverse = horizontalTravel ? normal >= 225 : !(normal >= 135 && normal < 225);
+  return Array.from({ length: steps }, (_, index) => {
+    const { hex, alpha } = colorAt(stops, (index + 0.5) / steps);
+    return { vertical: horizontalTravel, reverse, from: index / steps, to: (index + 1) / steps, hex, alpha };
+  });
+}
+
+/** A gradient's colour averaged over its length — for exporters that can only fill flat. */
+export function averageColor(stops: readonly Stop[]): { hex: string; alpha: number } {
+  if (stops.length === 1) return { hex: stops[0]!.hex, alpha: stops[0]!.alpha };
+  let red = 0; let green = 0; let blue = 0; let alpha = 0;
+  const samples = 12;
+  for (let index = 0; index < samples; index += 1) {
+    const sample = colorAt(stops, (index + 0.5) / samples);
+    const parsed = rgba(`#${sample.hex}`);
+    red += parsed.red; green += parsed.green; blue += parsed.blue; alpha += sample.alpha;
+  }
+  const byte = (value: number) => Math.round((value / samples) * 255).toString(16).padStart(2, "0");
+  return { hex: `${byte(red)}${byte(green)}${byte(blue)}`.toUpperCase(), alpha: alpha / samples };
+}

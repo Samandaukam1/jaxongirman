@@ -6,8 +6,8 @@ import {
   type RenderableSlideElement,
 } from "@jaxongirman/types";
 import * as LucideIcons from "lucide-react";
-import { Image as ImageGlyph, Play, Sparkles, Video, type LucideIcon } from "lucide-react";
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { Image as ImageGlyph, Play, Sparkles, Video, VolumeX, type LucideIcon } from "lucide-react";
+import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 /**
  * The DOM slide painter.
@@ -59,8 +59,10 @@ function background(style: Bag): string {
   const stops = list(style.gradientStops);
   if (stops.length >= 2) {
     const parts = stops.map((stop) => `${str(stop.color, "#000000")} ${num(stop.offset, 0)}%`).join(", ");
+    // `closest-side` so a radial fill fades to its stops at the shape's own
+    // edge — an elliptical glow stays elliptical, as it is on the phone.
     return str(style.gradientType) === "radial"
-      ? `radial-gradient(circle at 50% 50%, ${parts})`
+      ? `radial-gradient(closest-side, ${parts})`
       : `linear-gradient(${num(style.gradientAngle, 135)}deg, ${parts})`;
   }
   if (typeof style.gradientTo === "string") {
@@ -167,11 +169,77 @@ function Placeholder({ kind }: { kind: "image" | "video" | "frame" }) {
   );
 }
 
+/**
+ * A slide's video, played where the slide is shown.
+ *
+ * It used to be a still tile with a play badge, because the first screens this
+ * drew were previews. On a projector that is a talk with a hole in it, so the
+ * video now plays when its slide comes up and stops when the slide goes.
+ *
+ * A browser will not start sound on a page nobody has touched, and a projector
+ * page usually has not been — it was opened and then paired from a phone. So
+ * sound is tried first and, if refused, the video plays silent with one button
+ * that turns the sound on.
+ */
+function VideoElement({ uri, style, onFailed }: { uri: string; style: Bag; onFailed: () => void }) {
+  const player = useRef<HTMLVideoElement>(null);
+  const [silent, setSilent] = useState(false);
+
+  useEffect(() => {
+    const video = player.current;
+    if (!video) return;
+    video.muted = false;
+    setSilent(false);
+    video.play().catch(() => {
+      video.muted = true;
+      setSilent(true);
+      void video.play().catch(() => undefined);
+    });
+  }, [uri]);
+
+  return (
+    <>
+      <video
+        ref={player}
+        src={uri}
+        playsInline
+        preload="auto"
+        onError={onFailed}
+        style={{
+          width: "100%",
+          height: "100%",
+          display: "block",
+          objectFit: str(style.objectFit, "cover") === "contain" ? "contain" : "cover",
+          borderRadius: radius(style),
+          background: "#000",
+        }}
+      />
+      {silent ? (
+        <button
+          type="button"
+          className="slide-sound"
+          onClick={() => {
+            const video = player.current;
+            if (!video) return;
+            video.muted = false;
+            setSilent(false);
+            void video.play().catch(() => undefined);
+          }}
+        >
+          <VolumeX aria-hidden />
+          Ovozni yoqish
+        </button>
+      ) : null}
+    </>
+  );
+}
+
 function MediaElement({ style, content }: { style: Bag; content: Bag }) {
   const uri = str(content.signedUrl) || str(content.url) || str(content.uri);
   const kind = content.kind === "video" ? "video" : content.kind === "frame" ? "frame" : "image";
   const [failed, setFailed] = useState(false);
   useEffect(() => { setFailed(false); }, [uri]);
+  if (uri && !failed && kind === "video") return <VideoElement uri={uri} style={style} onFailed={() => setFailed(true)} />;
   if (!uri || failed || kind === "video") {
     return (
       <>
@@ -208,16 +276,21 @@ function Shape({ style }: { style: Bag }) {
     : shape === "polygon" && sides >= 3
       ? polygonClip(sides)
       : undefined;
+  // Glass: the browser's own backdrop blur under the card's translucent face,
+  // which is what the phone does with the system material.
+  const blur = num(style.backdropBlur, 0);
   return (
     <div
       style={{
         width: "100%",
         height: "100%",
-        borderRadius: clip ? undefined : radius(style),
+        boxSizing: "border-box",
+        borderRadius: clip ? undefined : shape === "ellipse" ? "50%" : radius(style),
         background: background(style),
         border: clip ? undefined : borderOf(style),
         boxShadow: clip ? undefined : boxShadow(style),
         clipPath: clip,
+        ...(blur > 0 && !clip ? { backdropFilter: `blur(${blur}px) saturate(160%)`, WebkitBackdropFilter: `blur(${blur}px) saturate(160%)` } : {}),
       }}
     />
   );
@@ -232,7 +305,63 @@ function polygonClip(sides: number): string {
   return `polygon(${points.join(", ")})`;
 }
 
+/** `#RRGGBB` at an opacity, for a CSS colour. Anything else is passed through. */
+function tint(hex: string, opacity: number): string {
+  const body = hex.replace("#", "");
+  if (!/^[0-9a-f]{6}$/i.test(body.slice(0, 6))) return hex;
+  const channel = (at: number) => Number.parseInt(body.slice(at, at + 2), 16);
+  return `rgba(${channel(0)},${channel(2)},${channel(4)},${opacity})`;
+}
+
+/** A CSS gradient angle as the two ends of an SVG gradient on the unit square. */
+function gradientEnds(angle: number) {
+  const radians = (angle * Math.PI) / 180;
+  const dx = Math.sin(radians) / 2;
+  const dy = -Math.cos(radians) / 2;
+  return { x1: 0.5 - dx, y1: 0.5 - dy, x2: 0.5 + dx, y2: 0.5 + dy };
+}
+
+/**
+ * An icon the deck carries as outlines (`content.vector`), filled with a
+ * solid colour or the row's gradient and lifted on a soft shadow. Rows from
+ * before vectors existed name a Lucide glyph instead, drawn below.
+ */
+function VectorIcon({ style, vector }: { style: Bag; vector: Bag }) {
+  const id = `icon-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+  const box = num(vector.box, 256);
+  const paths = list(vector.paths);
+  const stops = list(style.gradientStops);
+  const shadow = bag(style.iconShadow as Json);
+  const ends = gradientEnds(num(style.gradientAngle, 135));
+  const fill = stops.length >= 2 ? `url(#${id})` : str(style.color, "#000000");
+  return (
+    <svg
+      aria-hidden
+      viewBox={`0 0 ${box} ${box}`}
+      width="100%"
+      height="100%"
+      style={{
+        overflow: "visible",
+        filter: typeof shadow.color === "string"
+          ? `drop-shadow(${num(shadow.dx, 0)}px ${num(shadow.dy, 2)}px ${num(shadow.blur, 4)}px ${tint(shadow.color, num(shadow.opacity, 0.3))})`
+          : undefined,
+      }}
+    >
+      {stops.length >= 2 ? (
+        <defs>
+          <linearGradient id={id} x1={ends.x1} y1={ends.y1} x2={ends.x2} y2={ends.y2}>
+            {stops.map((stop, index) => <stop key={index} offset={`${num(stop.offset, 0)}%`} stopColor={str(stop.color, "#000000")} />)}
+          </linearGradient>
+        </defs>
+      ) : null}
+      {paths.map((path, index) => <path key={index} d={str(path.d)} fill={fill} opacity={num(path.opacity, 1)} />)}
+    </svg>
+  );
+}
+
 function Icon({ element, style, content }: { element: RenderableSlideElement; style: Bag; content: Bag }) {
+  const vector = bag(content.vector as Json);
+  if (list(vector.paths).length) return <VectorIcon style={style} vector={vector} />;
   const registry = LucideIcons as unknown as Record<string, LucideIcon | undefined>;
   const Glyph = registry[str(content.icon, "Sparkles")] ?? Sparkles;
   return (
@@ -538,15 +667,48 @@ function SlideElement({ element }: { element: RenderableSlideElement }) {
  * The slide, at model size. Callers scale it with a transform rather than
  * re-laying it out, so proportions survive every viewport (§86).
  */
+/** Faces registered in this document, so two slides of one deck fetch a file once. */
+const registeredFaces = new Set<string>();
+
+/**
+ * The library faces a deck is set in, made available to the page.
+ *
+ * Rows from the Liquid Glass engine name a face by the id the phone registers
+ * it under (`jx_<family>_<weight>`) and carry the file's key in the public
+ * font bucket. The browser has neither, so each face is declared here with the
+ * FontFace API; text set in it redraws when it lands, and draws in the row's
+ * nominated fallback until then.
+ */
+function useLibraryFaces(elements: RenderableSlideElement[], fontBase: string | undefined) {
+  useEffect(() => {
+    if (!fontBase || typeof document === "undefined" || typeof FontFace === "undefined") return;
+    for (const element of elements) {
+      if (element.type !== "text") continue;
+      const style = bag(element.style);
+      const family = str(style.fontFamily);
+      const asset = str(style.fontAsset);
+      if (!family.startsWith("jx_") || !asset || registeredFaces.has(family)) continue;
+      registeredFaces.add(family);
+      const url = `${fontBase.replace(/\/$/, "")}/${asset.split("/").map(encodeURIComponent).join("/")}`;
+      const face = new FontFace(family, `url("${url}")`);
+      face.load().then((loaded) => { document.fonts.add(loaded); }).catch(() => { registeredFaces.delete(family); });
+    }
+  }, [elements, fontBase]);
+}
+
 export function SlideCanvas({
   slide,
   elements,
   className,
+  fontBase,
 }: {
   slide: Pick<RenderableSlide, "title" | "background">;
   elements: RenderableSlideElement[];
   className?: string;
+  /** Public URL of the `design-fonts` bucket, so library faces can be loaded. */
+  fontBase?: string;
 }) {
+  useLibraryFaces(elements, fontBase);
   const ground = bag(slide.background);
   const gradient = list(ground.gradientStops).length >= 2 || typeof ground.gradientTo === "string"
     ? background({ ...ground, fill: ground.color })
@@ -577,17 +739,19 @@ export function ScaledSlide({
   elements,
   width,
   className,
+  fontBase,
 }: {
   slide: Pick<RenderableSlide, "title" | "background">;
   elements: RenderableSlideElement[];
   width: number;
   className?: string;
+  fontBase?: string;
 }) {
   const scale = width / SLIDE_MODEL_WIDTH;
   return (
     <div style={{ width, height: SLIDE_MODEL_HEIGHT * scale, overflow: "hidden", position: "relative" }}>
       <div style={{ transform: `scale(${scale})`, transformOrigin: "top left", position: "absolute", inset: 0 }}>
-        <SlideCanvas slide={slide} elements={elements} className={className} />
+        <SlideCanvas slide={slide} elements={elements} className={className} fontBase={fontBase} />
       </div>
     </div>
   );

@@ -1,3 +1,4 @@
+import type { DeckLanguage } from "./glass/language.ts";
 /**
  * Writing what to say while the deck is on the screen.
  *
@@ -79,7 +80,15 @@ function secondsFor(slide: DefenseSlide): number {
   return Math.max(25, Math.min(75, 20 + words * 1.6));
 }
 
+/** The language the script is spoken in — the deck's own. */
+const SPOKEN: Record<DeckLanguage, string> = {
+  uz: "1. Faqat mukammal o‘zbek lotin tilida. Jonli, og‘zaki nutq — yozma insho emas.",
+  en: "1. Matnni faqat INGLIZ tilida yozing (ko‘rsatmalar o‘zbekcha, javob — yo‘q). Jonli, og‘zaki nutq — yozma insho emas.",
+  ru: "1. Matnni faqat RUS tilida, kirill yozuvida yozing (ko‘rsatmalar o‘zbekcha, javob — yo‘q). Jonli, og‘zaki nutq — yozma insho emas.",
+};
+
 export function defensePrompt(input: {
+  language?: DeckLanguage;
   topic: string;
   authorName: string | null;
   teacherName: string | null;
@@ -102,7 +111,7 @@ export function defensePrompt(input: {
     "Quyidagi taqdimot uchun HIMOYA MATNI yozing — taqdimotchi og‘zaki nima deyishini.",
     "",
     "QOIDALAR:",
-    "1. Faqat mukammal o‘zbek lotin tilida. Jonli, og‘zaki nutq — yozma insho emas.",
+    SPOKEN[input.language ?? "uz"],
     "2. Bu slayd matnining takrori EMAS. Slaydda uch so‘z bo‘lsa, nutqda o‘sha uch so‘z nimani anglatishini tushuntiring.",
     "3. Har bir slayd uchun \"soniya\" da ko‘rsatilgan vaqtga yetadigan matn yozing.",
     "4. Kirish qiziqarli boshlansin: savol, kutilmagan kuzatuv, muammo yoki qarama-qarshilik bilan. \"Bugungi kunda...\" va \"Mavzu dolzarbdir\" kabi quruq boshlanishlarni ISHLATMANG.",
@@ -116,11 +125,20 @@ export function defensePrompt(input: {
   ].filter(Boolean).join("\n");
 }
 
-export const DEFENSE_SYSTEM =
-  "You are an experienced Uzbek presentation coach writing the spoken script a student will deliver beside their slides. "
-  + "Write natural spoken Uzbek Latin — the way a person actually talks in front of a room, not written prose. "
+const SPOKEN_AS: Record<DeckLanguage, string> = {
+  uz: "natural spoken Uzbek Latin",
+  en: "natural spoken English",
+  ru: "natural spoken Russian, in Cyrillic",
+};
+
+/** The coach's brief, in the language the script is to be spoken in. */
+export const defenseSystem = (language: DeckLanguage = "uz") =>
+  "You are an experienced presentation coach writing the spoken script a student will deliver beside their slides. "
+  + `Write ${SPOKEN_AS[language]} — the way a person actually talks in front of a room, not written prose. `
   + "Never invent a statistic, a date, a study or a name: everything you say must be supported by what the slides already contain. "
   + "Never simply read the slide back. Return only the required schema.";
+
+export const DEFENSE_SYSTEM = defenseSystem("uz");
 
 const text = (value: unknown, max: number): string =>
   String(value ?? "").replace(/\s+/g, " ").trim().slice(0, max);

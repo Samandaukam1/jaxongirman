@@ -1,9 +1,13 @@
+import { createClient } from "npm:@supabase/supabase-js";
 import { requestContext } from "../_shared/auth.ts";
+import { runGenerationPipeline } from "../_shared/pipeline.ts";
 import { preflight } from "../_shared/cors.ts";
 import { errorResponse, HttpError, json } from "../_shared/http.ts";
 import { geminiWriter } from "../_shared/gemini.ts";
 import { ProviderUnavailable } from "../_shared/writer.ts";
 import { contentSchema, outlineSchema } from "../_shared/plan-schema.ts";
+
+declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void } | undefined;
 
 /**
  * Whether the text pipeline will work, asked before somebody's deck asks it.
@@ -50,11 +54,154 @@ async function authorize(request: Request): Promise<void> {
   if (!isAdmin) throw new HttpError(403, "forbidden", "forbidden");
 }
 
+/**
+ * Runs the generation pipeline for a job that is already queued.
+ *
+ * The operator's end-to-end check: a deck made by exactly the code a
+ * customer's deck is made by — research, outline, copy, design, photographs,
+ * layout, saving — started from a job row the operator created, so nobody's
+ * allowance is spent and nobody's session is borrowed. The job is created with
+ * database access and carries a one-time secret in its idempotency key
+ * (`operator-trial:<secret>`); only a caller holding that secret can start it,
+ * and only while it is still `queued` — it can start work, never redo or
+ * redirect it. The owner comes from the job, not from the request.
+ */
+/**
+ * Hour-long links to an operator trial deck's photographs, for the preview
+ * the operator renders of it. Same one-time secret as `runQueuedJob`; only
+ * that trial's own pictures can be signed.
+ */
+async function trialImages(jobId: string, secret: string): Promise<Response> {
+  const url = Deno.env.get("SUPABASE_URL") ?? "";
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const service = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  const { data: job, error } = await service
+    .from("generation_jobs")
+    .select("presentation_id, idempotency_key")
+    .eq("id", jobId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!job || !secretsMatch(job.idempotency_key ?? "", `operator-trial:${secret}`)) {
+    throw new HttpError(404, "job not found", "not_found");
+  }
+  const { data: rows, error: rowsError } = await service
+    .from("slide_elements")
+    .select("content")
+    .eq("presentation_id", job.presentation_id)
+    .eq("type", "image");
+  if (rowsError) throw rowsError;
+  const links: Record<string, string> = {};
+  for (const row of rows ?? []) {
+    const content = (row.content ?? {}) as { storageBucket?: string; storagePath?: string };
+    if (!content.storageBucket || !content.storagePath) continue;
+    const { data } = await service.storage.from(content.storageBucket).createSignedUrl(content.storagePath, 3600);
+    if (data?.signedUrl) links[content.storagePath] = data.signedUrl;
+  }
+  return json({ presentationId: job.presentation_id, links });
+}
+
+/**
+ * What a grounded research answer looks like, as structure only.
+ *
+ * Decks came back with "no sources found" while the notes quoted Google's own
+ * redirect links — the search ran, and its citations were not read. This asks
+ * one small grounded question and reports where in the answer the grounding
+ * lives: field names and counts, never text, never a key.
+ */
+async function researchProbe(jobId: string, secret: string): Promise<Response> {
+  const url = Deno.env.get("SUPABASE_URL") ?? "";
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const service = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  const { data: job } = await service.from("generation_jobs").select("idempotency_key").eq("id", jobId).maybeSingle();
+  if (!job || !secretsMatch(job.idempotency_key ?? "", `operator-trial:${secret}`)) throw new HttpError(404, "job not found", "not_found");
+  const writer = geminiWriter();
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(writer.researchModel)}:generateContent?key=${encodeURIComponent(Deno.env.get("GEMINI_API_KEY") ?? "")}`;
+
+  // The production research request, word for word, and variations on it.
+  const system = "You are a research assistant for Uzbek-language academic presentations. Search the live web before answering and report only what the pages you opened actually say. Never state a fact you could not find a source for. Write in Uzbek Latin script.";
+  const uzbek = "Mavzu: Amir Temur davlatining tashkil topishi va rivojlanishi\n\nIshonchli manbalardan qidiring: rasmiy saytlar, ilmiy nashrlar, statistika idoralari, universitetlar.\nQuyidagilarni QISQA ro'yxat qilib yozing — izoh va kirish so'zlarisiz:\n- FAKTLAR: 8–12 ta aniq dalil, har biri bir qatorda, qavsda manba.\n- RAQAMLAR: 4–8 ta statistika, yil va manba bilan.\n- TA'RIFLAR: 2–4 ta asosiy tushuncha, bir jumladan.\n- MANBALAR: 5–8 ta havola.\nManbasi yo'q da'voni yozmang. Uzun paragraf yozmang.";
+  const lead = "Step 1 — use Google Search now: run 2–3 searches about the topic below (in English and in Uzbek) and open the most authoritative pages. Step 2 — using only what those pages say, write the notes below in Uzbek Latin script.";
+  const variants: Record<string, Record<string, unknown>> = {};
+  void lead;
+  const ask = "Search the web and list 10 key facts and 5 statistics (each with its year) about the topic below. After every fact, name its source in brackets. End with a SOURCES list of the pages you used.\nTopic: Amir Temur davlatining tashkil topishi va rivojlanishi";
+  for (let round = 1; round <= 4; round += 1) {
+    variants[`C_short_en_${round}`] = { contents: [{ role: "user", parts: [{ text: ask }] }] };
+    variants[`D_short_en_uz_${round}`] = { contents: [{ role: "user", parts: [{ text: `${ask}\nWrite the answer in Uzbek Latin script.` }] }] };
+  }
+  const report: Record<string, unknown> = { model: writer.researchModel };
+  await Promise.all(Object.entries(variants).map(async ([name, body]) => {
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...body, tools: [{ google_search: {} }], generationConfig: { maxOutputTokens: 2_500 } }),
+      });
+      const payload = await response.json() as Record<string, unknown>;
+      const first = ((payload.candidates ?? []) as Record<string, unknown>[])[0] ?? {};
+      const grounding = (first.groundingMetadata ?? {}) as Record<string, unknown>;
+      const parts = ((first.content as { parts?: Record<string, unknown>[] } | undefined)?.parts ?? []);
+      const text = parts.map((part) => String(part.text ?? "")).join("");
+      const usage = (payload.usageMetadata ?? {}) as Record<string, unknown>;
+      report[name] = {
+        http: response.status,
+        finish: first.finishReason ?? null,
+        chunks: Array.isArray(grounding.groundingChunks) ? grounding.groundingChunks.length : 0,
+        queries: Array.isArray(grounding.webSearchQueries) ? grounding.webSearchQueries.length : 0,
+        groundingKeys: Object.keys(grounding),
+        textLength: text.length,
+        redirectsInText: (text.match(/vertexaisearch|grounding-api-redirect/g) ?? []).length,
+        outputTokens: usage.candidatesTokenCount ?? null,
+        thoughtTokens: usage.thoughtsTokenCount ?? null,
+      };
+    } catch (failure) {
+      report[name] = { error: String((failure as Error)?.message ?? failure).slice(0, 160) };
+    }
+  }));
+  return json(report);
+}
+
+async function runQueuedJob(jobId: string, secret: string): Promise<Response> {
+  const url = Deno.env.get("SUPABASE_URL") ?? "";
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const service = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  const { data: job, error } = await service
+    .from("generation_jobs")
+    .select("id, presentation_id, owner_id, status, idempotency_key")
+    .eq("id", jobId)
+    .maybeSingle();
+  if (error) throw error;
+  // The job carries its own one-time secret, put there by whoever created it
+  // with database access. Nothing else can start it.
+  if (!job || !secret || !secretsMatch(job.idempotency_key ?? "", `operator-trial:${secret}`)) {
+    throw new HttpError(404, "job not found", "not_found");
+  }
+  if (job.status !== "queued") throw new HttpError(409, `job is ${job.status}`, "not_queued");
+  const pipeline = runGenerationPipeline({ jobId: job.id, presentationId: job.presentation_id, ownerId: job.owner_id, service });
+  if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(pipeline);
+  else await pipeline;
+  return json({ jobId: job.id, presentationId: job.presentation_id, status: "running" }, 202);
+}
+
 Deno.serve(async (request) => {
   const early = preflight(request);
   if (early) return early;
 
   try {
+    if (request.method === "POST") {
+      const body = await request.clone().json().catch(() => ({})) as { action?: string; jobId?: string; secret?: string };
+      if (body.action === "run_job") {
+        if (!body.jobId || !body.secret) throw new HttpError(400, "jobId and secret are required", "bad_request");
+        return await runQueuedJob(body.jobId, body.secret);
+      }
+      if (body.action === "research_probe") {
+        if (!body.jobId || !body.secret) throw new HttpError(400, "jobId and secret are required", "bad_request");
+        return await researchProbe(body.jobId, body.secret);
+      }
+      if (body.action === "trial_images") {
+        if (!body.jobId || !body.secret) throw new HttpError(400, "jobId and secret are required", "bad_request");
+        return await trialImages(body.jobId, body.secret);
+      }
+    }
     await authorize(request);
 
     const writer = geminiWriter();

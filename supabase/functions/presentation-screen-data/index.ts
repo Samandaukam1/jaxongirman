@@ -19,9 +19,13 @@
  *   * one presentation — the one the session is showing;
  *   * its owner's rows only;
  *   * render fields only, so nothing about who owns it travels to the screen;
- *   * storage objects only under `{owner}/{presentation}/`, which is where both
- *     the generator and the importer write, so an element whose content points
- *     somewhere else is dropped rather than signed.
+ *   * private storage objects only under `{owner}/{presentation}/`, which is
+ *     where the generator, the importer and the editor's uploads all write, so
+ *     an element whose content points somewhere else is dropped rather than
+ *     signed;
+ *   * the two public catalogues (design and JElement assets), which hold no one's
+ *     data and are linked as they are;
+ *   * a picture the deck names by an `https://` address, passed through.
  *
  * Signed URLs last an hour: shorter than the four-hour session ceiling, long
  * enough that a talk does not stall reloading images. Accepted risk, stated
@@ -30,12 +34,23 @@
  */
 import { preflight } from "../_shared/cors.ts";
 import { bodyJson, errorResponse, HttpError, json } from "../_shared/http.ts";
-import { createClient } from "npm:@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js";
 
 type Body = { sessionId?: string; screenToken?: string };
 
-/** The two buckets slide images are ever written to. */
-const IMAGE_BUCKETS = new Set(["generated-images", "presentation-assets"]);
+/**
+ * Every private bucket a slide's media is written to.
+ *
+ * The list used to be the first two only. The generator has since moved its
+ * photographs to `stock-images` and the editor writes photos and videos to
+ * `user-uploads`, and an element from either was dropped here as "not ours" —
+ * so a projector drew every slide of a new deck without one picture on it.
+ * Kept in step with `OWNER_BUCKETS` in `_shared/export-assets.ts`, which the
+ * exporters read the same rows with.
+ */
+const IMAGE_BUCKETS = new Set(["generated-images", "presentation-assets", "stock-images", "user-uploads"]);
+/** Catalogues anyone may read: namespaced by entry, never by a person. */
+const PUBLIC_BUCKETS = new Set(["design-assets", "jelement-assets"]);
 const SIGNED_URL_SECONDS = 60 * 60;
 
 type Snapshot = {
@@ -101,17 +116,15 @@ Deno.serve(async (request) => {
       .order("z_index");
     if (elements.error) throw elements.error;
 
-    const rendered = [];
-    for (const element of elements.data) {
-      if (element.type !== "image") {
-        rendered.push(element);
-        continue;
-      }
+    // Signed side by side: a deck of twenty photographs is twenty round trips,
+    // and the screen is waiting on all of them before it draws anything.
+    const rendered = (await Promise.all(elements.data.map(async (element) => {
+      if (element.type !== "image") return element;
       const signed = await signImage(service, element.content, ownerId, presentationId);
       // An image we will not sign is an image the screen cannot draw. Sending it
       // anyway would render an empty box over the slide.
-      if (signed) rendered.push({ ...element, content: signed });
-    }
+      return signed ? { ...element, content: signed } : null;
+    }))).filter((element) => element !== null);
 
     return json({
       title: typeof title === "string" && title ? title : "Taqdimot",
@@ -135,7 +148,7 @@ Deno.serve(async (request) => {
  * is refused too — the screen was paired to one presentation, not to a library.
  */
 async function signImage(
-  service: ReturnType<typeof createClient>,
+  service: SupabaseClient,
   content: unknown,
   ownerId: string,
   presentationId: string,
@@ -144,8 +157,20 @@ async function signImage(
   const record = content as Record<string, unknown>;
   const bucket = typeof record.storageBucket === "string" ? record.storageBucket : null;
   const path = typeof record.storagePath === "string" ? record.storagePath : null;
-  if (!bucket || !path || !IMAGE_BUCKETS.has(bucket)) return null;
-  if (path.includes("..") || !path.startsWith(`${ownerId}/${presentationId}/`)) return null;
+
+  // A picture named by its address rather than stored: already public.
+  if (!bucket && !path) {
+    const address = typeof record.url === "string" ? record.url : "";
+    return address.startsWith("https://") ? { ...record, signedUrl: address } : null;
+  }
+  if (!bucket || !path || path.includes("..") || path.startsWith("/")) return null;
+
+  if (PUBLIC_BUCKETS.has(bucket)) {
+    const { data } = service.storage.from(bucket).getPublicUrl(path);
+    const { storageBucket: _bucket, storagePath: _path, ...rest } = record;
+    return data?.publicUrl ? { ...rest, signedUrl: data.publicUrl } : null;
+  }
+  if (!IMAGE_BUCKETS.has(bucket) || !path.startsWith(`${ownerId}/${presentationId}/`)) return null;
 
   const signed = await service.storage.from(bucket).createSignedUrl(path, SIGNED_URL_SECONDS);
   if (signed.error || !signed.data?.signedUrl) return null;

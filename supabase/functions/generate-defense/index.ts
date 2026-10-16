@@ -12,6 +12,7 @@
  * too — for a deck made before this existed, and to rewrite one whose deck has
  * since been edited.
  */
+import { isDeckLanguage, type DeckLanguage } from "../_shared/glass/language.ts";
 import type { SupabaseClient } from "npm:@supabase/supabase-js";
 
 import { createClient } from "npm:@supabase/supabase-js";
@@ -19,12 +20,15 @@ import { createClient } from "npm:@supabase/supabase-js";
 import { requestContext } from "../_shared/auth.ts";
 import { preflight } from "../_shared/cors.ts";
 import {
-  DEFENSE_SCHEMA_NAME, DEFENSE_SYSTEM, defensePrompt, defenseSchema, isUsable, readDefense,
+  DEFENSE_SCHEMA_NAME, defensePrompt, defenseSchema, defenseSystem, isUsable, readDefense,
   type DefenseScript, type DefenseSlide,
 } from "../_shared/defense.ts";
 import { renderDefensePdf } from "../_shared/defense-pdf.ts";
+import { ExportAssetLoader } from "../_shared/export-assets.ts";
+import { loadExportDeck } from "../_shared/export-deck.ts";
 import { geminiWriter } from "../_shared/gemini.ts";
 import { bodyJson, errorResponse, HttpError, json } from "../_shared/http.ts";
+import { renderPdf } from "../_shared/pdf-export.ts";
 import { ProviderUnavailable } from "../_shared/writer.ts";
 
 type Body = { presentationId?: string; action?: "write" | "pdf" };
@@ -45,10 +49,26 @@ function serviceClient(): SupabaseClient {
  * Read from `slide_elements` rather than from anything the generator held in
  * memory, so a deck somebody edited produces a script about the deck they have.
  */
+/**
+ * The deck as the PDF exporter draws it, so the script can show each slide
+ * beside its words. Best effort: a deck that cannot be drawn costs the
+ * pictures, and the script is still set.
+ */
+async function drawDeck(service: SupabaseClient, presentationId: string, ownerId: string) {
+  try {
+    const deck = await loadExportDeck(service, presentationId, ownerId);
+    const pdf = await renderPdf(deck, new ExportAssetLoader(service, ownerId, presentationId));
+    return { pdf, numbers: deck.slides.map((slide) => slide.position + 1) };
+  } catch (error) {
+    console.error("defense: deck could not be drawn", error);
+    return null;
+  }
+}
+
 async function readDeck(service: SupabaseClient, presentationId: string, ownerId: string) {
   const presentation = await service
     .from("presentations")
-    .select("id, title, topic, author_name, teacher_name, updated_at, status")
+    .select("id, title, topic, author_name, teacher_name, updated_at, status, language")
     .eq("id", presentationId)
     .eq("owner_id", ownerId)
     .maybeSingle();
@@ -100,7 +120,9 @@ async function write(service: SupabaseClient, presentationId: string, ownerId: s
   });
 
   try {
+    const language: DeckLanguage = isDeckLanguage(presentation.language) ? presentation.language : "uz";
     const prompt = defensePrompt({
+      language,
       topic: presentation.topic ?? presentation.title,
       authorName: presentation.author_name,
       teacherName: presentation.teacher_name,
@@ -108,8 +130,8 @@ async function write(service: SupabaseClient, presentationId: string, ownerId: s
       slides: deck,
     });
     const answer = await writer.structured<unknown>({
-      prompt: `${DEFENSE_SYSTEM}\n\n${prompt}`,
-      system: DEFENSE_SYSTEM,
+      prompt: `${defenseSystem(language)}\n\n${prompt}`,
+      system: defenseSystem(language),
       schemaName: DEFENSE_SCHEMA_NAME,
       schema: defenseSchema(),
       // A minute of speech per slide over a dozen slides, with room to spare.
@@ -216,11 +238,12 @@ Deno.serve(async (request) => {
       }
 
       const presentation = await service
-        .from("presentations").select("title, author_name, teacher_name")
+        .from("presentations").select("title, author_name, teacher_name, language")
         .eq("id", presentationId).eq("owner_id", ownerId).single();
       if (presentation.error) throw presentation.error;
 
       const bytes = await renderDefensePdf({
+        language: isDeckLanguage(presentation.data.language) ? presentation.data.language : "uz",
         title: presentation.data.title,
         authorName: presentation.data.author_name,
         teacherName: presentation.data.teacher_name,
@@ -229,6 +252,7 @@ Deno.serve(async (request) => {
           conclusion: stored.data.conclusion,
           sections: (stored.data.sections ?? []) as never,
         },
+        deck: await drawDeck(service, presentationId, ownerId),
       });
 
       const path = `${ownerId}/${presentationId}/himoya-matni.pdf`;

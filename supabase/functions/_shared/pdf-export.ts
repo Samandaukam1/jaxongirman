@@ -1,13 +1,19 @@
 import fontkit from "@pdf-lib/fontkit";
 import {
+  appendBezierCurve,
   clip,
+  closePath,
   degrees,
   endPath,
+  lineTo,
+  moveTo,
   PDFDocument,
   popGraphicsState,
   pushGraphicsState,
   rectangle,
   rgb,
+  rotateDegrees,
+  translate,
   StandardFonts,
   type PDFFont,
   type PDFImage,
@@ -19,7 +25,11 @@ import {
   applyTextTransform,
   boolean,
   clamp,
+  colorAt,
   interpolateHex,
+  linearBands,
+  radialBands,
+  stopsOf,
   MODEL_HEIGHT,
   MODEL_WIDTH,
   number,
@@ -173,10 +183,149 @@ function drawPlaceholder(page: PDFPage, element: ExportElement, label = "Rasm") 
   });
 }
 
+/** A rounded rectangle as path operators, in PDF space (y up). */
+/**
+ * A row's corner radii, top-left, top-right, bottom-right, bottom-left: its
+ * own four when it carries them (the naqsh leaf), else its one radius.
+ */
+function cornerRadii(style: JsonObject): readonly number[] {
+  const list = style.borderRadiusCorners;
+  if (Array.isArray(list) && list.length === 4) return list.map((value) => Math.max(0, number(value, 0)));
+  const one = Math.max(0, number(style.borderRadius, 0));
+  return [one, one, one, one];
+}
+
+/**
+ * The corners fitted to the box the way CSS — and so the phone and the web
+ * viewer — fit them: all scaled down together only where two curves on one
+ * side would overlap. A single corner may sweep the whole side, which is what
+ * makes a quarter disc of a square.
+ */
+function fitted(corners: readonly number[] | number, width: number, height: number): [number, number, number, number] {
+  const list = typeof corners === "number" ? [corners, corners, corners, corners] : corners;
+  const [tl, tr, br, bl] = list.map((value) => Math.max(0, value)) as [number, number, number, number];
+  const room = (side: number, sum: number) => (sum > 0 ? side / sum : Infinity);
+  const scale = Math.min(1, room(width, tl + tr), room(width, bl + br), room(height, tl + bl), room(height, tr + br));
+  return [tl * scale, tr * scale, br * scale, bl * scale];
+}
+
+/**
+ * A rounded rectangle in PDF space, `(x, y)` its bottom-left. Corners are given
+ * the way the slide names them — top-left, top-right, bottom-right,
+ * bottom-left — and turned here into PDF's upward y.
+ */
+function roundedRectPath(x: number, y: number, width: number, height: number, corners: readonly number[] | number) {
+  const [tl, tr, br, bl] = fitted(corners, width, height);
+  const k = 0.5523;
+  return [
+    moveTo(x + bl, y),
+    lineTo(x + width - br, y),
+    appendBezierCurve(x + width - br + br * k, y, x + width, y + br - br * k, x + width, y + br),
+    lineTo(x + width, y + height - tr),
+    appendBezierCurve(x + width, y + height - tr + tr * k, x + width - tr + tr * k, y + height, x + width - tr, y + height),
+    lineTo(x + tl, y + height),
+    appendBezierCurve(x + tl - tl * k, y + height, x, y + height - tl + tl * k, x, y + height - tl),
+    lineTo(x, y + bl),
+    appendBezierCurve(x, y + bl - bl * k, x + bl - bl * k, y, x + bl, y),
+    closePath(),
+  ];
+}
+
+/** The same outline as an SVG path, for strokes (y down from the top-left). */
+function roundedRectSvg(width: number, height: number, corners: readonly number[] | number): string {
+  const [tl, tr, br, bl] = fitted(corners, width, height);
+  return `M ${tl} 0 H ${width - tr} A ${tr} ${tr} 0 0 1 ${width} ${tr} V ${height - br} A ${br} ${br} 0 0 1 ${width - br} ${height} `
+    + `H ${bl} A ${bl} ${bl} 0 0 1 0 ${height - bl} V ${tl} A ${tl} ${tl} 0 0 1 ${tl} 0 Z`;
+}
+
+/**
+ * A filled shape: rectangles, rounded glass cards, ellipses and radial light.
+ *
+ * The Liquid Glass engine's backgrounds are radial gradients fading to
+ * nothing, and its cards are translucent rounded rectangles with a lit top
+ * edge. PDF has neither primitive in pdf-lib's API, so a radial fill is drawn
+ * as solved concentric layers (`radialBands`) and a gradient card as strips
+ * clipped to its rounded outline. Rotation turns round the shape's centre, as
+ * it does on the phone.
+ */
 function drawShape(page: PDFPage, element: ExportElement, style: JsonObject) {
-  const y = MODEL_HEIGHT - element.y - element.height;
+  const stops = stopsOf(style);
+  const stroke = typeof style.stroke === "string" ? pdfColor(style.stroke, "#000000") : null;
+  const strokeWidth = stroke ? Math.max(0.5, number(style.strokeWidth, 1)) : 0;
+  const cx = element.x + element.width / 2;
+  const cy = MODEL_HEIGHT - element.y - element.height / 2;
+
+  if (string(style.shape) === "ellipse" || string(style.gradientType) === "radial") {
+    const rotate = degrees(-element.rotation);
+    const rx = element.width / 2;
+    const ry = element.height / 2;
+    if (string(style.gradientType) === "radial" && stops.length >= 2) {
+      for (const band of radialBands(stops, 28)) {
+        page.drawEllipse({
+          x: cx, y: cy, xScale: Math.max(0.1, rx * band.scale), yScale: Math.max(0.1, ry * band.scale),
+          color: pdfColor(`#${band.hex}`).color, opacity: clamp(element.opacity * band.alpha, 0, 1), rotate,
+        });
+      }
+    } else {
+      const fill = colorAt(stops, 0);
+      if (fill.alpha > 0.002) {
+        page.drawEllipse({ x: cx, y: cy, xScale: rx, yScale: ry, color: pdfColor(`#${fill.hex}`).color, opacity: clamp(element.opacity * fill.alpha, 0, 1), rotate });
+      }
+    }
+    if (stroke && stroke.alpha > 0.002) {
+      page.drawEllipse({
+        x: cx, y: cy, xScale: Math.max(0.1, rx - strokeWidth / 2), yScale: Math.max(0.1, ry - strokeWidth / 2),
+        borderColor: stroke.color, borderWidth: strokeWidth, borderOpacity: clamp(element.opacity * stroke.alpha, 0, 1), rotate,
+      });
+    }
+    return;
+  }
+
+  const corners = cornerRadii(style);
+  const radius = Math.max(...fitted(corners, element.width, element.height));
+  const left = element.x;
+  const bottom = MODEL_HEIGHT - element.y - element.height;
+
+  if (radius > 0.5 || stops.length >= 2) {
+    page.pushOperators(pushGraphicsState());
+    if (element.rotation) page.pushOperators(translate(cx, cy), rotateDegrees(-element.rotation), translate(-cx, -cy));
+    page.pushOperators(...roundedRectPath(left, bottom, element.width, element.height, corners), clip(), endPath());
+    if (stops.length >= 2) {
+      for (const band of linearBands(stops, number(style.gradientAngle, 135))) {
+        if (band.alpha <= 0.002) continue;
+        const from = band.reverse ? 1 - band.to : band.from;
+        const to = band.reverse ? 1 - band.from : band.to;
+        const color = pdfColor(`#${band.hex}`).color;
+        const opacity = clamp(element.opacity * band.alpha, 0, 1);
+        // Edge to edge and never overlapping: two translucent strips sharing a
+        // sliver would double its alpha and draw a line across the glass.
+        if (band.vertical) {
+          page.drawRectangle({ x: left + element.width * from, y: bottom, width: element.width * (to - from), height: element.height, color, opacity });
+        } else {
+          // Strips are measured from the top, and PDF counts from the bottom.
+          page.drawRectangle({ x: left, y: bottom + element.height * (1 - to), width: element.width, height: element.height * (to - from), color, opacity });
+        }
+      }
+    } else {
+      const fill = colorAt(stops, 0);
+      if (fill.alpha > 0.002) {
+        page.drawRectangle({ x: left, y: bottom, width: element.width, height: element.height, color: pdfColor(`#${fill.hex}`).color, opacity: clamp(element.opacity * fill.alpha, 0, 1) });
+      }
+    }
+    page.pushOperators(popGraphicsState());
+    if (stroke && stroke.alpha > 0.002) {
+      page.pushOperators(pushGraphicsState());
+      if (element.rotation) page.pushOperators(translate(cx, cy), rotateDegrees(-element.rotation), translate(-cx, -cy));
+      page.drawSvgPath(roundedRectSvg(element.width, element.height, corners), {
+        x: left, y: MODEL_HEIGHT - element.y,
+        borderColor: stroke.color, borderWidth: strokeWidth, borderOpacity: clamp(element.opacity * stroke.alpha, 0, 1),
+      });
+      page.pushOperators(popGraphicsState());
+    }
+    return;
+  }
+
   const fill = pdfColor(style.fill, "#EEEEEE");
-  const stroke = style.stroke ? pdfColor(style.stroke, "#000000") : null;
   const opacity = clamp(element.opacity * fill.alpha, 0, 1);
   const gradientTo = string(style.gradientTo);
   if (gradientTo) {
@@ -186,13 +335,13 @@ function drawShape(page: PDFPage, element: ExportElement, style: JsonObject) {
     for (let index = 0; index < steps; index += 1) {
       const color = pdfColor(`#${interpolateHex(style.fill, gradientTo, index / (steps - 1))}`).color;
       page.drawRectangle(vertical
-        ? { x: element.x + element.width * index / steps, y, width: element.width / steps + 0.5, height: element.height, color, opacity }
-        : { x: element.x, y: y + element.height * index / steps, width: element.width, height: element.height / steps + 0.5, color, opacity });
+        ? { x: element.x + element.width * index / steps, y: bottom, width: element.width / steps + 0.5, height: element.height, color, opacity }
+        : { x: element.x, y: bottom + element.height * index / steps, width: element.width, height: element.height / steps + 0.5, color, opacity });
     }
   } else {
     page.drawRectangle({
       x: element.x,
-      y,
+      y: bottom,
       width: element.width,
       height: element.height,
       color: fill.color,
@@ -203,11 +352,11 @@ function drawShape(page: PDFPage, element: ExportElement, style: JsonObject) {
   if (stroke) {
     page.drawRectangle({
       x: element.x,
-      y,
+      y: bottom,
       width: element.width,
       height: element.height,
       borderColor: stroke.color,
-      borderWidth: Math.max(0.5, number(style.strokeWidth, 1)),
+      borderWidth: strokeWidth,
       borderOpacity: clamp(element.opacity * stroke.alpha, 0, 1),
       opacity: 0,
       rotate: degrees(element.rotation),
@@ -308,9 +457,11 @@ async function drawImage(page: PDFPage, pdf: PDFDocument, element: ExportElement
     height = image.height * scale;
     x += (element.width - width) / 2;
     drawY += (element.height - height) / 2;
+    // Clipped to the row's own corners, so a rounded or leaf-cut photograph
+    // keeps its shape in the PDF as it has it on the screen.
     page.pushOperators(
       pushGraphicsState(),
-      rectangle(element.x, y, element.width, element.height),
+      ...roundedRectPath(element.x, y, element.width, element.height, cornerRadii(style)),
       clip(),
       endPath(),
     );
@@ -319,7 +470,67 @@ async function drawImage(page: PDFPage, pdf: PDFDocument, element: ExportElement
   if (mode !== "contain") page.pushOperators(popGraphicsState());
 }
 
+/**
+ * An icon the deck carries as outlines: drawn as its own paths, so the PDF
+ * shows the same glyph as the phone. A gradient is laid as strips, each the
+ * glyph clipped to one band of the gradient (pdf-lib has no gradient fill);
+ * the shadow is the glyph again, offset and faint, under it.
+ */
+function drawVectorIcon(page: PDFPage, element: ExportElement, style: JsonObject, content: JsonObject): boolean {
+  const vector = object(content.vector);
+  const paths = (Array.isArray(vector.paths) ? vector.paths : [])
+    .map((path) => object(path))
+    .filter((path) => typeof path.d === "string" && path.d);
+  if (!paths.length) return false;
+  const box = number(vector.box, 256);
+  const size = Math.min(element.width, element.height);
+  const scale = size / box;
+  const left = element.x + (element.width - size) / 2;
+  const top = element.y + (element.height - size) / 2;
+  const draw = (x: number, y: number, color: ReturnType<typeof pdfColor>["color"], opacity: number) => {
+    for (const path of paths) {
+      const alpha = clamp(opacity * number(path.opacity, 1), 0, 1);
+      if (alpha <= 0.002) continue;
+      page.drawSvgPath(string(path.d), { x, y: MODEL_HEIGHT - y, scale, color, opacity: alpha, borderWidth: 0 });
+    }
+  };
+
+  const shadow = object(style.iconShadow);
+  if (typeof shadow.color === "string") {
+    const tone = pdfColor(shadow.color, "#000000");
+    const strength = number(shadow.opacity, 0.3) * element.opacity;
+    // Two offsets, the nearer one darker: a step toward the blur a PDF cannot draw.
+    draw(left + number(shadow.dx, 0) * 0.5, top + number(shadow.dy, 2) * 0.5, tone.color, strength * 0.35);
+    draw(left + number(shadow.dx, 0), top + number(shadow.dy, 2), tone.color, strength * 0.3);
+  }
+
+  const graded = Array.isArray(style.gradientStops) && style.gradientStops.length >= 2;
+  if (!graded) {
+    const color = pdfColor(style.color, "#151A18");
+    draw(left, top, color.color, element.opacity * color.alpha);
+    return true;
+  }
+  const bottom = MODEL_HEIGHT - top - size;
+  for (const band of linearBands(stopsOf(style), number(style.gradientAngle, 135), 10)) {
+    if (band.alpha <= 0.002) continue;
+    const from = band.reverse ? 1 - band.to : band.from;
+    const to = band.reverse ? 1 - band.from : band.to;
+    page.pushOperators(pushGraphicsState());
+    page.pushOperators(
+      band.vertical
+        ? rectangle(left + size * from, bottom, size * (to - from) + 0.3, size)
+        : rectangle(left, bottom + size * (1 - to), size, size * (to - from) + 0.3),
+      clip(),
+      endPath(),
+    );
+    draw(left, top, pdfColor(`#${band.hex}`).color, element.opacity * band.alpha);
+    page.pushOperators(popGraphicsState());
+  }
+  return true;
+}
+
 function drawIcon(page: PDFPage, element: ExportElement, style: JsonObject, content: JsonObject) {
+  if (drawVectorIcon(page, element, style, content)) return;
   const color = pdfColor(style.color, "#151A18");
   const opacity = clamp(element.opacity * color.alpha, 0, 1);
   const centerX = element.x + element.width / 2;
@@ -343,14 +554,46 @@ function seriesColors(style: JsonObject): string[] {
   return Array.isArray(style.series) ? style.series.filter((value): value is string => typeof value === "string") : [];
 }
 
-function drawChart(page: PDFPage, element: ExportElement, style: JsonObject, content: JsonObject) {
+function drawChart(page: PDFPage, element: ExportElement, style: JsonObject, content: JsonObject, fonts: FontBook) {
   const values = Array.isArray(content.values) ? content.values.map((value) => number(value, 0)).filter((value) => Number.isFinite(value)) : [];
   if (!values.length) return;
+  const labels = Array.isArray(content.labels) ? content.labels.map((label) => String(label ?? "")) : [];
   const colors = seriesColors(style);
   const primary = string(style.color, "#173E35");
   const type = string(content.chartType, "bar");
   const max = Math.max(...values.map(Math.abs), 1);
   const baseY = MODEL_HEIGHT - element.y - element.height;
+  const font = fonts.faceFor({});
+  const labelColor = pdfColor(style.labelColor, "#777777");
+  const labelSize = Math.max(6, number(style.labelSize, 11));
+
+  if (type === "donut" || type === "pie") {
+    // Arcs stroked round the centre, the way the phone draws the ring.
+    const size = Math.min(element.width, element.height);
+    const thickness = Math.min(number(style.strokeWidth, size * 0.19), size / 2);
+    const radius = size / 2 - thickness / 2;
+    const cx = element.width / 2;
+    const cy = element.height / 2;
+    const total = values.reduce((sum, value) => sum + Math.max(0, value), 0) || 1;
+    const track = pdfColor(style.trackColor, "#E5E5E5");
+    page.drawCircle({ x: element.x + cx, y: MODEL_HEIGHT - element.y - cy, size: radius, borderColor: track.color, borderWidth: thickness, borderOpacity: clamp(element.opacity * track.alpha, 0, 1), opacity: 0 });
+    let cursor = -90;
+    values.forEach((value, index) => {
+      const sweep = Math.max(0, value) / total * 359.9;
+      if (sweep <= 0) return;
+      const start = cursor * Math.PI / 180;
+      const end = (cursor + sweep) * Math.PI / 180;
+      cursor += sweep;
+      const path = `M ${cx + radius * Math.cos(start)} ${cy + radius * Math.sin(start)} A ${radius} ${radius} 0 ${sweep > 180 ? 1 : 0} 1 ${cx + radius * Math.cos(end)} ${cy + radius * Math.sin(end)}`;
+      page.drawSvgPath(path, {
+        x: element.x, y: MODEL_HEIGHT - element.y,
+        borderColor: pdfColor(colors[index % Math.max(1, colors.length)] ?? primary).color,
+        borderWidth: thickness, borderOpacity: element.opacity,
+      });
+    });
+    return;
+  }
+
   if (type === "line") {
     const step = values.length > 1 ? element.width / (values.length - 1) : element.width;
     for (let index = 0; index < values.length - 1; index += 1) {
@@ -364,18 +607,30 @@ function drawChart(page: PDFPage, element: ExportElement, style: JsonObject, con
     }
     return;
   }
-  const gap = element.width / Math.max(8, values.length * 4);
+
+  // Bars, with the room for their labels kept underneath as on the phone.
+  const band = style.showLabels !== false && labels.length ? Math.max(16, labelSize * 1.5) : 0;
+  const plot = Math.max(4, element.height - band);
+  const gap = number(style.gap, element.width / Math.max(8, values.length * 4));
   const width = Math.max(1, (element.width - gap * (values.length - 1)) / values.length);
   values.forEach((value, index) => {
-    const height = Math.max(2, Math.abs(value) / max * element.height * 0.92);
+    const height = Math.max(2, Math.abs(value) / max * plot * 0.88);
+    const x = element.x + index * (width + gap);
     page.drawRectangle({
-      x: element.x + index * (width + gap),
-      y: baseY,
+      x,
+      y: baseY + band,
       width,
       height,
       color: pdfColor(colors[index % Math.max(1, colors.length)] ?? primary).color,
       opacity: element.opacity,
     });
+    const draw = (text: string, y: number) => {
+      const safe = safeText(text, fonts.custom).slice(0, 40);
+      const measured = font.widthOfTextAtSize(safe, labelSize);
+      page.drawText(safe, { x: x + width / 2 - Math.min(measured, width + gap) / 2, y, size: labelSize, font, color: labelColor.color, opacity: clamp(element.opacity * labelColor.alpha, 0, 1), maxWidth: width + gap });
+    };
+    if (style.showValues) draw(String(value), baseY + band + height + 4);
+    if (band && labels[index]) draw(labels[index]!, baseY + 3);
   });
 }
 
@@ -394,7 +649,7 @@ function drawTable(page: PDFPage, element: ExportElement, style: JsonObject, con
       x: x + 4,
       y: y + Math.max(2, rowHeight - 16),
       size: Math.max(6, Math.min(12, rowHeight * 0.32)),
-      font: fonts.regular,
+      font: fonts.faceFor({}),
       color: pdfColor(style.color, "#151A18").color,
       opacity: element.opacity,
     });
@@ -416,6 +671,13 @@ export async function renderPdf(deck: ExportDeck, assets: ExportAssetLoader): Pr
     const background = object(slide.background);
     const backgroundColor = pdfColor(background.color, "#FFFFFF");
     page.drawRectangle({ x: 0, y: 0, width: MODEL_WIDTH, height: MODEL_HEIGHT, color: backgroundColor.color, opacity: backgroundColor.alpha });
+    // A slide's own gradient ground, drawn under everything as the phone does.
+    if (Array.isArray(background.gradientStops) && background.gradientStops.length >= 2) {
+      drawShape(page, {
+        id: `${slide.id}:ground`, slide_id: slide.id, presentation_id: slide.presentation_id, type: "shape",
+        x: 0, y: 0, width: MODEL_WIDTH, height: MODEL_HEIGHT, rotation: 0, z_index: -1, opacity: 1, style: {}, content: {},
+      } as unknown as ExportElement, background);
+    }
     const elements = deck.elements.filter((element) => element.slide_id === slide.id).sort((left, right) => left.z_index - right.z_index);
     for (const element of elements) {
       const style = object(element.style);
@@ -425,7 +687,7 @@ export async function renderPdf(deck: ExportDeck, assets: ExportAssetLoader): Pr
       else if (element.type === "text") drawText(page, element, style, content, fonts);
       else if (element.type === "image") await drawImage(page, pdf, element, style, await assets.forElement(element));
       else if (element.type === "icon") drawIcon(page, element, style, content);
-      else if (element.type === "chart") drawChart(page, element, style, content);
+      else if (element.type === "chart") drawChart(page, element, style, content, fonts);
       else if (element.type === "table") drawTable(page, element, style, content, fonts);
     }
   }

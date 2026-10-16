@@ -87,6 +87,9 @@ export function buildEdgeModules() {
       path.join(shared, "layout.ts"),
       path.join(shared, "jslayd-layout.ts"),
       path.join(shared, "jslayd", "*.ts"),
+      // The Liquid Glass engine: content, design DNA, light and layout — all
+      // pure, so a deck can be composed and checked without Deno or a network.
+      path.join(shared, "glass", "*.ts"),
     ],
   }, null, 2));
 
