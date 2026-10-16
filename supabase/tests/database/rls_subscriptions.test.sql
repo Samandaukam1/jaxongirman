@@ -50,22 +50,22 @@ select ok(has_table_privilege('anon', 'public.subscription_plans', 'SELECT'),
 
 select is((select count(*)::integer from public.subscription_plans where code = 'premium_monthly'), 1,
   'the launch plan exists');
-select is((select price_amount from public.subscription_plans where code = 'premium_monthly'), 36000,
-  'priced at 36 000');
+select is((select price_amount from public.subscription_plans where code = 'premium_monthly'), 24000,
+  'priced at 24 000');
 select is((select period_days from public.subscription_plans where code = 'premium_monthly'), 30,
   'for thirty days');
 select is(
   (select features -> 'presentation_weekly' ->> 'limit' from public.subscription_plans where code = 'premium_monthly'),
-  '4', 'four presentations a week');
+  '20', 'twenty presentations');
 select is(
   (select features -> 'presentation_weekly' ->> 'period' from public.subscription_plans where code = 'premium_monthly'),
-  'week', 'counted weekly, not as a monthly lump that can be spent in a day');
+  'month', 'counted per month');
 select is(
   (select features -> 'presentation_weekly' ->> 'rollover' from public.subscription_plans where code = 'premium_monthly'),
-  'false', 'and an unused week does not carry over by default');
+  'false', 'and an unused month does not carry over by default');
 select is(
   (select features -> 'presentation_max_slides' ->> 'limit' from public.subscription_plans where code = 'premium_monthly'),
-  '16', 'sixteen slides per presentation');
+  '10', 'ten slides per presentation');
 select is(
   (select features -> 'marathon_unlock' ->> 'limit' from public.subscription_plans where code = 'premium_monthly'),
   '1', 'one marathon unlock a week');
@@ -102,14 +102,14 @@ select 'f1110000-0000-0000-0000-000000000001', id, 'active', now(), now() + inte
        jsonb_build_object('features', features)
   from public.subscription_plans where code = 'premium_monthly';
 
--- Four allowed, the fifth refused: the limit is the limit.
+-- Twenty allowed, the twenty-first refused: the limit is the limit.
 select is(
   (select count(*) filter (where (public.quota_consume('presentation_weekly', 1, 'f1110000-0000-0000-0000-000000000001') ->> 'ok')::boolean)::integer
-     from generate_series(1, 4)),
-  4, 'a member spends the whole week');
+     from generate_series(1, 20)),
+  20, 'a member spends the whole month');
 select is(
   (public.quota_consume('presentation_weekly', 1, 'f1110000-0000-0000-0000-000000000001') ->> 'code'),
-  'quota_exhausted', 'and the fifth is refused rather than quietly allowed');
+  'quota_exhausted', 'and the twenty-first is refused rather than quietly allowed');
 
 /**
  * An expired membership is not a membership.
@@ -159,7 +159,7 @@ select is(
 /**
  * The plan meeting the work.
  *
- * A member's four a week are spent by generating, their sixteen slides are a
+ * A member's twenty a month are spent by generating, their ten slides are a
  * ceiling the server enforces, and somebody without a plan keeps the credit
  * path the product already had — this adds a plan, it does not take away how
  * things already worked.
@@ -168,24 +168,24 @@ set local role authenticated;
 select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config('request.jwt.claim.sub', 'f1110000-0000-0000-0000-000000000001', true);
 
--- Seventeen slides is past the plan's ceiling, and it is refused before
+-- Eleven slides is past the plan's ceiling, and it is refused before
 -- anything is written rather than trimmed silently.
 select throws_ok(
   $$ select public.start_generation(
-       gen_random_uuid(), 'Mavzu matni', 'Sarlavha', 'simple'::public.presentation_style, 17,
+       gen_random_uuid(), 'Mavzu matni', 'Sarlavha', 'simple'::public.presentation_style, 11,
        null, null, '{}', null, null, null, 'toza-qogoz') $$,
   '22023', null, 'a member cannot exceed the plan''s slide ceiling');
 
 reset role;
 
--- The week is already spent by the four consumed above, so the next generation
+-- The month is already spent by the twenty consumed above, so the next generation
 -- is refused for the allowance rather than for the wallet.
 select set_config('request.jwt.claim.sub', 'f1110000-0000-0000-0000-000000000001', true);
 set local role authenticated;
 select throws_ok(
   $$ select public.start_generation(
        gen_random_uuid(), 'Mavzu matni', 'Sarlavha', 'simple'::public.presentation_style, 8) $$,
-  'P0001', null, 'and cannot generate once the week is gone');
+  'P0001', null, 'and cannot generate once the month is gone');
 reset role;
 
 -- ------------------------------------------------------ hosting a game --
@@ -260,12 +260,12 @@ select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config('request.jwt.claim.sub', 'f2220000-0000-0000-0000-000000000002', true);
 
 select is(
-  (public.order_create_subscription('premium_monthly', 'android') ->> 'total_amount')::integer,
-  36000, 'the order is priced from the plan, not from the caller');
+  (public.order_create_subscription('premium_monthly', 'android', p_restart => false) ->> 'total_amount')::integer,
+  24000, 'the order is priced from the plan, not from the caller');
 
 -- Two presses are one purchase.
 select is(
-  (public.order_create_subscription('premium_monthly', 'android') ->> 'reused')::boolean,
+  (public.order_create_subscription('premium_monthly', 'android', p_restart => false) ->> 'reused')::boolean,
   true, 'and a second press reuses the open order rather than opening another');
 
 reset role;
@@ -290,7 +290,7 @@ select is(
 select is(
   (select (plan_snapshot -> 'features' -> 'presentation_weekly' ->> 'limit')
      from public.user_subscriptions where user_id = 'f2220000-0000-0000-0000-000000000002'),
-  '4', 'carrying the plan as it was sold, so a later edit cannot rewrite it');
+  '20', 'carrying the plan as it was sold, so a later edit cannot rewrite it');
 
 -- The dead `plan:` entitlement is gone rather than written alongside.
 select is(

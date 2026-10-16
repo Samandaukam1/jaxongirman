@@ -254,10 +254,10 @@ values ('oylik', 'Oylik tarif', 49000, 30);
 set local role authenticated;
 select set_config('request.jwt.claim.sub', 'aa110000-0000-0000-0000-0000000000d1', true);
 select is(
-  (public.order_create_subscription('oylik', 'android')) ->> 'total_amount',
+  (public.order_create_subscription('oylik', 'android', p_restart => false)) ->> 'total_amount',
   '49000', 'a subscription order is priced from the published plan');
 select throws_ok(
-  $$select public.order_create_subscription('yoq_bunday', 'android')$$,
+  $$select public.order_create_subscription('yoq_bunday', 'android', p_restart => false)$$,
   'P0002', null, 'and an unpublished plan cannot be bought');
 
 -- ------------------------------------------------------- test mode --
