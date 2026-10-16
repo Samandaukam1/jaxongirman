@@ -1,7 +1,9 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { Search, Sparkles, X } from "lucide-react-native";
 import { useCallback, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Image, Pressable, RefreshControl, Text, TextInput, View, type LayoutChangeEvent } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
   Extrapolation, interpolate, runOnJS, useAnimatedReaction, useAnimatedScrollHandler,
   useAnimatedStyle, useDerivedValue, useSharedValue,
@@ -63,9 +65,8 @@ import { makeStyles, useTheme } from "@/theme/ThemeProvider";
  */
 
 type Tool = {
-  key: string;
-  label: string;
-  detail: string;
+  /** Also the tool's key in the `projects` table, where its name and detail are. */
+  key: "portrait" | "objective" | "academic" | "import" | "present";
   art: ToolArt;
   /** The hue its own drawing is lit by — see `toolTint`. */
   tint: string;
@@ -80,11 +81,11 @@ type Tool = {
  * the two ends of a deck that already exists, so they sit together at the end.
  */
 const TOOLS: readonly Tool[] = [
-  { key: "portrait", label: "3×4 rasm", detail: "Hujjatga", art: PortraitArt, tint: toolTint.portrait, href: "/(app)/portrait" },
-  { key: "objective", label: "Obyektivka", detail: "DOCX / PDF", art: ObjectiveArt, tint: toolTint.objective, href: "/(app)/obyektivka" },
-  { key: "academic", label: "Ilmiy ish", detail: "Maqola, referat", art: ScientificArt, tint: toolTint.academic, href: "/(app)/ilmiy" },
-  { key: "import", label: "PowerPoint", detail: "Yuklab tahrirlash", art: PowerPointArt, tint: toolTint.importDeck, href: "/(app)/import" },
-  { key: "present", label: "Taqdimot qilish", detail: "Katta ekranga", art: PresentArt, tint: toolTint.present, href: "/(app)/present/scan" },
+  { key: "portrait", art: PortraitArt, tint: toolTint.portrait, href: "/(app)/portrait" },
+  { key: "objective", art: ObjectiveArt, tint: toolTint.objective, href: "/(app)/obyektivka" },
+  { key: "academic", art: ScientificArt, tint: toolTint.academic, href: "/(app)/ilmiy" },
+  { key: "import", art: PowerPointArt, tint: toolTint.importDeck, href: "/(app)/import" },
+  { key: "present", art: PresentArt, tint: toolTint.present, href: "/(app)/present/scan" },
 ];
 
 /**
@@ -102,7 +103,6 @@ const CHIP_ART = 32;
  * The pieces the header is built from, named so the two heights it moves
  * between are derived rather than typed twice.
  */
-const SAFE_TOP = 58;
 const TITLE_ROW = 52;
 const SEARCH_ROW = 46;
 const CHIP_ROW = 48;
@@ -121,6 +121,8 @@ const ESTIMATED_CARDS = 332;
 export default function ProjectsScreen() {
   const { colors, scheme } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation("projects");
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
   const { balance, refresh: refreshAccount } = useAccount();
@@ -133,9 +135,11 @@ export default function ProjectsScreen() {
   const [folded, setFolded] = useState(false);
   const [cards, setCards] = useState(ESTIMATED_CARDS);
 
-  const chrome = SAFE_TOP + TITLE_ROW + spacing.md + spacing.md + (searching ? SEARCH_ROW + spacing.md : 0);
+  // The status bar's own height, so the header sits under it on every phone.
+  const safeTop = Math.max(insets.top, 20) + spacing.xs;
+  const chrome = safeTop + TITLE_ROW + spacing.md + spacing.md + (searching ? SEARCH_ROW + spacing.md : 0);
   const open = chrome + cards;
-  const shut = SAFE_TOP + TITLE_ROW + spacing.md + CHIP_ROW + spacing.md;
+  const shut = safeTop + TITLE_ROW + spacing.md + CHIP_ROW + spacing.md;
   const range = Math.max(1, open - shut);
 
   // Measured once. The cards do not resize afterwards, and re-reading a layout
@@ -242,7 +246,7 @@ export default function ProjectsScreen() {
         }
       >
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{query ? "Topilganlar" : "Oxirgi ishlaringiz"}</Text>
+          <Text style={styles.sectionTitle}>{query ? t("found") : t("recent")}</Text>
           {shown.length > 0 ? <Text style={styles.sectionCount}>{shown.length}</Text> : null}
         </View>
 
@@ -252,33 +256,37 @@ export default function ProjectsScreen() {
         {!loading && !error && shown.length === 0 ? (
           <EmptyState
             icon={Sparkles}
-            title={query ? "Hech narsa topilmadi" : "Birinchi ishingizni yarating"}
+            title={query ? t("noneFound") : t("empty")}
             message={query
-              ? "Boshqa so‘z bilan qidirib ko‘ring."
-              : "Taqdimot, 3×4 rasm, obyektivka yoki ilmiy ish — hammasi shu yerda saqlanadi."}
+              ? t("noneFoundBody")
+              : t("emptyBody")}
           />
         ) : null}
 
         <View style={styles.list}>
           {shown.map((project, index) => (
             <Appear key={`${project.kind}-${project.id}`} index={index}>
-              <ProjectRow project={project} onPress={() => go(project.href)} />
+              <ProjectRow
+                project={project}
+                onPress={() => go(project.href)}
+                onDeleted={() => setItems((current) => current.filter((item) => !(item.kind === project.kind && item.id === project.id)))}
+              />
             </Appear>
           ))}
         </View>
       </Animated.ScrollView>
 
-      <Animated.View style={[styles.header, shell]}>
+      <Animated.View style={[styles.header, { paddingTop: safeTop }, shell]}>
         <View style={styles.titleRow}>
           <View style={styles.titleCopy}>
             <Text numberOfLines={1} style={styles.eyebrow}>JAXONGIRMAN</Text>
-            <Text numberOfLines={1} style={styles.brand}>Loyihalar</Text>
+            <Text numberOfLines={1} style={styles.brand}>{t("title")}</Text>
           </View>
           <View style={styles.titleActions}>
             <MarathonVoteButton variant="compact" />
             <Touchable
               accessibilityRole="button"
-              accessibilityLabel={searching ? "Qidiruvni yopish" : "Qidirish"}
+              accessibilityLabel={searching ? t("closeSearch") : t("search")}
               onPress={() => { setSearching((it) => !it); if (searching) setQuery(""); }}
               style={[styles.iconButton, searching && styles.iconButtonOn]}
             >
@@ -286,7 +294,7 @@ export default function ProjectsScreen() {
                 ? <X color={colors.primaryDeep} size={icon.md} strokeWidth={icon.stroke} />
                 : <Search color={colors.primaryDeep} size={icon.md} strokeWidth={icon.stroke} />}
             </Touchable>
-            <Touchable style={styles.coinPill} onPress={() => go("/(app)/coins/buy")} accessibilityLabel="J Coin balans">
+            <Touchable style={styles.coinPill} onPress={() => go("/(app)/coins/buy")} accessibilityLabel={t("balance")}>
               <Image source={coinIcon} resizeMode="contain" style={styles.coinIcon} />
               <Text style={styles.coinText}>{formatNumber(balance)}</Text>
             </Touchable>
@@ -300,13 +308,13 @@ export default function ProjectsScreen() {
               autoFocus
               value={query}
               onChangeText={setQuery}
-              placeholder="Nomi yoki turi bo‘yicha qidiring"
+              placeholder={t("searchPlaceholder")}
               placeholderTextColor={colors.inkSoft}
               style={styles.searchInput}
               returnKeyType="search"
             />
             {query ? (
-              <Pressable accessibilityLabel="Tozalash" onPress={() => setQuery("")} hitSlop={8}>
+              <Pressable accessibilityLabel={t("clear")} onPress={() => setQuery("")} hitSlop={8}>
                 <X color={colors.inkSoft} size={16} strokeWidth={2.2} />
               </Pressable>
             ) : null}
@@ -318,8 +326,8 @@ export default function ProjectsScreen() {
           <HeroToolCard
             art={SlideCreateArt}
             size={HERO_ART}
-            title="Taqdimot yaratish"
-            detail="Jaxongir AI bilan yangi slayd"
+            title={t("create.title")}
+            detail={t("create.detail")}
             tint={toolTint.slideCreate}
             onPress={() => go("/(app)/create")}
             progress={artFold}
@@ -333,8 +341,8 @@ export default function ProjectsScreen() {
                 key={tool.key}
                 art={tool.art}
                 size={TILE_ART}
-                title={tool.label}
-                detail={tool.detail}
+                title={t(`tools.${tool.key}.label`)}
+                detail={t(`tools.${tool.key}.detail`)}
                 tint={tool.tint}
                 onPress={() => go(tool.href)}
                 progress={artFold}
@@ -347,8 +355,8 @@ export default function ProjectsScreen() {
                 key={tool.key}
                 art={tool.art}
                 size={WIDE_ART}
-                title={tool.label}
-                detail={tool.detail}
+                title={t(`tools.${tool.key}.label`)}
+                detail={t(`tools.${tool.key}.detail`)}
                 tint={tool.tint}
                 onPress={() => go(tool.href)}
                 progress={artFold}
@@ -361,7 +369,7 @@ export default function ProjectsScreen() {
         <Animated.View style={[styles.narrow, narrow]} pointerEvents={folded ? "auto" : "none"}>
           <Touchable
             accessibilityRole="button"
-            accessibilityLabel="Taqdimot yaratish"
+            accessibilityLabel={t("create.title")}
             onPress={() => go("/(app)/create")}
             style={[styles.chip, chipSkin(toolTint.slideCreate)]}
           >
@@ -371,7 +379,7 @@ export default function ProjectsScreen() {
             <Touchable
               key={tool.key}
               accessibilityRole="button"
-              accessibilityLabel={tool.label}
+              accessibilityLabel={t(`tools.${tool.key}.label`)}
               onPress={() => go(tool.href)}
               style={[styles.chip, chipSkin(tool.tint)]}
             >
@@ -398,7 +406,6 @@ const useStyles = makeStyles((colors) => ({
   header: {
     position: "absolute",
     top: 0, left: 0, right: 0,
-    paddingTop: 58,
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.md,
     gap: spacing.md,

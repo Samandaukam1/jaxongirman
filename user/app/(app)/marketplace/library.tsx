@@ -1,6 +1,7 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { BookOpenText, Download, Library } from "lucide-react-native";
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 
 import { useAuth } from "@/providers/AuthProvider";
@@ -35,6 +36,7 @@ export default function LibraryScreen() {
   const { user } = useAuth();
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation("market");
   const router = useRouter();
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,9 +66,9 @@ export default function LibraryScreen() {
     try {
       const file = await downloadPurchasedFile(productId, kind);
       const shared = await shareFile(file.uri, file.mimeType);
-      if (!shared) Alert.alert("Yuklab olindi", "Fayl qurilmaga saqlandi.");
+      if (!shared) Alert.alert(t("library.saved"), t("library.savedBody"));
     } catch (downloadError) {
-      Alert.alert("Yuklab olinmadi", await asFunctionErrorMessage(downloadError));
+      Alert.alert(t("library.failed"), await asFunctionErrorMessage(downloadError));
     } finally {
       setBusyId(null);
     }
@@ -74,7 +76,7 @@ export default function LibraryScreen() {
 
   return (
     <View style={styles.screen}>
-      <ScreenHeader title="Xaridlarim" subtitle={purchases.length ? `${purchases.length} ta material` : undefined} />
+      <ScreenHeader title={t("library.title")} subtitle={purchases.length ? t("library.count", { count: purchases.length }) : undefined} />
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -87,8 +89,8 @@ export default function LibraryScreen() {
         {!loading && !error && purchases.length === 0 ? (
           <EmptyState
             icon={Library}
-            title="Kutubxonangiz bo‘sh"
-            message="Do‘kondan material sotib olsangiz, u shu yerda saqlanadi va istalgan vaqtda yuklab olasiz."
+            title={t("library.empty")}
+            message={t("library.emptyBody")}
           />
         ) : null}
 
@@ -102,7 +104,7 @@ export default function LibraryScreen() {
                   style={styles.cardCopy}
                 >
                   <Text numberOfLines={2} style={styles.cardTitle}>
-                    {purchase.marketplace_products?.title ?? "Material"}
+                    {purchase.marketplace_products?.title ?? t("library.fallback")}
                   </Text>
                   <Text style={styles.cardMeta}>
                     {formatSom(purchase.buyer_total)} · {formatShortDateTime(purchase.purchased_at)}
@@ -120,7 +122,7 @@ export default function LibraryScreen() {
                     {busyId === `${purchase.product_id}:main`
                       ? <ActivityIndicator color={colors.primary} size="small" />
                       : <Download color={colors.primary} size={16} strokeWidth={2} />}
-                    <Text style={styles.actionText}>Yuklab olish</Text>
+                    <Text style={styles.actionText}>{t("library.download")}</Text>
                   </Pressable>
                   {purchase.marketplace_products?.has_study_guide ? (
                     <Pressable
@@ -132,7 +134,7 @@ export default function LibraryScreen() {
                       {busyId === `${purchase.product_id}:study_guide`
                         ? <ActivityIndicator color={colors.primary} size="small" />
                         : <BookOpenText color={colors.primary} size={16} strokeWidth={2} />}
-                      <Text style={styles.actionText}>Study guide</Text>
+                      <Text style={styles.actionText}>{t("library.guide")}</Text>
                     </Pressable>
                   ) : null}
                 </View>

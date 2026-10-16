@@ -1,8 +1,8 @@
-import type { GameQuestionType, MarketplaceQuote } from "@jaxongirman/types";
-import { GAME_DIFFICULTY_LABELS, GAME_TYPE_LABELS } from "@jaxongirman/types";
+import type { MarketplaceQuote } from "@jaxongirman/types";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { BookOpenText, CheckCircle2, Flag, Gamepad2, Heart, Star, Store } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Alert, Image, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -10,6 +10,7 @@ import { ScreenHeader } from "@/components/ScreenHeader";
 import { ErrorState, InlineError, SkeletonCard } from "@/components/StateBlocks";
 import { formatShortDateTime } from "@/lib/datetime";
 import { asErrorMessage } from "@/lib/format";
+import { labelOf } from "@/lib/labels";
 import { createSession } from "@/lib/games";
 import { signPaths, toggleFavorite } from "@/lib/marketplace";
 import { formatSom } from "@/lib/money";
@@ -39,12 +40,9 @@ type Detail = {
   is_favorite: boolean;
 };
 
+/** Why a listing is reported; the words are in the `market` table under `product.reason`. */
 const REPORT_REASONS = [
-  { code: "copyright", label: "Mualliflik huquqi" },
-  { code: "plagiarism", label: "Plagiat" },
-  { code: "inappropriate", label: "Nomaqbul kontent" },
-  { code: "fraud", label: "Aldov" },
-  { code: "other", label: "Boshqa" },
+  { code: "copyright" }, { code: "plagiarism" }, { code: "inappropriate" }, { code: "fraud" }, { code: "other" },
 ] as const;
 
 /**
@@ -57,6 +55,7 @@ const REPORT_REASONS = [
 export default function ProductDetailScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation(["market", "common"]);
   const router = useRouter();
   const { user } = useAuth();
   const params = useLocalSearchParams<{ id?: string }>();
@@ -183,17 +182,17 @@ export default function ProductDetailScreen() {
     setBusy(false);
     setReportOpen(false);
     if (reportError) {
-      Alert.alert("Yuborilmadi", reportError.code === "23505" ? "Siz bu mahsulot haqida allaqachon shikoyat qilgansiz." : asErrorMessage(reportError));
+      Alert.alert(t("product.reportFailed"), reportError.code === "23505" ? t("product.reportDuplicate") : asErrorMessage(reportError));
     } else {
       setReportDetail("");
-      Alert.alert("Yuborildi", "Shikoyatingiz moderatsiyaga tushdi. Rahmat.");
+      Alert.alert(t("product.reportSent"), t("product.reportSentBody"));
     }
   }
 
   if (loading) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="Mahsulot" />
+        <ScreenHeader title={t("product.fallback")} />
         <View style={styles.content}><SkeletonCard lines={3} /><SkeletonCard lines={3} /></View>
       </View>
     );
@@ -202,8 +201,8 @@ export default function ProductDetailScreen() {
   if (error || !detail) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="Mahsulot" />
-        <View style={styles.content}><ErrorState message={error ?? "Mahsulot topilmadi"} onRetry={() => void load()} /></View>
+        <ScreenHeader title={t("product.fallback")} />
+        <View style={styles.content}><ErrorState message={error ?? t("product.notFound")} onRetry={() => void load()} /></View>
       </View>
     );
   }
@@ -214,11 +213,11 @@ export default function ProductDetailScreen() {
   return (
     <View style={styles.screen}>
       <ScreenHeader
-        title={product.material_label ?? "Mahsulot"}
+        title={product.material_label ?? t("product.fallback")}
         action={
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={detail.is_favorite ? "Sevimlilardan olib tashlash" : "Sevimlilarga qo‘shish"}
+            accessibilityLabel={detail.is_favorite ? t("unfavorite") : t("favorite")}
             onPress={() => void onFavorite()}
             style={styles.headerAction}
           >
@@ -247,7 +246,7 @@ export default function ProductDetailScreen() {
             onPress={() => router.push({ pathname: "/(app)/marketplace/preview/[id]", params: { id: productId } })}
             style={styles.previewOpen}
           >
-            <Text style={styles.previewOpenText}>Ko‘rib chiqish</Text>
+            <Text style={styles.previewOpenText}>{t("product.preview")}</Text>
           </Pressable>
         ) : null}
 
@@ -268,7 +267,7 @@ export default function ProductDetailScreen() {
             style={styles.sellerRow}
           >
             <Text style={styles.sellerName}>{seller.name}</Text>
-            <Text style={styles.sellerMeta}>· {seller.product_count} ta material</Text>
+            <Text style={styles.sellerMeta}>{t("product.sellerCount", { count: seller.product_count })}</Text>
           </Pressable>
         ) : null}
 
@@ -280,9 +279,9 @@ export default function ProductDetailScreen() {
               <Text style={styles.statLabel}>({product.rating_count})</Text>
             </View>
           ) : null}
-          <View style={styles.stat}><Text style={styles.statValue}>{product.sales_count}</Text><Text style={styles.statLabel}>sotilgan</Text></View>
+          <View style={styles.stat}><Text style={styles.statValue}>{product.sales_count}</Text><Text style={styles.statLabel}>{t("product.sold")}</Text></View>
           {product.content_units ? (
-            <View style={styles.stat}><Text style={styles.statValue}>{product.content_units}</Text><Text style={styles.statLabel}>bet/slayd</Text></View>
+            <View style={styles.stat}><Text style={styles.statValue}>{product.content_units}</Text><Text style={styles.statLabel}>{t("product.units")}</Text></View>
           ) : null}
           {product.file_format ? (
             <View style={styles.stat}><Text style={styles.statValue}>{product.file_format.toUpperCase()}</Text></View>
@@ -293,7 +292,7 @@ export default function ProductDetailScreen() {
           <View style={styles.guideCard}>
             <BookOpenText color={colors.primary} size={18} strokeWidth={2} />
             <Text style={styles.guideText}>
-              Qo‘shimcha o‘quv materiali biriktirilgan. Xariddan so‘ng yuklab olish mumkin.
+              {t("product.guide")}
             </Text>
           </View>
         ) : null}
@@ -302,10 +301,10 @@ export default function ProductDetailScreen() {
           <View style={styles.guideCard}>
             <Gamepad2 color={colors.primary} size={18} strokeWidth={2} />
             <Text style={styles.guideText}>
-              {gamePreview.question_count} savol · {GAME_DIFFICULTY_LABELS[gamePreview.difficulty] ?? gamePreview.difficulty}
+              {t("product.questions", { count: gamePreview.question_count })} · {labelOf("gameDifficulty", gamePreview.difficulty)}
               {Object.keys(gamePreview.types).length > 0
                 ? ` · ${Object.entries(gamePreview.types)
-                    .map(([type, count]) => `${GAME_TYPE_LABELS[type as GameQuestionType] ?? type} (${count})`)
+                    .map(([type, count]) => `${labelOf("gameType", type)} (${count})`)
                     .join(", ")}`
                 : ""}
             </Text>
@@ -325,16 +324,16 @@ export default function ProductDetailScreen() {
         {policy.showPrices ? (
         <View style={styles.priceCard}>
           <View style={styles.priceLine}>
-            <Text style={styles.priceLabel}>Mahsulot</Text>
+            <Text style={styles.priceLabel}>{t("product.price")}</Text>
             <Text style={styles.priceValue}>{formatSom(quote.base_price)}</Text>
           </View>
           <View style={styles.priceLine}>
-            <Text style={styles.priceLabel}>Xizmat haqi ({quote.buyer_fee_rate}%)</Text>
+            <Text style={styles.priceLabel}>{t("product.fee", { rate: quote.buyer_fee_rate })}</Text>
             <Text style={styles.priceValue}>{formatSom(quote.buyer_fee_amount)}</Text>
           </View>
           <View style={styles.priceDivider} />
           <View style={styles.priceLine}>
-            <Text style={styles.priceTotalLabel}>Jami</Text>
+            <Text style={styles.priceTotalLabel}>{t("product.total")}</Text>
             <Text style={styles.priceTotal}>{formatSom(quote.buyer_total)}</Text>
           </View>
         </View>
@@ -344,7 +343,7 @@ export default function ProductDetailScreen() {
 
         {(detail.owned || product.is_own) && gamePreview ? (
           <PrimaryButton
-            label="O‘yinni boshlash"
+            label={t("product.startGame")}
             icon={Gamepad2}
             loading={hosting}
             onPress={() => void hostGame(gamePreview.game_id)}
@@ -354,22 +353,22 @@ export default function ProductDetailScreen() {
         {detail.owned ? (
           <View style={styles.ownedCard}>
             <CheckCircle2 color={colors.success} size={20} strokeWidth={2} />
-            <Text style={styles.ownedText}>Bu mahsulot sizda bor.</Text>
+            <Text style={styles.ownedText}>{t("product.owned")}</Text>
             <Pressable onPress={() => router.push("/(app)/marketplace/library")}>
-              <Text style={styles.ownedLink}>Kutubxonaga o‘tish</Text>
+              <Text style={styles.ownedLink}>{t("toLibrary")}</Text>
             </Pressable>
           </View>
         ) : product.is_own ? (
           <View style={styles.ownedCard}>
-            <Text style={styles.ownedText}>Bu sizning mahsulotingiz.</Text>
+            <Text style={styles.ownedText}>{t("product.own")}</Text>
           </View>
         ) : policy.paymentsEnabled ? (
-          <PrimaryButton label={`${formatSom(quote.buyer_total)} — sotib olish`} loading={busy} onPress={() => void startBuy()} />
+          <PrimaryButton label={t("product.buy", { amount: formatSom(quote.buyer_total) })} loading={busy} onPress={() => void startBuy()} />
         ) : null}
 
         {detail.reviews.length > 0 ? (
           <>
-            <Text style={styles.sectionTitle}>Sharhlar</Text>
+            <Text style={styles.sectionTitle}>{t("product.reviews")}</Text>
             <View style={styles.reviewList}>
               {detail.reviews.map((review) => (
                 <View key={review.id} style={styles.review}>
@@ -398,7 +397,7 @@ export default function ProductDetailScreen() {
         {!product.is_own ? (
           <Pressable accessibilityRole="button" onPress={() => setReportOpen(true)} style={styles.reportButton}>
             <Flag color={colors.inkSoft} size={14} strokeWidth={2} />
-            <Text style={styles.reportText}>Shikoyat qilish</Text>
+            <Text style={styles.reportText}>{t("product.report")}</Text>
           </Pressable>
         ) : null}
       </ScrollView>
@@ -428,7 +427,7 @@ export default function ProductDetailScreen() {
 
             <View style={styles.refundActions}>
               <Pressable accessibilityRole="button" onPress={() => setRefundOpen(false)} style={styles.refundCancel}>
-                <Text style={styles.refundCancelText}>Bekor qilish</Text>
+                <Text style={styles.refundCancelText}>{t("common:cancel")}</Text>
               </Pressable>
               <Pressable
                 accessibilityRole="button"
@@ -436,7 +435,7 @@ export default function ProductDetailScreen() {
                 onPress={() => void buy(true)}
                 style={[styles.refundConfirm, (!refundAgreed || busy) && styles.refundDisabled]}
               >
-                <Text style={styles.refundConfirmText}>{busy ? "Ochilmoqda…" : "Davom etish"}</Text>
+                <Text style={styles.refundConfirmText}>{busy ? t("product.opening") : t("common:continue")}</Text>
               </Pressable>
             </View>
           </View>
@@ -444,9 +443,9 @@ export default function ProductDetailScreen() {
       </Modal>
 
       <Modal visible={reportOpen} transparent animationType="fade" onRequestClose={() => setReportOpen(false)}>
-        <Pressable accessibilityLabel="Yopish" onPress={() => setReportOpen(false)} style={styles.backdrop}>
+        <Pressable accessibilityLabel={t("common:close")} onPress={() => setReportOpen(false)} style={styles.backdrop}>
           <Pressable style={styles.sheet} onPress={() => undefined}>
-            <Text style={styles.sheetTitle}>Shikoyat qilish</Text>
+            <Text style={styles.sheetTitle}>{t("product.report")}</Text>
             <View style={styles.reasonRow}>
               {REPORT_REASONS.map((reason) => (
                 <Pressable
@@ -454,19 +453,19 @@ export default function ProductDetailScreen() {
                   onPress={() => setReportReason(reason.code)}
                   style={[styles.chip, reportReason === reason.code && styles.chipActive]}
                 >
-                  <Text style={[styles.chipText, reportReason === reason.code && styles.chipTextActive]}>{reason.label}</Text>
+                  <Text style={[styles.chipText, reportReason === reason.code && styles.chipTextActive]}>{t(`product.reason.${reason.code}`)}</Text>
                 </Pressable>
               ))}
             </View>
             <TextInput
               value={reportDetail}
               onChangeText={(value) => setReportDetail(value.slice(0, 1000))}
-              placeholder="Qisqacha tushuntiring (ixtiyoriy)"
+              placeholder={t("product.reportDetail")}
               placeholderTextColor={colors.inkSoft}
               multiline
               style={styles.reportInput}
             />
-            <PrimaryButton label="Yuborish" loading={busy} onPress={() => void submitReport()} />
+            <PrimaryButton label={t("common:send")} loading={busy} onPress={() => void submitReport()} />
           </Pressable>
         </Pressable>
       </Modal>

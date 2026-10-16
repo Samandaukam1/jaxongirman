@@ -7,8 +7,9 @@ import PortraitArt from "../../assets/icons/1.svg";
 import ObjectiveArt from "../../assets/icons/2.svg";
 import ScientificArt from "../../assets/icons/3.svg";
 import SlideCreateArt from "../../assets/icons/4.svg";
+import { DeleteWorkButton } from "@/components/DeleteWorkButton";
 import { Touchable } from "@/components/Touchable";
-import { KIND_LABEL, statusLabel, type Project, type ProjectKind } from "@/lib/projects";
+import { kindLabel, statusLabel, type Project, type ProjectKind } from "@/lib/projects";
 import { withAlpha } from "@/theme/color";
 import { radius, shadow, spacing, toolTint, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
@@ -73,7 +74,7 @@ function ago(iso: string): string {
   return days < 30 ? `${days} kun oldin` : new Date(iso).toLocaleDateString("uz");
 }
 
-export function ProjectRow({ project, onPress }: { project: Project; onPress: () => void }) {
+export function ProjectRow({ project, onPress, onDeleted }: { project: Project; onPress: () => void; onDeleted?: () => void }) {
   const { scheme } = useTheme();
   const styles = useStyles();
   const { art: Art, tint } = MARK[project.kind];
@@ -83,7 +84,7 @@ export function ProjectRow({ project, onPress }: { project: Project; onPress: ()
   return (
     <Touchable
       accessibilityRole="button"
-      accessibilityLabel={`${KIND_LABEL[project.kind]}: ${project.title}`}
+      accessibilityLabel={`${kindLabel(project.kind)}: ${project.title}`}
       onPress={onPress}
       style={styles.row}
     >
@@ -94,7 +95,7 @@ export function ProjectRow({ project, onPress }: { project: Project; onPress: ()
       <View style={styles.copy}>
         <Text numberOfLines={2} style={styles.title}>{project.title}</Text>
         <Text numberOfLines={1} style={styles.meta}>
-          {KIND_LABEL[project.kind]} · {project.detail} · {ago(project.updatedAt)}
+          {kindLabel(project.kind)} · {project.detail} · {ago(project.updatedAt)}
         </Text>
       </View>
       {/**
@@ -107,6 +108,7 @@ export function ProjectRow({ project, onPress }: { project: Project; onPress: ()
       {status && loud
         ? <View style={styles.badge}><Text style={styles.badgeText}>{status}</Text></View>
         : <View style={styles.dot} />}
+      {onDeleted ? <DeleteWorkButton kind={project.kind} id={project.id} title={project.title} onDeleted={onDeleted} /> : null}
     </Touchable>
   );
 }

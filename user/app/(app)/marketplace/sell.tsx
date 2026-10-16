@@ -5,6 +5,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { BookOpenText, FileUp, Image as ImageIcon, Send, X } from "lucide-react-native";
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -42,6 +43,7 @@ function extensionFor(mimeType: string, name: string): string {
 export default function SellScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation(["market", "common"]);
   const router = useRouter();
   const { user } = useAuth();
   const { types } = useMaterialTypes();
@@ -76,10 +78,10 @@ export default function SellScreen() {
   const selectedType: MarketplaceMaterialType | undefined = types.find((type) => type.code === materialType);
 
   const problem =
-    !materialType ? "Material turini tanlang."
-    : title.trim().length < 3 ? "Nom kamida 3 ta belgidan iborat bo‘lsin."
-    : price <= 0 ? "Narxni kiriting."
-    : !gameId && !mainFile ? "Asosiy faylni yuklang."
+    !materialType ? t("sellForm.needType")
+    : title.trim().length < 3 ? t("sellForm.needName")
+    : price <= 0 ? t("sellForm.needPrice")
+    : !gameId && !mainFile ? t("sellForm.needFile")
     : null;
 
   async function pickImage(kind: "cover" | "preview") {
@@ -113,11 +115,11 @@ export default function SellScreen() {
 
     const mimeType = asset.mimeType ?? "";
     if (kind === "main" && !accepted.includes(mimeType)) {
-      Alert.alert("Fayl mos emas", `Bu material turi uchun ${accepted.join(", ")} formatlari qabul qilinadi.`);
+      Alert.alert(t("sellForm.wrongFile"), t("sellForm.wrongFileBody", { formats: accepted.join(", ") }));
       return;
     }
     if (kind === "main" && (asset.size ?? 0) > selectedType.max_file_bytes) {
-      Alert.alert("Fayl katta", `Maksimal hajm: ${formatBytes(selectedType.max_file_bytes)}.`);
+      Alert.alert(t("sellForm.bigFile"), t("sellForm.bigFileBody", { size: formatBytes(selectedType.max_file_bytes) }));
       return;
     }
 
@@ -135,8 +137,8 @@ export default function SellScreen() {
 
   async function publish() {
     if (problem) { setError(problem); return; }
-    if (!user) { setError("Hisobingiz aniqlanmadi. Ilovaga qaytadan kiring."); return; }
-    if (!materialType) { setError("Material turini tanlang."); return; }
+    if (!user) { setError(t("sellForm.noAccount")); return; }
+    if (!materialType) { setError(t("sellForm.needType")); return; }
     setBusy(true);
     setError(null);
     try {
@@ -223,9 +225,9 @@ export default function SellScreen() {
       if (submitError) throw submitError;
 
       Alert.alert(
-        "Yuborildi",
-        "Material moderatsiyaga yuborildi. Tasdiqlangach Do‘konda ko‘rinadi va sizga xabar keladi.",
-        [{ text: "Yaxshi", onPress: () => router.replace("/(app)/marketplace/seller") }],
+        t("sellForm.sent"),
+        t("sellForm.sentBody"),
+        [{ text: t("sellForm.ok"), onPress: () => router.replace("/(app)/marketplace/seller") }],
       );
     } catch (nextError) {
       setError(asErrorMessage(nextError));
@@ -240,7 +242,7 @@ export default function SellScreen() {
     return (
       <PaymentUnavailable
         title={policy.unavailableMessage("marketplace")}
-        message="Mavjud e’lonlaringiz o‘zgarishsiz qoladi."
+        message={t("sellForm.kept")}
         onLeave={() => router.back()}
       />
     );
@@ -248,14 +250,14 @@ export default function SellScreen() {
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.screen}>
-      <ScreenHeader title="Material sotish" variant="close" onLeave={() => router.back()} />
+      <ScreenHeader title={t("sellForm.title")} variant="close" onLeave={() => router.back()} />
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <View style={styles.block}>
-          <Text style={styles.label}>Material turi</Text>
+          <Text style={styles.label}>{t("sellForm.type")}</Text>
           {gameId ? (
             <View style={[styles.typeChip, styles.typeChipActive, { alignSelf: "flex-start" }]}>
-              <Text style={[styles.typeText, styles.typeTextActive]}>O‘yin</Text>
+              <Text style={[styles.typeText, styles.typeTextActive]}>{t("sellForm.game")}</Text>
             </View>
           ) : (
             <View style={styles.typeRow}>
@@ -271,30 +273,27 @@ export default function SellScreen() {
             </View>
           )}
           {gameId ? (
-            <Text style={styles.hint}>
-              O‘yin fayl sifatida yuklanmaydi. Xaridor uni o‘z kutubxonasidan boshlab o‘tkazadi,
-              o‘yin esa sizning nomingizda qoladi.
-            </Text>
+            <Text style={styles.hint}>{t("sellForm.gameHint")}</Text>
           ) : selectedType ? <Text style={styles.hint}>{selectedType.description}</Text> : null}
         </View>
 
         <View style={styles.block}>
-          <Text style={styles.label}>Nomi</Text>
+          <Text style={styles.label}>{t("sellForm.name")}</Text>
           <TextInput
             value={title}
             onChangeText={(value) => setTitle(value.slice(0, 160))}
-            placeholder="Masalan: Alisher Navoiy hayoti va ijodi"
+            placeholder={t("sellForm.namePlaceholder")}
             placeholderTextColor={colors.inkSoft}
             style={styles.input}
           />
         </View>
 
         <View style={styles.block}>
-          <Text style={styles.label}>Tavsif</Text>
+          <Text style={styles.label}>{t("sellForm.description")}</Text>
           <TextInput
             value={description}
             onChangeText={(value) => setDescription(value.slice(0, 4000))}
-            placeholder="Material nima haqida, kimga mos, nimalarni o‘z ichiga oladi"
+            placeholder={t("sellForm.descriptionPlaceholder")}
             placeholderTextColor={colors.inkSoft}
             multiline
             style={[styles.input, styles.multiline]}
@@ -302,11 +301,11 @@ export default function SellScreen() {
         </View>
 
         <View style={styles.block}>
-          <Text style={styles.label}>Slayd / bet soni</Text>
+          <Text style={styles.label}>{t("sellForm.units")}</Text>
           <TextInput
             value={units}
             onChangeText={(value) => setUnits(value.replace(/[^0-9]/g, "").slice(0, 5))}
-            placeholder="Masalan: 18"
+            placeholder={t("sellForm.unitsPlaceholder")}
             placeholderTextColor={colors.inkSoft}
             keyboardType="number-pad"
             style={styles.input}
@@ -315,7 +314,7 @@ export default function SellScreen() {
 
         {/* ------------------------------------------------ price calculator */}
         <View style={styles.block}>
-          <Text style={styles.label}>Siz belgilagan narx</Text>
+          <Text style={styles.label}>{t("sellForm.price")}</Text>
           <TextInput
             value={priceText}
             onChangeText={(value) => setPriceText(value.replace(/[^0-9]/g, "").slice(0, 9))}
@@ -328,36 +327,36 @@ export default function SellScreen() {
           {quote && price > 0 ? (
             <View style={styles.calculator}>
               <Text style={styles.calcNote}>
-                Platforma mahsulot sotilganda {quote.seller_fee_rate}% komissiya oladi. Narxni shunga qarab belgilang.
+                {t("sellForm.commission", { rate: quote.seller_fee_rate })}
               </Text>
 
-              <Text style={styles.calcSection}>Siz olasiz</Text>
+              <Text style={styles.calcSection}>{t("sellForm.youGet")}</Text>
               <View style={styles.calcLine}>
-                <Text style={styles.calcLabel}>Asosiy narx</Text>
+                <Text style={styles.calcLabel}>{t("sellForm.base")}</Text>
                 <Text style={styles.calcValue}>{formatSom(quote.base_price)}</Text>
               </View>
               <View style={styles.calcLine}>
-                <Text style={styles.calcLabel}>Sotuvchi komissiyasi ({quote.seller_fee_rate}%)</Text>
+                <Text style={styles.calcLabel}>{t("sellForm.sellerFee", { rate: quote.seller_fee_rate })}</Text>
                 <Text style={[styles.calcValue, styles.calcNegative]}>−{formatSom(quote.seller_fee_amount)}</Text>
               </View>
               <View style={styles.calcDivider} />
               <View style={styles.calcLine}>
-                <Text style={styles.calcTotalLabel}>Sizga tushadi</Text>
+                <Text style={styles.calcTotalLabel}>{t("sellForm.net")}</Text>
                 <Text style={styles.calcTotal}>{formatSom(quote.seller_net)}</Text>
               </View>
 
-              <Text style={[styles.calcSection, styles.calcSectionSpaced]}>Xaridor to‘laydi</Text>
+              <Text style={[styles.calcSection, styles.calcSectionSpaced]}>{t("sellForm.buyerPays")}</Text>
               <View style={styles.calcLine}>
-                <Text style={styles.calcLabel}>Mahsulot</Text>
+                <Text style={styles.calcLabel}>{t("product.price")}</Text>
                 <Text style={styles.calcValue}>{formatSom(quote.base_price)}</Text>
               </View>
               <View style={styles.calcLine}>
-                <Text style={styles.calcLabel}>Xizmat haqi ({quote.buyer_fee_rate}%)</Text>
+                <Text style={styles.calcLabel}>{t("product.fee", { rate: quote.buyer_fee_rate })}</Text>
                 <Text style={styles.calcValue}>{formatSom(quote.buyer_fee_amount)}</Text>
               </View>
               <View style={styles.calcDivider} />
               <View style={styles.calcLine}>
-                <Text style={styles.calcTotalLabel}>Jami</Text>
+                <Text style={styles.calcTotalLabel}>{t("product.total")}</Text>
                 <Text style={styles.calcTotal}>{formatSom(quote.buyer_total)}</Text>
               </View>
             </View>
@@ -366,30 +365,30 @@ export default function SellScreen() {
 
         {/* ------------------------------------------------------------ files */}
         <View style={styles.block}>
-          <Text style={styles.label}>Muqova rasmi</Text>
+          <Text style={styles.label}>{t("sellForm.cover")}</Text>
           {cover ? (
             <View style={styles.filePicked}>
               <Image source={{ uri: cover.uri }} style={styles.coverThumb} />
               <Text numberOfLines={1} style={styles.fileName}>{cover.name}</Text>
-              <Pressable accessibilityLabel="Olib tashlash" onPress={() => setCover(null)} style={styles.fileRemove}>
+              <Pressable accessibilityLabel={t("sellForm.remove")} onPress={() => setCover(null)} style={styles.fileRemove}>
                 <X color={colors.danger} size={14} strokeWidth={2.4} />
               </Pressable>
             </View>
           ) : (
             <Pressable onPress={() => void pickImage("cover")} style={styles.picker}>
               <ImageIcon color={colors.primary} size={18} strokeWidth={2} />
-              <Text style={styles.pickerText}>Muqova tanlash</Text>
+              <Text style={styles.pickerText}>{t("sellForm.pickCover")}</Text>
             </Pressable>
           )}
         </View>
 
         <View style={styles.block}>
-          <Text style={styles.label}>Ko‘rish uchun rasmlar ({previews.length}/6)</Text>
+          <Text style={styles.label}>{t("sellForm.previews", { count: previews.length })}</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.previewStrip}>
             {previews.map((preview, index) => (
               <Pressable
                 key={preview.uri}
-                accessibilityLabel="Olib tashlash"
+                accessibilityLabel={t("sellForm.remove")}
                 onPress={() => setPreviews((current) => current.filter((_, position) => position !== index))}
               >
                 <Image source={{ uri: preview.uri }} style={styles.previewThumb} />
@@ -406,7 +405,7 @@ export default function SellScreen() {
         {/* A game has no bytes to upload: the listing references the game row. */}
         {!gameId ? (<>
         <View style={styles.block}>
-          <Text style={styles.label}>Asosiy fayl</Text>
+          <Text style={styles.label}>{t("sellForm.main")}</Text>
           {mainFile ? (
             <View style={styles.filePicked}>
               <FileUp color={colors.primary} size={18} strokeWidth={2} />
@@ -414,7 +413,7 @@ export default function SellScreen() {
                 <Text numberOfLines={1} style={styles.fileName}>{mainFile.name}</Text>
                 <Text style={styles.fileSize}>{formatBytes(mainFile.sizeBytes)}</Text>
               </View>
-              <Pressable accessibilityLabel="Olib tashlash" onPress={() => setMainFile(null)} style={styles.fileRemove}>
+              <Pressable accessibilityLabel={t("sellForm.remove")} onPress={() => setMainFile(null)} style={styles.fileRemove}>
                 <X color={colors.danger} size={14} strokeWidth={2.4} />
               </Pressable>
             </View>
@@ -426,7 +425,7 @@ export default function SellScreen() {
             >
               <FileUp color={colors.primary} size={18} strokeWidth={2} />
               <Text style={styles.pickerText}>
-                {selectedType ? "Fayl tanlash" : "Avval material turini tanlang"}
+                {selectedType ? t("sellForm.pickFile") : t("sellForm.typeFirst")}
               </Text>
             </Pressable>
           )}
@@ -434,7 +433,7 @@ export default function SellScreen() {
 
         {selectedType?.supports_study_guide ? (
           <View style={styles.block}>
-            <Text style={styles.label}>Qo‘shimcha o‘quv materiali (ixtiyoriy)</Text>
+            <Text style={styles.label}>{t("sellForm.guide")}</Text>
             {guideFile ? (
               <View style={styles.filePicked}>
                 <BookOpenText color={colors.primary} size={18} strokeWidth={2} />
@@ -442,17 +441,17 @@ export default function SellScreen() {
                   <Text numberOfLines={1} style={styles.fileName}>{guideFile.name}</Text>
                   <Text style={styles.fileSize}>{formatBytes(guideFile.sizeBytes)}</Text>
                 </View>
-                <Pressable accessibilityLabel="Olib tashlash" onPress={() => setGuideFile(null)} style={styles.fileRemove}>
+                <Pressable accessibilityLabel={t("sellForm.remove")} onPress={() => setGuideFile(null)} style={styles.fileRemove}>
                   <X color={colors.danger} size={14} strokeWidth={2.4} />
                 </Pressable>
               </View>
             ) : (
               <Pressable onPress={() => void pickDocument("guide")} style={styles.picker}>
                 <BookOpenText color={colors.primary} size={18} strokeWidth={2} />
-                <Text style={styles.pickerText}>Study guide biriktirish</Text>
+                <Text style={styles.pickerText}>{t("sellForm.attachGuide")}</Text>
               </Pressable>
             )}
-            <Text style={styles.hint}>Xaridor uni yuklab oladi, lekin Jaxongirman muharririda tahrirlay olmaydi.</Text>
+            <Text style={styles.hint}>{t("sellForm.guideHint")}</Text>
           </View>
         ) : null}
 
@@ -464,7 +463,7 @@ export default function SellScreen() {
         {error ? <InlineError message={error} /> : null}
 
         <PrimaryButton
-          label="Moderatsiyaga yuborish"
+          label={t("sellForm.submit")}
           icon={Send}
           loading={busy}
           disabled={busy || Boolean(problem)}
@@ -472,8 +471,7 @@ export default function SellScreen() {
         />
         {problem ? <Text style={styles.problem}>{problem}</Text> : null}
         <Text style={styles.footnote}>
-          Material administrator tasdiqlagandan keyin Do‘konda ko‘rinadi. Tasdiqlash yoki qaytarish haqida
-          sizga xabarnoma keladi.
+          {t("sellForm.footnote")}
         </Text>
       </ScrollView>
     </KeyboardAvoidingView>

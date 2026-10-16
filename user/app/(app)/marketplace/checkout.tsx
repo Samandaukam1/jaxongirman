@@ -12,6 +12,7 @@ import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { CheckCircle2, CreditCard, Info, Plus, ShieldCheck } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -48,6 +49,7 @@ const RESEND_SECONDS = 60;
 export default function CheckoutScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation(["market", "checkout", "common"]);
   const policy = usePaymentPolicy();
   const router = useRouter();
   const params = useLocalSearchParams<{ transactionId?: string }>();
@@ -75,7 +77,7 @@ export default function CheckoutScreen() {
   const submitting = useRef(false);
 
   const load = useCallback(async () => {
-    if (!transactionId) { setLoadError("To‘lov topilmadi."); setLoading(false); return; }
+    if (!transactionId) { setLoadError(t("legacy.notFound")); setLoading(false); return; }
     setLoading(true);
     const [transactionResult, cardsResult, settingsResult] = await Promise.all([
       // Column-granted, like `orders`: the provider token is not askable for,
@@ -97,7 +99,7 @@ export default function CheckoutScreen() {
     setProductTitle(product?.title ?? "");
     setLoadError(null);
     setLoading(false);
-  }, [transactionId]);
+  }, [t, transactionId]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -154,7 +156,7 @@ export default function CheckoutScreen() {
     try {
       const paymentPan = reconstructPan();
       if (!paymentPan || !expiryValidation.valid) {
-        setError("Karta ma’lumotlarini tekshirib, qayta kiriting.");
+        setError(t("checkout:checkCard"));
         return;
       }
       const startRequest = supabase.functions.invoke("pay-marketplace", {
@@ -170,7 +172,7 @@ export default function CheckoutScreen() {
       const { data, error: startError } = await startRequest;
       if (startError) throw startError;
       const result = data as { attemptId: string; maskedCard: string; expiryHint: string; sandbox: boolean };
-      if (!result.attemptId) throw new Error("To‘lov urinishi ochilmadi.");
+      if (!result.attemptId) throw new Error(t("legacy.noAttempt"));
 
       setAttempt({
         attemptId: result.attemptId,
@@ -202,7 +204,7 @@ export default function CheckoutScreen() {
       const { data, error: verifyError } = await verifyRequest;
       if (verifyError) throw verifyError;
       const result = data as { state: string };
-      if (result.state !== "paid") throw new Error("To‘lov yakunlanmadi.");
+      if (result.state !== "paid") throw new Error(t("legacy.notFinished"));
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setAttempt(null);
       setStep("done");
@@ -224,7 +226,7 @@ export default function CheckoutScreen() {
   if (loading) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="To‘lov" />
+        <ScreenHeader title={t("checkout:title")} />
         <View style={styles.centered}><ActivityIndicator color={colors.primary} size="large" /></View>
       </View>
     );
@@ -233,8 +235,8 @@ export default function CheckoutScreen() {
   if (loadError || !transaction) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="To‘lov" />
-        <View style={styles.content}><ErrorState message={loadError ?? "To‘lov topilmadi"} onRetry={() => void load()} /></View>
+        <ScreenHeader title={t("checkout:title")} />
+        <View style={styles.content}><ErrorState message={loadError ?? t("legacy.notFound")} onRetry={() => void load()} /></View>
       </View>
     );
   }
@@ -246,10 +248,10 @@ export default function CheckoutScreen() {
   if (!policy.loading && !policy.paymentsEnabled) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="To‘lov" variant="close" onLeave={() => router.back()} />
+        <ScreenHeader title={t("checkout:title")} variant="close" onLeave={() => router.back()} />
         <View style={styles.blockedWrap}>
           <Text style={styles.blockedTitle}>{policy.unavailableMessage("marketplace")}</Text>
-          <PrimaryButton label="Ortga" tone="secondary" onPress={() => router.back()} />
+          <PrimaryButton label={t("common:back")} tone="secondary" onPress={() => router.back()} />
         </View>
       </View>
     );
@@ -258,7 +260,7 @@ export default function CheckoutScreen() {
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.screen}>
       <ScreenHeader
-        title={step === "otp" ? "Tasdiqlash" : "To‘lov"}
+        title={step === "otp" ? t("checkout:confirmTitle") : t("checkout:title")}
         variant="close"
         onLeave={() => {
           if (step !== "otp") { router.back(); return; }
@@ -273,19 +275,19 @@ export default function CheckoutScreen() {
         <View style={styles.summary}>
           <Text style={styles.summaryTitle} numberOfLines={2}>{productTitle}</Text>
           <View style={styles.line}>
-            <Text style={styles.lineLabel}>Mahsulot</Text>
+            <Text style={styles.lineLabel}>{t("product.price")}</Text>
             <Text style={styles.lineValue}>{formatSom(transaction.base_price)}</Text>
           </View>
           <View style={styles.line}>
-            <Text style={styles.lineLabel}>Xizmat haqi ({transaction.buyer_fee_rate}%)</Text>
+            <Text style={styles.lineLabel}>{t("product.fee", { rate: transaction.buyer_fee_rate })}</Text>
             <Text style={styles.lineValue}>{formatSom(transaction.buyer_fee_amount)}</Text>
           </View>
           <View style={styles.divider} />
           <View style={styles.line}>
-            <Text style={styles.totalLabel}>To‘lanadi</Text>
+            <Text style={styles.totalLabel}>{t("checkout:total")}</Text>
             <Text style={styles.total}>{formatSom(transaction.buyer_total)}</Text>
           </View>
-          <Text style={styles.snapshotNote}>Narx xarid boshlanganda qayd etilgan va o‘zgarmaydi.</Text>
+          <Text style={styles.snapshotNote}>{t("legacy.fixed")}</Text>
         </View>
 
         {/* --------------------------------------------------------- done */}
@@ -294,20 +296,23 @@ export default function CheckoutScreen() {
             <View style={[styles.notice, styles.noticeReady]}>
               <CheckCircle2 color={colors.success} size={20} strokeWidth={2} />
               <View style={styles.noticeCopy}>
-                <Text style={styles.noticeTitle}>To‘lov qabul qilindi</Text>
-                <Text style={styles.noticeBody}>Mahsulot kutubxonangizga qo‘shildi.</Text>
+                <Text style={styles.noticeTitle}>{t("legacy.received")}</Text>
+                <Text style={styles.noticeBody}>{t("legacy.added")}</Text>
               </View>
             </View>
-            <PrimaryButton label="Kutubxonaga o‘tish" onPress={() => router.replace("/(app)/marketplace/library")} />
+            <PrimaryButton label={t("toLibrary")} onPress={() => router.replace("/(app)/marketplace/library")} />
           </>
         ) : null}
 
         {/* ---------------------------------------------------- OTP step */}
         {step === "otp" ? (
           <View style={styles.otpBlock}>
-            <Text style={styles.otpTitle}>Tasdiqlash kodi</Text>
+            <Text style={styles.otpTitle}>{t("checkout:code")}</Text>
             <Text style={styles.otpCopy}>
-              {attempt ? `${formatCardPan(attempt.maskedCard)} · ${attempt.expiryHint} kartaga` : "Kartaga"} biriktirilgan raqamga {OTP_LENGTH} xonali kod yuborildi.
+              {t("legacy.codeSent", {
+                card: attempt ? t("legacy.cardWith", { card: formatCardPan(attempt.maskedCard), expiry: attempt.expiryHint }) : t("legacy.cardFallback"),
+                digits: OTP_LENGTH,
+              })}
             </Text>
 
             <TextInput
@@ -320,19 +325,19 @@ export default function CheckoutScreen() {
               placeholder="000000"
               placeholderTextColor={colors.inkSoft}
               style={styles.otpInput}
-              accessibilityLabel="Tasdiqlash kodi"
+              accessibilityLabel={t("checkout:code")}
             />
 
             {attempt?.sandbox ? (
               <View style={styles.sandboxHint}>
-                <Text style={styles.sandboxText}>Sinov rejimi: tasdiqlash kodi 111111</Text>
+                <Text style={styles.sandboxText}>{t("legacy.sandbox")}</Text>
               </View>
             ) : null}
 
             {error ? <InlineError message={error} /> : null}
 
             <PrimaryButton
-              label="Tasdiqlash"
+              label={t("checkout:confirmTitle")}
               loading={busy}
               disabled={!attempt || code.length < OTP_LENGTH}
               onPress={() => void confirmCode()}
@@ -350,7 +355,7 @@ export default function CheckoutScreen() {
               style={styles.resend}
             >
               <Text style={[styles.resendText, cooldown > 0 && styles.resendDisabled]}>
-                {cooldown > 0 ? `Yangi kod olish — ${cooldown}s` : "Yangi kod uchun kartani qayta kiriting"}
+                {cooldown > 0 ? t("legacy.newCodeIn", { seconds: cooldown }) : t("legacy.newCode")}
               </Text>
             </Pressable>
           </View>
@@ -362,7 +367,7 @@ export default function CheckoutScreen() {
             <>
               {cards.length > 0 ? (
                 <View style={styles.cardsBlock}>
-                  <Text style={styles.blockLabel}>Chala kartalardan</Text>
+                  <Text style={styles.blockLabel}>{t("checkout:partialCards")}</Text>
                   {cards.map((card) => {
                     const active = selectedCard?.id === card.id;
                     const expired = isStoredCardExpired(card.expiry_month, card.expiry_year);
@@ -386,7 +391,7 @@ export default function CheckoutScreen() {
                           <Text style={styles.cardPan}>{formatCardPan(card.display_pan)}</Text>
                           <Text style={[styles.cardExpiry, expired && styles.cardExpiryExpired]}>
                             {formatStoredCardExpiry(card.expiry_month, card.expiry_year)}
-                            {expired ? " · muddati tugagan" : ""}
+                            {expired ? t("checkout:expiredSuffix") : ""}
                           </Text>
                         </View>
                         {active ? <CheckCircle2 color={colors.primary} size={18} strokeWidth={2} /> : null}
@@ -400,14 +405,14 @@ export default function CheckoutScreen() {
                     style={[styles.cardRow, selectedCard === null && styles.cardRowActive]}
                   >
                     <Plus color={selectedCard === null ? colors.primary : colors.inkSoft} size={18} strokeWidth={2} />
-                    <Text style={styles.cardCopy}>Yangi karta</Text>
+                    <Text style={styles.cardCopy}>{t("legacy.newCard")}</Text>
                   </Pressable>
                 </View>
               ) : null}
 
               {selectedCard ? (
                 <View style={styles.panBlock}>
-                  <Text style={styles.blockLabel}>Yetishmayotgan 4 ta raqamni kiriting</Text>
+                  <Text style={styles.blockLabel}>{t("checkout:missingHint")}</Text>
                   <View style={styles.panRow}>
                     <Text style={styles.panPart}>{formatCardPan(selectedCard.display_pan.slice(0, 8))}</Text>
                     <TextInput
@@ -417,7 +422,7 @@ export default function CheckoutScreen() {
                       placeholder="XXXX"
                       placeholderTextColor={colors.borderStrong}
                       style={styles.panInput}
-                      accessibilityLabel="Yetishmayotgan to‘rt raqam"
+                      accessibilityLabel={t("checkout:missingLabel")}
                       autoFocus
                     />
                     <Text style={styles.panPart}>{selectedCard.last4}</Text>
@@ -428,7 +433,7 @@ export default function CheckoutScreen() {
                 </View>
               ) : (
                 <View style={styles.panBlock}>
-                  <Text style={styles.blockLabel}>Karta raqami</Text>
+                  <Text style={styles.blockLabel}>{t("checkout:cardNumber")}</Text>
                   <TextInput
                     value={formatCardPan(cardDigits(newPan))}
                     onChangeText={(value) => setNewPan(cardDigits(value).slice(0, 16))}
@@ -436,7 +441,7 @@ export default function CheckoutScreen() {
                     placeholder="8600 0000 0000 0000"
                     placeholderTextColor={colors.inkSoft}
                     style={styles.input}
-                    accessibilityLabel="Karta raqami"
+                    accessibilityLabel={t("checkout:cardNumber")}
                   />
                   <TextInput
                     value={formatCardExpiryInput(expiry)}
@@ -445,13 +450,13 @@ export default function CheckoutScreen() {
                     placeholder="MM/YY"
                     placeholderTextColor={colors.inkSoft}
                     style={styles.input}
-                    accessibilityLabel="Amal qilish muddati"
+                    accessibilityLabel={t("checkout:expiry")}
                   />
                   {cardDigits(expiry).length === 4 && !expiryValidation.valid ? (
                     <Text style={styles.validationError}>
                       {expiryValidation.error === "invalid_month"
-                        ? "Oy 01–12 oralig‘ida bo‘lsin."
-                        : "Kartaning amal qilish muddati tugagan."}
+                        ? t("checkout:badMonth")
+                        : t("checkout:cardExpired")}
                     </Text>
                   ) : null}
                 </View>
@@ -460,7 +465,7 @@ export default function CheckoutScreen() {
               {error ? <InlineError message={error} /> : null}
 
               <PrimaryButton
-                label={`${formatSom(transaction.buyer_total)} to‘lash`}
+                label={t("checkout:pay", { amount: formatSom(transaction.buyer_total) })}
                 loading={busy}
                 disabled={!cardReady}
                 onPress={() => void startPayment()}
@@ -470,10 +475,9 @@ export default function CheckoutScreen() {
             <View style={[styles.notice, styles.noticePending]}>
               <Info color={colors.warning} size={18} strokeWidth={2} />
               <View style={styles.noticeCopy}>
-                <Text style={styles.noticeTitle}>To‘lov tizimi hali ulanmagan</Text>
+                <Text style={styles.noticeTitle}>{t("legacy.noProvider")}</Text>
                 <Text style={styles.noticeBody}>
-                  Xarid buyurtmasi saqlandi, lekin hozircha ilova orqali to‘lov qabul qilinmaydi.
-                  To‘lov provayderi ulangach shu sahifadan yakunlashingiz mumkin bo‘ladi.
+                  {t("legacy.noProviderBody")}
                 </Text>
               </View>
             </View>
@@ -484,8 +488,7 @@ export default function CheckoutScreen() {
           <ShieldCheck color={colors.inkSoft} size={14} strokeWidth={2} />
           <View style={styles.privacyCopy}>
             <Text style={styles.privacyText}>
-              Karta raqamingiz Jaxongirman bazasida saqlanmaydi. Keyingi xaridlar uchun faqat
-              niqoblangan ko‘rinish — 5614 8540 XXXX 2121 — eslab qolinadi. Kod va CVV saqlanmaydi.
+              {t("legacy.privacy")}
             </Text>
             <Text style={styles.paymeBrand}>Powered by Payme</Text>
           </View>

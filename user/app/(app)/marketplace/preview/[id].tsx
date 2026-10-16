@@ -2,7 +2,9 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import * as ScreenCapture from "expo-screen-capture";
 import { ChevronLeft, ShieldAlert } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Dimensions, FlatList, Image, Pressable, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { signPaths } from "@/lib/marketplace";
 import { supabase } from "@/lib/supabase";
@@ -30,6 +32,8 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 export default function ProductPreviewScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation(["market", "misc"]);
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -83,8 +87,8 @@ export default function ProductPreviewScreen() {
 
   return (
     <View style={styles.screen}>
-      <View style={styles.header}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Orqaga" onPress={() => router.back()} style={styles.back}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 20) + spacing.xs }]}>
+        <Pressable accessibilityRole="button" accessibilityLabel={t("misc:headerBack")} onPress={() => router.back()} style={styles.back}>
           <ChevronLeft color="#fff" size={icon.lg} strokeWidth={2} />
         </Pressable>
         <Text style={styles.headerTitle} numberOfLines={1}>{title}</Text>
@@ -95,7 +99,7 @@ export default function ProductPreviewScreen() {
         <View style={styles.centre}><ActivityIndicator color="#fff" /></View>
       ) : images.length === 0 ? (
         <View style={styles.centre}>
-          <Text style={styles.emptyText}>Bu mahsulot uchun ko‘rish uchun rasm qo‘yilmagan.</Text>
+          <Text style={styles.emptyText}>{t("preview.empty")}</Text>
         </View>
       ) : (
         <FlatList
@@ -127,7 +131,7 @@ export default function ProductPreviewScreen() {
       <View style={styles.footer}>
         <ShieldAlert color={colors.accentSoft} size={icon.sm} strokeWidth={2} />
         <Text style={styles.footerText}>
-          Ko‘rish rejimi — yuklab olish va ulashish yopiq. Xarid qilgach, fayl to‘liq sizniki bo‘ladi.
+          {t("preview.footer")}
         </Text>
       </View>
     </View>
@@ -136,7 +140,7 @@ export default function ProductPreviewScreen() {
 
 const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: "#0B0814" },
-  header: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingTop: 52, paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
+  header: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
   back: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.1)" },
   headerTitle: { ...typography.bodyMedium, color: "#fff", flex: 1 },
   counter: { ...typography.caption, color: "rgba(255,255,255,0.6)" },

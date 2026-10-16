@@ -5,6 +5,9 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { useCallback, useEffect, useState } from "react";
 
+import { i18n } from "../i18n";
+
+import { localized } from "./content";
 import { asErrorMessage } from "./format";
 import { supabase } from "./supabase";
 
@@ -76,11 +79,16 @@ export function useMaterialTypes() {
     setLoading(true);
     const { data, error: requestError } = await supabase
       .from("marketplace_material_types")
-      .select("code,label,description,allowed_mime_types,max_file_bytes,supports_study_guide,supports_editor_import,is_active")
+      .select("*")
       .eq("is_active", true)
       .order("sort_order");
     if (requestError) setError(asErrorMessage(requestError));
-    else { setTypes((data ?? []) as MarketplaceMaterialType[]); setError(null); }
+    else {
+      // Names and descriptions in the app's language, where an operator has written them.
+      setTypes(((data ?? []) as (MarketplaceMaterialType & { label_i18n?: unknown; description_i18n?: unknown })[])
+        .map((type) => ({ ...type, label: localized(type.label, type.label_i18n), description: localized(type.description, type.description_i18n) })));
+      setError(null);
+    }
     setLoading(false);
   }, []);
 
@@ -139,7 +147,7 @@ export async function downloadPurchasedFile(
   });
   if (error) throw error;
   const payload = data as { url?: string; filename?: string; mimeType?: string };
-  if (!payload.url) throw new Error("Yuklab olish havolasi olinmadi");
+  if (!payload.url) throw new Error(i18n.t("market:library.noLink"));
 
   const safeName = (payload.filename ?? "material").replace(/[^A-Za-z0-9._-]+/g, "-");
   const target = `${FileSystem.cacheDirectory}${safeName}`;
@@ -150,7 +158,7 @@ export async function downloadPurchasedFile(
 /** Opens the platform share sheet for a file already on disk. */
 export async function shareFile(uri: string, mimeType: string): Promise<boolean> {
   if (!(await Sharing.isAvailableAsync())) return false;
-  await Sharing.shareAsync(uri, { mimeType, dialogTitle: "Materialni ochish" });
+  await Sharing.shareAsync(uri, { mimeType, dialogTitle: i18n.t("market:library.openDialog") });
   return true;
 }
 
@@ -181,10 +189,17 @@ export async function refundPolicy(): Promise<RefundPolicy | null> {
 
   const value = (data?.value ?? null) as Record<string, unknown> | null;
   if (!value || value.enabled !== true) return null;
+  // The policy in the reader's language when the operator has written one; the
+  // server records the agreement in that same language.
+  const own = ((value.i18n ?? {}) as Record<string, Record<string, unknown> | undefined>)[i18n.language] ?? {};
+  const pick = (key: string, fallback: string) => {
+    const text = own[key];
+    return typeof text === "string" && text.trim() ? text : String(value[key] ?? fallback);
+  };
   return {
     enabled: true,
-    title: String(value.title ?? "Qaytarish siyosati"),
-    body: String(value.body ?? ""),
-    checkboxLabel: String(value.checkbox_label ?? "Shartlarga roziman."),
+    title: pick("title", "Qaytarish siyosati"),
+    body: pick("body", ""),
+    checkboxLabel: pick("checkbox_label", "Shartlarga roziman."),
   };
 }

@@ -1,10 +1,10 @@
-import {
-  MARKETPLACE_SORT_LABELS, type MarketplaceListItem, type MarketplaceSort,
-} from "@jaxongirman/types";
+import type { MarketplaceListItem, MarketplaceSort } from "@jaxongirman/types";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Heart, Plus, Search, SlidersHorizontal, Star, Store, X } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, FlatList, Image, Modal, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Appear } from "@/components/Appear";
 import { BOTTOM_NAV_SPACE } from "@/components/BottomNav";
@@ -12,6 +12,7 @@ import { MarathonVoteButton } from "@/components/MarathonVoteButton";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { EmptyState, ErrorState, SkeletonCard } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
+import { labelOf } from "@/lib/labels";
 import { useVoteMarketEnabled } from "@/lib/marathon-market";
 import {
   EMPTY_FILTERS, searchProducts, signPaths, toggleFavorite, useMaterialTypes,
@@ -36,6 +37,8 @@ const SORTS: MarketplaceSort[] = ["newest", "popular", "rating", "price_asc", "p
 export default function MarketplaceScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation(["market", "common"]);
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
   const { types } = useMaterialTypes();
@@ -131,12 +134,12 @@ export default function MarketplaceScreen() {
   // the library — access to acquired content, which 3.1.3(b) permits.
   if (!policy.loading && !policy.paymentsEnabled) {
     return (
-      <View style={styles.safe}>
+      <View style={[styles.safe, { paddingTop: Math.max(insets.top, 20) + spacing.xs }]}>
         <View style={styles.header}>
           <View style={styles.headerTop}>
             <View>
               <Text style={styles.eyebrow}>JAXONGIRMAN</Text>
-              <Text style={styles.title}>Do‘kon</Text>
+              <Text style={styles.title}>{t("title")}</Text>
             </View>
           </View>
         </View>
@@ -144,10 +147,10 @@ export default function MarketplaceScreen() {
           <EmptyState
             icon={Store}
             title={policy.unavailableMessage("marketplace")}
-            message="Sotib olgan materiallaringiz kutubxonangizda ochiq turadi."
+            message={t("closedBody")}
           />
           <PrimaryButton
-            label="Kutubxonaga o‘tish"
+            label={t("toLibrary")}
             tone="secondary"
             onPress={() => router.push("/(app)/marketplace/library")}
           />
@@ -157,23 +160,23 @@ export default function MarketplaceScreen() {
   }
 
   return (
-    <View style={styles.safe}>
+    <View style={[styles.safe, { paddingTop: Math.max(insets.top, 20) + spacing.xs }]}>
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <View>
             <Text style={styles.eyebrow}>JAXONGIRMAN</Text>
-            <Text style={styles.title}>Do‘kon</Text>
+            <Text style={styles.title}>{t("title")}</Text>
           </View>
           <View style={styles.headerActions}>
           <MarathonVoteButton variant="compact" />
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Mahsulot sotish"
+            accessibilityLabel={t("sellLabel")}
             onPress={() => router.push("/(app)/marketplace/sell")}
             style={styles.sellButton}
           >
             <Plus color={colors.onPrimary} size={icon.sm} strokeWidth={icon.strokeBold} />
-            <Text style={styles.sellText}>Sotish</Text>
+            <Text style={styles.sellText}>{t("sell")}</Text>
           </Pressable>
           </View>
         </View>
@@ -184,20 +187,20 @@ export default function MarketplaceScreen() {
             <TextInput
               value={draftQuery}
               onChangeText={setDraftQuery}
-              placeholder="Material qidirish"
+              placeholder={t("search")}
               placeholderTextColor={colors.inkSoft}
               style={styles.searchInput}
               returnKeyType="search"
             />
             {draftQuery ? (
-              <Pressable accessibilityLabel="Tozalash" onPress={() => setDraftQuery("")}>
+              <Pressable accessibilityLabel={t("clear")} onPress={() => setDraftQuery("")}>
                 <X color={colors.inkSoft} size={16} strokeWidth={2.2} />
               </Pressable>
             ) : null}
           </View>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Filtrlar"
+            accessibilityLabel={t("filters")}
             onPress={() => setFiltersOpen(true)}
             style={[styles.filterButton, activeFilterCount > 0 && styles.filterButtonActive]}
           >
@@ -217,14 +220,14 @@ export default function MarketplaceScreen() {
               onPress={() => router.push("/(app)/marathon/market")}
               style={[styles.chip, styles.chipVotes]}
             >
-              <Text style={[styles.chipText, styles.chipVotesText]}>⭐ Ovozlar</Text>
+              <Text style={[styles.chipText, styles.chipVotesText]}>{t("votes")}</Text>
             </Pressable>
           ) : null}
           <Pressable
             onPress={() => setFilters((current) => ({ ...current, materialType: null }))}
             style={[styles.chip, filters.materialType === null && styles.chipActive]}
           >
-            <Text style={[styles.chipText, filters.materialType === null && styles.chipTextActive]}>Barchasi</Text>
+            <Text style={[styles.chipText, filters.materialType === null && styles.chipTextActive]}>{t("all")}</Text>
           </Pressable>
           {types.map((type) => (
             <Pressable
@@ -265,16 +268,16 @@ export default function MarketplaceScreen() {
             if (items.length < total && !loadingMore) void load(filters, items.length, "append");
           }}
           ListHeaderComponent={
-            total > 0 ? <Text style={styles.resultCount}>{formatNumber(total)} ta material</Text> : null
+            total > 0 ? <Text style={styles.resultCount}>{t("count", { count: formatNumber(total) })}</Text> : null
           }
           ListEmptyComponent={
             <EmptyState
               icon={Store}
-              title={filters.query || activeFilterCount > 0 ? "Hech narsa topilmadi" : "Do‘kon hali bo‘sh"}
+              title={filters.query || activeFilterCount > 0 ? t("noneFound") : t("empty")}
               message={
                 filters.query || activeFilterCount > 0
-                  ? "Qidiruv shartlarini o‘zgartirib ko‘ring."
-                  : "Birinchi materialni siz joylashingiz mumkin — “Sotish” tugmasini bosing."
+                  ? t("noneFoundBody")
+                  : t("emptyBody")
               }
             />
           }
@@ -298,7 +301,7 @@ export default function MarketplaceScreen() {
                 )}
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={item.is_favorite ? "Sevimlilardan olib tashlash" : "Sevimlilarga qo‘shish"}
+                  accessibilityLabel={item.is_favorite ? t("unfavorite") : t("favorite")}
                   onPress={() => void onFavorite(item)}
                   style={styles.favorite}
                   hitSlop={8}
@@ -311,7 +314,7 @@ export default function MarketplaceScreen() {
                   />
                 </Pressable>
                 {item.material_label ? (
-                  <View style={styles.typeBadge}><Text style={styles.typeBadgeText}>{item.material_label}</Text></View>
+                  <View style={styles.typeBadge}><Text style={styles.typeBadgeText}>{types.find((type) => type.code === item.material_type)?.label ?? item.material_label}</Text></View>
                 ) : null}
               </View>
 
@@ -326,10 +329,10 @@ export default function MarketplaceScreen() {
                     <Text style={styles.ratingCount}>({item.rating_count})</Text>
                   </View>
                 ) : (
-                  <Text style={styles.ratingCount}>Baho yo‘q</Text>
+                  <Text style={styles.ratingCount}>{t("noRating")}</Text>
                 )}
                 {item.content_units ? (
-                  <Text style={styles.units}>{item.content_units} b.</Text>
+                  <Text style={styles.units}>{t("units", { count: item.content_units })}</Text>
                 ) : null}
               </View>
 
@@ -341,11 +344,11 @@ export default function MarketplaceScreen() {
       )}
 
       <Modal visible={filtersOpen} transparent animationType="slide" onRequestClose={() => setFiltersOpen(false)}>
-        <Pressable accessibilityLabel="Yopish" onPress={() => setFiltersOpen(false)} style={styles.backdrop}>
+        <Pressable accessibilityLabel={t("common:close")} onPress={() => setFiltersOpen(false)} style={styles.backdrop}>
           <Pressable style={styles.sheet} onPress={() => undefined}>
-            <Text style={styles.sheetTitle}>Filtrlar</Text>
+            <Text style={styles.sheetTitle}>{t("filters")}</Text>
 
-            <Text style={styles.sheetLabel}>Tartib</Text>
+            <Text style={styles.sheetLabel}>{t("sort")}</Text>
             <View style={styles.sortRow}>
               {SORTS.map((sort) => (
                 <Pressable
@@ -354,18 +357,18 @@ export default function MarketplaceScreen() {
                   style={[styles.chip, filters.sort === sort && styles.chipActive]}
                 >
                   <Text style={[styles.chipText, filters.sort === sort && styles.chipTextActive]}>
-                    {MARKETPLACE_SORT_LABELS[sort]}
+                    {labelOf("sort", sort)}
                   </Text>
                 </Pressable>
               ))}
             </View>
 
-            <Text style={styles.sheetLabel}>Narx oralig‘i (so‘m)</Text>
+            <Text style={styles.sheetLabel}>{t("priceRange")}</Text>
             <View style={styles.priceRow}>
               <TextInput
                 value={priceDraft.min}
                 onChangeText={(value) => setPriceDraft((current) => ({ ...current, min: value.replace(/[^0-9]/g, "") }))}
-                placeholder="Eng kam"
+                placeholder={t("min")}
                 placeholderTextColor={colors.inkSoft}
                 keyboardType="number-pad"
                 style={styles.priceInput}
@@ -373,7 +376,7 @@ export default function MarketplaceScreen() {
               <TextInput
                 value={priceDraft.max}
                 onChangeText={(value) => setPriceDraft((current) => ({ ...current, max: value.replace(/[^0-9]/g, "") }))}
-                placeholder="Eng ko‘p"
+                placeholder={t("max")}
                 placeholderTextColor={colors.inkSoft}
                 keyboardType="number-pad"
                 style={styles.priceInput}
@@ -385,10 +388,10 @@ export default function MarketplaceScreen() {
                 onPress={() => { setPriceDraft({ min: "", max: "" }); setFilters(EMPTY_FILTERS); setDraftQuery(""); setFiltersOpen(false); }}
                 style={styles.sheetSecondary}
               >
-                <Text style={styles.sheetSecondaryText}>Tozalash</Text>
+                <Text style={styles.sheetSecondaryText}>{t("clear")}</Text>
               </Pressable>
               <Pressable onPress={applyPriceDraft} style={styles.sheetPrimary}>
-                <Text style={styles.sheetPrimaryText}>Qo‘llash</Text>
+                <Text style={styles.sheetPrimaryText}>{t("apply")}</Text>
               </Pressable>
             </View>
           </Pressable>
@@ -400,7 +403,7 @@ export default function MarketplaceScreen() {
 
 const useStyles = makeStyles((colors) => ({
   closedWrap: { flex: 1, justifyContent: "center", paddingHorizontal: spacing.xl, gap: spacing.lg },
-  safe: { flex: 1, backgroundColor: colors.canvas, paddingTop: 58 },
+  safe: { flex: 1, backgroundColor: colors.canvas },
   header: { paddingHorizontal: spacing.xl, gap: spacing.md },
   headerTop: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" },
   eyebrow: { ...typography.caption, color: colors.accent, letterSpacing: 1.7 },

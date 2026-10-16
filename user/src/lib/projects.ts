@@ -1,5 +1,7 @@
 import type { Tables } from "@jaxongirman/types";
 
+import { i18n } from "../i18n";
+
 import { searchProjects as filter } from "./project-search";
 import { supabase } from "./supabase";
 
@@ -30,32 +32,24 @@ export type Project = {
   href: string;
 };
 
-export const KIND_LABEL: Record<ProjectKind, string> = {
-  presentation: "Taqdimot",
-  portrait: "3×4 rasm",
-  objective: "Obyektivka",
-  academic: "Ilmiy ish",
-};
+/** What kind of thing a project is, in the app's language. */
+export const kindLabel = (kind: ProjectKind): string => i18n.t(`projects:kind.${kind}`);
 
-const ACADEMIC_LABEL: Record<string, string> = {
-  article: "Ilmiy maqola",
-  independent: "Mustaqil ish",
-  referat: "Referat",
-  coursework: "Kurs ishi",
-};
+const ACADEMIC_KINDS = ["article", "independent", "referat", "coursework"] as const;
+const STATUSES = ["ready", "draft", "writing", "planning", "paused", "failed", "generating", "queued", "archived"] as const;
 
-const STATUS_LABEL: Record<string, string> = {
-  ready: "Tayyor",
-  draft: "Qoralama",
-  writing: "Yozilmoqda",
-  planning: "Reja tuzilmoqda",
-  paused: "To‘xtatilgan",
-  failed: "Xatolik",
-  generating: "Yaratilmoqda",
-};
+function academicLabel(kind: string): string {
+  return (ACADEMIC_KINDS as readonly string[]).includes(kind)
+    ? i18n.t(`projects:academicKind.${kind as (typeof ACADEMIC_KINDS)[number]}`)
+    : kindLabel("academic");
+}
 
-export const statusLabel = (status: string | null): string | null =>
-  (status ? STATUS_LABEL[status] ?? status : null);
+export const statusLabel = (status: string | null): string | null => {
+  if (!status) return null;
+  return (STATUSES as readonly string[]).includes(status)
+    ? i18n.t(`projects:status.${status as (typeof STATUSES)[number]}`)
+    : status;
+};
 
 const when = (value: unknown): string => String(value ?? new Date(0).toISOString());
 
@@ -103,7 +97,7 @@ export async function listProjects(ownerId: string): Promise<Project[]> {
         id: row.id,
         kind: "presentation",
         title: row.title,
-        detail: `${row.generated_slide_count ?? 0} slayd`,
+        detail: i18n.t("projects:slides", { count: row.generated_slide_count ?? 0 }),
         status: row.status,
         updatedAt: when(row.updated_at ?? row.created_at),
         href: row.status === "ready" ? `/(app)/presentation/${row.id}` : `/(app)/generation/${row.id}`,
@@ -116,8 +110,8 @@ export async function listProjects(ownerId: string): Promise<Project[]> {
       out.push({
         id: row.id,
         kind: "portrait",
-        title: "3×4 rasm",
-        detail: "A6 chop etish varag‘i",
+        title: kindLabel("portrait"),
+        detail: i18n.t("projects:portraitDetail"),
         status: "ready",
         updatedAt: when(row.created_at),
         href: `/(app)/portrait?sheetId=${row.id}`,
@@ -130,8 +124,8 @@ export async function listProjects(ownerId: string): Promise<Project[]> {
       out.push({
         id: row.id,
         kind: "objective",
-        title: row.full_name?.trim() || "Obyektivka",
-        detail: "Ma’lumotnoma",
+        title: row.full_name?.trim() || kindLabel("objective"),
+        detail: i18n.t("projects:objectiveDetail"),
         status: null,
         updatedAt: when(row.updated_at),
         href: "/(app)/obyektivka",
@@ -144,8 +138,8 @@ export async function listProjects(ownerId: string): Promise<Project[]> {
       out.push({
         id: row.id,
         kind: "academic",
-        title: row.topic?.trim() || "Ilmiy ish",
-        detail: ACADEMIC_LABEL[row.kind] ?? "Ilmiy ish",
+        title: row.topic?.trim() || kindLabel("academic"),
+        detail: academicLabel(row.kind),
         status: row.status,
         updatedAt: when(row.updated_at),
         href: "/(app)/ilmiy",
@@ -158,6 +152,6 @@ export async function listProjects(ownerId: string): Promise<Project[]> {
 
 /** Searching this list, with the matching rules kept where they are testable. */
 export const searchProjects = (projects: readonly Project[], query: string): Project[] =>
-  filter(projects.map((project) => ({ ...project, kind: KIND_LABEL[project.kind] })), query)
+  filter(projects.map((project) => ({ ...project, kind: kindLabel(project.kind) })), query)
     .map((entry) => projects.find((project) => project.id === (entry as Project).id)!)
     .filter(Boolean);

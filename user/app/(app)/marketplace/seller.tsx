@@ -1,7 +1,8 @@
-import { MARKETPLACE_STATUS_LABELS, type MarketplaceProductStatus } from "@jaxongirman/types";
+import type { MarketplaceProductStatus } from "@jaxongirman/types";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Package, Plus, Wallet } from "lucide-react-native";
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 
 import { Appear } from "@/components/Appear";
@@ -11,6 +12,7 @@ import { ScreenHeader } from "@/components/ScreenHeader";
 import { EmptyState, ErrorState, SkeletonCard } from "@/components/StateBlocks";
 import { formatShortDateTime } from "@/lib/datetime";
 import { asErrorMessage } from "@/lib/format";
+import { labelOf } from "@/lib/labels";
 import { formatSom } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
 import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
@@ -29,6 +31,7 @@ type Summary = { sales_count: number; net_total: number; pending_total: number; 
 export default function SellerDashboardScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation("market");
   const policy = usePaymentPolicy();
   const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]);
@@ -66,7 +69,7 @@ export default function SellerDashboardScreen() {
     return (
       <PaymentUnavailable
         title={policy.unavailableMessage("marketplace")}
-        message="Hisob-kitob ma’lumotlaringiz saqlanib qoladi."
+        message={t("seller.kept")}
         onLeave={() => router.back()}
       />
     );
@@ -75,11 +78,11 @@ export default function SellerDashboardScreen() {
   return (
     <View style={styles.screen}>
       <ScreenHeader
-        title="Mahsulotlarim"
+        title={t("seller.title")}
         action={
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Daromadlar"
+            accessibilityLabel={t("seller.earnings")}
             onPress={() => router.push("/(app)/earnings")}
             style={styles.headerAction}
           >
@@ -97,22 +100,22 @@ export default function SellerDashboardScreen() {
           <Pressable accessibilityRole="button" onPress={() => router.push("/(app)/earnings")} style={styles.summaryCard}>
             <View style={styles.summaryCell}>
               <Text style={styles.summaryValue}>{summary.sales_count}</Text>
-              <Text style={styles.summaryLabel}>Sotuv</Text>
+              <Text style={styles.summaryLabel}>{t("seller.sales")}</Text>
             </View>
             <View style={styles.summaryDivider} />
             <View style={styles.summaryCell}>
               <Text style={styles.summaryValue}>{formatSom(summary.pending_total)}</Text>
-              <Text style={styles.summaryLabel}>Kutilmoqda</Text>
+              <Text style={styles.summaryLabel}>{t("seller.pending")}</Text>
             </View>
             <View style={styles.summaryDivider} />
             <View style={styles.summaryCell}>
               <Text style={styles.summaryValue}>{formatSom(summary.paid_total)}</Text>
-              <Text style={styles.summaryLabel}>To‘langan</Text>
+              <Text style={styles.summaryLabel}>{t("seller.paid")}</Text>
             </View>
           </Pressable>
         ) : null}
 
-        <PrimaryButton label="Yangi material" icon={Plus} onPress={() => router.push("/(app)/marketplace/sell")} />
+        <PrimaryButton label={t("seller.add")} icon={Plus} onPress={() => router.push("/(app)/marketplace/sell")} />
 
         {loading ? <><SkeletonCard /><SkeletonCard /></> : null}
         {error && !loading ? <ErrorState message={error} onRetry={() => void load()} /> : null}
@@ -120,8 +123,8 @@ export default function SellerDashboardScreen() {
         {!loading && !error && products.length === 0 ? (
           <EmptyState
             icon={Package}
-            title="Hali material joylamagansiz"
-            message="Taqdimot, mustaqil ish yoki referatingizni joylang — tasdiqlangach Do‘konda sotuvga chiqadi."
+            title={t("seller.empty")}
+            message={t("seller.emptyBody")}
           />
         ) : null}
 
@@ -136,14 +139,14 @@ export default function SellerDashboardScreen() {
                 <View style={styles.cardHead}>
                   <Text numberOfLines={2} style={styles.cardTitle}>{product.title}</Text>
                   <View style={[styles.badge, styles[`badge_${product.status}`] ?? styles.badge_draft]}>
-                    <Text style={styles.badgeText}>{MARKETPLACE_STATUS_LABELS[product.status]}</Text>
+                    <Text style={styles.badgeText}>{labelOf("productStatus", product.status)}</Text>
                   </View>
                 </View>
                 <Text style={styles.cardMeta}>
-                  {formatSom(product.base_price)} · {product.sales_count} sotuv · {formatShortDateTime(product.created_at)}
+                  {t("seller.meta", { price: formatSom(product.base_price), count: product.sales_count, date: formatShortDateTime(product.created_at) })}
                 </Text>
                 {product.status === "rejected" && product.rejection_reason ? (
-                  <Text style={styles.rejection}>Sabab: {product.rejection_reason}</Text>
+                  <Text style={styles.rejection}>{t("seller.reason", { reason: product.rejection_reason })}</Text>
                 ) : null}
               </Pressable>
 
