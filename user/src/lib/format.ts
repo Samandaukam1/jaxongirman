@@ -1,15 +1,19 @@
-const relativeUnits: readonly (readonly [label: string, seconds: number])[] = [
-  ["yil", 31_536_000],
-  ["oy", 2_592_000],
-  ["hafta", 604_800],
-  ["kun", 86_400],
-  ["soat", 3_600],
-  ["daqiqa", 60],
-];
+import { i18n } from "../i18n";
+
+import { localizeError } from "./errors";
+
+const relativeUnits = [
+  ["year", 31_536_000],
+  ["month", 2_592_000],
+  ["week", 604_800],
+  ["day", 86_400],
+  ["hour", 3_600],
+  ["minute", 60],
+] as const;
 
 /**
- * Hermes ships without `Intl.RelativeTimeFormat`, so format directly rather than
- * pull in an ICU polyfill for the one locale this app speaks.
+ * Hermes ships without `Intl.RelativeTimeFormat`, so format directly from the
+ * `time` table rather than pull in an ICU polyfill.
  */
 export function formatRelativeDate(value: string): string {
   const time = new Date(value).getTime();
@@ -17,16 +21,21 @@ export function formatRelativeDate(value: string): string {
   const seconds = Math.round((time - Date.now()) / 1000);
   const magnitude = Math.abs(seconds);
 
-  for (const [label, size] of relativeUnits) {
+  for (const [unit, size] of relativeUnits) {
     if (magnitude >= size) {
-      const amount = Math.round(magnitude / size);
-      return seconds < 0 ? `${amount} ${label} oldin` : `${amount} ${label}dan keyin`;
+      const span = i18n.t(`time:unit.${unit}`, { count: Math.round(magnitude / size) });
+      return seconds < 0 ? i18n.t("time:past", { span }) : i18n.t("time:future", { span });
     }
   }
-  return "hozir";
+  return i18n.t("time:now");
 }
 
 export function asErrorMessage(error: unknown): string {
+  return localizeError(rawErrorMessage(error));
+}
+
+/** The sentence a failure carries, before it is put in the app's language. */
+function rawErrorMessage(error: unknown): string | null {
   if (error instanceof Error && error.message) return error.message;
   // Supabase reports failures as plain objects, not Error instances — a
   // PostgrestError is `{ message, details, hint, code }`. Treating those as
@@ -39,7 +48,7 @@ export function asErrorMessage(error: unknown): string {
     }
   }
   if (typeof error === "string" && error.trim()) return error;
-  return "Kutilmagan xatolik yuz berdi";
+  return null;
 }
 
 /**
@@ -68,9 +77,11 @@ export async function asFunctionErrorMessage(error: unknown): Promise<string> {
         ? (response.clone as () => NonNullable<typeof response>)()
         : response;
       const body = typeof source.json === "function"
-        ? await (source.json as () => Promise<{ error?: unknown }>)()
-        : JSON.parse(await (source.text as () => Promise<string>)()) as { error?: unknown };
-      if (typeof body.error === "string" && body.error) return body.error;
+        ? await (source.json as () => Promise<{ error?: unknown; code?: unknown }>)()
+        : JSON.parse(await (source.text as () => Promise<string>)()) as { error?: unknown; code?: unknown };
+      if (typeof body.error === "string" && body.error) {
+        return localizeError(body.error, typeof body.code === "string" ? body.code : undefined);
+      }
     } catch {
       // Not JSON, or already consumed — fall back to the generic message.
     }

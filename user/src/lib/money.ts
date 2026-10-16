@@ -2,24 +2,29 @@
  * Coin and som amounts, grouped with a no-break space so "1 240 tanga"
  * never wraps between the number and its unit.
  *
- * The unit is always the Uzbek word "tanga" — the balance card is the one place
+ * The unit comes from the `common` table — the balance card is the one place
  * that drops it, because the coin illustration beside the figure says the same
  * thing better.
  */
 
-const GROUP_SEPARATOR = " ";
+import { i18n } from "../i18n";
+
+/** Thousands are grouped with a narrow no-break space, except in English, which uses a comma. */
+function groupSeparator(): string {
+  return i18n.language === "en" ? "," : "\u202F";
+}
 
 export function formatNumber(value: number): string {
   if (!Number.isFinite(value)) return "0";
   const rounded = Math.round(value);
   return String(Math.abs(rounded))
-    .replace(/\B(?=(\d{3})+(?!\d))/g, GROUP_SEPARATOR)
+    .replace(/\B(?=(\d{3})+(?!\d))/g, groupSeparator())
     .replace(/^/, rounded < 0 ? "−" : "");
 }
 
 /** "1 240 tanga" — the wallet amount wherever it appears as running text. */
 export function formatCoins(value: number): string {
-  return `${formatNumber(value)}\u00A0tanga`;
+  return i18n.t("common:coinAmount", { amount: formatNumber(value) });
 }
 
 /** "11 000 UZS" — a configured price, in whatever currency it was configured in. */

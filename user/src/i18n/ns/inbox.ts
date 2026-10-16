@@ -1,0 +1,47 @@
+import { translations } from "../define";
+
+/** The notifications screen. The messages themselves are written by the server. */
+export default translations(
+  {
+    title: "Xabarnomalar",
+    unread: "{{count}} ta o‘qilmagan xabar",
+    allRead: "Barchasi o‘qilgan",
+    markAll: "Barchasini o‘qilgan deb belgilash",
+    today: "Bugun",
+    yesterday: "Kecha",
+    dayCount: "{{day}} — {{count}} ta xabar",
+    pickDay: "Kunni tanlang",
+    all: "Barchasi",
+    emptyDay: "Bu kunda xabar yo‘q",
+    empty: "Hozircha xabar yo‘q",
+    emptyBody: "Tanga, so‘rovnoma va tizim xabarlari shu yerda ko‘rinadi.",
+  },
+  {
+    title: "Notifications",
+    unread: "{{count}} unread",
+    allRead: "All read",
+    markAll: "Mark all as read",
+    today: "Today",
+    yesterday: "Yesterday",
+    dayCount: "{{day}} — {{count}} messages",
+    pickDay: "Pick a day",
+    all: "All",
+    emptyDay: "No messages on this day",
+    empty: "No messages yet",
+    emptyBody: "Coin, survey and system messages appear here.",
+  },
+  {
+    title: "Уведомления",
+    unread: "Непрочитанных: {{count}}",
+    allRead: "Всё прочитано",
+    markAll: "Отметить всё как прочитанное",
+    today: "Сегодня",
+    yesterday: "Вчера",
+    dayCount: "{{day}} — сообщений: {{count}}",
+    pickDay: "Выберите день",
+    all: "Все",
+    emptyDay: "В этот день сообщений нет",
+    empty: "Пока нет сообщений",
+    emptyBody: "Здесь появятся сообщения о монетах, опросах и системе.",
+  },
+);

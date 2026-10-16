@@ -2,7 +2,7 @@ import { Arimo_400Regular, Arimo_700Bold } from "@expo-google-fonts/arimo";
 import { CaveatBrush_400Regular } from "@expo-google-fonts/caveat-brush";
 import { Inter_400Regular, Inter_900Black } from "@expo-google-fonts/inter";
 import { LeagueSpartan_700Bold, LeagueSpartan_800ExtraBold } from "@expo-google-fonts/league-spartan";
-import { Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold, useFonts } from "@expo-google-fonts/manrope";
+import { Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold, Manrope_800ExtraBold, useFonts } from "@expo-google-fonts/manrope";
 import { PinyonScript_400Regular } from "@expo-google-fonts/pinyon-script";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -11,7 +11,9 @@ import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import "@/i18n";
 import { AuthProvider } from "@/providers/AuthProvider";
+import { LanguageProvider } from "@/providers/LanguageProvider";
 import { ThemeProvider, useTheme } from "@/theme/ThemeProvider";
 
 void SplashScreen.preventAutoHideAsync();
@@ -24,7 +26,7 @@ export default function RootLayout() {
   // designs reference. Dropping one does not fail loudly; it renders that
   // design's type in whatever the platform substitutes.
   const [loaded] = useFonts({
-    Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold,
+    Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold, Manrope_800ExtraBold,
     LeagueSpartan_700Bold, LeagueSpartan_800ExtraBold,
     PinyonScript_400Regular,
     Arimo_400Regular, Arimo_700Bold,
@@ -43,7 +45,9 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <ThemeProvider>
           <AuthProvider>
-            <ThemedShell />
+            <LanguageProvider>
+              <ThemedShell />
+            </LanguageProvider>
           </AuthProvider>
         </ThemeProvider>
       </SafeAreaProvider>
