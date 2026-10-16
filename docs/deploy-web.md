@@ -1,7 +1,21 @@
 # Deploying the public site
 
-`jaxongirman.uz` does not resolve yet, so nothing is live. This is the whole of
-what it takes to change that.
+The site is live at `jaxongirman.app` (Vercel project `jaxongirman_web`, root
+directory `web`). Below is how it was set up, and how it is shipped.
+
+## Shipping a change
+
+From the repository root, with the Vercel CLI logged in:
+
+```bash
+npx vercel deploy --prod --yes
+```
+
+The build runs on Vercel, not here: the production variables are marked
+Sensitive, so `vercel pull` writes them empty and a local `vercel build` fails
+`web/lib/env-guard.ts` by design. The root [.vercelignore](../.vercelignore)
+keeps the upload to the site and its packages — without it the CLI would send
+the 2.8 GB `font-library/` and the mascot work in `output/`.
 
 The site is a workspace inside this monorepo, so Vercel deploys it by pointing at
 a subdirectory rather than by needing its own repository.
