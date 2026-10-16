@@ -3,9 +3,8 @@
 import { useEffect, useState } from "react";
 
 import { supabase } from "@/lib/supabase";
+import { STORE_ANDROID, STORE_IOS } from "@/lib/stores";
 
-const STORE_IOS = "https://apps.apple.com/app/jaxongirman/id0000000000";
-const STORE_ANDROID = "https://play.google.com/store/apps/details?id=uz.jaxongirman.app";
 const CONTINUATION_KEY = "jaxongirman:pending-join";
 
 type Platform = "ios" | "android" | "other";

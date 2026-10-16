@@ -97,6 +97,8 @@ function imageUrls(deck: PresentationScreenDeck, slidePositions: number[]): stri
   for (const element of deck.elements) {
     if (element.type !== "image" || !ids.has(element.slide_id) || !element.content || typeof element.content !== "object" || Array.isArray(element.content)) continue;
     const content = element.content as Record<string, unknown>;
+    // A video is fetched by its own player; warming it as a picture only downloads it twice.
+    if (content.kind === "video") continue;
     const uri = content.signedUrl ?? content.url ?? content.uri;
     if (typeof uri === "string") urls.push(uri);
   }
@@ -512,7 +514,7 @@ export function PairingScreen({ experienceRow }: { experienceRow: unknown | null
           }}
         >
           <p className="eyebrow">TAQDIMOT PULTI</p>
-          <h1>Telefoningizni ulang</h1>
+          <h1>Telefoningizni <em>ulang</em></h1>
           <ol>
             <li>Jaxongirman ilovasini oching</li>
             <li>&ldquo;Loyihalar&rdquo; sahifasida <strong>Taqdimot qilish</strong> tugmasini bosing</li>

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { STORE_ANDROID, STORE_IOS } from "@/lib/stores";
 
 export const metadata: Metadata = {
   title: "Do'kon — Jaxongirman ilovasida",
@@ -24,8 +25,8 @@ export default function MarketplaceNoticePage() {
             Jaxongirman mobil ilovasi orqali amalga oshiriladi. Bu xizmat saytda ishlamaydi.
           </p>
           <div className="store-row">
-            <a className="store-button" href="https://apps.apple.com/app/id0000000000">App Store</a>
-            <a className="store-button ghost" href="https://play.google.com/store/apps/details?id=uz.jaxongirman.app">
+            <a className="store-button" href={STORE_IOS}>App Store</a>
+            <a className="store-button ghost" href={STORE_ANDROID}>
               Google Play
             </a>
           </div>

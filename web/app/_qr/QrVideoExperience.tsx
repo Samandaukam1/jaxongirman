@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 
 import { drawQr, glowFilter, placeQr, type QrRect } from "@jaxongirman/qr-video";
 
+import { useBrand } from "../_brand/BrandContext";
 import { type QrExperience } from "@/lib/qr-experience";
 
 /**
@@ -65,6 +66,7 @@ type Props = {
 const READY_TIMEOUT_MS = 20000;
 
 export function QrVideoExperience({ experience, qrValue, onPlaying, onUnavailable, children }: Props) {
+  const brand = useBrand();
   const stageRef = useRef<HTMLDivElement | null>(null);
   const introRef = useRef<HTMLVideoElement | null>(null);
   const loopRef = useRef<HTMLVideoElement | null>(null);
@@ -338,9 +340,9 @@ export function QrVideoExperience({ experience, qrValue, onPlaying, onUnavailabl
       />
 
       <div className="qrx-chrome" aria-hidden={false}>
-        <div className="qrx-rail qrx-panel">
+        <div className="qrx-rail">
           <a className="qrx-brand" href="/">
-            <span className="qrx-brand-mark">J</span>
+            <img className="qrx-brand-logo" src={brand.logo} alt="" width={42} height={42} />
             <span>Jaxongirman</span>
           </a>
           <nav className="qrx-nav" aria-label="Asosiy navigatsiya">
@@ -350,7 +352,7 @@ export function QrVideoExperience({ experience, qrValue, onPlaying, onUnavailabl
           </nav>
         </div>
 
-        {children ? <div className="qrx-copy qrx-panel">{children}</div> : null}
+        {children ? <div className="qrx-copy">{children}</div> : null}
       </div>
 
       {drawing && rect ? (

@@ -3,8 +3,8 @@
  *
  * The join link has to be an absolute `https://` URL: a phone camera reads a
  * string, not a same-origin path, and a Universal Link / App Link only fires
- * for a host the app has claimed. Which host that is changes — jaxongirman.uz
- * today, jaxongirman.app when it lands — so it is configuration rather than a
+ * for a host the app has claimed. Which host that is changes — jaxongirman.app
+ * now, jaxongirman.uz before it — so it is configuration rather than a
  * literal in a component. Swapping the domain is an env change and a redeploy;
  * no code moves.
  *
@@ -21,7 +21,7 @@ function trimSlash(value: string): string {
 export function publicOrigin(): string {
   if (configured) return trimSlash(configured);
   if (typeof window !== "undefined") return trimSlash(window.location.origin);
-  return "https://jaxongirman.uz";
+  return "https://jaxongirman.app";
 }
 
 /** The universal join link for a live match. */

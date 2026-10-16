@@ -295,7 +295,7 @@ export function ArenaScreen({ handoff, experienceRow }: {
           }}
         >
           <p className="eyebrow">O&lsquo;YINGOH</p>
-          <h1>Bellashuvni boshlang</h1>
+          <h1>Bellashuvni <em>boshlang</em></h1>
           <ol>
             <li>Jaxongirman ilovasini oching</li>
             <li><strong>O&lsquo;yingoh</strong> bo&lsquo;limiga kiring</li>
