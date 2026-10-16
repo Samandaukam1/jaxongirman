@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Check, Crown, Search, Sparkles } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { Avatar } from "@/components/Avatar";
@@ -46,6 +47,7 @@ function initialsOf(row: Choice): string {
 
 export default function MarathonVoteScreen() {
   const styles = useStyles();
+  const { t } = useTranslation(["marathon", "common"]);
   const { colors } = useTheme();
   const enabled = useMarathonEnabled();
   const router = useRouter();
@@ -92,11 +94,11 @@ export default function MarathonVoteScreen() {
       .then((row) => {
         if (cancelled) return;
         if (row) setChosen(row);
-        else setError("Havola eskirgan yoki bu marafon yakunlangan.");
+        else setError(t("voting.expired"));
       })
       .catch((failure) => { if (!cancelled) setError(asErrorMessage(failure)); });
     return () => { cancelled = true; };
-  }, [enabled, params.campaignId, params.candidateId]);
+  }, [enabled, params.campaignId, params.candidateId, t]);
 
   // The search waits for a pause rather than querying per keystroke.
   useEffect(() => {
@@ -150,19 +152,19 @@ export default function MarathonVoteScreen() {
   if (!enabled) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="Ovoz berish" variant="back" />
-        <EmptyState icon={Sparkles} title="Marafon faol emas" message="Talabalar marafoni hozircha ochilmagan." />
+        <ScreenHeader title={t("vote")} variant="back" />
+        <EmptyState icon={Sparkles} title={t("inactive")} message={t("voting.inactiveBody")} />
       </View>
     );
   }
 
   return (
     <View style={styles.screen}>
-      <ScreenHeader title="OVOZ BERISH" variant="back" />
+      <ScreenHeader title={t("voting.title")} variant="back" />
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.lead}>
-          Qo‘llab-quvvatlamoqchi bo‘lgan ishtirokchini username orqali toping.
+          {t("voting.lead")}
         </Text>
 
         <View style={styles.searchRow}>
@@ -172,7 +174,7 @@ export default function MarathonVoteScreen() {
             autoCorrect={false}
             value={query}
             onChangeText={setQuery}
-            placeholder="@ username orqali qidiring"
+            placeholder={t("voting.search")}
             placeholderTextColor={colors.inkSoft}
             returnKeyType="search"
             style={styles.searchInput}
@@ -183,13 +185,13 @@ export default function MarathonVoteScreen() {
         {/* What is left to give, said before somebody picks a person. */}
         <View style={styles.wallet}>
           <View style={styles.walletItem}>
-            <Text style={styles.walletLabel}>Bepul ovoz</Text>
-            <Text style={styles.walletValue}>{available.free > 0 ? `${available.free} ta mavjud` : "Ishlatilgan"}</Text>
+            <Text style={styles.walletLabel}>{t("voting.free")}</Text>
+            <Text style={styles.walletValue}>{available.free > 0 ? t("voting.available", { count: available.free }) : t("voting.used")}</Text>
           </View>
           <View style={styles.walletDivider} />
           <View style={styles.walletItem}>
-            <Text style={styles.walletLabel}>Premium ovoz ⭐</Text>
-            <Text style={styles.walletValue}>{available.premium > 0 ? `${available.premium} ta mavjud` : "Ishlatilgan"}</Text>
+            <Text style={styles.walletLabel}>{t("voting.premiumStar")}</Text>
+            <Text style={styles.walletValue}>{available.premium > 0 ? t("voting.available", { count: available.premium }) : t("voting.used")}</Text>
           </View>
         </View>
 
@@ -199,19 +201,19 @@ export default function MarathonVoteScreen() {
           <View key={row.user_id} style={styles.card}>
             <Avatar initials={initialsOf(row)} uri={row.avatar_url} size={48} />
             <View style={styles.cardBody}>
-              <Text numberOfLines={1} style={styles.cardName}>{row.full_name ?? "Ishtirokchi"}</Text>
+              <Text numberOfLines={1} style={styles.cardName}>{row.full_name ?? t("voting.participant")}</Text>
               <Text numberOfLines={1} style={styles.cardHandle}>@{row.username}</Text>
               <Text style={styles.cardVotes}>
-                {formatNumber(Number(row.total_votes))} ovoz · Premium: {formatNumber(Number(row.premium_votes))}
+                {t("voting.votes", { votes: formatNumber(Number(row.total_votes)), premium: formatNumber(Number(row.premium_votes)) })}
               </Text>
             </View>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`${row.username} ni tanlash`}
+              accessibilityLabel={t("voting.pickLabel", { username: row.username })}
               onPress={() => { setKind(null); setChosen(row); }}
               style={styles.choose}
             >
-              <Text style={styles.chooseText}>Tanlash</Text>
+              <Text style={styles.chooseText}>{t("voting.pick")}</Text>
             </Pressable>
           </View>
         ))}
@@ -219,8 +221,8 @@ export default function MarathonVoteScreen() {
         {query.trim().length >= 2 && !searching && results.length === 0 && !error ? (
           <EmptyState
             icon={Search}
-            title="Topilmadi"
-            message="Bu username bo‘yicha marafon ishtirokchisi yo‘q."
+            title={t("voting.notFound")}
+            message={t("voting.notFoundBody")}
           />
         ) : null}
       </ScrollView>
@@ -232,9 +234,9 @@ export default function MarathonVoteScreen() {
           {chosen ? (
             <>
               <Avatar initials={initialsOf(chosen)} uri={chosen.avatar_url} size={64} />
-              <Text style={styles.sheetName}>{chosen.full_name ?? "Ishtirokchi"}</Text>
+              <Text style={styles.sheetName}>{chosen.full_name ?? t("voting.participant")}</Text>
               <Text style={styles.sheetHandle}>@{chosen.username}</Text>
-              <Text style={styles.sheetAsk}>Ushbu ishtirokchiga ovoz bermoqchimisiz?</Text>
+              <Text style={styles.sheetAsk}>{t("voting.ask")}</Text>
 
               <Pressable
                 accessibilityRole="radio"
@@ -244,8 +246,8 @@ export default function MarathonVoteScreen() {
                 style={[styles.option, chosenKind === "free" && styles.optionOn, available.free === 0 && styles.optionOff]}
               >
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.optionLabel}>Bepul ovoz</Text>
-                  <Text style={styles.optionHint}>{available.free > 0 ? "1 ta mavjud" : "✓ Ishlatilgan"}</Text>
+                  <Text style={styles.optionLabel}>{t("voting.free")}</Text>
+                  <Text style={styles.optionHint}>{available.free > 0 ? t("voting.available", { count: 1 }) : t("voting.usedTick")}</Text>
                 </View>
                 {chosenKind === "free" && available.free > 0 ? <Check color={colors.primary} size={icon.sm} strokeWidth={icon.strokeBold} /> : null}
               </Pressable>
@@ -259,9 +261,9 @@ export default function MarathonVoteScreen() {
               >
                 <Crown color={available.premium > 0 ? colors.primary : colors.inkSoft} size={icon.sm} strokeWidth={icon.stroke} />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.optionLabel}>Premium ovoz</Text>
+                  <Text style={styles.optionLabel}>{t("voting.premium")}</Text>
                   <Text style={styles.optionHint}>
-                    {available.premium > 0 ? "1 ta mavjud" : "Premium a’zolik bilan mavjud"}
+                    {available.premium > 0 ? t("voting.available", { count: 1 }) : t("voting.withPremium")}
                   </Text>
                 </View>
                 {chosenKind === "premium" && available.premium > 0 ? <Check color={colors.primary} size={icon.sm} strokeWidth={icon.strokeBold} /> : null}
@@ -269,9 +271,9 @@ export default function MarathonVoteScreen() {
 
               {available.free === 0 && available.premium === 0 ? (
                 /* Nothing left to give: the existing purchase flow, not a new one. */
-                <PrimaryButton label="Premium olish" onPress={() => { setChosen(null); router.push("/(app)/tarif"); }} />
+                <PrimaryButton label={t("voting.getPremium")} onPress={() => { setChosen(null); router.push("/(app)/tarif"); }} />
               ) : (
-                <PrimaryButton label="Ovoz berish" loading={sending} onPress={() => void send()} />
+                <PrimaryButton label={t("vote")} loading={sending} onPress={() => void send()} />
               )}
             </>
           ) : null}
@@ -282,11 +284,11 @@ export default function MarathonVoteScreen() {
         <Pressable style={styles.backdrop} onPress={() => setDone(null)} />
         <View style={styles.sheet}>
           <View style={styles.successMark}><Sparkles color={colors.primary} size={icon.lg} strokeWidth={icon.stroke} /></View>
-          <Text style={styles.sheetName}>Ovozingiz qabul qilindi</Text>
+          <Text style={styles.sheetName}>{t("voting.accepted")}</Text>
           <Text style={styles.sheetAsk}>
-            {done?.full_name ?? "Ishtirokchi"}ga ovoz berdingiz.
+            {t("voting.votedFor", { name: done?.full_name ?? t("voting.participant") })}
           </Text>
-          <PrimaryButton label="Yopish" onPress={() => setDone(null)} />
+          <PrimaryButton label={t("common:close")} onPress={() => setDone(null)} />
         </View>
       </Modal>
     </View>

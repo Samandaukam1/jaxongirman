@@ -5,6 +5,7 @@ import {
   Check, ChevronRight, Gift, Minus, Play, Plus, Square, SquareCheck, Users, Volume2, VolumeX, X,
 } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from "react-native";
 
 import { GameLeaderboardList } from "@/components/GameAnswerInput";
@@ -27,19 +28,12 @@ type Player = { id: string; nickname: string; avatar_id: number; team: string | 
 type OpenAnswer = { id: string; text: string; nickname: string; is_correct: boolean | null };
 type Hostable = { id: string; title: string; question_count: number; category_label: string | null; difficulty: string; source: string };
 
-const SOURCE_LABELS: Record<string, string> = {
-  mine: "Yaratganlarim",
-  presentation: "Prezentatsiyadan",
-  purchased: "Sotib olganlarim",
-  free: "Bepul o‘yinlar",
-};
+/** Where a hostable game came from; named in the `play` table under `host.source`. */
+const SOURCES = ["mine", "presentation", "purchased", "free"] as const;
+const isSource = (value: string): value is (typeof SOURCES)[number] => (SOURCES as readonly string[]).includes(value);
 
-const REWARD_STEPS: { key: keyof GameRewardPlan; label: string }[] = [
-  { key: "first", label: "1-o‘rin" },
-  { key: "second", label: "2-o‘rin" },
-  { key: "third", label: "3-o‘rin" },
-  { key: "participant", label: "Har bir qatnashchi" },
-];
+/** The reward plan's steps, in order; named in the `play` table under `host.reward`. */
+const REWARD_STEPS: (keyof GameRewardPlan & ("first" | "second" | "third" | "participant"))[] = ["first", "second", "third", "participant"];
 
 /**
  * The host's remote. It never renders a question — the room is looking at the
@@ -63,6 +57,7 @@ const LEADERBOARD_SECONDS = 8;
 export default function HostGameScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation(["play", "games", "common"]);
   const router = useRouter();
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
   const { balance, refresh: refreshWallet } = useAccount();
@@ -253,7 +248,7 @@ export default function HostGameScreen() {
       const next = !state.team_mode;
       await configureSession(sessionId, {
         teamMode: next,
-        teams: next ? ["Ko‘k jamoa", "Qizil jamoa"] : [],
+        teams: next ? [t("host.teams.blue"), t("host.teams.red")] : [],
       });
       await refresh();
     } catch (failure) {
@@ -263,16 +258,16 @@ export default function HostGameScreen() {
 
 
   function confirmCancel() {
-    Alert.alert("O‘yinni bekor qilish", "Mukofot jamg‘armasi balansingizga qaytariladi.", [
-      { text: "Yo‘q", style: "cancel" },
-      { text: "Bekor qilish", style: "destructive", onPress: () => void advance("cancel") },
+    Alert.alert(t("host.cancelTitle"), t("host.cancelBody"), [
+      { text: t("common:no"), style: "cancel" },
+      { text: t("common:cancel"), style: "destructive", onPress: () => void advance("cancel") },
     ]);
   }
 
   if (fatal) {
     return (
       <View style={styles.safe}>
-        <ScreenHeader title="O‘yingoh" onLeave={() => router.back()} />
+        <ScreenHeader title={t("games:title")} onLeave={() => router.back()} />
         <ErrorState message={fatal} onRetry={() => { setFatal(null); void refresh(); }} />
       </View>
     );
@@ -294,35 +289,35 @@ export default function HostGameScreen() {
 
   const advanceLabel = (() => {
     switch (state.status) {
-      case "lobby": return "O‘yinni boshlash";
-      case "countdown": return "Birinchi savol";
-      case "question": return "Javoblarni yopish";
-      case "question_result": return "Natijalar jadvali";
-      case "leaderboard": return "Keyingi savol";
-      default: return "Davom etish";
+      case "lobby": return t("host.advance.lobby");
+      case "countdown": return t("host.advance.countdown");
+      case "question": return t("host.advance.question");
+      case "question_result": return t("host.advance.question_result");
+      case "leaderboard": return t("host.advance.leaderboard");
+      default: return t("host.advance.other");
     }
   })();
 
   return (
     <View style={styles.safe}>
       <ScreenHeader
-        title="O‘yingoh boshqaruvi"
-        subtitle={state.status === "lobby" ? "Lobbi" : `Savol ${state.current_index + 1}`}
+        title={t("host.title")}
+        subtitle={state.status === "lobby" ? t("host.lobby") : t("host.question", { number: state.current_index + 1 })}
         onLeave={() => router.back()}
       />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {state.status === "lobby" && !state.game_id ? (
           <>
-            <Text style={styles.pickerTitle}>Qaysi o‘yinni o‘tkazasiz?</Text>
-            <Text style={styles.hint}>Tanlangach katta ekranda qo‘shilish uchun QR kod chiqadi.</Text>
+            <Text style={styles.pickerTitle}>{t("host.pick")}</Text>
+            <Text style={styles.hint}>{t("host.pickHint")}</Text>
             {error ? <InlineError message={error} /> : null}
             {hostable === null ? (
               <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.xl }} />
             ) : hostable.length === 0 ? (
               <View style={styles.emptyPicker}>
-                <Text style={styles.settingText}>Tayyor o‘yin yo‘q</Text>
-                <Text style={styles.hint}>Avval O‘yingoh bo‘limida o‘yin yaratib, uni tayyor holatga keltiring.</Text>
-                <PrimaryButton label="O‘yin yaratish" onPress={() => router.replace("/(app)/oyingoh/create")} />
+                <Text style={styles.settingText}>{t("host.noGames")}</Text>
+                <Text style={styles.hint}>{t("host.noGamesBody")}</Text>
+                <PrimaryButton label={t("host.createGame")} onPress={() => router.replace("/(app)/oyingoh/create")} />
               </View>
             ) : (
               Object.entries(
@@ -332,7 +327,7 @@ export default function HostGameScreen() {
                 }, {}),
               ).map(([source, games]) => (
                 <View key={source} style={{ gap: spacing.sm }}>
-                  <Text style={styles.groupLabel}>{SOURCE_LABELS[source] ?? source}</Text>
+                  <Text style={styles.groupLabel}>{isSource(source) ? t(`host.source.${source}`) : source}</Text>
                   {games.map((game) => (
                     <Pressable
                       key={game.id}
@@ -341,9 +336,9 @@ export default function HostGameScreen() {
                       onPress={() => void chooseGame(game.id)}
                     >
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.settingText} numberOfLines={1}>{game.title || "Nomsiz o‘yin"}</Text>
+                        <Text style={styles.settingText} numberOfLines={1}>{game.title || t("games:untitled")}</Text>
                         <Text style={styles.hint}>
-                          {game.question_count} savol
+                          {t("games:questions", { count: game.question_count })}
                           {game.category_label ? ` · ${game.category_label}` : ""}
                         </Text>
                       </View>
@@ -359,49 +354,49 @@ export default function HostGameScreen() {
         {state.status === "lobby" && state.game_id ? (
           <>
             <View style={styles.codeCard}>
-              <Text style={styles.codeLabel}>Qo‘shilish kodi</Text>
+              <Text style={styles.codeLabel}>{t("host.code")}</Text>
               <Text style={styles.codeValue}>{state.join_code.replace(/(\d{3})(\d{3})/, "$1 $2")}</Text>
-              <Text style={styles.codeHint}>Katta ekrandagi QR kodni skaner qilish ham mumkin.</Text>
+              <Text style={styles.codeHint}>{t("host.codeHint")}</Text>
             </View>
 
             <View style={styles.countRow}>
               <Users color={colors.primary} size={icon.lg} strokeWidth={icon.stroke} />
-              <Text style={styles.countText}>{state.player_count} ishtirokchi</Text>
+              <Text style={styles.countText}>{t("host.players", { count: state.player_count })}</Text>
             </View>
 
             <Pressable style={styles.settingRow} onPress={() => void toggleTeamMode()}>
               {state.team_mode
                 ? <SquareCheck color={colors.primary} size={icon.lg} strokeWidth={icon.strokeBold} />
                 : <Square color={colors.borderStrong} size={icon.lg} strokeWidth={icon.stroke} />}
-              <Text style={styles.settingText}>Jamoaviy bellashuv</Text>
+              <Text style={styles.settingText}>{t("host.teamMode")}</Text>
             </Pressable>
 
             <Pressable style={styles.settingRow} onPress={() => void toggleSetting("showOnPhones", !state.show_on_phones)}>
               {state.show_on_phones
                 ? <SquareCheck color={colors.primary} size={icon.lg} strokeWidth={icon.strokeBold} />
                 : <Square color={colors.borderStrong} size={icon.lg} strokeWidth={icon.stroke} />}
-              <Text style={styles.settingText}>Savol telefonlarda ham ko‘rinadi</Text>
+              <Text style={styles.settingText}>{t("host.onPhones")}</Text>
             </Pressable>
 
             <Pressable style={styles.settingRow} onPress={() => void toggleSetting("soundEnabled", !state.sound_enabled)}>
               {state.sound_enabled
                 ? <Volume2 color={colors.primary} size={icon.lg} strokeWidth={icon.stroke} />
                 : <VolumeX color={colors.inkSoft} size={icon.lg} strokeWidth={icon.stroke} />}
-              <Text style={styles.settingText}>Ovoz effektlari</Text>
+              <Text style={styles.settingText}>{t("host.sound")}</Text>
             </Pressable>
 
             <Pressable style={styles.settingRow} onPress={() => setRewardsOpen((value) => !value)}>
               <Gift color={colors.primary} size={icon.lg} strokeWidth={icon.stroke} />
-              <Text style={styles.settingText}>Mukofotlar</Text>
-              <Text style={styles.settingValue}>{liability > 0 ? `${formatNumber(liability)} J` : "yo‘q"}</Text>
+              <Text style={styles.settingText}>{t("host.rewards")}</Text>
+              <Text style={styles.settingValue}>{liability > 0 ? `${formatNumber(liability)} J` : t("host.none")}</Text>
               <ChevronRight color={colors.inkSoft} size={icon.md} strokeWidth={icon.stroke} />
             </Pressable>
 
             {rewardsOpen ? (
               <View style={styles.rewardCard}>
-                {REWARD_STEPS.map(({ key, label }) => (
+                {REWARD_STEPS.map((key) => (
                   <View key={key} style={styles.rewardRow}>
-                    <Text style={styles.rewardLabel}>{label}</Text>
+                    <Text style={styles.rewardLabel}>{t(`host.reward.${key}`)}</Text>
                     <Pressable
                       style={styles.stepButton}
                       onPress={() => void saveRewards({ ...plan, [key]: Math.max((plan[key] ?? 0) - 1, 0) })}
@@ -419,18 +414,18 @@ export default function HostGameScreen() {
                 ))}
                 <Text style={[styles.rewardTotal, !affordable && styles.rewardShort]}>
                   {liability > 0
-                    ? `Band qilinadi: ${formatNumber(liability)} J · balans ${formatNumber(balance)} J`
-                    : "Mukofot belgilanmagan"}
+                    ? t("host.reserve", { amount: formatNumber(liability), balance: formatNumber(balance) })
+                    : t("host.noReward")}
                 </Text>
                 {!affordable ? (
-                  <Text style={styles.rewardShort}>Balans yetmaydi — rejani kamaytiring yoki balansni to‘ldiring.</Text>
+                  <Text style={styles.rewardShort}>{t("host.short")}</Text>
                 ) : null}
               </View>
             ) : null}
 
-            <Text style={styles.sectionTitle}>Ishtirokchilar</Text>
+            <Text style={styles.sectionTitle}>{t("host.participants")}</Text>
             {players.length === 0 ? (
-              <Text style={styles.hint}>Hali hech kim qo‘shilmadi.</Text>
+              <Text style={styles.hint}>{t("host.nobody")}</Text>
             ) : (
               <View style={styles.playerWrap}>
                 {players.map((player) => (
@@ -447,21 +442,21 @@ export default function HostGameScreen() {
         {state.status !== "lobby" && state.status !== "finished" && state.status !== "cancelled" ? (
           <View style={styles.liveCard}>
             <Text style={styles.liveStatus}>
-              {state.status === "countdown" ? "Sanoq boshlandi"
-                : state.status === "question" ? "Savol ekranda"
-                : state.status === "question_result" ? "Natija ko‘rsatilmoqda"
-                : "Jadval ko‘rsatilmoqda"}
+              {state.status === "countdown" ? t("host.live.countdown")
+                : state.status === "question" ? t("host.live.question")
+                : state.status === "question_result" ? t("host.live.question_result")
+                : t("host.live.leaderboard")}
             </Text>
-            <Text style={styles.hint}>{state.player_count} ishtirokchi</Text>
+            <Text style={styles.hint}>{t("host.players", { count: state.player_count })}</Text>
             {state.reward_reserved > 0 ? (
-              <Text style={styles.hint}>Band qilingan mukofot: {formatNumber(state.reward_reserved)} J</Text>
+              <Text style={styles.hint}>{t("host.reserved", { amount: formatNumber(state.reward_reserved) })}</Text>
             ) : null}
           </View>
         ) : null}
 
         {openAnswers.length > 0 ? (
           <>
-            <Text style={styles.sectionTitle}>Erkin javoblarni baholang</Text>
+            <Text style={styles.sectionTitle}>{t("host.review")}</Text>
             {openAnswers.map((answer) => (
               <View key={answer.id} style={styles.reviewRow}>
                 <View style={{ flex: 1 }}>
@@ -474,7 +469,7 @@ export default function HostGameScreen() {
                     await reviewAnswer(answer.id, true);
                     setOpenAnswers((current) => current.map((row) => row.id === answer.id ? { ...row, is_correct: true } : row));
                   })()}
-                  accessibilityLabel="To‘g‘ri"
+                  accessibilityLabel={t("correct")}
                 >
                   <Check color={answer.is_correct === true ? colors.onPrimary : colors.success} size={icon.md} strokeWidth={icon.strokeBold} />
                 </Pressable>
@@ -484,7 +479,7 @@ export default function HostGameScreen() {
                     await reviewAnswer(answer.id, false);
                     setOpenAnswers((current) => current.map((row) => row.id === answer.id ? { ...row, is_correct: false } : row));
                   })()}
-                  accessibilityLabel="Noto‘g‘ri"
+                  accessibilityLabel={t("wrong")}
                 >
                   <X color={answer.is_correct === false ? colors.onPrimary : colors.danger} size={icon.md} strokeWidth={icon.strokeBold} />
                 </Pressable>
@@ -495,10 +490,10 @@ export default function HostGameScreen() {
 
         {state.status === "finished" && leaderboard ? (
           <>
-            <Text style={styles.sectionTitle}>Yakuniy natijalar</Text>
+            <Text style={styles.sectionTitle}>{t("host.final")}</Text>
             <GameLeaderboardList players={leaderboard.players} />
-            <PrimaryButton label="Natijalar sahifasi" onPress={() => router.replace(`/oyingoh/results/${sessionId}`)} />
-            <PrimaryButton label="O‘yingohga qaytish" tone="secondary" onPress={() => router.replace("/(app)/(tabs)/games")} />
+            <PrimaryButton label={t("host.resultsPage")} onPress={() => router.replace(`/oyingoh/results/${sessionId}`)} />
+            <PrimaryButton label={t("back")} tone="secondary" onPress={() => router.replace("/(app)/(tabs)/games")} />
           </>
         ) : null}
 
@@ -519,15 +514,15 @@ export default function HostGameScreen() {
                 {/* The game paces itself; this is how a host takes it back to
                     talk over a question without the clock moving on. */}
                 <PrimaryButton
-                  label={autoPaused ? "Avtomatik o‘tishni yoqish" : "Avtomatik o‘tishni to‘xtatish"}
+                  label={autoPaused ? t("host.autoOn") : t("host.autoOff")}
                   tone="ghost"
                   disabled={busy}
                   onPress={() => setAutoPaused((value) => !value)}
                 />
-                <PrimaryButton label="O‘yinni yakunlash" tone="secondary" disabled={busy} onPress={() => void advance("finish")} />
+                <PrimaryButton label={t("host.finish")} tone="secondary" disabled={busy} onPress={() => void advance("finish")} />
               </>
             ) : null}
-            <PrimaryButton label="Bekor qilish" tone="ghost" disabled={busy} onPress={confirmCancel} />
+            <PrimaryButton label={t("common:cancel")} tone="ghost" disabled={busy} onPress={confirmCancel} />
           </>
         ) : null}
       </ScrollView>

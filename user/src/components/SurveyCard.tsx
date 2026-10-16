@@ -1,9 +1,12 @@
-import { SURVEY_STATUS_LABELS, type SurveyStatus } from "@jaxongirman/types";
+import type { SurveyStatus } from "@jaxongirman/types";
 import { CheckCircle2, Clock, Users } from "lucide-react-native";
+import { useTranslation } from "react-i18next";
 import { Text, View } from "react-native";
 
+import { DeleteWorkButton } from "@/components/DeleteWorkButton";
 import { Touchable } from "@/components/Touchable";
 import { countdownTo, formatCountdown, formatShortDateTime, useNow } from "@/lib/datetime";
+import { labelOf } from "@/lib/labels";
 import { radius, shadow, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
@@ -37,9 +40,10 @@ export function CountdownText({ deadline, style }: { deadline: string | null; st
   return <Text style={style}>{formatCountdown(countdownTo(deadline, now))}</Text>;
 }
 
-export function SurveyCard({ item, onPress }: { item: SurveySummary; onPress: () => void }) {
+export function SurveyCard({ item, onPress, onDeleted }: { item: SurveySummary; onPress: () => void; onDeleted?: () => void }) {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation("misc");
   // A minute is fine here: this only decides which badge the card wears, while
   // the countdown inside it keeps its own second-by-second clock.
   const now = useNow(item.status === "open", 60_000);
@@ -53,12 +57,15 @@ export function SurveyCard({ item, onPress }: { item: SurveySummary; onPress: ()
         <Text numberOfLines={2} style={styles.title}>{item.title}</Text>
         <View style={[styles.badge, live ? styles.badgeLive : expired ? styles.badgeDone : styles.badgeDraft]}>
           <Text style={[styles.badgeText, live ? styles.badgeTextLive : expired ? styles.badgeTextDone : styles.badgeTextDraft]}>
-            {expired && item.status === "open" ? "Tugagan" : SURVEY_STATUS_LABELS[item.status]}
+            {expired && item.status === "open" ? labelOf("surveyStatus", "closed") : labelOf("surveyStatus", item.status)}
           </Text>
         </View>
       </View>
 
-      <Text style={styles.owner}>{item.is_owner ? "Siz yaratgansiz" : item.owner_name}</Text>
+      <View style={styles.ownerRow}>
+        <Text style={styles.owner}>{item.is_owner ? t("surveyOwner") : item.owner_name}</Text>
+        {item.is_owner && onDeleted ? <DeleteWorkButton kind="survey" id={item.id} title={item.title} onDeleted={onDeleted} /> : null}
+      </View>
 
       <View style={styles.metrics}>
         <View style={styles.metric}>
@@ -70,7 +77,7 @@ export function SurveyCard({ item, onPress }: { item: SurveySummary; onPress: ()
         {answered ? (
           <View style={styles.metric}>
             <CheckCircle2 color={colors.success} size={14} strokeWidth={2} />
-            <Text style={[styles.metricText, styles.metricDone]}>Javob berilgan</Text>
+            <Text style={[styles.metricText, styles.metricDone]}>{t("answered")}</Text>
           </View>
         ) : null}
       </View>
@@ -112,6 +119,7 @@ const useStyles = makeStyles((colors) => ({
   badgeTextDone: { color: colors.inkMuted },
   badgeTextDraft: { color: colors.primary },
   owner: { ...typography.caption, color: colors.inkSoft },
+  ownerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
   metrics: { flexDirection: "row", alignItems: "center", gap: spacing.lg, marginTop: 2 },
   metric: { flexDirection: "row", alignItems: "center", gap: 5 },
   metricText: { ...typography.caption, color: colors.inkMuted },

@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react-native";
 import { useEffect, useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { Animated, Easing, Pressable, Text, View, type DimensionValue, type ViewStyle } from "react-native";
 
 import { IconChip } from "@/components/IconChip";
@@ -69,13 +70,14 @@ export function EmptyState({ icon, title, message, action }: { icon: LucideIcon;
 
 export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
   const styles = useStyles();
+  const { t } = useTranslation(["misc", "common"]);
   return (
     <View style={[styles.card, styles.errorCard]}>
-      <Text style={styles.errorTitle}>Ma’lumot yuklanmadi</Text>
+      <Text style={styles.errorTitle}>{t("loadFailed")}</Text>
       <Text style={styles.copy}>{message}</Text>
       {onRetry ? (
         <Pressable accessibilityRole="button" onPress={onRetry} style={styles.retry}>
-          <Text style={styles.retryText}>Qayta urinish</Text>
+          <Text style={styles.retryText}>{t("common:retry")}</Text>
         </Pressable>
       ) : null}
     </View>

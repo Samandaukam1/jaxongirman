@@ -5,6 +5,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as Sharing from "expo-sharing";
 import { Check, ClipboardCopy, Download, ExternalLink, ImagePlus, Sparkles } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
+import { Trans, useTranslation } from "react-i18next";
 import { ActivityIndicator, Image, Linking, Platform, Pressable, ScrollView, Share, Text, View } from "react-native";
 
 import { ScreenHeader } from "@/components/ScreenHeader";
@@ -28,11 +29,13 @@ import { makeStyles, useTheme } from "@/theme/ThemeProvider";
  * a size a printer will not soften.
  */
 
-const STEPS = ["Prompt", "ChatGPT", "Rasm", "Chop etish"] as const;
+/** The four steps; named in the `tools` table under `portrait.steps`. */
+const STEPS = ["prompt", "chatgpt", "photo", "print"] as const;
 
 export default function PortraitScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation("tools");
   const { user } = useAuth();
   const { sheetId } = useLocalSearchParams<{ sheetId?: string }>();
   const [step, setStep] = useState(0);
@@ -110,9 +113,9 @@ export default function PortraitScreen() {
     try {
       const url = await sheetUrl(sheet.sheetPath);
       if (Platform.OS === "web") { window.open(url, "_blank", "noopener,noreferrer"); return; }
-      const { uri } = await FileSystem.downloadAsync(url, `${FileSystem.cacheDirectory}3x4-rasm.pdf`);
+      const { uri } = await FileSystem.downloadAsync(url, `${FileSystem.cacheDirectory}${t("portrait.fileName")}.pdf`);
       if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, { mimeType: "application/pdf", UTI: "com.adobe.pdf", dialogTitle: "3×4 rasm" });
+        await Sharing.shareAsync(uri, { mimeType: "application/pdf", UTI: "com.adobe.pdf", dialogTitle: t("portrait.title") });
       }
     } catch (downloadError) {
       setError(asErrorMessage(downloadError));
@@ -123,7 +126,7 @@ export default function PortraitScreen() {
 
   return (
     <View style={styles.screen}>
-      <ScreenHeader title="3×4 rasm" />
+      <ScreenHeader title={t("portrait.title")} />
 
       <View style={styles.steps}>
         {STEPS.map((label, index) => (
@@ -141,7 +144,7 @@ export default function PortraitScreen() {
                 ? <Check color={colors.onPrimary} size={13} strokeWidth={3} />
                 : <Text style={[styles.stepNumber, index <= step && styles.stepNumberOn]}>{index + 1}</Text>}
             </View>
-            <Text style={[styles.stepLabel, index === step && styles.stepLabelOn]} numberOfLines={1}>{label}</Text>
+            <Text style={[styles.stepLabel, index === step && styles.stepLabelOn]} numberOfLines={1}>{t(`portrait.steps.${label}`)}</Text>
           </Pressable>
         ))}
       </View>
@@ -152,8 +155,7 @@ export default function PortraitScreen() {
         {step === 0 ? (
           <>
             <Text style={styles.lead}>
-              Quyidagi matn — rasm modeliga beriladigan aniq ko‘rsatma. U yuzni o‘zgartirmaslikni,
-              oq studiya foni va rasmiy kiyimni talab qiladi.
+              {t("portrait.promptLead")}
             </Text>
             <View style={styles.promptCard}>
               <Text style={styles.promptText} numberOfLines={12}>{prompt || "…"}</Text>
@@ -171,8 +173,8 @@ export default function PortraitScreen() {
               style={[styles.primary, !prompt && styles.disabled]}
             >
               {copied
-                ? <><Check color={colors.onPrimary} size={icon.sm} strokeWidth={2.6} /><Text style={styles.primaryText}>Nusxalandi</Text></>
-                : <><ClipboardCopy color={colors.onPrimary} size={icon.sm} strokeWidth={2} /><Text style={styles.primaryText}>Promptni nusxalash</Text></>}
+                ? <><Check color={colors.onPrimary} size={icon.sm} strokeWidth={2.6} /><Text style={styles.primaryText}>{t("portrait.copied")}</Text></>
+                : <><ClipboardCopy color={colors.onPrimary} size={icon.sm} strokeWidth={2} /><Text style={styles.primaryText}>{t("portrait.copy")}</Text></>}
             </Pressable>
 
             {/* Sharing stays as a second way out, for people who would rather
@@ -182,10 +184,10 @@ export default function PortraitScreen() {
               onPress={() => { void Share.share({ message: prompt }).catch(() => { /* dismissed */ }); }}
               style={styles.secondary}
             >
-              <Text style={styles.secondaryText}>Ulashish</Text>
+              <Text style={styles.secondaryText}>{t("portrait.share")}</Text>
             </Pressable>
             <Pressable onPress={() => setStep(1)} style={styles.ghost}>
-              <Text style={styles.ghostText}>Keyingisi</Text>
+              <Text style={styles.ghostText}>{t("portrait.next")}</Text>
             </Pressable>
           </>
         ) : null}
@@ -193,16 +195,10 @@ export default function PortraitScreen() {
         {step === 1 ? (
           <>
             <Text style={styles.lead}>
-              ChatGPT’ni oching, nusxalangan promptni qo‘ying va <Text style={styles.bold}>o‘z rasmingizni
-              birga yuboring</Text>. Rasm yuzingiz aniq ko‘rinadigan, yorug‘ joyda olingan bo‘lsin.
+              <Trans t={t} i18nKey="portrait.chatLead" components={{ b: <Text style={styles.bold} /> }} />
             </Text>
             <View style={styles.tips}>
-              {[
-                "Rasmda faqat siz bo‘ling",
-                "Yuz to‘g‘ridan-to‘g‘ri ko‘rinsin",
-                "Ko‘zoynak aksi va soya bo‘lmasin",
-                "Natijani telefoningizga saqlang",
-              ].map((tip) => (
+              {(["alone", "straight", "glare", "save"] as const).map((key) => t(`portrait.tips.${key}`)).map((tip) => (
                 <View key={tip} style={styles.tip}>
                   <View style={styles.tipDot} />
                   <Text style={styles.tipText}>{tip}</Text>
@@ -211,10 +207,10 @@ export default function PortraitScreen() {
             </View>
             <Pressable onPress={() => void Linking.openURL("https://chat.openai.com/")} style={styles.secondary}>
               <ExternalLink color={colors.primary} size={icon.sm} strokeWidth={2} />
-              <Text style={styles.secondaryText}>ChatGPT’ni ochish</Text>
+              <Text style={styles.secondaryText}>{t("portrait.openChat")}</Text>
             </Pressable>
             <Pressable onPress={() => setStep(2)} style={styles.primary}>
-              <Text style={styles.primaryText}>Rasm tayyor</Text>
+              <Text style={styles.primaryText}>{t("portrait.ready")}</Text>
             </Pressable>
           </>
         ) : null}
@@ -222,13 +218,12 @@ export default function PortraitScreen() {
         {step === 2 ? (
           <>
             <Text style={styles.lead}>
-              ChatGPT qaytargan rasmni yuklang. Rasm bo‘yiga va kamida 355×473 nuqta bo‘lishi kerak —
-              aks holda chop etilganda xira chiqadi.
+              {t("portrait.uploadLead")}
             </Text>
             <Pressable disabled={busy !== null} onPress={() => void pick()} style={[styles.dropzone, busy !== null && styles.disabled]}>
               {busy === "upload"
                 ? <ActivityIndicator color={colors.primary} size="large" />
-                : <><ImagePlus color={colors.primary} size={30} strokeWidth={1.8} /><Text style={styles.dropzoneText}>Rasmni tanlash</Text></>}
+                : <><ImagePlus color={colors.primary} size={30} strokeWidth={1.8} /><Text style={styles.dropzoneText}>{t("portrait.pick")}</Text></>}
             </Pressable>
           </>
         ) : null}
@@ -237,8 +232,7 @@ export default function PortraitScreen() {
           <>
             {preview ? <Image source={{ uri: preview }} style={styles.preview} resizeMode="cover" /> : null}
             <Text style={styles.lead}>
-              A6 varaqqa 3×3 qilib to‘qqizta 30×40 mm rasm joylashtiriladi. Qirqish uchun ingichka
-              chiziqlar chiziladi.
+              {t("portrait.sheetLead")}
             </Text>
 
             {sheet?.warnings.map((warning) => (
@@ -249,18 +243,18 @@ export default function PortraitScreen() {
               <Pressable disabled={busy !== null} onPress={() => void download()} style={[styles.primary, busy !== null && styles.disabled]}>
                 {busy === "download"
                   ? <ActivityIndicator color={colors.onPrimary} size="small" />
-                  : <><Download color={colors.onPrimary} size={icon.sm} strokeWidth={2} /><Text style={styles.primaryText}>PDF yuklab olish</Text></>}
+                  : <><Download color={colors.onPrimary} size={icon.sm} strokeWidth={2} /><Text style={styles.primaryText}>{t("portrait.pdf")}</Text></>}
               </Pressable>
             ) : (
               <Pressable disabled={busy !== null || !sourcePath} onPress={() => void build()} style={[styles.primary, (busy !== null || !sourcePath) && styles.disabled]}>
                 {busy === "sheet"
                   ? <ActivityIndicator color={colors.onPrimary} size="small" />
-                  : <><Sparkles color={colors.onPrimary} size={icon.sm} strokeWidth={2} /><Text style={styles.primaryText}>Chop etish varag‘ini tayyorlash</Text></>}
+                  : <><Sparkles color={colors.onPrimary} size={icon.sm} strokeWidth={2} /><Text style={styles.primaryText}>{t("portrait.build")}</Text></>}
               </Pressable>
             )}
 
             <Pressable onPress={() => { setStep(2); setSheet(null); }} style={styles.ghost}>
-              <Text style={styles.ghostText}>Boshqa rasm tanlash</Text>
+              <Text style={styles.ghostText}>{t("portrait.another")}</Text>
             </Pressable>
           </>
         ) : null}

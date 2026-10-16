@@ -10,6 +10,7 @@ import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ChevronLeft, ChevronRight, Eye, EyeOff, Gamepad2, PowerOff, RotateCcw } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Alert, Image, Pressable, ScrollView, Text, View } from "react-native";
 
 import { PresentationPreview, type PresentationPreviewHandle } from "@/components/PresentationPreview";
@@ -18,7 +19,7 @@ import { ErrorState, InlineError } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
 import { launchPresentationGame, presentationHasGame } from "@/lib/games";
 import { loadDefense, type Defense } from "@/lib/defense";
-import { supabase } from "@/lib/supabase";
+import { changesChannel, supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
 import { radius, shadow, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
@@ -107,6 +108,7 @@ export default function RemoteScreen() {
   const { user } = useAuth();
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation(["present", "common"]);
   const router = useRouter();
   const params = useLocalSearchParams<{ sessionId?: string }>();
   const sessionId = typeof params.sessionId === "string" ? params.sessionId : "";
@@ -146,7 +148,7 @@ export default function RemoteScreen() {
         .order("created_at", { ascending: false }).limit(30),
     ]);
     if (sessionResult.error || !sessionResult.data) {
-      setError(sessionResult.error ? asErrorMessage(sessionResult.error) : "Sessiya topilmadi.");
+      setError(sessionResult.error ? asErrorMessage(sessionResult.error) : t("notFound"));
     } else {
       const next = sessionResult.data as Session;
       setSession(next);
@@ -159,7 +161,7 @@ export default function RemoteScreen() {
       slide_count: (row.slides as unknown as { count: number }[])?.[0]?.count ?? 0,
     })));
     setLoading(false);
-  }, [sessionId, user]);
+  }, [sessionId, t, user]);
 
   /**
    * The spoken script, beside the slide it belongs to.
@@ -192,11 +194,11 @@ export default function RemoteScreen() {
       console.error("presentation preview load failed", deckFailure);
       setSlides([]);
       setElements([]);
-      setDeckError("Slayd yuklanmadi.");
+      setDeckError(t("slideFailed"));
     } finally {
       if (sequence === deckLoadSequence.current) setDeckLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -225,8 +227,7 @@ export default function RemoteScreen() {
     if (!sessionId) return;
     let subscribed = true;
     setSessionConnected(false);
-    const channel = supabase
-      .channel(`remote-session-${sessionId}`)
+    const channel = changesChannel(`remote-session-${sessionId}`)
       .on("postgres_changes",
         { event: "UPDATE", schema: "public", table: "presentation_sessions", filter: `id=eq.${sessionId}` },
         (payload) => {
@@ -391,7 +392,7 @@ export default function RemoteScreen() {
   if (loading) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="Pult" />
+        <ScreenHeader title={t("remote")} />
         <View style={styles.centered}><ActivityIndicator color={colors.primary} size="large" /></View>
       </View>
     );
@@ -400,8 +401,8 @@ export default function RemoteScreen() {
   if (error || !session) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="Pult" />
-        <View style={styles.content}><ErrorState message={error ?? "Sessiya topilmadi"} onRetry={() => void load()} /></View>
+        <ScreenHeader title={t("remote")} />
+        <View style={styles.content}><ErrorState message={error ?? t("notFound")} onRetry={() => void load()} /></View>
       </View>
     );
   }
@@ -411,37 +412,37 @@ export default function RemoteScreen() {
   return (
     <View style={styles.screen}>
       <ScreenHeader
-        title="Taqdimot pulti"
-        subtitle={ended ? "Sessiya yakunlandi" : connected ? "Ekran ulangan" : "Qayta ulanmoqda…"}
+        title={t("title")}
+        subtitle={ended ? t("ended") : connected ? t("connected") : t("reconnecting")}
         variant="close"
         onLeave={() => router.replace("/(app)/(tabs)/projects")}
       />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {!connected ? <InlineError message="Ulanish uzildi. Qayta ulanmoqda..." /> : null}
+        {!connected ? <InlineError message={t("offline")} /> : null}
         {session.presentation_id === null ? (
           <>
-            <Text style={styles.sectionTitle}>Qaysi taqdimot ko‘rsatilsin?</Text>
+            <Text style={styles.sectionTitle}>{t("pick")}</Text>
             <View style={styles.deckList}>
               {decks.map((deck) => (
                 <Pressable key={deck.id} accessibilityRole="button" onPress={() => void chooseDeck(deck)} style={styles.deckRow}>
                   <Text numberOfLines={1} style={styles.deckTitle}>{deck.title}</Text>
-                  <Text style={styles.deckMeta}>{deck.slide_count} slayd</Text>
+                  <Text style={styles.deckMeta}>{t("slides", { count: deck.slide_count })}</Text>
                 </Pressable>
               ))}
-              {decks.length === 0 ? <Text style={styles.hint}>Tayyor taqdimot topilmadi. Avval Loyihalar bo‘limida taqdimot yarating.</Text> : null}
+              {decks.length === 0 ? <Text style={styles.hint}>{t("noDecks")}</Text> : null}
             </View>
           </>
         ) : (
           <>
             <View style={styles.stageHeader}>
-              <Text style={styles.stageLabel}>Joriy slayd</Text>
+              <Text style={styles.stageLabel}>{t("current")}</Text>
               <View style={styles.stageRight}>
                 {/* Reset belongs beside what it resets, not at the end of a
                     scroll: it undoes a zoom, and a zoom is on the picture. */}
-                <Pressable accessibilityLabel="Masshtabni asliga qaytarish" disabled={ended} onPress={() => previewRef.current?.reset()} style={styles.resetButton}>
+                <Pressable accessibilityLabel={t("resetZoom")} disabled={ended} onPress={() => previewRef.current?.reset()} style={styles.resetButton}>
                   <RotateCcw color={colors.primary} size={16} strokeWidth={2} />
-                  <Text style={styles.resetText}>Reset</Text>
+                  <Text style={styles.resetText}>{t("reset")}</Text>
                 </Pressable>
                 <Text style={styles.stageCount}>{session.slide_count > 0 ? `${session.current_slide + 1} / ${session.slide_count}` : "—"}</Text>
               </View>
@@ -451,7 +452,7 @@ export default function RemoteScreen() {
               <View style={styles.previewState}><ActivityIndicator color={colors.primary} size="large" /></View>
             ) : deckError || !currentSlide ? (
               <View style={styles.previewState}>
-                <ErrorState message="Slayd yuklanmadi." onRetry={() => {
+                <ErrorState message={t("slideFailed")} onRetry={() => {
                   if (session.presentation_id) void loadDeck(session.presentation_id);
                 }} />
               </View>
@@ -466,28 +467,28 @@ export default function RemoteScreen() {
               />
             )}
 
-            <Text style={styles.gestureHint}>Kattalashtirish uchun ikki barmoq bilan suring</Text>
+            <Text style={styles.gestureHint}>{t("pinch")}</Text>
 
             <View style={styles.navRow}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Oldingi slayd"
+                accessibilityLabel={t("prevLabel")}
                 disabled={ended || session.current_slide <= 0}
                 onPress={() => void send("previous")}
                 style={({ pressed }) => [styles.navButton, (ended || session.current_slide <= 0) && styles.disabled, pressed && styles.pressed]}
               >
                 <ChevronLeft color={colors.primaryDeep} size={34} strokeWidth={2.4} />
-                <Text style={styles.navText}>Oldingi</Text>
+                <Text style={styles.navText}>{t("prev")}</Text>
               </Pressable>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Keyingi slayd"
+                accessibilityLabel={t("nextLabel")}
                 disabled={ended || session.current_slide >= session.slide_count - 1}
                 onPress={() => void send("next")}
                 style={({ pressed }) => [styles.navButton, styles.navPrimary, (ended || session.current_slide >= session.slide_count - 1) && styles.disabled, pressed && styles.pressed]}
               >
                 <ChevronRight color={colors.onPrimary} size={34} strokeWidth={2.4} />
-                <Text style={[styles.navText, styles.navPrimaryText]}>Keyingi</Text>
+                <Text style={[styles.navText, styles.navPrimaryText]}>{t("next")}</Text>
               </Pressable>
             </View>
 
@@ -501,20 +502,20 @@ export default function RemoteScreen() {
             {defense?.status === "ready" && showScript ? (
               <View style={styles.script}>
                 <View style={styles.scriptHead}>
-                  <Text style={styles.scriptTitle}>Himoya matni</Text>
-                  <Pressable accessibilityLabel="Himoya matnini yashirish" onPress={() => setShowScript(false)} style={styles.scriptHide}>
+                  <Text style={styles.scriptTitle}>{t("script")}</Text>
+                  <Pressable accessibilityLabel={t("hideScript")} onPress={() => setShowScript(false)} style={styles.scriptHide}>
                     <EyeOff color={colors.inkMuted} size={16} strokeWidth={2} />
-                    <Text style={styles.scriptHideText}>Yashirish</Text>
+                    <Text style={styles.scriptHideText}>{t("hide")}</Text>
                   </Pressable>
                 </View>
                 <ScrollView style={styles.scriptScroll} nestedScrollEnabled showsVerticalScrollIndicator>
                   <Text style={styles.scriptBody}>
                     {defense.sections[session.current_slide]?.speaker_text?.trim()
-                      || "Bu slayd uchun matn yozilmagan."}
+                      || t("noScript")}
                   </Text>
                   {defense.sections[session.current_slide]?.key_point ? (
                     <Text style={styles.scriptPoint}>
-                      Asosiy fikr: {defense.sections[session.current_slide]!.key_point}
+                      {t("keyPoint", { point: defense.sections[session.current_slide]!.key_point })}
                     </Text>
                   ) : null}
                 </ScrollView>
@@ -524,7 +525,7 @@ export default function RemoteScreen() {
             {defense?.status === "ready" && !showScript ? (
               <Pressable accessibilityRole="button" onPress={() => setShowScript(true)} style={styles.scriptShow}>
                 <Eye color={colors.primary} size={16} strokeWidth={2} />
-                <Text style={styles.scriptShowText}>Himoya matnini ko‘rsatish</Text>
+                <Text style={styles.scriptShowText}>{t("showScript")}</Text>
               </Pressable>
             ) : null}
 
@@ -541,7 +542,7 @@ export default function RemoteScreen() {
                   ? <ActivityIndicator color={colors.onPrimary} size="small" />
                   : <Gamepad2 color={colors.onPrimary} size={22} strokeWidth={2.2} />}
                 <Text style={styles.launchText}>
-                  {launching ? "O‘yingoh ochilmoqda…" : "O‘yingohni ishga tushirish"}
+                  {launching ? t("launching") : t("launch")}
                 </Text>
               </Pressable>
             ) : null}
@@ -549,14 +550,14 @@ export default function RemoteScreen() {
             <Pressable
               accessibilityRole="button"
               disabled={ended}
-              onPress={() => Alert.alert("Taqdimotni yakunlash?", "Ekrandagi ko‘rsatuv to‘xtaydi.", [
-                { text: "Bekor qilish", style: "cancel" },
-                { text: "Yakunlash", style: "destructive", onPress: () => void send("end") },
+              onPress={() => Alert.alert(t("endTitle"), t("endBody"), [
+                { text: t("common:cancel"), style: "cancel" },
+                { text: t("endConfirm"), style: "destructive", onPress: () => void send("end") },
               ])}
               style={styles.endButton}
             >
               <PowerOff color={colors.danger} size={18} strokeWidth={2} />
-              <Text style={styles.endText}>Taqdimotni yakunlash</Text>
+              <Text style={styles.endText}>{t("end")}</Text>
             </Pressable>
           </>
         )}

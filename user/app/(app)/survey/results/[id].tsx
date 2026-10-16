@@ -4,6 +4,7 @@ import * as Sharing from "expo-sharing";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Clock, Download, Link2, Lock, Pencil, Play, Users } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Alert, Image, Pressable, RefreshControl, ScrollView, Share, Text, View } from "react-native";
 
 import { ScreenHeader } from "@/components/ScreenHeader";
@@ -11,7 +12,7 @@ import { CountdownText } from "@/components/SurveyCard";
 import { EmptyState, ErrorState, InlineError, SkeletonCard } from "@/components/StateBlocks";
 import { formatShortDateTime, useNow } from "@/lib/datetime";
 import { asErrorMessage, asFunctionErrorMessage } from "@/lib/format";
-import { supabase } from "@/lib/supabase";
+import { changesChannel, supabase } from "@/lib/supabase";
 import { icon, radius, shadow, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
@@ -61,6 +62,7 @@ type ResponseRow = {
 export default function SurveyResultsScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation("survey");
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
   const formId = typeof params.id === "string" ? params.id : "";
@@ -110,8 +112,7 @@ export default function SurveyResultsScreen() {
   // without a single answer row crossing the wire.
   useEffect(() => {
     if (!formId) return;
-    const channel = supabase
-      .channel(`survey-results-${formId}`)
+    const channel = changesChannel(`survey-results-${formId}`)
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "survey_forms", filter: `id=eq.${formId}` }, () => void load(true))
       .subscribe();
     return () => { void supabase.removeChannel(channel); };
@@ -128,7 +129,7 @@ export default function SurveyResultsScreen() {
   async function shareLink() {
     const url = Linking.createURL(`/survey/${formId}`);
     await Share.share({
-      message: `“${summary?.form.title ?? "So‘rovnoma"}” so‘rovnomasini to‘ldiring:\n${url}`,
+      message: t("results.shareMessage", { title: summary?.form.title ?? t("respond.title"), url }),
     });
   }
 
@@ -138,17 +139,17 @@ export default function SurveyResultsScreen() {
       const { data, error: invokeError } = await supabase.functions.invoke("export-survey", { body: { formId, format } });
       if (invokeError) throw invokeError;
       const url = (data as { url?: string })?.url;
-      if (!url) throw new Error("Eksport havolasi olinmadi");
+      if (!url) throw new Error(t("results.noExport"));
 
       const target = `${FileSystem.cacheDirectory}${(summary?.form.title ?? "survey").replace(/[^A-Za-z0-9]+/g, "-").toLowerCase()}.${format}`;
       const download = await FileSystem.downloadAsync(url, target);
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(download.uri, {
           mimeType: format === "csv" ? "text/csv" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          dialogTitle: "Natijalarni ulashish",
+          dialogTitle: t("results.shareDialog"),
         });
       } else {
-        Alert.alert("Yuklab olindi", "Fayl qurilmaga saqlandi.");
+        Alert.alert(t("results.saved"), t("results.savedBody"));
       }
     } catch (nextError) {
       setActionError(await asFunctionErrorMessage(nextError));
@@ -160,7 +161,7 @@ export default function SurveyResultsScreen() {
   if (loading) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="Natijalar" />
+        <ScreenHeader title={t("results.title")} />
         <View style={styles.content}><SkeletonCard lines={3} /><SkeletonCard lines={3} /></View>
       </View>
     );
@@ -169,8 +170,8 @@ export default function SurveyResultsScreen() {
   if (error || !summary) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="Natijalar" />
-        <View style={styles.content}><ErrorState message={error ?? "Natijalar topilmadi"} onRetry={() => void load()} /></View>
+        <ScreenHeader title={t("results.title")} />
+        <View style={styles.content}><ErrorState message={error ?? t("results.notFound")} onRetry={() => void load()} /></View>
       </View>
     );
   }
@@ -187,11 +188,11 @@ export default function SurveyResultsScreen() {
     <View style={styles.screen}>
       <ScreenHeader
         title={form.title}
-        subtitle={live ? "Faol" : form.status === "draft" ? "Qoralama" : "Tugagan"}
+        subtitle={live ? t("results.live") : form.status === "draft" ? t("results.draft") : t("results.ended")}
         action={
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Tahrirlash"
+            accessibilityLabel={t("results.edit")}
             onPress={() => router.push({ pathname: "/(app)/survey/create", params: { id: formId } })}
             style={styles.headerAction}
           >
@@ -209,7 +210,7 @@ export default function SurveyResultsScreen() {
           <View style={styles.headlineTop}>
             <Text style={styles.headlineValue}>{form.submitted_count}</Text>
             <Text style={styles.headlineUnit}>
-              {form.expected_participants ? `/ ${form.expected_participants} javob` : "javob"}
+              {form.expected_participants ? t("results.ofAnswers", { count: form.expected_participants }) : t("results.answers")}
             </Text>
           </View>
           {completion !== null ? (
@@ -217,24 +218,24 @@ export default function SurveyResultsScreen() {
               <View style={styles.progressTrack}>
                 <View style={[styles.progressFill, { width: `${completion}%` }]} />
               </View>
-              <Text style={styles.headlineMeta}>{completion}% to‘ldirildi · {remaining} ta qoldi</Text>
+              <Text style={styles.headlineMeta}>{t("results.completion", { percent: completion, count: remaining ?? 0 })}</Text>
             </>
           ) : null}
           <View style={styles.headlineRow}>
             <Users color={colors.inkSoft} size={14} strokeWidth={2} />
-            <Text style={styles.headlineMeta}>{summary.participants} kishi ochgan</Text>
+            <Text style={styles.headlineMeta}>{t("results.opened", { count: summary.participants })}</Text>
             <View style={styles.spacer} />
             <Clock color={live ? colors.primary : colors.inkSoft} size={14} strokeWidth={2} />
             {live
               ? <CountdownText deadline={form.deadline} style={styles.headlineCountdown} />
-              : <Text style={styles.headlineMeta}>{expired ? "Muddat tugagan" : "Muddatsiz"}</Text>}
+              : <Text style={styles.headlineMeta}>{expired ? t("results.expired") : t("results.noDeadline")}</Text>}
           </View>
         </View>
 
         <View style={styles.actions}>
           <Pressable accessibilityRole="button" onPress={() => void shareLink()} style={styles.action}>
             <Link2 color={colors.primary} size={18} strokeWidth={2} />
-            <Text style={styles.actionText}>Havola</Text>
+            <Text style={styles.actionText}>{t("results.link")}</Text>
           </Pressable>
           <Pressable accessibilityRole="button" disabled={busy !== null} onPress={() => void exportResults("xlsx")} style={styles.action}>
             {busy === "xlsx" ? <ActivityIndicator color={colors.primary} size="small" /> : <Download color={colors.primary} size={18} strokeWidth={2} />}
@@ -247,12 +248,12 @@ export default function SurveyResultsScreen() {
           {live ? (
             <Pressable accessibilityRole="button" disabled={busy !== null} onPress={() => void changeStatus("closed")} style={styles.action}>
               <Lock color={colors.danger} size={18} strokeWidth={2} />
-              <Text style={[styles.actionText, styles.actionDanger]}>Yopish</Text>
+              <Text style={[styles.actionText, styles.actionDanger]}>{t("results.close")}</Text>
             </Pressable>
           ) : (
             <Pressable accessibilityRole="button" disabled={busy !== null} onPress={() => void changeStatus("open")} style={styles.action}>
               <Play color={colors.success} size={18} strokeWidth={2} />
-              <Text style={[styles.actionText, styles.actionSuccess]}>Ochish</Text>
+              <Text style={[styles.actionText, styles.actionSuccess]}>{t("results.open")}</Text>
             </Pressable>
           )}
         </View>
@@ -261,30 +262,30 @@ export default function SurveyResultsScreen() {
 
         <View style={styles.retention}>
           <Text style={styles.retentionText}>
-            Javoblar {form.retention_hours} soat saqlanadi.
-            {summary.next_expiry ? ` Eng erta o‘chirilish: ${formatShortDateTime(summary.next_expiry)}.` : ""}
-            {" "}Eksportni shu muddat ichida yuklab oling.
+            {t("results.retention", { hours: form.retention_hours })}
+            {summary.next_expiry ? t("results.earliest", { date: formatShortDateTime(summary.next_expiry) }) : ""}
+            {t("results.exportSoon")}
           </Text>
         </View>
 
         {form.submitted_count === 0 ? (
           <EmptyState
             icon={Users}
-            title="Hali javob yo‘q"
+            title={t("results.none")}
             message={live
-              ? "Havolani ulashing — javoblar kelgani sari bu sahifa o‘zi yangilanadi."
-              : "So‘rovnoma ochilgach, javoblar shu yerda to‘planadi."}
+              ? t("results.noneLive")
+              : t("results.noneClosed")}
           />
         ) : null}
 
         {form.submitted_count > 0 ? (
           <>
-            <Text style={styles.sectionTitle}>Savollar bo‘yicha</Text>
+            <Text style={styles.sectionTitle}>{t("results.byQuestion")}</Text>
             <View style={styles.statList}>
               {summary.questions.map((question, index) => (
                 <View key={question.id} style={styles.statCard}>
                   <Text style={styles.statLabel}>{index + 1}. {question.label}</Text>
-                  <Text style={styles.statMeta}>{question.answered} ta javob</Text>
+                  <Text style={styles.statMeta}>{t("results.answered", { count: question.answered })}</Text>
 
                   {question.options.length > 0 ? (
                     <View style={styles.bars}>
@@ -305,9 +306,9 @@ export default function SurveyResultsScreen() {
 
                   {question.number_summary && question.number_summary.avg !== null ? (
                     <View style={styles.numbers}>
-                      <View style={styles.numberCell}><Text style={styles.numberValue}>{question.number_summary.min}</Text><Text style={styles.numberLabel}>eng kichik</Text></View>
-                      <View style={styles.numberCell}><Text style={styles.numberValue}>{question.number_summary.avg}</Text><Text style={styles.numberLabel}>o‘rtacha</Text></View>
-                      <View style={styles.numberCell}><Text style={styles.numberValue}>{question.number_summary.max}</Text><Text style={styles.numberLabel}>eng katta</Text></View>
+                      <View style={styles.numberCell}><Text style={styles.numberValue}>{question.number_summary.min}</Text><Text style={styles.numberLabel}>{t("results.min")}</Text></View>
+                      <View style={styles.numberCell}><Text style={styles.numberValue}>{question.number_summary.avg}</Text><Text style={styles.numberLabel}>{t("results.avg")}</Text></View>
+                      <View style={styles.numberCell}><Text style={styles.numberValue}>{question.number_summary.max}</Text><Text style={styles.numberLabel}>{t("results.max")}</Text></View>
                     </View>
                   ) : null}
 
@@ -322,7 +323,7 @@ export default function SurveyResultsScreen() {
               ))}
             </View>
 
-            <Text style={styles.sectionTitle}>Javoblar jadvali</Text>
+            <Text style={styles.sectionTitle}>{t("results.table")}</Text>
             {/* One card per respondent rather than a real grid: a phone cannot
                 show a fifteen-column table, and the spreadsheet export exists
                 precisely for the case where a grid is what you need. */}
@@ -346,7 +347,7 @@ export default function SurveyResultsScreen() {
                       ?? (answer.option_ids.length
                         ? answer.option_ids.map((id) => question.options.find((option) => option.id === id)?.label ?? "—").join(", ")
                         : null)
-                      ?? (answer.files.length ? `${answer.files.length} ta rasm` : null);
+                      ?? (answer.files.length ? t("results.images", { count: answer.files.length }) : null);
                     if (!text) return null;
                     return (
                       <View key={question.id} style={styles.rowAnswer}>

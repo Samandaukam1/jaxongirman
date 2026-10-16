@@ -1,5 +1,5 @@
 import {
-  GAME_POINT_PRESETS, GAME_TIME_LIMIT_PRESETS, GAME_TYPE_LABELS,
+  GAME_POINT_PRESETS, GAME_TIME_LIMIT_PRESETS,
   type GameOption, type GameQuestionConfig, type GameQuestionType,
 } from "@jaxongirman/types";
 import * as Crypto from "expo-crypto";
@@ -10,10 +10,12 @@ import {
   ImagePlus, Minus, Plus, RefreshCw, Square, SquareCheck, Trash2, X,
 } from "lucide-react-native";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Image, LayoutChangeEvent, Pressable, Text, TextInput, View } from "react-native";
 
 import { asErrorMessage } from "@/lib/format";
 import type { GameQuestion } from "@/lib/games";
+import { labelOf } from "@/lib/labels";
 import { supabase } from "@/lib/supabase";
 import { icon, radius, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
@@ -48,6 +50,7 @@ function publicUrl(path: string | null): string | null {
 export function GameQuestionCard({ question, index, total, onSaved, onDelete, onDuplicate, onMove, onRegenerate, regenerating }: Props) {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation(["games", "play"]);
   const [open, setOpen] = useState(false);
   const [prompt, setPrompt] = useState(question.prompt);
   const [explanation, setExplanation] = useState(question.explanation);
@@ -100,7 +103,7 @@ export function GameQuestionCard({ question, index, total, onSaved, onDelete, on
     setError(null);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Kirish talab qilinadi.");
+      if (!user) throw new Error(t("form.signIn"));
       const response = await fetch(asset.uri);
       const blob = await response.blob();
       const path = `${user.id}/${question.game_id}/${Crypto.randomUUID()}.jpg`;
@@ -149,20 +152,20 @@ export function GameQuestionCard({ question, index, total, onSaved, onDelete, on
             {options.map((option) => (
               <View key={option.id} style={styles.optionRow}>
                 <Pressable onPress={() => setConfig({ ...config, correct: option.id })} hitSlop={8}
-                  accessibilityLabel={`${option.text || "Variant"} to‘g‘ri javob`}>
+                  accessibilityLabel={t("editor.optionCorrect", { option: option.text || t("editor.option") })}>
                   {config.correct === option.id
                     ? <CircleDot color={colors.success} size={icon.lg} strokeWidth={icon.strokeBold} />
                     : <Circle color={colors.borderStrong} size={icon.lg} strokeWidth={icon.stroke} />}
                 </Pressable>
                 <TextInput style={styles.optionInput} value={option.text} maxLength={200}
-                  onChangeText={(text) => setOptionText(option.id, text)} placeholder="Variant"
+                  onChangeText={(text) => setOptionText(option.id, text)} placeholder={t("editor.option")}
                   placeholderTextColor={colors.inkSoft} />
-                <Pressable onPress={() => removeOption(option.id)} hitSlop={8} accessibilityLabel="Variantni o‘chirish">
+                <Pressable onPress={() => removeOption(option.id)} hitSlop={8} accessibilityLabel={t("editor.removeOption")}>
                   <X color={colors.inkSoft} size={icon.md} strokeWidth={icon.stroke} />
                 </Pressable>
               </View>
             ))}
-            <AddRow label="Variant qo‘shish" onPress={addOption} />
+            <AddRow label={t("editor.addOption")} onPress={addOption} />
           </View>
         );
       case "multiple_choice": {
@@ -178,20 +181,20 @@ export function GameQuestionCard({ question, index, total, onSaved, onDelete, on
                       ? correct.filter((value) => value !== option.id)
                       : [...correct, option.id],
                   })}
-                  accessibilityLabel={`${option.text || "Variant"} to‘g‘ri javob`}>
+                  accessibilityLabel={t("editor.optionCorrect", { option: option.text || t("editor.option") })}>
                   {correct.includes(option.id)
                     ? <SquareCheck color={colors.success} size={icon.lg} strokeWidth={icon.strokeBold} />
                     : <Square color={colors.borderStrong} size={icon.lg} strokeWidth={icon.stroke} />}
                 </Pressable>
                 <TextInput style={styles.optionInput} value={option.text} maxLength={200}
-                  onChangeText={(text) => setOptionText(option.id, text)} placeholder="Variant"
+                  onChangeText={(text) => setOptionText(option.id, text)} placeholder={t("editor.option")}
                   placeholderTextColor={colors.inkSoft} />
-                <Pressable onPress={() => removeOption(option.id)} hitSlop={8} accessibilityLabel="Variantni o‘chirish">
+                <Pressable onPress={() => removeOption(option.id)} hitSlop={8} accessibilityLabel={t("editor.removeOption")}>
                   <X color={colors.inkSoft} size={icon.md} strokeWidth={icon.stroke} />
                 </Pressable>
               </View>
             ))}
-            <AddRow label="Variant qo‘shish" onPress={addOption} />
+            <AddRow label={t("editor.addOption")} onPress={addOption} />
           </View>
         );
       }
@@ -203,7 +206,7 @@ export function GameQuestionCard({ question, index, total, onSaved, onDelete, on
                 style={[styles.tfButton, config.correct === value && styles.tfButtonActive]}
                 onPress={() => setConfig({ ...config, correct: value })}>
                 <Text style={[styles.tfText, config.correct === value && styles.tfTextActive]}>
-                  {value ? "ROST" : "YOLG‘ON"}
+                  {value ? t("play:answer.true") : t("play:answer.false")}
                 </Text>
               </Pressable>
             ))}
@@ -215,13 +218,13 @@ export function GameQuestionCard({ question, index, total, onSaved, onDelete, on
           setConfig({ ...config, items: next, order: next.map((item) => item.id) });
         return (
           <View style={styles.block}>
-            <Text style={styles.blockHint}>Elementlarni TO‘G‘RI tartibda yozing — o‘yinda aralashtiriladi.</Text>
+            <Text style={styles.blockHint}>{t("editor.orderHint")}</Text>
             {items.map((item, itemIndex) => (
               <View key={item.id} style={styles.optionRow}>
                 <Text style={styles.orderBadge}>{itemIndex + 1}</Text>
                 <TextInput style={styles.optionInput} value={item.text} maxLength={200}
                   onChangeText={(text) => setItems(items.map((row) => row.id === item.id ? { ...row, text } : row))}
-                  placeholder="Element" placeholderTextColor={colors.inkSoft} />
+                  placeholder={t("editor.item")} placeholderTextColor={colors.inkSoft} />
                 <Pressable hitSlop={8} disabled={itemIndex === 0}
                   onPress={() => {
                     const next = [...items];
@@ -243,7 +246,7 @@ export function GameQuestionCard({ question, index, total, onSaved, onDelete, on
                 </Pressable>
               </View>
             ))}
-            <AddRow label="Element qo‘shish" onPress={() => { if (items.length < 6) setItems([...items, { id: newId(), text: "" }]); }} />
+            <AddRow label={t("editor.addItem")} onPress={() => { if (items.length < 6) setItems([...items, { id: newId(), text: "" }]); }} />
           </View>
         );
       }
@@ -253,7 +256,7 @@ export function GameQuestionCard({ question, index, total, onSaved, onDelete, on
         const pairs = config.pairs ?? {};
         return (
           <View style={styles.block}>
-            <Text style={styles.blockHint}>Har qatorda bitta juftlik: chapi ↔ o‘ngi.</Text>
+            <Text style={styles.blockHint}>{t("editor.pairHint")}</Text>
             {left.map((leftItem) => {
               const rightItem = right.find((row) => row.id === pairs[leftItem.id]);
               return (
@@ -263,14 +266,14 @@ export function GameQuestionCard({ question, index, total, onSaved, onDelete, on
                       ...config,
                       left: left.map((row) => row.id === leftItem.id ? { ...row, text } : row),
                     })}
-                    placeholder="Chap" placeholderTextColor={colors.inkSoft} />
+                    placeholder={t("editor.left")} placeholderTextColor={colors.inkSoft} />
                   <Text style={styles.pairArrow}>↔</Text>
                   <TextInput style={[styles.optionInput, { flex: 1 }]} value={rightItem?.text ?? ""} maxLength={120}
                     onChangeText={(text) => setConfig({
                       ...config,
                       right: right.map((row) => row.id === rightItem?.id ? { ...row, text } : row),
                     })}
-                    placeholder="O‘ng" placeholderTextColor={colors.inkSoft} />
+                    placeholder={t("editor.right")} placeholderTextColor={colors.inkSoft} />
                   <Pressable hitSlop={8} onPress={() => {
                     if (left.length <= 2) return;
                     const nextPairs = { ...pairs };
@@ -287,7 +290,7 @@ export function GameQuestionCard({ question, index, total, onSaved, onDelete, on
                 </View>
               );
             })}
-            <AddRow label="Juftlik qo‘shish" onPress={() => {
+            <AddRow label={t("editor.addPair")} onPress={() => {
               if (left.length >= 6) return;
               const leftId = `l${newId()}`;
               const rightId = `r${newId()}`;
@@ -305,7 +308,7 @@ export function GameQuestionCard({ question, index, total, onSaved, onDelete, on
         const answers = config.answers ?? [];
         return (
           <View style={styles.block}>
-            <Text style={styles.blockHint}>Qabul qilinadigan javoblar. Katta-kichik harf farqi yo‘q.</Text>
+            <Text style={styles.blockHint}>{t("editor.blankHint")}</Text>
             <View style={styles.answerWrap}>
               {answers.map((answer, answerIndex) => (
                 <Pressable key={`${answer}-${answerIndex}`} style={styles.answerChip}
@@ -324,29 +327,29 @@ export function GameQuestionCard({ question, index, total, onSaved, onDelete, on
       case "poll":
         return (
           <View style={styles.block}>
-            <Text style={styles.blockHint}>Ovoz berish — to‘g‘ri javob yo‘q, ball berilmaydi.</Text>
+            <Text style={styles.blockHint}>{t("editor.pollHint")}</Text>
             {options.map((option) => (
               <View key={option.id} style={styles.optionRow}>
                 <TextInput style={styles.optionInput} value={option.text} maxLength={200}
-                  onChangeText={(text) => setOptionText(option.id, text)} placeholder="Variant"
+                  onChangeText={(text) => setOptionText(option.id, text)} placeholder={t("editor.option")}
                   placeholderTextColor={colors.inkSoft} />
                 <Pressable onPress={() => removeOption(option.id)} hitSlop={8}>
                   <X color={colors.inkSoft} size={icon.md} strokeWidth={icon.stroke} />
                 </Pressable>
               </View>
             ))}
-            <AddRow label="Variant qo‘shish" onPress={addOption} />
+            <AddRow label={t("editor.addOption")} onPress={addOption} />
           </View>
         );
       case "word_cloud":
-        return <Text style={styles.blockHint}>Ishtirokchilar bitta so‘z yoki ibora yozadi; eng ko‘p uchraganlari ekranda kattaroq ko‘rinadi. Ball berilmaydi.</Text>;
+        return <Text style={styles.blockHint}>{t("editor.cloudHint")}</Text>;
       case "open_answer":
         return (
           <View style={styles.block}>
-            <Text style={styles.blockHint}>Javoblarni natija bosqichida o‘zingiz baholaysiz.</Text>
+            <Text style={styles.blockHint}>{t("editor.openHint")}</Text>
             <TextInput style={[styles.input, styles.multiline]} value={config.reference ?? ""} maxLength={500}
               onChangeText={(text) => setConfig({ ...config, reference: text })}
-              placeholder="Namuna javob (o‘zingiz uchun)" placeholderTextColor={colors.inkSoft} multiline />
+              placeholder={t("editor.reference")} placeholderTextColor={colors.inkSoft} multiline />
           </View>
         );
       case "hotspot": {
@@ -354,7 +357,7 @@ export function GameQuestionCard({ question, index, total, onSaved, onDelete, on
         const url = publicUrl(mediaPath);
         return (
           <View style={styles.block}>
-            <Text style={styles.blockHint}>Rasmga bosib to‘g‘ri zonani belgilang.</Text>
+            <Text style={styles.blockHint}>{t("editor.hotspotHint")}</Text>
             {url ? (
               <Pressable
                 onLayout={(event: LayoutChangeEvent) => setImageBox({
@@ -382,7 +385,7 @@ export function GameQuestionCard({ question, index, total, onSaved, onDelete, on
             ) : null}
             {region ? (
               <View style={styles.sizeRow}>
-                <Text style={styles.blockHint}>Zona kattaligi</Text>
+                <Text style={styles.blockHint}>{t("editor.zone")}</Text>
                 <Pressable style={styles.sizeButton} onPress={() => {
                   const size = Math.max((region.w ?? 0.2) - 0.05, 0.08);
                   setConfig({ ...config, region: { ...region, w: size, h: size } });
@@ -404,9 +407,9 @@ export function GameQuestionCard({ question, index, total, onSaved, onDelete, on
       <Pressable style={styles.cardHeader} onPress={() => setOpen((value) => !value)}>
         <View style={styles.indexBadge}><Text style={styles.indexText}>{index + 1}</Text></View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.typeLabel}>{GAME_TYPE_LABELS[type]}</Text>
+          <Text style={styles.typeLabel}>{labelOf("gameType", type)}</Text>
           <Text style={styles.promptPreview} numberOfLines={open ? undefined : 1}>
-            {question.prompt || "Savol matni yozilmagan"}
+            {question.prompt || t("editor.noPrompt")}
           </Text>
         </View>
         {open
@@ -417,14 +420,14 @@ export function GameQuestionCard({ question, index, total, onSaved, onDelete, on
       {open ? (
         <View style={styles.body}>
           <TextInput style={[styles.input, styles.multiline]} value={prompt} onChangeText={setPrompt}
-            placeholder="Savol matni" placeholderTextColor={colors.inkSoft} multiline maxLength={600} />
+            placeholder={t("editor.prompt")} placeholderTextColor={colors.inkSoft} multiline maxLength={600} />
 
           {needsImage ? (
             <Pressable style={styles.imageButton} onPress={() => void pickImage()} disabled={uploading}>
               {uploading ? <ActivityIndicator color={colors.primary} /> : (
                 <>
                   <ImagePlus color={colors.primary} size={icon.md} strokeWidth={icon.stroke} />
-                  <Text style={styles.imageButtonText}>{mediaPath ? "Rasmni almashtirish" : "Rasm yuklash"}</Text>
+                  <Text style={styles.imageButtonText}>{mediaPath ? t("editor.replaceImage") : t("editor.uploadImage")}</Text>
                 </>
               )}
             </Pressable>
@@ -446,14 +449,14 @@ export function GameQuestionCard({ question, index, total, onSaved, onDelete, on
             <View style={styles.chipRow}>
               {GAME_POINT_PRESETS.filter((preset) => preset > 0).map((preset) => (
                 <Pressable key={preset} style={[styles.chip, points === preset && styles.chipActive]} onPress={() => setPoints(preset)}>
-                  <Text style={[styles.chipText, points === preset && styles.chipTextActive]}>{preset} ball</Text>
+                  <Text style={[styles.chipText, points === preset && styles.chipTextActive]}>{t("editor.points", { count: preset })}</Text>
                 </Pressable>
               ))}
             </View>
           ) : null}
 
           <TextInput style={[styles.input, styles.multiline]} value={explanation} onChangeText={setExplanation}
-            placeholder="Izoh — to‘g‘ri javob nima uchun to‘g‘ri" placeholderTextColor={colors.inkSoft} multiline maxLength={1000} />
+            placeholder={t("editor.explanation")} placeholderTextColor={colors.inkSoft} multiline maxLength={1000} />
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -462,17 +465,17 @@ export function GameQuestionCard({ question, index, total, onSaved, onDelete, on
               {saving ? <ActivityIndicator color={colors.onPrimary} size="small" /> : (
                 <>
                   <Check color={colors.onPrimary} size={icon.md} strokeWidth={icon.strokeBold} />
-                  <Text style={styles.saveText}>Saqlash</Text>
+                  <Text style={styles.saveText}>{t("editor.save")}</Text>
                 </>
               )}
             </Pressable>
             {onRegenerate ? (
-              <IconAction icon={RefreshCw} label="Qayta yaratish" spinning={regenerating} onPress={onRegenerate} />
+              <IconAction icon={RefreshCw} label={t("editor.regenerate")} spinning={regenerating} onPress={onRegenerate} />
             ) : null}
-            <IconAction icon={Copy} label="Nusxalash" onPress={onDuplicate} />
-            <IconAction icon={ArrowUp} label="Yuqoriga" disabled={index === 0} onPress={() => onMove(-1)} />
-            <IconAction icon={ArrowDown} label="Pastga" disabled={index === total - 1} onPress={() => onMove(1)} />
-            <IconAction icon={Trash2} label="O‘chirish" danger onPress={onDelete} />
+            <IconAction icon={Copy} label={t("editor.duplicate")} onPress={onDuplicate} />
+            <IconAction icon={ArrowUp} label={t("editor.up")} disabled={index === 0} onPress={() => onMove(-1)} />
+            <IconAction icon={ArrowDown} label={t("editor.down")} disabled={index === total - 1} onPress={() => onMove(1)} />
+            <IconAction icon={Trash2} label={t("editor.delete")} danger onPress={onDelete} />
           </View>
         </View>
       ) : null}
@@ -494,11 +497,12 @@ function AddRow({ label, onPress }: { label: string; onPress: () => void }) {
 function AnswerInput({ onAdd }: { onAdd: (value: string) => void }) {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation("games");
   const [value, setValue] = useState("");
   return (
     <View style={styles.optionRow}>
       <TextInput style={styles.optionInput} value={value} onChangeText={setValue} maxLength={120}
-        placeholder="Javob varianti" placeholderTextColor={colors.inkSoft}
+        placeholder={t("editor.answer")} placeholderTextColor={colors.inkSoft}
         onSubmitEditing={() => { onAdd(value); setValue(""); }} returnKeyType="done" />
       <Pressable hitSlop={8} onPress={() => { onAdd(value); setValue(""); }}>
         <Plus color={colors.primary} size={icon.lg} strokeWidth={icon.stroke} />

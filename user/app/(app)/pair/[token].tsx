@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Text, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -20,6 +21,7 @@ import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 export default function PairScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation("present");
   const router = useRouter();
   const params = useLocalSearchParams<{ token?: string }>();
   const token = typeof params.token === "string" ? params.token : "";
@@ -28,7 +30,7 @@ export default function PairScreen() {
   useEffect(() => {
     let active = true;
     void (async () => {
-      if (!token) { setError("Kod topilmadi."); return; }
+      if (!token) { setError(t("pair.noCode")); return; }
       const { data, error: claimError } = await supabase.rpc("presentation_pairing_claim", {
         p_token: token,
         // Null rather than omitted: this parameter happens to have a default
@@ -45,15 +47,15 @@ export default function PairScreen() {
       });
     })();
     return () => { active = false; };
-  }, [router, token]);
+  }, [router, t, token]);
 
   if (error) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="Ulanish" variant="close" />
+        <ScreenHeader title={t("pair.title")} variant="close" />
         <View style={styles.content}>
           <ErrorState message={error} />
-          <PrimaryButton label="Qaytadan skaner qilish" onPress={() => router.replace("/(app)/present/scan")} />
+          <PrimaryButton label={t("pair.rescan")} onPress={() => router.replace("/(app)/present/scan")} />
         </View>
       </View>
     );
@@ -61,10 +63,10 @@ export default function PairScreen() {
 
   return (
     <View style={styles.screen}>
-      <ScreenHeader title="Ulanmoqda" />
+      <ScreenHeader title={t("pair.connecting")} />
       <View style={styles.centered}>
         <ActivityIndicator color={colors.primary} size="large" />
-        <Text style={styles.copy}>Ekran bilan bog‘lanmoqda…</Text>
+        <Text style={styles.copy}>{t("pair.body")}</Text>
       </View>
     </View>
   );

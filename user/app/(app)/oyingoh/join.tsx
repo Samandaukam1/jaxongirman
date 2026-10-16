@@ -1,19 +1,22 @@
-import { GAME_AVATAR_COUNT } from "@jaxongirman/types";
+import { GAME_AVATAR_COUNT, GAME_AVATAR_GROUPS, gameAvatarIds, type GameAvatarGroup } from "@jaxongirman/types";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Camera, KeyRound, ScanLine } from "lucide-react-native";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Camera, Dices, KeyRound, ScanLine } from "lucide-react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
-  KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
+  InteractionManager, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
 } from "react-native";
+import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from "react-native-reanimated";
 
 import { GameAvatar } from "@/components/GameAvatar";
+import { GlassPanel } from "@/components/Glass";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { InlineError } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
-import { isTransport, TRANSPORT_MESSAGE } from "@/lib/retry";
+import { isTransport } from "@/lib/retry";
 import { joinGame, joinGameByCode } from "@/lib/games";
 import { useAccount } from "@/providers/AccountProvider";
 import { icon, radius, spacing, typography } from "@/theme/tokens";
@@ -34,12 +37,14 @@ type Step = "scan" | "identity";
  * under it — and then one screen for the only two things the room needs to
  * know about you: a face and a name.
  *
- * The avatar grid shows all forty at once. Nobody is asked to declare a gender
- * to pick a character.
+ * The avatar grid opens on all forty. The quick picks above it are ways in —
+ * a dice for somebody who just wants to play, a few groups for somebody
+ * looking for themselves — and none of them is a question to answer.
  */
 export default function JoinGameScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation(["games", "errors"]);
   const router = useRouter();
   const params = useLocalSearchParams<{ token?: string; code?: string }>();
   const { profile } = useAccount();
@@ -52,7 +57,36 @@ export default function JoinGameScreen() {
   const [avatarId, setAvatarId] = useState(() => Math.floor(Math.random() * GAME_AVATAR_COUNT));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [group, setGroup] = useState<GameAvatarGroup>("all");
+  // Forty portraits are a few thousand vector nodes: drawn once the screen
+  // has finished arriving, so the transition into it never stutters.
+  const [gridReady, setGridReady] = useState(false);
   const claiming = useRef(false);
+  const visible = useMemo(() => gameAvatarIds(group), [group]);
+  const pop = useSharedValue(1);
+  const turn = useSharedValue(0);
+  const chosenStyle = useAnimatedStyle(() => ({ transform: [{ scale: pop.value }, { rotate: `${turn.value}deg` }] }));
+
+  useEffect(() => {
+    if (step !== "identity" || gridReady) return;
+    const task = InteractionManager.runAfterInteractions(() => setGridReady(true));
+    return () => task.cancel();
+  }, [gridReady, step]);
+
+  const choose = useCallback((id: number) => {
+    setAvatarId(id);
+    pop.set(withSequence(withTiming(0.9, { duration: 90 }), withSpring(1, { damping: 9, stiffness: 260 })));
+    void Haptics.selectionAsync();
+  }, [pop]);
+
+  /** A random character from the group in view, never the one already chosen. */
+  const roll = useCallback(() => {
+    const pool = visible.filter((id) => id !== avatarId);
+    const next = pool[Math.floor(Math.random() * pool.length)] ?? avatarId;
+    turn.set(withSequence(withTiming(-8, { duration: 80 }), withTiming(8, { duration: 110 }), withSpring(0, { damping: 8 })));
+    choose(next);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, [avatarId, choose, turn, visible]);
 
   useEffect(() => {
     if (!nickname && profile?.first_name) setNickname(profile.first_name);
@@ -85,7 +119,7 @@ export default function JoinGameScreen() {
        * standing in front of a screen with everybody waiting; making them
        * re-aim a camera is the worst possible answer to a lost packet.
        */
-      setError(isTransport(failure) ? TRANSPORT_MESSAGE : asErrorMessage(failure));
+      setError(isTransport(failure) ? t("errors:network") : asErrorMessage(failure));
       setBusy(false);
       claiming.current = false;
     }
@@ -94,13 +128,13 @@ export default function JoinGameScreen() {
   if (step === "scan") {
     return (
       <View style={styles.safe}>
-        <ScreenHeader title="O‘yinga qo‘shilish" subtitle="O‘yingoh" onLeave={() => router.back()} />
+        <ScreenHeader title={t("entry.joinTitle")} subtitle={t("title")} onLeave={() => router.back()} />
         <ScrollView contentContainerStyle={styles.content}>
           {manualCode ? (
             <View style={styles.codeBlock}>
               <KeyRound color={colors.primary} size={36} strokeWidth={icon.stroke} />
-              <Text style={styles.blockTitle}>Kodni kiriting</Text>
-              <Text style={styles.blockHint}>Katta ekranda ko‘rsatilgan 6 xonali kod.</Text>
+              <Text style={styles.blockTitle}>{t("entry.enterCode")}</Text>
+              <Text style={styles.blockHint}>{t("entry.codeHint")}</Text>
               <TextInput
                 style={styles.codeInput}
                 value={code}
@@ -112,22 +146,22 @@ export default function JoinGameScreen() {
                 autoFocus
               />
               <PrimaryButton
-                label="Davom etish"
+                label={t("entry.continue")}
                 disabled={code.length !== 6}
                 onPress={() => { setToken(null); setStep("identity"); }}
               />
               <Pressable onPress={() => setManualCode(false)}>
-                <Text style={styles.linkText}>QR skanerlashga qaytish</Text>
+                <Text style={styles.linkText}>{t("entry.backToQr")}</Text>
               </Pressable>
             </View>
           ) : !permission?.granted ? (
             <View style={styles.codeBlock}>
               <Camera color={colors.primary} size={36} strokeWidth={icon.stroke} />
-              <Text style={styles.blockTitle}>Kamera ruxsati kerak</Text>
-              <Text style={styles.blockHint}>Proyektordagi QR kodni o‘qish uchun kameraga ruxsat bering.</Text>
-              <PrimaryButton label="Ruxsat berish" onPress={() => void requestPermission()} />
+              <Text style={styles.blockTitle}>{t("entry.camera")}</Text>
+              <Text style={styles.blockHint}>{t("entry.cameraJoin")}</Text>
+              <PrimaryButton label={t("entry.allow")} onPress={() => void requestPermission()} />
               <Pressable onPress={() => setManualCode(true)}>
-                <Text style={styles.linkText}>Kod bilan qo‘shilish</Text>
+                <Text style={styles.linkText}>{t("entry.withCode")}</Text>
               </Pressable>
             </View>
           ) : (
@@ -142,9 +176,9 @@ export default function JoinGameScreen() {
                   <ScanLine color={colors.onPrimary} size={40} strokeWidth={icon.stroke} />
                 </View>
               </View>
-              <Text style={styles.blockHint}>Katta ekrandagi QR kodni kamera oldiga tuting.</Text>
+              <Text style={styles.blockHint}>{t("entry.holdQr")}</Text>
               <Pressable onPress={() => setManualCode(true)}>
-                <Text style={styles.linkText}>QR ishlamayaptimi? Kod bilan qo‘shilish</Text>
+                <Text style={styles.linkText}>{t("entry.qrBroken")}</Text>
               </Pressable>
             </>
           )}
@@ -156,34 +190,62 @@ export default function JoinGameScreen() {
 
   return (
     <View style={styles.safe}>
-      <ScreenHeader title="O‘yinga qo‘shiling" subtitle="O‘yingoh" onLeave={() => { setStep("scan"); claiming.current = false; }} />
+      <ScreenHeader title={t("entry.joinNow")} subtitle={t("title")} onLeave={() => { setStep("scan"); claiming.current = false; }} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <View style={styles.chosenAvatar}>
-            <GameAvatar id={avatarId} size={96} />
-          </View>
+          <GlassPanel radius={radius.xl} padded={false}>
+            <View style={styles.chosen}>
+              <Animated.View style={[styles.chosenRing, chosenStyle]}>
+                <GameAvatar id={avatarId} size={124} />
+              </Animated.View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("entry.randomAvatar")}
+                onPress={roll}
+                style={({ pressed }) => [styles.dice, pressed && styles.pressed]}
+              >
+                <Dices color={colors.onPrimary} size={18} strokeWidth={2.2} />
+                <Text style={styles.diceText}>{t("entry.random")}</Text>
+              </Pressable>
+            </View>
+          </GlassPanel>
 
-          <Text style={styles.label}>Avatar tanlang</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.groups} keyboardShouldPersistTaps="handled">
+            {GAME_AVATAR_GROUPS.map((item) => (
+              <Pressable
+                key={item.key}
+                accessibilityRole="button"
+                accessibilityState={{ selected: group === item.key }}
+                onPress={() => { setGroup(item.key); void Haptics.selectionAsync(); }}
+                style={[styles.group, group === item.key && styles.groupActive]}
+              >
+                <Text style={[styles.groupText, group === item.key && styles.groupTextActive]}>{item.label}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+
           <View style={styles.avatarGrid}>
-            {Array.from({ length: GAME_AVATAR_COUNT }, (_, index) => (
+            {gridReady ? visible.map((index) => (
               <Pressable
                 key={index}
                 style={[styles.avatarCell, avatarId === index && styles.avatarCellActive]}
-                onPress={() => { setAvatarId(index); void Haptics.selectionAsync(); }}
-                accessibilityLabel={`Avatar ${index + 1}`}
+                onPress={() => choose(index)}
+                accessibilityLabel={t("entry.avatar", { number: index + 1 })}
                 accessibilityState={{ selected: avatarId === index }}
               >
-                <GameAvatar id={index} size={54} />
+                <GameAvatar id={index} size={56} />
               </Pressable>
-            ))}
+            )) : Array.from({ length: Math.min(visible.length, 15) }, (_, at) => <View key={at} style={styles.avatarPlaceholder} />)}
+            {/* Keeps the last row's cells at their own width, not stretched. */}
+            {Array.from({ length: 4 }, (_, at) => <View key={`gap${at}`} style={styles.avatarSpacer} />)}
           </View>
 
-          <Text style={styles.label}>Ismingiz</Text>
+          <Text style={styles.label}>{t("entry.name")}</Text>
           <TextInput
             style={styles.nameInput}
             value={nickname}
             onChangeText={setNickname}
-            placeholder="O‘yindagi ismingiz"
+            placeholder={t("entry.namePlaceholder")}
             placeholderTextColor={colors.inkSoft}
             maxLength={30}
           />
@@ -191,7 +253,7 @@ export default function JoinGameScreen() {
           {error ? <InlineError message={error} /> : null}
 
           <PrimaryButton
-            label={busy ? "O‘yinga ulanmoqda..." : "Tayyorman"}
+            label={busy ? t("entry.joining") : t("entry.ready")}
             loading={busy}
             disabled={nickname.trim().length < 1 || busy}
             onPress={() => void join()}
@@ -218,13 +280,30 @@ const useStyles = makeStyles((colors) => ({
     paddingVertical: spacing.md, width: "100%",
   },
   linkText: { ...typography.body, color: colors.primary, textAlign: "center" },
-  chosenAvatar: { alignItems: "center" },
+  chosen: { alignItems: "center", paddingTop: spacing.xl, paddingBottom: spacing.lg, gap: spacing.md },
+  chosenRing: { padding: 4, borderRadius: 70, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  dice: {
+    flexDirection: "row", alignItems: "center", gap: 6, height: 38, paddingHorizontal: spacing.lg,
+    borderRadius: radius.pill, backgroundColor: colors.primary,
+  },
+  diceText: { ...typography.caption, fontFamily: "Manrope_700Bold", color: colors.onPrimary },
+  pressed: { opacity: 0.85, transform: [{ scale: 0.97 }] },
+  groups: { gap: spacing.sm, paddingRight: spacing.sm },
+  group: {
+    height: 34, paddingHorizontal: spacing.md, borderRadius: radius.pill, justifyContent: "center",
+    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
+  },
+  groupActive: { backgroundColor: colors.primarySoft, borderColor: colors.primary },
+  groupText: { ...typography.caption, fontFamily: "Manrope_600SemiBold", color: colors.inkMuted },
+  groupTextActive: { color: colors.primaryDeep, fontFamily: "Manrope_700Bold" },
   label: { ...typography.bodyMedium, color: colors.ink },
   avatarGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, justifyContent: "space-between" },
   avatarCell: {
-    borderRadius: radius.md, padding: 3, borderWidth: 2.5, borderColor: "transparent",
+    borderRadius: 40, padding: 3, borderWidth: 2.5, borderColor: "transparent",
   },
   avatarCellActive: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
+  avatarPlaceholder: { width: 67, height: 67, borderRadius: 34, backgroundColor: colors.surfaceMuted },
+  avatarSpacer: { width: 67, height: 0 },
   nameInput: {
     ...typography.body, color: colors.ink, backgroundColor: colors.surfaceMuted,
     borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md,

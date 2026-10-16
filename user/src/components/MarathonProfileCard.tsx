@@ -1,5 +1,6 @@
 import { useRouter } from "expo-router";
 import { Clock, Trophy } from "lucide-react-native";
+import { useTranslation } from "react-i18next";
 import { Text, View } from "react-native";
 
 import { MarathonShareRow } from "@/components/MarathonShareRow";
@@ -31,6 +32,7 @@ function shortfall(have: number, need: number): number {
 
 export function MarathonProfileCard() {
   const styles = useStyles();
+  const { t } = useTranslation("marathon");
   const { colors } = useTheme();
   const router = useRouter();
   const { campaign, join, joining, skew } = useMarathonCampaign();
@@ -44,7 +46,7 @@ export function MarathonProfileCard() {
 
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>TALABALAR MARAFONI</Text>
+      <Text style={styles.sectionTitle}>{t("title")}</Text>
 
       <View style={styles.card}>
         {campaign.joined ? (
@@ -52,12 +54,12 @@ export function MarathonProfileCard() {
             <View style={styles.tallies}>
               <View style={styles.tally}>
                 <Text style={styles.tallyValue}>{formatNumber(campaign.total_votes)}</Text>
-                <Text style={styles.tallyLabel}>Jami ovoz</Text>
+                <Text style={styles.tallyLabel}>{t("totalVotes")}</Text>
               </View>
               <View style={styles.tallyRule} />
               <View style={styles.tally}>
                 <Text style={styles.tallyValue}>{formatNumber(campaign.premium_votes)}</Text>
-                <Text style={styles.tallyLabel}>Premium ovoz</Text>
+                <Text style={styles.tallyLabel}>{t("premiumVotes")}</Text>
               </View>
             </View>
 
@@ -66,39 +68,38 @@ export function MarathonProfileCard() {
                 <View style={styles.nextHead}>
                   <Trophy color={colors.primaryDeep} size={icon.sm} strokeWidth={icon.stroke} />
                   <Text style={styles.nextTitle}>
-                    KEYINGI MARRA · {next.reward_percent}%
+                    {t("nextMilestone", { percent: next.reward_percent })}
                   </Text>
                 </View>
 
                 <Text style={styles.progressLine}>
-                  {formatNumber(campaign.total_votes)} / {formatNumber(next.votes_required)} ovoz
+                  {t("votesOf", { have: formatNumber(campaign.total_votes), need: formatNumber(next.votes_required) })}
                 </Text>
                 <View style={styles.track}>
                   <View style={[styles.fill, { width: `${Math.round(Math.min(1, campaign.total_votes / Math.max(1, next.votes_required)) * 100)}%` }]} />
                 </View>
 
                 <Text style={styles.progressLine}>
-                  {formatNumber(campaign.premium_votes)} / {formatNumber(next.premium_required)} Premium
+                  {t("premiumOf", { have: formatNumber(campaign.premium_votes), need: formatNumber(next.premium_required) })}
                 </Text>
                 <View style={styles.track}>
                   <View style={[styles.fill, { width: `${Math.round(Math.min(1, campaign.premium_votes / Math.max(1, next.premium_required)) * 100)}%` }]} />
                 </View>
 
                 <Text style={styles.left}>
-                  Qoldi: {formatNumber(shortfall(campaign.total_votes, next.votes_required))} ovoz ·{" "}
-                  {formatNumber(shortfall(campaign.premium_votes, next.premium_required))} Premium ovoz
+                  {t("left", { votes: formatNumber(shortfall(campaign.total_votes, next.votes_required)), premium: formatNumber(shortfall(campaign.premium_votes, next.premium_required)) })}
                 </Text>
               </View>
             ) : (
-              <Text style={styles.hint}>Barcha marralar bosib o‘tilgan.</Text>
+              <Text style={styles.hint}>{t("allMilestones")}</Text>
             )}
 
             <View style={styles.clock}>
               <Clock color={colors.primaryDeep} size={icon.sm} strokeWidth={icon.stroke} />
-              <Text style={styles.clockText}>Tugashiga: {formatCountdown(countdown)}</Text>
+              <Text style={styles.clockText}>{t("endsIn", { time: formatCountdown(countdown) })}</Text>
             </View>
 
-            <PrimaryButton label="Marafonni ochish" onPress={() => router.push("/(app)/marathon")} />
+            <PrimaryButton label={t("open")} onPress={() => router.push("/(app)/marathon")} />
 
             {/* A candidate's own link, which is the only way anybody finds them
                 to vote: the search asks for a username somebody has to know. */}
@@ -109,13 +110,13 @@ export function MarathonProfileCard() {
         ) : (
           <>
             <Text style={styles.hint}>
-              Kontrakt uchun {formatSom(campaign.contract_cap)}gacha mukofot yutish imkoniyati.
+              {t("contractChance", { amount: formatSom(campaign.contract_cap) })}
             </Text>
             <View style={styles.clock}>
               <Clock color={colors.primaryDeep} size={icon.sm} strokeWidth={icon.stroke} />
-              <Text style={styles.clockText}>Tugashiga: {formatCountdown(countdown)}</Text>
+              <Text style={styles.clockText}>{t("endsIn", { time: formatCountdown(countdown) })}</Text>
             </View>
-            <PrimaryButton label="Qatnashish" loading={joining} onPress={() => void join()} />
+            <PrimaryButton label={t("join")} loading={joining} onPress={() => void join()} />
           </>
         )}
       </View>

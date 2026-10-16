@@ -38,8 +38,10 @@ export function MascotCanvas({ style, options, onReady, onFailed, greetToken, pa
   // The GL context is created once, so its callback would otherwise capture
   // whatever `suspended` was on first render and hold the scene frozen there.
   const suspendedRef = useRef(suspended);
-  suspendedRef.current = suspended;
   useEffect(() => {
+    // Kept current from an effect, never during render: a ref written while
+    // rendering can be read by a render React later throws away.
+    suspendedRef.current = suspended;
     stageRef.current?.setPaused(suspended);
   }, [suspended]);
 

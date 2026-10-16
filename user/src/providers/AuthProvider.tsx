@@ -3,6 +3,7 @@ import * as Linking from "expo-linking";
 import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren } from "react";
 import { Alert } from "react-native";
 
+import { i18n } from "@/i18n";
 import { completeAuthRedirect } from "@/lib/authLinking";
 import { asErrorMessage } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
@@ -41,7 +42,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       try {
         await completeAuthRedirect(url);
       } catch (error) {
-        Alert.alert("Tasdiqlash amalga oshmadi", asErrorMessage(error));
+        Alert.alert(i18n.t("auth:confirmFailed"), asErrorMessage(error));
       }
     }
     void Linking.getInitialURL().then(handle);

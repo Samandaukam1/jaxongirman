@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { asErrorMessage } from "@/lib/format";
-import { supabase } from "@/lib/supabase";
+import { changesChannel, supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
 
 /**
@@ -222,8 +222,7 @@ export function useMarathonCampaign(): {
    */
   useEffect(() => {
     if (!enabled || !user) return;
-    const channel = supabase
-      .channel(`marathon-${user.id}`)
+    const channel = changesChannel(`marathon-${user.id}`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${user.id}` },

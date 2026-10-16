@@ -1,5 +1,8 @@
 import type { Tables } from "@jaxongirman/types";
 
+import { i18n } from "../i18n";
+
+import { localizeError } from "./errors";
 import { supabase } from "./supabase";
 
 /**
@@ -62,8 +65,8 @@ async function invoke<T>(body: Record<string, unknown>): Promise<T> {
     // but `context` is only sometimes a Response.
     const context = (error as { context?: unknown }).context;
     if (context && typeof (context as Response).json === "function") {
-      const payload = await (context as Response).json().catch(() => null) as { error?: string } | null;
-      if (payload?.error) throw new Error(payload.error);
+      const payload = await (context as Response).json().catch(() => null) as { error?: string; code?: string } | null;
+      if (payload?.error) throw new Error(localizeError(payload.error, payload.code));
     }
     throw error;
   }
@@ -81,6 +84,6 @@ export const defensePdf = (presentationId: string) =>
 /** A URL the phone may fetch, valid for long enough to save the file. */
 export async function defensePdfUrl(storagePath: string): Promise<string> {
   const { data, error } = await supabase.storage.from("exports").createSignedUrl(storagePath, 300);
-  if (error || !data) throw error ?? new Error("Havola olinmadi");
+  if (error || !data) throw error ?? new Error(i18n.t("tools:academic.noLink"));
   return data.signedUrl;
 }

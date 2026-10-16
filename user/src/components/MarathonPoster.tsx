@@ -1,6 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { Trophy } from "lucide-react-native";
 import { useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { Image, Pressable, Text, View, type ViewStyle } from "react-native";
 
 import { posterUrl, type MarathonCampaign } from "@/lib/marathon";
@@ -26,6 +27,7 @@ export function MarathonPoster({ campaign, onPress, style, children }: {
   children?: ReactNode;
 }) {
   const styles = useStyles();
+  const { t } = useTranslation("marathon");
   const [failed, setFailed] = useState(false);
   const uri = posterUrl(campaign.poster_path);
 
@@ -49,7 +51,7 @@ export function MarathonPoster({ campaign, onPress, style, children }: {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${campaign.title} — marafon sahifasi`}
+      accessibilityLabel={t("posterLabel", { title: campaign.title })}
       onPress={onPress}
       style={({ pressed }) => [styles.frame, pressed && styles.pressed, style]}
     >

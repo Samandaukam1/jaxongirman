@@ -1,3 +1,5 @@
+import { i18n } from "../i18n";
+
 import { supabase } from "./supabase";
 
 /**
@@ -70,7 +72,7 @@ export async function openObjective(): Promise<ObjectiveDoc> {
 
   const { data: user } = await supabase.auth.getUser();
   const owner = user.user?.id;
-  if (!owner) throw new Error("Tizimga kiring");
+  if (!owner) throw new Error(i18n.t("tools:academic.signIn"));
 
   // Seeded from the profile, because the app already knows three of the
   // answers and asking again is asking somebody to repeat themselves.
@@ -110,6 +112,6 @@ export async function objectiveFile(id: string, format: "docx" | "pdf"): Promise
   }
   const { storagePath } = data as { storagePath: string };
   const signed = await supabase.storage.from("exports").createSignedUrl(storagePath, 300);
-  if (signed.error || !signed.data) throw signed.error ?? new Error("Havola olinmadi");
+  if (signed.error || !signed.data) throw signed.error ?? new Error(i18n.t("tools:academic.noLink"));
   return signed.data.signedUrl;
 }

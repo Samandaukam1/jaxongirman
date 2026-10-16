@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
 import { Crown, ShoppingBag, Store, Vote } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -27,6 +28,7 @@ import { makeStyles, useTheme } from "@/theme/ThemeProvider";
  */
 export default function VoteMarketScreen() {
   const styles = useStyles();
+  const { t } = useTranslation("marathon");
   const { colors } = useTheme();
   const router = useRouter();
   const enabled = useVoteMarketEnabled();
@@ -69,15 +71,15 @@ export default function VoteMarketScreen() {
   if (!enabled) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="OVOZ MARKETPLACE" variant="back" />
-        <EmptyState icon={Store} title="Bozor yopiq" message="Ovozlar bozori hozircha ochilmagan." />
+        <ScreenHeader title={t("market.title")} variant="back" />
+        <EmptyState icon={Store} title={t("market.closed")} message={t("market.closedBody")} />
       </View>
     );
   }
 
   return (
     <View style={styles.screen}>
-      <ScreenHeader title="OVOZ MARKETPLACE" variant="back" />
+      <ScreenHeader title={t("market.title")} variant="back" />
 
       <View style={styles.tabs}>
         {(["premium", "free"] as const).map((option) => (
@@ -89,7 +91,7 @@ export default function VoteMarketScreen() {
             style={[styles.tab, kind === option && styles.tabOn]}
           >
             <Text style={[styles.tabLabel, kind === option && styles.tabLabelOn]}>
-              {option === "premium" ? "⭐ Premium ovoz" : "Bepul ovoz"}
+              {option === "premium" ? t("market.premiumTab") : t("market.freeTab")}
             </Text>
           </Pressable>
         ))}
@@ -112,8 +114,8 @@ export default function VoteMarketScreen() {
         ) : lots.length === 0 ? (
           <EmptyState
             icon={ShoppingBag}
-            title="Hozircha e’lon yo‘q"
-            message={kind === "premium" ? "Sotuvda Premium ovoz yo‘q." : "Sotuvda bepul ovoz yo‘q."}
+            title={t("market.none")}
+            message={kind === "premium" ? t("market.nonePremium") : t("market.noneFree")}
           />
         ) : (
           lots.map((lot) => (
@@ -123,35 +125,35 @@ export default function VoteMarketScreen() {
                   ? <Crown color={colors.primary} size={icon.sm} strokeWidth={icon.stroke} />
                   : <Vote color={colors.primary} size={icon.sm} strokeWidth={icon.stroke} />}
                 <Text style={styles.cardTitle}>
-                  {lot.kind === "premium" ? "PREMIUM OVOZ" : "BEPUL OVOZ"}
+                  {lot.kind === "premium" ? t("market.premiumCard") : t("market.freeCard")}
                 </Text>
-                {lot.is_mine ? <Text style={styles.mine}>Sizniki</Text> : null}
+                {lot.is_mine ? <Text style={styles.mine}>{t("market.mine")}</Text> : null}
               </View>
 
-              <Text style={styles.quantity}>{formatNumber(lot.remaining)} dona</Text>
+              <Text style={styles.quantity}>{t("market.pieces", { count: formatNumber(lot.remaining) })}</Text>
 
               {/* Every figure the buyer will be charged, before they commit to
                   a screen that asks for a card. */}
               <View style={styles.lines}>
-                <Line label="1 dona" value={formatSom(lot.unit_price)} />
-                <Line label="Jami" value={formatSom(lot.unit_price * lot.remaining)} />
-                <Line label="Xaridor komissiyasi" value={formatSom(lot.buyer_fee)} />
+                <Line label={t("market.unit")} value={formatSom(lot.unit_price)} />
+                <Line label={t("market.total")} value={formatSom(lot.unit_price * lot.remaining)} />
+                <Line label={t("market.buyerFee")} value={formatSom(lot.buyer_fee)} />
               </View>
 
               <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>TO‘LOV</Text>
+                <Text style={styles.totalLabel}>{t("market.pay")}</Text>
                 <Text style={styles.totalValue}>{formatSom(lot.buyer_total)}</Text>
               </View>
 
               {lot.is_mine ? (
-                <Text style={styles.hint}>O‘z e’loningizni sotib ololmaysiz.</Text>
+                <Text style={styles.hint}>{t("market.ownLot")}</Text>
               ) : buying === lot.listing_id ? (
                 <View style={styles.buying}><ActivityIndicator color={colors.primary} /></View>
               ) : (
-                <PrimaryButton label="Sotib olish" onPress={() => void buy(lot)} />
+                <PrimaryButton label={t("market.buy")} onPress={() => void buy(lot)} />
               )}
 
-              <Text style={styles.anon}>Sotuvchi: anonim</Text>
+              <Text style={styles.anon}>{t("market.anonymous")}</Text>
             </View>
           ))
         )}

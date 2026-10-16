@@ -1,9 +1,11 @@
 import * as Haptics from "expo-haptics";
 import { Check, Square, SquareCheck } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Image, LayoutChangeEvent, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import type { SanitizedQuestion } from "@/lib/games";
+import { formatNumber } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
 import { icon, radius, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
@@ -50,6 +52,7 @@ type Props = {
 export function GameAnswerInput({ question, locked, onSubmit }: Props) {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation("play");
   const [choices, setChoices] = useState<string[]>([]);
   const [text, setText] = useState("");
   const [order, setOrder] = useState<string[]>([]);
@@ -119,7 +122,7 @@ export function GameAnswerInput({ question, locked, onSubmit }: Props) {
             accessibilityRole="button"
           >
             <Text style={styles.tfGlyph}>✓</Text>
-            <Text style={styles.tfLabel}>ROST</Text>
+            <Text style={styles.tfLabel}>{t("answer.true")}</Text>
           </Pressable>
           <Pressable
             style={({ pressed }) => [styles.tfButton, { backgroundColor: colors.danger }, pressed && styles.pressed, locked && styles.dim]}
@@ -128,7 +131,7 @@ export function GameAnswerInput({ question, locked, onSubmit }: Props) {
             accessibilityRole="button"
           >
             <Text style={styles.tfGlyph}>✕</Text>
-            <Text style={styles.tfLabel}>YOLG‘ON</Text>
+            <Text style={styles.tfLabel}>{t("answer.false")}</Text>
           </Pressable>
         </View>
       );
@@ -167,7 +170,7 @@ export function GameAnswerInput({ question, locked, onSubmit }: Props) {
             );
           })}
           <SubmitBar
-            label="Javobni yuborish"
+            label={t("answer.submit")}
             disabled={locked || choices.length === 0}
             onPress={() => send({ choices })}
           />
@@ -179,7 +182,7 @@ export function GameAnswerInput({ question, locked, onSubmit }: Props) {
       const byId = new Map(items.map((item) => [item.id, item.text]));
       return (
         <View style={{ gap: spacing.sm }}>
-          <Text style={styles.hint}>To‘g‘ri ketma-ketlikka qo‘ying.</Text>
+          <Text style={styles.hint}>{t("answer.order")}</Text>
           {order.map((itemId, index) => (
             <View key={itemId} style={styles.orderRow}>
               <Text style={styles.orderIndex}>{index + 1}</Text>
@@ -195,7 +198,7 @@ export function GameAnswerInput({ question, locked, onSubmit }: Props) {
                     return next;
                   });
                 }}
-                accessibilityLabel="Yuqoriga"
+                accessibilityLabel={t("answer.up")}
               >
                 <Text style={[styles.arrowGlyph, (locked || index === 0) && styles.arrowDim]}>↑</Text>
               </Pressable>
@@ -210,13 +213,13 @@ export function GameAnswerInput({ question, locked, onSubmit }: Props) {
                     return next;
                   });
                 }}
-                accessibilityLabel="Pastga"
+                accessibilityLabel={t("answer.down")}
               >
                 <Text style={[styles.arrowGlyph, (locked || index === order.length - 1) && styles.arrowDim]}>↓</Text>
               </Pressable>
             </View>
           ))}
-          <SubmitBar label="Javobni yuborish" disabled={locked} onPress={() => send({ order })} />
+          <SubmitBar label={t("answer.submit")} disabled={locked} onPress={() => send({ order })} />
         </View>
       );
     }
@@ -228,7 +231,7 @@ export function GameAnswerInput({ question, locked, onSubmit }: Props) {
       const complete = Object.keys(pairs).length === left.length;
       return (
         <View style={{ gap: spacing.sm }}>
-          <Text style={styles.hint}>Chapdagini tanlab, mos o‘ngdagini bosing.</Text>
+          <Text style={styles.hint}>{t("answer.match")}</Text>
           <View style={styles.matchColumns}>
             <View style={styles.matchColumn}>
               {left.map((item) => {
@@ -281,7 +284,7 @@ export function GameAnswerInput({ question, locked, onSubmit }: Props) {
               ))}
             </View>
           </View>
-          <SubmitBar label="Javobni yuborish" disabled={locked || !complete} onPress={() => send({ pairs })} />
+          <SubmitBar label={t("answer.submit")} disabled={locked || !complete} onPress={() => send({ pairs })} />
         </View>
       );
     }
@@ -297,7 +300,7 @@ export function GameAnswerInput({ question, locked, onSubmit }: Props) {
             value={text}
             onChangeText={setText}
             editable={!locked}
-            placeholder={question.type === "word_cloud" ? "Bitta so‘z yoki ibora" : "Javobingiz"}
+            placeholder={question.type === "word_cloud" ? t("answer.word") : t("answer.text")}
             placeholderTextColor={colors.inkSoft}
             maxLength={maxLength}
             multiline={question.type === "open_answer"}
@@ -305,7 +308,7 @@ export function GameAnswerInput({ question, locked, onSubmit }: Props) {
             returnKeyType="done"
             onSubmitEditing={() => { if (text.trim()) send({ text: text.trim() }); }}
           />
-          <SubmitBar label="Javobni yuborish" disabled={locked || text.trim().length === 0} onPress={() => send({ text: text.trim() })} />
+          <SubmitBar label={t("answer.submit")} disabled={locked || text.trim().length === 0} onPress={() => send({ text: text.trim() })} />
         </View>
       );
     }
@@ -314,7 +317,7 @@ export function GameAnswerInput({ question, locked, onSubmit }: Props) {
       const url = publicUrl(question.media_path);
       return (
         <View style={{ gap: spacing.md }}>
-          <Text style={styles.hint}>Rasmda kerakli joyni bosing.</Text>
+          <Text style={styles.hint}>{t("answer.hotspot")}</Text>
           <Pressable
             disabled={locked}
             onLayout={(event: LayoutChangeEvent) => setImageBox({
@@ -389,6 +392,7 @@ export function GameRevealPanel({ question, config, stats }: {
 }) {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation("play");
   const options = question.config.options ?? [];
   const correct = config.correct;
 
@@ -401,7 +405,7 @@ export function GameRevealPanel({ question, config, stats }: {
   if (question.type === "word_cloud") {
     return (
       <View style={styles.cloudWrap}>
-        {words.length === 0 ? <Text style={styles.hint}>Hech kim javob yozmadi.</Text> : words.map(([word, count]) => (
+        {words.length === 0 ? <Text style={styles.hint}>{t("answer.noWords")}</Text> : words.map(([word, count]) => (
           <Text key={word} style={[styles.cloudWord, { fontSize: 14 + (count / peak) * 20, opacity: 0.55 + (count / peak) * 0.45 }]}>
             {word}
           </Text>
@@ -434,13 +438,13 @@ export function GameRevealPanel({ question, config, stats }: {
 
   if (question.type === "true_false") {
     return (
-      <Text style={styles.revealAnswer}>To‘g‘ri javob: {correct === true ? "ROST" : "YOLG‘ON"}</Text>
+      <Text style={styles.revealAnswer}>{t("answer.correctIs", { answer: correct === true ? t("answer.true") : t("answer.false") })}</Text>
     );
   }
 
   if (question.type === "fill_blank") {
     const answers = Array.isArray(config.answers) ? config.answers as string[] : [];
-    return <Text style={styles.revealAnswer}>To‘g‘ri javob: {answers[0] ?? "—"}</Text>;
+    return <Text style={styles.revealAnswer}>{t("answer.correctIs", { answer: answers[0] ?? "—" })}</Text>;
   }
 
   if (question.type === "ordering") {
@@ -473,7 +477,7 @@ export function GameRevealPanel({ question, config, stats }: {
 
   return (
     <Text style={styles.hint}>
-      {stats.answers} javob · {stats.correct} to‘g‘ri · {stats.incorrect} noto‘g‘ri
+      {t("answer.stats", { answers: stats.answers, correct: stats.correct, incorrect: stats.incorrect })}
     </Text>
   );
 }
@@ -481,6 +485,7 @@ export function GameRevealPanel({ question, config, stats }: {
 /** A horizontal strip of option letters, for the compact result header. */
 export function GameStatsSummary({ stats }: { stats: { answers: number; correct: number; incorrect: number } }) {
   const styles = useStyles();
+  const { t } = useTranslation("play");
   const total = Math.max(stats.correct + stats.incorrect, 1);
   return (
     <View style={{ gap: spacing.sm }}>
@@ -489,7 +494,7 @@ export function GameStatsSummary({ stats }: { stats: { answers: number; correct:
         <View style={[styles.splitWrong, { flex: stats.incorrect || 0.001 }]} />
       </View>
       <Text style={styles.hint}>
-        {Math.round((stats.correct / total) * 100)}% to‘g‘ri · {Math.round((stats.incorrect / total) * 100)}% noto‘g‘ri
+        {t("answer.split", { correct: Math.round((stats.correct / total) * 100), incorrect: Math.round((stats.incorrect / total) * 100) })}
       </Text>
     </View>
   );
@@ -507,7 +512,7 @@ export function GameLeaderboardList({ players, meId }: {
         <View key={player.id} style={[styles.boardRow, player.id === meId && styles.boardRowMe]}>
           <Text style={styles.boardRank}>{player.rank}</Text>
           <Text style={styles.boardName} numberOfLines={1}>{player.nickname}</Text>
-          <Text style={styles.boardScore}>{player.total_score.toLocaleString("uz-UZ")}</Text>
+          <Text style={styles.boardScore}>{formatNumber(player.total_score)}</Text>
         </View>
       ))}
     </ScrollView>

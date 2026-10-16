@@ -2,6 +2,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { Vote } from "lucide-react-native";
 import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Text, useWindowDimensions, View } from "react-native";
 import Animated, {
   cancelAnimation, Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming,
@@ -48,6 +49,7 @@ export function MarathonVoteButton({ variant = "full" }: Props) {
   const enabled = useMarathonEnabled();
   const { width } = useWindowDimensions();
   const styles = useStyles();
+  const { t } = useTranslation("marathon");
   const router = useRouter();
   const press = usePressScale();
   const reduceMotion = useReduceMotion();
@@ -92,12 +94,12 @@ export function MarathonVoteButton({ variant = "full" }: Props) {
           <Animated.View
             {...press.handlers}
             accessibilityRole="button"
-            accessibilityLabel="Ovoz berish"
+            accessibilityLabel={t("vote")}
             onTouchEnd={() => router.push("/(app)/marathon/vote")}
             style={styles.inner}
           >
             <Vote color={brandInk.strong} size={icon.sm} strokeWidth={icon.strokeBold} />
-            {showLabel ? <Text style={styles.label}>Ovoz berish</Text> : null}
+            {showLabel ? <Text style={styles.label}>{t("vote")}</Text> : null}
           </Animated.View>
         </AnimatedGradient>
       </Animated.View>

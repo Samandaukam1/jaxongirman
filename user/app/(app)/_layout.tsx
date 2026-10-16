@@ -1,10 +1,14 @@
 import { Redirect, Stack } from "expo-router";
 
 import { useResumeMarathonInvite } from "@/lib/useResumeMarathonInvite";
+import { RouteError } from "@/components/RouteError";
 import { AccountProvider } from "@/providers/AccountProvider";
 import { PaymentPolicyProvider } from "@/providers/PaymentPolicyProvider";
 import { useAuth } from "@/providers/AuthProvider";
 import { useTheme } from "@/theme/ThemeProvider";
+
+/** A screen that throws shows a retry, rather than closing the app. */
+export const ErrorBoundary = RouteError;
 
 export default function AppLayout() {
   const { session, loading } = useAuth();
@@ -47,10 +51,16 @@ export default function AppLayout() {
               name="generation/[id]"
               options={{ gestureEnabled: false }}
             />
-            <Stack.Screen name="presentation/[id]" />
+            <Stack.Screen name="presentation/[id]/index" />
+            {/* Elements are dragged from the slide's edges too; a swipe from the
+              left edge must move the element, not leave the editor. */}
+            <Stack.Screen name="presentation/[id]/edit" options={{ gestureEnabled: false }} />
             <Stack.Screen name="coins/send" />
             <Stack.Screen name="coins/buy" />
             <Stack.Screen name="tarif/index" />
+            <Stack.Screen name="support/index" />
+            <Stack.Screen name="support/new" />
+            <Stack.Screen name="support/[id]" />
             <Stack.Screen name="survey/index" />
             {/* The survey builder and the response form are both long forms whose
               in-progress state lives only in memory — the same rule as `create`. */}

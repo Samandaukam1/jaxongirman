@@ -1,4 +1,5 @@
 import { Check, Lock } from "lucide-react-native";
+import { useTranslation } from "react-i18next";
 import { Text, View } from "react-native";
 
 import { nextTierOf, tierProgress, tierReached, type MarathonCampaign } from "@/lib/marathon";
@@ -21,6 +22,7 @@ import { makeStyles, useTheme } from "@/theme/ThemeProvider";
  */
 export function MarathonRewards({ campaign }: { campaign: MarathonCampaign }) {
   const styles = useStyles();
+  const { t } = useTranslation("marathon");
   const { colors } = useTheme();
   if (campaign.tiers.length === 0) return null;
   const next = nextTierOf(campaign);
@@ -42,16 +44,16 @@ export function MarathonRewards({ campaign }: { campaign: MarathonCampaign }) {
                 : <Lock color={colors.inkSoft} size={icon.xs} strokeWidth={icon.stroke} />}
             </View>
             <View style={styles.body}>
-              <Text style={styles.reward}>Kontraktning {tier.reward_percent}% i</Text>
+              <Text style={styles.reward}>{t("rewards.share", { percent: tier.reward_percent })}</Text>
               <Text style={styles.amount}>
-                {formatSom(Math.round((campaign.contract_cap * tier.reward_percent) / 100))}gacha
+                {t("rewards.upTo", { amount: formatSom(Math.round((campaign.contract_cap * tier.reward_percent) / 100)) })}
               </Text>
               <Text style={styles.need}>
-                {formatNumber(tier.votes_required)} ovoz · {formatNumber(tier.premium_required)} Premium
+                {t("rewards.need", { votes: formatNumber(tier.votes_required), premium: formatNumber(tier.premium_required) })}
               </Text>
               {decision ? (
                 <Text style={decision.decision === "claim" ? styles.claimed : styles.forfeited}>
-                  {decision.decision === "claim" ? "Mukofot so‘raldi" : "Voz kechilgan"}
+                  {decision.decision === "claim" ? t("rewards.claimed") : t("rewards.forfeited")}
                 </Text>
               ) : null}
               <View style={styles.track}>

@@ -1,5 +1,6 @@
 import { Sparkles, TriangleAlert } from "lucide-react-native";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Animated, Easing, Modal, Pressable, Text, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -38,6 +39,7 @@ export function MarathonMilestoneModal({ campaign, tier, onSettled }: {
   onSettled: () => void | Promise<void>;
 }) {
   const styles = useStyles();
+  const { t } = useTranslation("marathon");
   const { colors } = useTheme();
   const reduceMotion = useReduceMotion();
   const [confirming, setConfirming] = useState(false);
@@ -93,20 +95,20 @@ export function MarathonMilestoneModal({ campaign, tier, onSettled }: {
               ))}
             </View>
 
-            <Text style={styles.title}>🎉 {tier.reward_percent}% MARRAGA YETDINGIZ</Text>
+            <Text style={styles.title}>{t("milestone.title", { percent: tier.reward_percent })}</Text>
             <Text style={styles.body}>
-              Siz kontrakt mukofotining {tier.reward_percent}% qismini olish huquqiga ega bo‘ldingiz.
+              {t("milestone.body", { percent: tier.reward_percent })}
             </Text>
-            <Text style={styles.amount}>{formatSom(reward)}gacha</Text>
+            <Text style={styles.amount}>{t("rewards.upTo", { amount: formatSom(reward) })}</Text>
 
             <Text style={styles.tally}>
-              {formatNumber(campaign.total_votes)} ovoz · {formatNumber(campaign.premium_votes)} Premium
+              {t("milestone.tally", { votes: formatNumber(campaign.total_votes), premium: formatNumber(campaign.premium_votes) })}
             </Text>
 
             {error ? <Text style={styles.error}>{error}</Text> : null}
 
             <PrimaryButton
-              label={`${tier.reward_percent}% mukofotni olish`}
+              label={t("milestone.claim", { percent: tier.reward_percent })}
               loading={sending && !confirming}
               onPress={() => void decide("claim")}
             />
@@ -118,12 +120,12 @@ export function MarathonMilestoneModal({ campaign, tier, onSettled }: {
                 onPress={() => setConfirming(true)}
                 style={({ pressed }) => [styles.ghost, pressed && styles.ghostPressed]}
               >
-                <Text style={styles.ghostLabel}>{next.reward_percent}% uchun davom etish</Text>
+                <Text style={styles.ghostLabel}>{t("milestone.continue", { percent: next.reward_percent })}</Text>
               </Pressable>
             ) : null}
 
             <Pressable accessibilityRole="button" onPress={() => setDismissed(true)} hitSlop={8}>
-              <Text style={styles.later}>Keyinroq hal qilaman</Text>
+              <Text style={styles.later}>{t("milestone.later")}</Text>
             </Pressable>
           </View>
         </View>
@@ -137,15 +139,15 @@ export function MarathonMilestoneModal({ campaign, tier, onSettled }: {
             <View style={styles.warnMark}>
               <TriangleAlert color={colors.warning} size={icon.lg} strokeWidth={icon.stroke} />
             </View>
-            <Text style={styles.title}>Diqqat</Text>
+            <Text style={styles.title}>{t("milestone.warn")}</Text>
             <Text style={styles.body}>
-              Davom etsangiz {tier.reward_percent}% mukofotdan qaytarib bo‘lmas tarzda voz kechasiz.
-              {next ? `\n\nKeyingi mukofotni faqat ${formatNumber(next.votes_required)} jami va ${formatNumber(next.premium_required)} Premium ovozga yetganingizdan keyin olishingiz mumkin.` : ""}
+              {t("milestone.warnBody", { percent: tier.reward_percent })}
+              {next ? t("milestone.warnNext", { votes: formatNumber(next.votes_required), premium: formatNumber(next.premium_required) }) : ""}
             </Text>
 
             {error ? <Text style={styles.error}>{error}</Text> : null}
 
-            <PrimaryButton label="Ha, davom etaman" loading={sending} onPress={() => void decide("continue")} />
+            <PrimaryButton label={t("milestone.confirm")} loading={sending} onPress={() => void decide("continue")} />
 
             <Pressable
               accessibilityRole="button"
@@ -153,7 +155,7 @@ export function MarathonMilestoneModal({ campaign, tier, onSettled }: {
               onPress={() => setConfirming(false)}
               style={({ pressed }) => [styles.ghost, pressed && styles.ghostPressed]}
             >
-              <Text style={styles.ghostLabel}>Orqaga</Text>
+              <Text style={styles.ghostLabel}>{t("milestone.back")}</Text>
             </Pressable>
           </View>
         </View>

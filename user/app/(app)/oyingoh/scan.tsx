@@ -3,6 +3,7 @@ import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Camera, MonitorPlay, ScanLine } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Trans, useTranslation } from "react-i18next";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -29,7 +30,7 @@ function extractToken(raw: string): string | null {
 /**
  * Becoming the host of a screen.
  *
- * The projector at jaxongirman.uz/oyingoh shows a rotating one-time code; this
+ * The projector at jaxongirman.app/oyingoh shows a rotating one-time code; this
  * screen scans it and claims the session, which is the moment the phone becomes
  * the only device that can drive the match. The game itself is chosen next, on
  * the host remote — so a presenter can walk up to a screen and decide what to
@@ -38,6 +39,7 @@ function extractToken(raw: string): string | null {
 export default function HostScanScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation("games");
   const router = useRouter();
   const params = useLocalSearchParams<{ token?: string }>();
   const [permission, requestPermission] = useCameraPermissions();
@@ -70,19 +72,19 @@ export default function HostScanScreen() {
 
   return (
     <View style={styles.safe}>
-      <ScreenHeader title="Mezbon bo‘lish" subtitle="O‘yingoh" onLeave={() => router.back()} />
+      <ScreenHeader title={t("entry.hostTitle")} subtitle={t("title")} onLeave={() => router.back()} />
       <ScrollView contentContainerStyle={styles.content}>
         {busy ? (
           <View style={styles.block}>
             <ActivityIndicator color={colors.primary} size="large" />
-            <Text style={styles.blockTitle}>Ekranga ulanmoqda…</Text>
+            <Text style={styles.blockTitle}>{t("entry.connecting")}</Text>
           </View>
         ) : !permission?.granted ? (
           <View style={styles.block}>
             <Camera color={colors.primary} size={36} strokeWidth={icon.stroke} />
-            <Text style={styles.blockTitle}>Kamera ruxsati kerak</Text>
-            <Text style={styles.blockHint}>Katta ekrandagi QR kodni o‘qish uchun kameraga ruxsat bering.</Text>
-            <PrimaryButton label="Ruxsat berish" onPress={() => void requestPermission()} />
+            <Text style={styles.blockTitle}>{t("entry.camera")}</Text>
+            <Text style={styles.blockHint}>{t("entry.cameraHost")}</Text>
+            <PrimaryButton label={t("entry.allow")} onPress={() => void requestPermission()} />
           </View>
         ) : (
           <>
@@ -103,14 +105,12 @@ export default function HostScanScreen() {
             <View style={styles.steps}>
               <MonitorPlay color={colors.primary} size={icon.lg} strokeWidth={icon.stroke} />
               <Text style={styles.blockHint}>
-                Katta ekranda <Text style={styles.strong}>jaxongirman.uz</Text> saytini oching,
-                {" "}<Text style={styles.strong}>O‘yingohni ochish</Text> tugmasini bosing va shu yerdagi
-                QR kodni skaner qiling. Keyin qaysi o‘yinni o‘tkazishni tanlaysiz.
+                <Trans t={t} i18nKey="entry.hostSteps" components={{ b: <Text style={styles.strong} /> }} />
               </Text>
             </View>
 
             <Pressable onPress={() => router.replace("/(app)/oyingoh/join")}>
-              <Text style={styles.linkText}>Mezbon emasmisiz? O‘yinga qo‘shilish</Text>
+              <Text style={styles.linkText}>{t("entry.notHost")}</Text>
             </Pressable>
           </>
         )}

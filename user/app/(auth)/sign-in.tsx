@@ -1,15 +1,19 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { ArrowRight } from "lucide-react-native";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AuthHero } from "@/components/AuthHero";
 import { FormField } from "@/components/FormField";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { SocialAuthButtons } from "@/components/SocialAuthButtons";
+import { LANGUAGE_NAMES } from "@/i18n";
 import { authRedirectTo } from "@/lib/authLinking";
 import { asErrorMessage } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
+import { useLanguage } from "@/providers/LanguageProvider";
 import { radius, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
@@ -26,6 +30,9 @@ import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 export default function SignInScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
+  const insets = useSafeAreaInsets();
+  const { t } = useTranslation("auth");
+  const { language, setLanguage, uiLanguages } = useLanguage();
   const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
   const [emailOpen, setEmailOpen] = useState(false);
   const [email, setEmail] = useState("");
@@ -35,7 +42,7 @@ export default function SignInScreen() {
 
   async function submit() {
     if (!email.trim() || password.length < 8) {
-      Alert.alert("Ma’lumot yetarli emas", "Email va kamida 8 belgili parol kiriting.");
+      Alert.alert(t("missingTitle"), t("missingBody"));
       return;
     }
     setLoading(true);
@@ -50,10 +57,10 @@ export default function SignInScreen() {
           options: { data: { full_name: fullName.trim() }, emailRedirectTo: authRedirectTo },
         });
         if (error) throw error;
-        if (!data.session) Alert.alert("Emailni tasdiqlang", "Tasdiqlash havolasi emailingizga yuborildi.");
+        if (!data.session) Alert.alert(t("confirmTitle"), t("confirmBody"));
       }
     } catch (error) {
-      Alert.alert("Kirish amalga oshmadi", asErrorMessage(error));
+      Alert.alert(t("failed"), asErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -73,17 +80,35 @@ export default function SignInScreen() {
         style={styles.flex}
       >
         <ScrollView
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.xl }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {/* Before an account there is no profile to keep a language in, so
+              the choice is offered here too; it is remembered on the phone. */}
+          <View style={styles.languages} accessibilityRole="radiogroup">
+            {uiLanguages.concat(uiLanguages.includes(language) ? [] : [language]).map((code) => {
+              const selected = language === code;
+              return (
+                <Pressable
+                  key={code}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                  onPress={() => void setLanguage(code)}
+                  hitSlop={6}
+                  style={[styles.language, selected && styles.languageSelected]}
+                >
+                  <Text style={[styles.languageText, selected && styles.languageTextSelected]}>{LANGUAGE_NAMES[code]}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
           <AuthHero />
 
           <View style={styles.copy}>
-            <Text style={styles.title}>Fikringizdan{"\n"}taqdimot tug‘iladi</Text>
-            <Text style={styles.subtitle}>
-              Bir mavzu yozing — slaydlar, dizayn va o‘yin o‘zi tayyor bo‘ladi.
-            </Text>
+            <Text style={styles.title}>{t("title")}</Text>
+            <Text style={styles.subtitle}>{t("subtitle")}</Text>
           </View>
 
           <SocialAuthButtons />
@@ -91,12 +116,12 @@ export default function SignInScreen() {
           {emailOpen ? (
             <View style={styles.form}>
               {mode === "sign-up" ? (
-                <FormField label="Ism va familiya" value={fullName} onChangeText={setFullName} autoComplete="name" />
+                <FormField label={t("fullName")} value={fullName} onChangeText={setFullName} autoComplete="name" />
               ) : null}
-              <FormField label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" autoComplete="email" />
-              <FormField label="Parol" value={password} onChangeText={setPassword} secureTextEntry autoComplete={mode === "sign-in" ? "current-password" : "new-password"} />
+              <FormField label={t("email")} value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" autoComplete="email" />
+              <FormField label={t("password")} value={password} onChangeText={setPassword} secureTextEntry autoComplete={mode === "sign-in" ? "current-password" : "new-password"} />
               <PrimaryButton
-                label={mode === "sign-in" ? "Kirish" : "Ro‘yxatdan o‘tish"}
+                label={mode === "sign-in" ? t("signIn") : t("signUp")}
                 trailingIcon={ArrowRight}
                 loading={loading}
                 onPress={() => void submit()}
@@ -106,7 +131,7 @@ export default function SignInScreen() {
                 style={styles.switch}
               >
                 <Text style={styles.switchText}>
-                  {mode === "sign-in" ? "Hisobingiz yo‘qmi? Ro‘yxatdan o‘ting" : "Hisobingiz bormi? Kirish"}
+                  {mode === "sign-in" ? t("toSignUp") : t("toSignIn")}
                 </Text>
               </Pressable>
             </View>
@@ -116,13 +141,11 @@ export default function SignInScreen() {
               onPress={() => setEmailOpen(true)}
               style={({ pressed }) => [styles.emailButton, pressed && styles.pressed]}
             >
-              <Text style={styles.emailButtonText}>Email bilan davom etish</Text>
+              <Text style={styles.emailButtonText}>{t("withEmail")}</Text>
             </Pressable>
           )}
 
-          <Text style={styles.legal}>
-            Davom etish orqali foydalanish shartlariga rozilik bildirasiz.
-          </Text>
+          <Text style={styles.legal}>{t("legal")}</Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </LinearGradient>
@@ -134,10 +157,15 @@ const useStyles = makeStyles((colors) => ({
   flex: { flex: 1 },
   content: {
     paddingHorizontal: spacing.xl,
-    paddingTop: 64,
     paddingBottom: spacing.xxxl,
     gap: spacing.lg,
   },
+
+  languages: { flexDirection: "row", justifyContent: "center", gap: spacing.xs },
+  language: { paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: radius.pill },
+  languageSelected: { backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border },
+  languageText: { ...typography.caption, color: colors.inkSoft },
+  languageTextSelected: { color: colors.ink, fontFamily: "Manrope_700Bold" },
 
   copy: { alignItems: "center", gap: spacing.sm, marginBottom: spacing.xs },
   title: { ...typography.display, color: colors.ink, textAlign: "center", fontSize: 32, lineHeight: 38 },

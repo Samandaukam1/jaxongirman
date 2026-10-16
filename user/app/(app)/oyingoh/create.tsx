@@ -1,11 +1,9 @@
-import {
-  GAME_AI_TYPES, GAME_AUDIENCE_LABELS, GAME_DIFFICULTY_LABELS, GAME_TYPE_LABELS,
-  type GameQuestionType,
-} from "@jaxongirman/types";
+import { GAME_AI_TYPES, GAME_DIFFICULTY_LABELS, type GameQuestionType } from "@jaxongirman/types";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Check, FileText, Presentation, Sparkles, SquarePen } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -13,6 +11,7 @@ import { ScreenHeader } from "@/components/ScreenHeader";
 import { InlineError } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
 import { generateGame } from "@/lib/games";
+import { labelOf } from "@/lib/labels";
 import { supabase } from "@/lib/supabase";
 import { icon, radius, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
@@ -30,6 +29,7 @@ const COUNT_PRESETS = [5, 10, 15, 20] as const;
 export default function CreateGameScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation("games");
   const router = useRouter();
   const params = useLocalSearchParams<{ categoryId?: string; presentationId?: string }>();
   const [mode, setMode] = useState<Mode>("topic");
@@ -82,12 +82,12 @@ export default function CreateGameScreen() {
     try {
       if (mode === "manual") {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error("Kirish talab qilinadi.");
+        if (!user) throw new Error(t("form.signIn"));
         const { data, error: insertError } = await supabase
           .from("games")
           .insert({
             owner_id: user.id,
-            title: topic.trim() || "Yangi o‘yin",
+            title: topic.trim() || t("form.defaultTitle"),
             category_id: params.categoryId ?? null,
             difficulty,
             audience,
@@ -119,24 +119,24 @@ export default function CreateGameScreen() {
 
   return (
     <View style={styles.safe}>
-      <ScreenHeader title="Yangi o‘yin" subtitle="O‘yingoh" onLeave={() => router.back()} />
+      <ScreenHeader title={t("form.title")} subtitle={t("title")} onLeave={() => router.back()} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           <View style={styles.modeGrid}>
-            <ModeCard active={mode === "topic"} icon={Sparkles} label="Mavzu bo‘yicha" hint="AI bilan" onPress={() => setMode("topic")} />
-            <ModeCard active={mode === "text"} icon={FileText} label="Matndan" hint="AI bilan" onPress={() => setMode("text")} />
-            <ModeCard active={mode === "presentation"} icon={Presentation} label="Prezentatsiyadan" hint="AI bilan" onPress={() => setMode("presentation")} />
-            <ModeCard active={mode === "manual"} icon={SquarePen} label="Qo‘lda" hint="Bo‘sh o‘yin" onPress={() => setMode("manual")} />
+            <ModeCard active={mode === "topic"} icon={Sparkles} label={t("form.mode.topic")} hint={t("form.withAi")} onPress={() => setMode("topic")} />
+            <ModeCard active={mode === "text"} icon={FileText} label={t("form.mode.text")} hint={t("form.withAi")} onPress={() => setMode("text")} />
+            <ModeCard active={mode === "presentation"} icon={Presentation} label={t("form.mode.presentation")} hint={t("form.withAi")} onPress={() => setMode("presentation")} />
+            <ModeCard active={mode === "manual"} icon={SquarePen} label={t("form.mode.manual")} hint={t("form.blank")} onPress={() => setMode("manual")} />
           </View>
 
           {mode === "topic" || mode === "manual" ? (
             <View style={styles.field}>
-              <Text style={styles.label}>{mode === "manual" ? "O‘yin nomi" : "Mavzu"}</Text>
+              <Text style={styles.label}>{mode === "manual" ? t("form.name") : t("form.topic")}</Text>
               <TextInput
                 style={styles.input}
                 value={topic}
                 onChangeText={setTopic}
-                placeholder={mode === "manual" ? "Masalan: Adabiyot viktorinasi" : "Masalan: Amir Temur davlati"}
+                placeholder={mode === "manual" ? t("form.namePlaceholder") : t("form.topicPlaceholder")}
                 placeholderTextColor={colors.inkSoft}
                 maxLength={300}
               />
@@ -145,12 +145,12 @@ export default function CreateGameScreen() {
 
           {mode === "text" ? (
             <View style={styles.field}>
-              <Text style={styles.label}>Manba matn</Text>
+              <Text style={styles.label}>{t("form.source")}</Text>
               <TextInput
                 style={[styles.input, styles.textArea]}
                 value={text}
                 onChangeText={setText}
-                placeholder="Savollar shu matndan tuziladi. Kamida bir necha jumla joylashtiring."
+                placeholder={t("form.sourcePlaceholder")}
                 placeholderTextColor={colors.inkSoft}
                 multiline
                 maxLength={20000}
@@ -160,9 +160,9 @@ export default function CreateGameScreen() {
 
           {mode === "presentation" ? (
             <View style={styles.field}>
-              <Text style={styles.label}>Taqdimotni tanlang</Text>
+              <Text style={styles.label}>{t("form.deck")}</Text>
               {decks.length === 0 ? (
-                <Text style={styles.hint}>Tayyor taqdimotingiz yo‘q. Avval taqdimot yarating.</Text>
+                <Text style={styles.hint}>{t("form.noDecks")}</Text>
               ) : decks.map((deck) => (
                 <Pressable
                   key={deck.id}
@@ -179,25 +179,25 @@ export default function CreateGameScreen() {
           {mode !== "manual" ? (
             <>
               <View style={styles.field}>
-                <Text style={styles.label}>Daraja</Text>
+                <Text style={styles.label}>{t("form.difficulty")}</Text>
                 <View style={styles.chipRow}>
-                  {Object.entries(GAME_DIFFICULTY_LABELS).map(([value, label]) => (
-                    <Chip key={value} active={difficulty === value} label={label} onPress={() => setDifficulty(value)} />
+                  {Object.keys(GAME_DIFFICULTY_LABELS).map((value) => (
+                    <Chip key={value} active={difficulty === value} label={labelOf("gameDifficulty", value)} onPress={() => setDifficulty(value)} />
                   ))}
                 </View>
               </View>
 
               <View style={styles.field}>
-                <Text style={styles.label}>Auditoriya</Text>
+                <Text style={styles.label}>{t("form.audience")}</Text>
                 <View style={styles.chipRow}>
                   {["umumiy", "maktab_1_4", "maktab_5_9", "maktab_10_11", "universitet"].map((value) => (
-                    <Chip key={value} active={audience === value} label={GAME_AUDIENCE_LABELS[value] ?? value} onPress={() => setAudience(value)} />
+                    <Chip key={value} active={audience === value} label={labelOf("audience", value)} onPress={() => setAudience(value)} />
                   ))}
                 </View>
               </View>
 
               <View style={styles.field}>
-                <Text style={styles.label}>Savollar soni</Text>
+                <Text style={styles.label}>{t("form.count")}</Text>
                 <View style={styles.chipRow}>
                   {COUNT_PRESETS.map((preset) => (
                     <Chip key={preset} active={count === preset} label={`${preset}`} onPress={() => setCount(preset)} />
@@ -206,11 +206,11 @@ export default function CreateGameScreen() {
               </View>
 
               <View style={styles.field}>
-                <Text style={styles.label}>Savol turlari</Text>
-                <Text style={styles.hint}>Rasmli turlar (Rasmni toping, Rasmdan joyni toping) muharrirda qo‘lda qo‘shiladi.</Text>
+                <Text style={styles.label}>{t("form.types")}</Text>
+                <Text style={styles.hint}>{t("form.typesHint")}</Text>
                 <View style={styles.chipRow}>
                   {GAME_AI_TYPES.map((type) => (
-                    <Chip key={type} active={types.has(type)} label={GAME_TYPE_LABELS[type]} onPress={() => toggleType(type)} />
+                    <Chip key={type} active={types.has(type)} label={labelOf("gameType", type)} onPress={() => toggleType(type)} />
                   ))}
                 </View>
               </View>
@@ -220,7 +220,7 @@ export default function CreateGameScreen() {
           {error ? <InlineError message={error} /> : null}
 
           <PrimaryButton
-            label={mode === "manual" ? "O‘yin yaratish" : busy ? "O‘yingoh yaratilmoqda..." : "AI bilan yaratish"}
+            label={mode === "manual" ? t("form.createManual") : busy ? t("form.creating") : t("form.createAi")}
             loading={busy}
             disabled={!canSubmit}
             onPress={() => void submit()}

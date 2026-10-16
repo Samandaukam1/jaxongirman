@@ -1,7 +1,12 @@
 import { Tabs } from "expo-router";
+import { useTranslation } from "react-i18next";
 
 import { BottomNav } from "@/components/BottomNav";
+import { RouteError } from "@/components/RouteError";
 import { useTheme } from "@/theme/ThemeProvider";
+
+/** A screen that throws shows a retry, rather than closing the app. */
+export const ErrorBoundary = RouteError;
 
 /**
  * The five places a person moves between. A tab navigator rather than stack
@@ -12,6 +17,7 @@ import { useTheme } from "@/theme/ThemeProvider";
  */
 export default function TabsLayout() {
   const { colors } = useTheme();
+  const { t } = useTranslation("nav");
   return (
     <Tabs
       tabBar={(props) => <BottomNav {...props} />}
@@ -26,11 +32,11 @@ export default function TabsLayout() {
         sceneStyle: { backgroundColor: colors.canvas },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: "Bosh sahifa" }} />
-      <Tabs.Screen name="projects" options={{ title: "Loyihalar" }} />
-      <Tabs.Screen name="marketplace" options={{ title: "Do‘kon" }} />
-      <Tabs.Screen name="games" options={{ title: "O‘yinlar" }} />
-      <Tabs.Screen name="profile" options={{ title: "Profil" }} />
+      <Tabs.Screen name="index" options={{ title: t("home") }} />
+      <Tabs.Screen name="projects" options={{ title: t("projects") }} />
+      <Tabs.Screen name="marketplace" options={{ title: t("store") }} />
+      <Tabs.Screen name="games" options={{ title: t("games") }} />
+      <Tabs.Screen name="profile" options={{ title: t("profile") }} />
     </Tabs>
   );
 }

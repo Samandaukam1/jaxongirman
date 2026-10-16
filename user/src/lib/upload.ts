@@ -1,3 +1,4 @@
+import { i18n } from "@/i18n";
 import { supabase } from "@/lib/supabase";
 
 /**
@@ -40,10 +41,10 @@ export async function uploadLocalFile(options: {
 }): Promise<UploadOutcome> {
   const bytes = await readLocalBytes(options.uri);
   if (bytes.byteLength === 0) {
-    return { ok: false, message: "Fayl o‘qilmadi. Boshqa fayl tanlang." };
+    return { ok: false, message: i18n.t("misc:upload.unreadable") };
   }
   if (options.maxBytes && bytes.byteLength > options.maxBytes) {
-    return { ok: false, message: options.tooLargeMessage ?? "Fayl juda katta." };
+    return { ok: false, message: options.tooLargeMessage ?? i18n.t("misc:upload.tooLarge") };
   }
 
   const { error } = await supabase.storage.from(options.bucket).upload(options.path, bytes, {

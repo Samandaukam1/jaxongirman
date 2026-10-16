@@ -1,7 +1,8 @@
 import { CameraView, useCameraPermissions } from "expo-camera";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Camera, ScanLine } from "lucide-react-native";
 import { useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -30,7 +31,11 @@ function extractToken(raw: string): string | null {
 export default function ScanScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation(["present", "common"]);
   const router = useRouter();
+  // Opened from a finished deck, the scan puts that deck on the screen at once.
+  const params = useLocalSearchParams<{ presentationId?: string }>();
+  const deckId = (Array.isArray(params.presentationId) ? params.presentationId[0] : params.presentationId) || null;
   const [permission, requestPermission] = useCameraPermissions();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,9 +54,9 @@ export default function ScanScreen() {
     const { data, error: claimError } = await supabase.rpc("presentation_pairing_claim", {
       p_token: token,
       // Null rather than omitted: this parameter happens to have a default
-        // today, and a call that only works because of that is one schema
-        // change away from failing with "function not found".
-        p_presentation_id: null as unknown as string,
+      // today, and a call that only works because of that is one schema
+      // change away from failing with "function not found".
+      p_presentation_id: deckId as unknown as string,
     });
     setBusy(false);
     if (claimError) {
@@ -72,7 +77,7 @@ export default function ScanScreen() {
   if (!permission) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="Taqdimot qilish" variant="close" />
+        <ScreenHeader title={t("scan.title")} variant="close" />
         <View style={styles.centered}><ActivityIndicator color={colors.primary} size="large" /></View>
       </View>
     );
@@ -81,15 +86,14 @@ export default function ScanScreen() {
   if (!permission.granted) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="Taqdimot qilish" variant="close" />
+        <ScreenHeader title={t("scan.title")} variant="close" />
         <View style={styles.permission}>
           <View style={styles.permissionIcon}><Camera color={colors.primary} size={28} strokeWidth={2} /></View>
-          <Text style={styles.permissionTitle}>Kameraga ruxsat kerak</Text>
+          <Text style={styles.permissionTitle}>{t("scan.camera")}</Text>
           <Text style={styles.permissionCopy}>
-            Ekrandagi QR kodni o‘qish uchun kameradan foydalanamiz. Rasm saqlanmaydi va hech qayerga
-            yuborilmaydi.
+            {t("scan.cameraBody")}
           </Text>
-          <PrimaryButton label="Ruxsat berish" onPress={() => void requestPermission()} />
+          <PrimaryButton label={t("scan.allow")} onPress={() => void requestPermission()} />
         </View>
       </View>
     );
@@ -97,7 +101,7 @@ export default function ScanScreen() {
 
   return (
     <View style={styles.screen}>
-      <ScreenHeader title="QR kodni skaner qiling" variant="close" />
+      <ScreenHeader title={t("scan.scanTitle")} variant="close" />
       <View style={styles.cameraFrame}>
         <CameraView
           style={StyleSheet.absoluteFill}
@@ -119,11 +123,10 @@ export default function ScanScreen() {
       <View style={styles.footer}>
         {error ? <InlineError message={error} /> : null}
         <Text style={styles.hint}>
-          jaxongirman.uz saytida &ldquo;Taqdimot qilish&rdquo; sahifasini oching va ekrandagi kodni
-          shu yerga tuting.
+          {t("scan.hint")}
         </Text>
         <Pressable accessibilityRole="button" onPress={() => router.back()}>
-          <Text style={styles.cancel}>Bekor qilish</Text>
+          <Text style={styles.cancel}>{t("common:cancel")}</Text>
         </Pressable>
       </View>
     </View>

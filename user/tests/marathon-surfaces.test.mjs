@@ -46,7 +46,7 @@ test("projects: the vote button sits beside the search control", () => {
   const vote = at(source, '<MarathonVoteButton variant="compact" />', "projects");
   // The search on this screen is a toggle that opens the field, so the element
   // it has to sit beside is that button, not the input it reveals.
-  const search = at(source, 'accessibilityLabel={searching ? "Qidiruvni yopish" : "Qidirish"}', "projects");
+  const search = at(source, 'accessibilityLabel={searching ? t("closeSearch") : t("search")}', "projects");
   assert.ok(vote < search && search - vote < 400,
     "§3 puts it next to the existing search rather than under it");
 });
@@ -54,7 +54,7 @@ test("projects: the vote button sits beside the search control", () => {
 test("marketplace: the vote button sits beside Sotish", () => {
   const source = read("app/(app)/(tabs)/marketplace.tsx");
   const vote = at(source, '<MarathonVoteButton variant="compact" />', "marketplace");
-  const sell = at(source, 'accessibilityLabel="Mahsulot sotish"', "marketplace");
+  const sell = at(source, 'accessibilityLabel={t("sellLabel")}', "marketplace");
   assert.ok(vote < sell && sell - vote < 400, "§4 puts the two actions side by side");
 });
 
@@ -70,7 +70,8 @@ test("games: the vote button sits beside the coin balance", () => {
 test("profile: the marathon section comes before Sozlamalar", () => {
   const source = read("app/(app)/(tabs)/profile.tsx");
   const marathon = at(source, "<MarathonProfileCard />", "profile");
-  const settings = at(source, "SOZLAMALAR", "profile");
+  // The heading's words live in the `profile` table; its key marks the place.
+  const settings = at(source, 't("sections.settings")', "profile");
   assert.ok(marathon < settings, "§15: a competition is not a setting and must not be filed under them");
 });
 
@@ -90,7 +91,8 @@ test("what is under the poster is the description and the rewards", () => {
   const poster = at(section, "<MarathonPoster", "home section");
   const description = at(section, "styles.description", "home section");
   const rewards = at(section, "<MarathonRewards", "home section");
-  const join = section.indexOf("Qatnashish");
+  // The button's words live in the `marathon` table; its key marks the place.
+  const join = section.indexOf('t("join")');
   assert.ok(poster < description && description < rewards && rewards < join,
     "§13 orders it: poster, words, clock, rewards, and only then the button");
 });

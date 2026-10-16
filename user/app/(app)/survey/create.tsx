@@ -2,6 +2,7 @@ import { DATA_COLLECTION_MODULE } from "@jaxongirman/types";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { BookmarkPlus, Plus, Send } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -11,7 +12,7 @@ import {
 } from "@/components/QuestionEditor";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { ErrorState, InlineError } from "@/components/StateBlocks";
-import { formatDate, useNow } from "@/lib/datetime";
+import { formatClock, formatDate, useNow } from "@/lib/datetime";
 import { asErrorMessage } from "@/lib/format";
 import { moduleGate, useModuleAccess } from "@/lib/modules";
 import { supabase } from "@/lib/supabase";
@@ -20,11 +21,11 @@ import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /** Deadlines people actually choose, plus a typed date for everything else. */
 const DEADLINE_PRESETS = [
-  { label: "1 kun", days: 1 },
-  { label: "3 kun", days: 3 },
-  { label: "1 hafta", days: 7 },
-  { label: "2 hafta", days: 14 },
-  { label: "1 oy", days: 30 },
+  { label: "d1", days: 1 },
+  { label: "d3", days: 3 },
+  { label: "w1", days: 7 },
+  { label: "w2", days: 14 },
+  { label: "m1", days: 30 },
 ] as const;
 
 function addDays(days: number): Date {
@@ -53,6 +54,7 @@ function parseTypedDeadline(value: string): Date | null {
 export default function SurveyBuilderScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation(["survey", "common"]);
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string; templateId?: string }>();
   const formId = typeof params.id === "string" ? params.id : null;
@@ -159,10 +161,10 @@ export default function SurveyBuilderScreen() {
   const now = useNow(deadline !== null, 30_000);
 
   const problem = useMemo(() => {
-    if (title.trim().length < 3) return "So‘rovnoma nomi kamida 3 ta belgidan iborat bo‘lsin.";
-    if (deadline && deadline.getTime() <= now) return "Muddat kelajakdagi sana bo‘lishi kerak.";
+    if (title.trim().length < 3) return t("builder.needTitle");
+    if (deadline && deadline.getTime() <= now) return t("builder.needFuture");
     return locked ? null : firstQuestionProblem(questions);
-  }, [deadline, locked, now, questions, title]);
+  }, [deadline, locked, now, questions, t, title]);
 
   function moveQuestion(from: number, to: number) {
     if (to < 0 || to >= questions.length) return;
@@ -237,21 +239,21 @@ export default function SurveyBuilderScreen() {
     setTemplateSaving(false);
     if (templateError) { setError(asErrorMessage(templateError)); return; }
     setTemplateOpen(false);
-    Alert.alert("Saqlandi", "Savollar shablon sifatida saqlandi va keyingi so‘rovnomalarda qayta ishlatiladi.");
+    Alert.alert(t("builder.templateSaved"), t("builder.templateSavedBody"));
   }
 
   function confirmLeave() {
     if (!title && questions.every((question) => question.label === "")) { router.back(); return; }
-    Alert.alert("Chiqilsinmi?", "Saqlanmagan savollar yo‘qoladi.", [
-      { text: "Bekor qilish", style: "cancel" },
-      { text: "Chiqish", style: "destructive", onPress: () => router.back() },
+    Alert.alert(t("builder.leaveTitle"), t("builder.leaveBody"), [
+      { text: t("common:cancel"), style: "cancel" },
+      { text: t("builder.leave"), style: "destructive", onPress: () => router.back() },
     ]);
   }
 
   if (loading) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="So‘rovnoma" variant="close" onLeave={() => router.back()} />
+        <ScreenHeader title={t("builder.title")} variant="close" onLeave={() => router.back()} />
         <View style={styles.centered}><ActivityIndicator color={colors.primary} size="large" /></View>
       </View>
     );
@@ -260,7 +262,7 @@ export default function SurveyBuilderScreen() {
   if (loadError) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="So‘rovnoma" variant="close" onLeave={() => router.back()} />
+        <ScreenHeader title={t("builder.title")} variant="close" onLeave={() => router.back()} />
         <View style={styles.content}><ErrorState message={loadError} onRetry={() => void load()} /></View>
       </View>
     );
@@ -269,8 +271,8 @@ export default function SurveyBuilderScreen() {
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.screen}>
       <ScreenHeader
-        title={formId ? "So‘rovnomani tahrirlash" : "Yangi so‘rovnoma"}
-        subtitle={locked ? "Javoblar kelgan — savollar qulflangan" : undefined}
+        title={formId ? t("builder.edit") : t("newSurvey")}
+        subtitle={locked ? t("builder.locked") : undefined}
         variant="close"
         onLeave={confirmLeave}
       />
@@ -279,22 +281,22 @@ export default function SurveyBuilderScreen() {
         {!creatorGate.allowed ? <InlineError message={creatorGate.reason ?? ""} /> : null}
 
         <View style={styles.block}>
-          <Text style={styles.label}>Nomi</Text>
+          <Text style={styles.label}>{t("builder.name")}</Text>
           <TextInput
             value={title}
             onChangeText={(value) => setTitle(value.slice(0, 120))}
-            placeholder="Masalan: Guruh ma’lumotlari"
+            placeholder={t("builder.namePlaceholder")}
             placeholderTextColor={colors.inkSoft}
             style={styles.input}
           />
         </View>
 
         <View style={styles.block}>
-          <Text style={styles.label}>Tavsif (ixtiyoriy)</Text>
+          <Text style={styles.label}>{t("builder.description")}</Text>
           <TextInput
             value={description}
             onChangeText={(value) => setDescription(value.slice(0, 1000))}
-            placeholder="So‘rovnoma nima uchun to‘ldirilishini yozing"
+            placeholder={t("builder.descriptionPlaceholder")}
             placeholderTextColor={colors.inkSoft}
             multiline
             style={[styles.input, styles.multiline]}
@@ -302,7 +304,7 @@ export default function SurveyBuilderScreen() {
         </View>
 
         <View style={styles.block}>
-          <Text style={styles.label}>Muddat</Text>
+          <Text style={styles.label}>{t("builder.deadline")}</Text>
           <View style={styles.presets}>
             {DEADLINE_PRESETS.map((preset) => {
               const target = addDays(preset.days);
@@ -314,12 +316,12 @@ export default function SurveyBuilderScreen() {
                   onPress={() => { setDeadline(target); setDeadlineText(""); }}
                   style={[styles.preset, active && styles.presetActive]}
                 >
-                  <Text style={[styles.presetText, active && styles.presetTextActive]}>{preset.label}</Text>
+                  <Text style={[styles.presetText, active && styles.presetTextActive]}>{t(`builder.preset.${preset.label}`)}</Text>
                 </Pressable>
               );
             })}
             <Pressable accessibilityRole="button" onPress={() => { setDeadline(null); setDeadlineText(""); }} style={[styles.preset, deadline === null && styles.presetActive]}>
-              <Text style={[styles.presetText, deadline === null && styles.presetTextActive]}>Muddatsiz</Text>
+              <Text style={[styles.presetText, deadline === null && styles.presetTextActive]}>{t("builder.noDeadline")}</Text>
             </Pressable>
           </View>
           <TextInput
@@ -329,52 +331,52 @@ export default function SurveyBuilderScreen() {
               const parsed = parseTypedDeadline(value);
               if (parsed) setDeadline(parsed);
             }}
-            placeholder="yoki qo‘lda: 31.12.2026 18:00"
+            placeholder={t("builder.typed")}
             placeholderTextColor={colors.inkSoft}
             keyboardType="numbers-and-punctuation"
             style={styles.input}
           />
           <Text style={styles.hint}>
-            {deadline ? `Tugash sanasi: ${formatDate(deadline)} · ${String(deadline.getHours()).padStart(2, "0")}:${String(deadline.getMinutes()).padStart(2, "0")}` : "Muddat belgilanmasa, so‘rovnoma siz yopguningizcha ochiq qoladi."}
+            {deadline ? t("builder.ends", { date: formatDate(deadline), time: formatClock(deadline) }) : t("builder.openEnded")}
           </Text>
         </View>
 
         <View style={styles.block}>
-          <Text style={styles.label}>Kutilayotgan qatnashchilar (ixtiyoriy)</Text>
+          <Text style={styles.label}>{t("builder.expected")}</Text>
           <TextInput
             value={expected}
             onChangeText={(value) => setExpected(value.replace(/[^0-9]/g, "").slice(0, 6))}
-            placeholder="Masalan: 30"
+            placeholder={t("builder.expectedPlaceholder")}
             placeholderTextColor={colors.inkSoft}
             keyboardType="number-pad"
             style={styles.input}
           />
-          <Text style={styles.hint}>Belgilansa, javoblar shu songa yetganda sizga xabar keladi.</Text>
+          <Text style={styles.hint}>{t("builder.expectedHint")}</Text>
         </View>
 
         <View style={styles.block}>
-          <Text style={styles.label}>Maxfiylik izohi (ixtiyoriy)</Text>
+          <Text style={styles.label}>{t("builder.privacy")}</Text>
           <TextInput
             value={privacyNote}
             onChangeText={(value) => setPrivacyNote(value.slice(0, 600))}
-            placeholder="Ma’lumotlar nima uchun yig‘ilayotganini tushuntiring"
+            placeholder={t("builder.privacyPlaceholder")}
             placeholderTextColor={colors.inkSoft}
             multiline
             style={[styles.input, styles.multiline]}
           />
           <Text style={styles.hint}>
-            Javoblar {access?.retention_hours ?? 48} soat saqlanadi va shundan so‘ng avtomatik o‘chiriladi. Bu matn javob beruvchiga ko‘rsatiladi.
+            {t("builder.retention", { hours: access?.retention_hours ?? 48 })}
           </Text>
         </View>
 
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Savollar</Text>
+          <Text style={styles.sectionTitle}>{t("builder.questions")}</Text>
           <Text style={styles.sectionCount}>{questions.length}</Text>
         </View>
 
         {locked ? (
           <Text style={styles.lockedNote}>
-            Bu so‘rovnomaga javoblar kelgan, shuning uchun savollarni o‘zgartirib bo‘lmaydi. Nomi, tavsifi va muddatini tahrirlashingiz mumkin.
+            {t("builder.lockedNote")}
           </Text>
         ) : null}
 
@@ -402,7 +404,7 @@ export default function SurveyBuilderScreen() {
         {!locked ? (
           <Pressable accessibilityRole="button" onPress={() => setQuestions((current) => [...current, blankQuestion()])} style={styles.addQuestion}>
             <Plus color={colors.primary} size={icon.sm} strokeWidth={2.4} />
-            <Text style={styles.addQuestionText}>Savol qo‘shish</Text>
+            <Text style={styles.addQuestionText}>{t("builder.addQuestion")}</Text>
           </Pressable>
         ) : null}
 
@@ -410,14 +412,14 @@ export default function SurveyBuilderScreen() {
 
         <View style={styles.actions}>
           <PrimaryButton
-            label="Saqlash va yopish"
+            label={t("builder.saveClose")}
             tone="secondary"
             loading={saving}
             disabled={!creatorGate.allowed || publishing}
             onPress={() => void saveDraft()}
           />
           <PrimaryButton
-            label="Saqlash va e’lon qilish"
+            label={t("builder.publish")}
             icon={Send}
             loading={publishing}
             disabled={!creatorGate.allowed || saving}
@@ -426,7 +428,7 @@ export default function SurveyBuilderScreen() {
           {!locked ? (
             <Pressable accessibilityRole="button" onPress={openTemplateSheet} style={styles.templateButton}>
               <BookmarkPlus color={colors.primary} size={icon.sm} strokeWidth={2.2} />
-              <Text style={styles.templateText}>Savollarni shablon sifatida saqlash</Text>
+              <Text style={styles.templateText}>{t("builder.saveTemplate")}</Text>
             </Pressable>
           ) : null}
         </View>
@@ -434,20 +436,20 @@ export default function SurveyBuilderScreen() {
 
       {/* A named prompt rather than Alert.prompt, which exists only on iOS. */}
       <Modal visible={templateOpen} transparent animationType="fade" onRequestClose={() => setTemplateOpen(false)}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Yopish" onPress={() => setTemplateOpen(false)} style={styles.backdrop}>
+        <Pressable accessibilityRole="button" accessibilityLabel={t("common:close")} onPress={() => setTemplateOpen(false)} style={styles.backdrop}>
           <Pressable style={styles.sheet} onPress={() => undefined}>
-            <Text style={styles.sheetTitle}>Shablon nomi</Text>
-            <Text style={styles.sheetCopy}>Bu savollar to‘plami keyingi so‘rovnomalarda qayta ishlatiladi.</Text>
+            <Text style={styles.sheetTitle}>{t("builder.templateName")}</Text>
+            <Text style={styles.sheetCopy}>{t("builder.templateBody")}</Text>
             <TextInput
               value={templateName}
               onChangeText={(value) => setTemplateName(value.slice(0, 120))}
-              placeholder="Masalan: Talaba ma’lumotlari"
+              placeholder={t("builder.templatePlaceholder")}
               placeholderTextColor={colors.inkSoft}
               autoFocus
               style={styles.input}
             />
             <PrimaryButton
-              label="Shablonni saqlash"
+              label={t("builder.templateSave")}
               loading={templateSaving}
               disabled={templateName.trim() === ""}
               onPress={() => void saveAsTemplate()}

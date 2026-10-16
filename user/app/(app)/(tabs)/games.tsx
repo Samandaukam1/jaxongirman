@@ -1,19 +1,24 @@
-import { GAME_STATUS_LABELS, type GameStatus } from "@jaxongirman/types";
+import type { GameStatus } from "@jaxongirman/types";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
 import {
   Bell, Gamepad2, Gift, Medal, MonitorPlay, Plus, QrCode, ShoppingBag, Sparkles, Trophy,
 } from "lucide-react-native";
 import { useCallback, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Image, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import coinIcon from "../../../assets/coin/coin-icon.png";
+import { DeleteWorkButton } from "@/components/DeleteWorkButton";
 import { Appear } from "@/components/Appear";
 import { Touchable } from "@/components/Touchable";
 import { BOTTOM_NAV_SPACE } from "@/components/BottomNav";
 import { MarathonVoteButton } from "@/components/MarathonVoteButton";
 import { EmptyState, InlineError, SkeletonCard } from "@/components/StateBlocks";
+import { formatDate } from "@/lib/datetime";
 import { asErrorMessage } from "@/lib/format";
+import { labelOf } from "@/lib/labels";
 import {
   listCategories, listFreeGames, listMyGames, listMyMatches, myGameStats,
   type Game, type GameCategory,
@@ -27,13 +32,8 @@ import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type Shelf = "all" | "mine" | "bought" | "presentation" | "played";
 
-const SHELF_LABELS: Record<Shelf, string> = {
-  all: "Barchasi",
-  mine: "Yaratganlarim",
-  bought: "Sotib olganlarim",
-  presentation: "Prezentatsiyadan",
-  played: "Qatnashganlarim",
-};
+/** The shelves, in the order offered; their names are in the `games` table under `shelf`. */
+const SHELVES: readonly Shelf[] = ["all", "mine", "bought", "presentation", "played"];
 
 type Match = { session_id: string; joined_at: string; total_score: number; rank: number | null; game_title: string };
 type Stats = { played: number; wins: number; top3: number; average_score: number; coins_won: number };
@@ -46,6 +46,8 @@ type Stats = { played: number; wins: number; top3: number; average_score: number
 export default function GamesScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation("games");
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { balance, unreadCount } = useAccount();
   const { user } = useAuth();
@@ -105,7 +107,7 @@ export default function GamesScreen() {
   }, [boughtIds, games, shelf]);
 
   return (
-    <View style={styles.safe}>
+    <View style={[styles.safe, { paddingTop: Math.max(insets.top, 20) + spacing.xs }]}>
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -114,15 +116,15 @@ export default function GamesScreen() {
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
             <Text numberOfLines={1} style={styles.eyebrow}>JAXONGIRMAN</Text>
-            <Text numberOfLines={1} style={styles.title}>O‘yingoh</Text>
+            <Text numberOfLines={1} style={styles.title}>{t("title")}</Text>
           </View>
           <View style={styles.headerActions}>
             <MarathonVoteButton variant="compact" />
-            <Pressable style={styles.coinPill} onPress={() => router.push("/coins/buy")} accessibilityLabel="J Coin balans">
+            <Pressable style={styles.coinPill} onPress={() => router.push("/coins/buy")} accessibilityLabel={t("balance")}>
               <Image source={coinIcon} resizeMode="contain" style={styles.coinIcon} />
               <Text style={styles.coinText}>{formatNumber(balance)}</Text>
             </Pressable>
-            <Pressable style={styles.iconButton} onPress={() => router.push("/notifications")} accessibilityLabel="Bildirishnomalar">
+            <Pressable style={styles.iconButton} onPress={() => router.push("/notifications")} accessibilityLabel={t("notifications")}>
               <Bell color={colors.ink} size={icon.md} strokeWidth={icon.stroke} />
               {unreadCount > 0 ? <View style={styles.badge} /> : null}
             </Pressable>
@@ -139,8 +141,8 @@ export default function GamesScreen() {
               <Plus color={brandInk.strong} size={icon.lg} strokeWidth={icon.strokeBold} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.createTitle}>Yangi o‘yin yaratish</Text>
-              <Text style={styles.createSubtitle}>AI bilan, matndan yoki qo‘lda</Text>
+              <Text style={styles.createTitle}>{t("create.title")}</Text>
+              <Text style={styles.createSubtitle}>{t("create.subtitle")}</Text>
             </View>
             <Sparkles color={brandInk.muted} size={icon.lg} strokeWidth={icon.stroke} />
           </LinearGradient>
@@ -156,8 +158,8 @@ export default function GamesScreen() {
           >
             <LinearGradient colors={gradients.join} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.halfCta}>
               <QrCode color={brandInk.strong} size={icon.xl} strokeWidth={icon.stroke} />
-              <Text style={styles.halfTitle}>O‘yinga qo‘shilish</Text>
-              <Text style={styles.halfSubtitle}>QR yoki kod</Text>
+              <Text style={styles.halfTitle}>{t("join.title")}</Text>
+              <Text style={styles.halfSubtitle}>{t("join.subtitle")}</Text>
             </LinearGradient>
           </Touchable>
 
@@ -168,8 +170,8 @@ export default function GamesScreen() {
           >
             <LinearGradient colors={gradients.host} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.halfCta}>
               <MonitorPlay color={brandInk.strong} size={icon.xl} strokeWidth={icon.stroke} />
-              <Text style={styles.halfTitle}>Mezbon bo‘lish</Text>
-              <Text style={styles.halfSubtitle}>Katta ekranni ulash</Text>
+              <Text style={styles.halfTitle}>{t("host.title")}</Text>
+              <Text style={styles.halfSubtitle}>{t("host.subtitle")}</Text>
             </LinearGradient>
           </Touchable>
         </View>
@@ -178,22 +180,22 @@ export default function GamesScreen() {
 
         {stats && stats.played > 0 ? (
           <View style={styles.statsRow}>
-            <StatCard icon={Gamepad2} value={stats.played} label="O‘yinlar" />
-            <StatCard icon={Trophy} value={stats.wins} label="G‘alabalar" />
-            <StatCard icon={Medal} value={stats.top3} label="Top 3" />
-            <StatCard icon={Gift} value={stats.coins_won} label="J mukofot" />
+            <StatCard icon={Gamepad2} value={stats.played} label={t("stats.played")} />
+            <StatCard icon={Trophy} value={stats.wins} label={t("stats.wins")} />
+            <StatCard icon={Medal} value={stats.top3} label={t("stats.top3")} />
+            <StatCard icon={Gift} value={stats.coins_won} label={t("stats.coins")} />
           </View>
         ) : null}
 
-        <Text style={styles.sectionTitle}>Mening o‘yinlarim</Text>
+        <Text style={styles.sectionTitle}>{t("mine")}</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.shelfTabs}>
-          {(Object.keys(SHELF_LABELS) as Shelf[]).map((key) => (
+          {SHELVES.map((key) => (
             <Pressable
               key={key}
               style={[styles.shelfTab, shelf === key && styles.shelfTabActive]}
               onPress={() => setShelf(key)}
             >
-              <Text style={[styles.shelfTabText, shelf === key && styles.shelfTabTextActive]}>{SHELF_LABELS[key]}</Text>
+              <Text style={[styles.shelfTabText, shelf === key && styles.shelfTabTextActive]}>{t(`shelf.${key}`)}</Text>
             </Pressable>
           ))}
         </ScrollView>
@@ -202,7 +204,7 @@ export default function GamesScreen() {
           <View style={{ gap: spacing.md }}><SkeletonCard /><SkeletonCard /></View>
         ) : shelf === "played" ? (
           matches.length === 0 ? (
-            <EmptyState icon={Gamepad2} title="Hali o‘yinda qatnashmadingiz" message="QR skaner qilib birinchi bellashuvga qo‘shiling." />
+            <EmptyState icon={Gamepad2} title={t("noMatches")} message={t("noMatchesBody")} />
           ) : (
             <View style={{ gap: spacing.sm }}>
               {matches.map((match) => (
@@ -212,7 +214,7 @@ export default function GamesScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.gameTitle} numberOfLines={1}>{match.game_title}</Text>
-                    <Text style={styles.gameMeta}>{new Date(match.joined_at).toLocaleDateString("uz-UZ")}</Text>
+                    <Text style={styles.gameMeta}>{formatDate(match.joined_at)}</Text>
                   </View>
                   <Text style={styles.matchScore}>{formatNumber(match.total_score)}</Text>
                 </View>
@@ -222,14 +224,21 @@ export default function GamesScreen() {
         ) : shelfGames.length === 0 ? (
           <EmptyState
             icon={Gamepad2}
-            title="Menda hali o‘yin yo‘q"
-            message="Birinchi o‘yiningizni yarating — AI bir daqiqada tayyorlab beradi."
+            title={t("noGames")}
+            message={t("noGamesBody")}
           />
         ) : (
           <View style={{ gap: spacing.sm }}>
             {shelfGames.map((game, index) => (
               <Appear key={game.id} index={index}>
-                <GameRow game={game} onPress={() => router.push(`/oyingoh/${game.id}`)} />
+                <GameRow
+                  game={game}
+                  onPress={() => router.push(`/oyingoh/${game.id}`)}
+                  // Only a game this account made can be deleted; a bought one is a licence, not a file.
+                  onDeleted={game.owner_id === user?.id && !boughtIds.has(game.id)
+                    ? () => setGames((current) => current.filter((item) => item.id !== game.id))
+                    : undefined}
+                />
               </Appear>
             ))}
           </View>
@@ -237,7 +246,7 @@ export default function GamesScreen() {
 
         {freeGames.length > 0 ? (
           <>
-            <Text style={styles.sectionTitle}>Bepul o‘yinlar</Text>
+            <Text style={styles.sectionTitle}>{t("free")}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md }}>
               {freeGames.map((game) => (
                 <Touchable
@@ -245,9 +254,9 @@ export default function GamesScreen() {
                   style={styles.freeCard}
                   onPress={() => router.push(`/oyingoh/${game.id}`)}
                 >
-                  <View style={styles.freeBadge}><Text style={styles.freeBadgeText}>Bepul</Text></View>
+                  <View style={styles.freeBadge}><Text style={styles.freeBadgeText}>{t("freeBadge")}</Text></View>
                   <Text style={styles.freeTitle} numberOfLines={2}>{game.title}</Text>
-                  <Text style={styles.gameMeta}>{game.question_count} savol</Text>
+                  <Text style={styles.gameMeta}>{t("questions", { count: game.question_count })}</Text>
                 </Touchable>
               ))}
             </ScrollView>
@@ -256,7 +265,7 @@ export default function GamesScreen() {
 
         {categories.length > 0 ? (
           <>
-            <Text style={styles.sectionTitle}>Kategoriyalar</Text>
+            <Text style={styles.sectionTitle}>{t("categories")}</Text>
             <View style={styles.categoryGrid}>
               {categories.map((category) => (
                 <Touchable
@@ -273,7 +282,7 @@ export default function GamesScreen() {
 
         <Pressable style={styles.marketLink} onPress={() => router.push("/(app)/(tabs)/marketplace")}>
           <ShoppingBag color={colors.primary} size={icon.md} strokeWidth={icon.stroke} />
-          <Text style={styles.marketLinkText}>Do‘kondan tayyor o‘yinlarni ko‘ring</Text>
+          <Text style={styles.marketLinkText}>{t("toStore")}</Text>
         </Pressable>
       </ScrollView>
     </View>
@@ -292,9 +301,10 @@ function StatCard({ icon: Icon, value, label }: { icon: typeof Trophy; value: nu
   );
 }
 
-function GameRow({ game, onPress }: { game: Game; onPress: () => void }) {
+function GameRow({ game, onPress, onDeleted }: { game: Game; onPress: () => void; onDeleted?: () => void }) {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation("games");
   const status = game.status as GameStatus;
   return (
     <Touchable style={styles.gameRow} onPress={onPress} accessibilityRole="button">
@@ -302,18 +312,19 @@ function GameRow({ game, onPress }: { game: Game; onPress: () => void }) {
         <Gamepad2 color={colors.primary} size={icon.md} strokeWidth={icon.stroke} />
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={styles.gameTitle} numberOfLines={1}>{game.title || "Nomsiz o‘yin"}</Text>
+        <Text style={styles.gameTitle} numberOfLines={1}>{game.title || t("untitled")}</Text>
         <Text style={styles.gameMeta}>
-          {game.question_count} savol · {GAME_STATUS_LABELS[status] ?? game.status}
+          {t("questions", { count: game.question_count })} · {labelOf("gameStatus", game.status)}
         </Text>
       </View>
       <View style={[styles.statusDot, status === "ready" ? styles.statusReady : status === "generating" ? styles.statusBusy : styles.statusDraft]} />
+      {onDeleted ? <DeleteWorkButton kind="game" id={game.id} title={game.title || t("untitled")} onDeleted={onDeleted} /> : null}
     </Touchable>
   );
 }
 
 const useStyles = makeStyles((colors) => ({
-  safe: { flex: 1, backgroundColor: colors.canvas, paddingTop: 58 },
+  safe: { flex: 1, backgroundColor: colors.canvas },
   content: { paddingHorizontal: spacing.xl, paddingBottom: BOTTOM_NAV_SPACE + spacing.xl, gap: spacing.lg },
   headerRow: { flexDirection: "row", alignItems: "flex-start", gap: spacing.md },
   eyebrow: { ...typography.caption, color: colors.accent, letterSpacing: 1.7 },

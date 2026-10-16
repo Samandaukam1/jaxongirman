@@ -1,37 +1,31 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
 import {
-  ChevronRight, CreditCard, Crown, Gamepad2, LogOut, Moon, Pencil, Receipt, Store, Sun, SunMoon,
-  Trash2, User as UserIcon, Wallet,
+  ChevronRight, CircleHelp, CreditCard, Crown, Inbox, Languages, LogOut, MessageSquarePlus, Moon, Pencil, Receipt, Store, Sun, SunMoon,
+  Trash2, User as UserIcon, Wallet, type LucideIcon,
 } from "lucide-react-native";
-import { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, Image, RefreshControl, ScrollView, Text, View } from "react-native";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { ActivityIndicator, Alert, Image, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import coinIcon from "../../../assets/coin/coin-icon.png";
-/**
- * The slide stack from Loyihalar, and it has to be that one.
- *
- * "Taqdimot" here counts the same thing that screen makes, so drawing it with a
- * different icon would be the app disagreeing with itself about what a
- * presentation looks like. The file numbers do not run in the order of the
- * sheet they were cut from — `4.svg` is the stack — which is why the import is
- * named for the picture rather than the digit.
- */
-import SlideCreateArt from "../../../assets/icons/4.svg";
-import { AccentIcon } from "@/components/AccentIcon";
 import { BOTTOM_NAV_SPACE } from "@/components/BottomNav";
+import { BrandSurface } from "@/components/BrandSurface";
 import { DeleteAccountSheet } from "@/components/DeleteAccountSheet";
 import { MarathonProfileCard } from "@/components/MarathonProfileCard";
+import { PlanUsageCard } from "@/components/PlanUsageCard";
 import { SegmentedSwitch, type Segment } from "@/components/SegmentedSwitch";
 import { Touchable } from "@/components/Touchable";
 import { asErrorMessage } from "@/lib/format";
 import { formatNumber } from "@/lib/money";
 import { myMembership } from "@/lib/subscription";
 import { supabase } from "@/lib/supabase";
+import { supportUnread } from "@/lib/support";
+import { LANGUAGE_NAMES, type AppLanguage } from "@/i18n";
 import { useAuth } from "@/providers/AuthProvider";
+import { useLanguage } from "@/providers/LanguageProvider";
 import type { ThemeMode } from "@/theme/ThemeProvider";
-import { brandInk, gradients, icon, radius, shadow, spacing, typography, type AccentName } from "@/theme/tokens";
+import { brandInk, gradients, radius, shadow, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type Identity = {
@@ -48,58 +42,64 @@ const EMPTY: Identity = {
 };
 
 /**
- * How big the picture of you is.
+ * The picture of you, and the rim of page colour round it.
  *
- * It used to be 116 inside a 128 ring, which sounds close to this and is not:
- * the ring was a translucent white square and the whole block sat under a page
- * of padding, so the picture read as a thumbnail attached to a header. At 120
- * on a lit plate, high on the screen, it is the subject of the screen. The ring
- * is the difference between the two numbers and is drawn as a gradient, so the
- * edge of the photograph is a lit rim rather than a border somebody drew.
+ * The rim is the canvas, not white: it is what cuts the photograph out of the
+ * banner it overlaps, so at night it has to be the night's colour too.
  */
-const AVATAR = 120;
-const RING = 8;
+const AVATAR = 106;
+const RING = 5;
+const FRAME = AVATAR + RING * 2;
 
-/** The header actions, and the hue each one is drawn in. */
-const HERO_ACTIONS = [
-  { key: "tarif", label: "Tarif", glyph: Crown, accent: "gold", href: "/(app)/tarif" },
-  { key: "shop", label: "Do‘kon", glyph: Store, accent: "magenta", href: "/(app)/marketplace/seller" },
-  { key: "edit", label: "Tahrirlash", glyph: Pencil, accent: "azure", href: "/(app)/profile-edit" },
-] as const satisfies readonly { key: string; label: string; glyph: typeof Crown; accent: AccentName; href: string }[];
-
-/** Sozlamalar, one hue each, in the order somebody reaches for them. */
+/** Sozlamalar, in the order somebody reaches for them. The only way to the tariff on this screen. */
 const SETTINGS = [
-  { label: "Tarif", detail: "Obuna va limitlaringiz", glyph: Crown, accent: "gold", href: "/(app)/tarif" },
-  { label: "Mahsulotlarim", detail: "Do‘konga qo‘yganlaringiz", glyph: Store, accent: "magenta", href: "/(app)/marketplace/seller" },
-  { label: "Daromadlar", detail: "Sotuvlar va to‘lovlar", glyph: Wallet, accent: "emerald", href: "/(app)/earnings" },
-  { label: "To‘lovlar tarixi", detail: "Buyurtmalar va cheklar", glyph: Receipt, accent: "azure", href: "/(app)/orders" },
-  { label: "Chala kartalar", detail: "To‘lovda ishlatilgan kartalar", glyph: CreditCard, accent: "indigo", href: "/(app)/cards" },
-] as const satisfies readonly { label: string; detail: string; glyph: typeof Crown; accent: AccentName; href: string }[];
+  { key: "tariff", glyph: Crown, href: "/(app)/tarif" },
+  { key: "products", glyph: Store, href: "/(app)/marketplace/seller" },
+  { key: "earnings", glyph: Wallet, href: "/(app)/earnings" },
+  { key: "orders", glyph: Receipt, href: "/(app)/orders" },
+  { key: "cards", glyph: CreditCard, href: "/(app)/cards" },
+] as const satisfies readonly { key: string; glyph: LucideIcon; href: string }[];
 
-const APPEARANCE: readonly Segment<ThemeMode>[] = [
-  { key: "system", label: "Tizim", icon: SunMoon },
-  { key: "light", label: "Yorug‘", icon: Sun },
-  { key: "dark", label: "Qorong‘i", icon: Moon },
-];
+/** Yordam markazi: a question to the support staff, the questions already asked, and the common answers. */
+const SUPPORT = [
+  { key: "new", glyph: MessageSquarePlus, href: "/(app)/support/new" },
+  { key: "mine", glyph: Inbox, href: "/(app)/support" },
+  { key: "faq", glyph: CircleHelp, href: "/(app)/support?faq=1" },
+] as const satisfies readonly { key: string; glyph: LucideIcon; href: string }[];
+
+const APPEARANCE_ICONS = { system: SunMoon, light: Sun, dark: Moon } as const;
 
 /**
  * The profile, as something you have rather than something you fill in.
  *
- * This tab used to be the edit form. Every visit — to check a balance, to open
- * the tariff, to sign out — opened a page of text inputs with a Save button
- * under them, for a task nobody had come to do. The form now lives on its own
- * screen and this one answers the question people actually arrive with: who am
- * I here, what am I on, and what have I made.
+ * This tab used to be the edit form; the form now lives on its own screen and
+ * this one answers what people arrive with: who am I here, what am I on, what
+ * have I made.
  *
- * The second thing it had wrong was colour. Eleven controls, every one of them
- * the same violet outline at the same weight, which is a screen you navigate by
- * counting rows. The glyphs are unchanged; what changed is that each now sits
- * on a plate of its own hue (`AccentIcon`), and the two counts that name things
- * the app already draws elsewhere — a presentation, a J Tanga — use the
- * drawings the app already draws them with rather than a second opinion.
+ * The version before this one spent colour everywhere — a violet field bled
+ * from the top of the screen, three action tiles each in their own hue, a hue
+ * per settings row, a red slab at the bottom — and read as busy rather than
+ * finished. Now the brand is one banner (`BrandSurface`, the same material as
+ * the balance card on Bosh sahifa), the person sits on its edge, and every
+ * control below is drawn one way: one tile, one ink, one grouped list. The
+ * only other colour is red, on the one thing that cannot be undone. The tariff
+ * is reached from one row; a member's allowance shows above the settings.
  */
 export default function ProfileScreen() {
   const { colors, mode, setMode } = useTheme();
+  const { t } = useTranslation(["profile", "common"]);
+  const { language, setLanguage, uiLanguages } = useLanguage();
+  const appearance = useMemo<Segment<ThemeMode>[]>(
+    () => (Object.keys(APPEARANCE_ICONS) as ThemeMode[]).map((key) => ({ key, label: t(`appearance.${key}`), icon: APPEARANCE_ICONS[key] })),
+    [t],
+  );
+  // Each language named in itself, never translated: someone lost in the wrong one must still find theirs.
+  // The languages the operator offers, and always the one in use.
+  const languages = useMemo<Segment<AppLanguage>[]>(
+    () => uiLanguages.concat(uiLanguages.includes(language) ? [] : [language])
+      .map((code) => ({ key: code, label: LANGUAGE_NAMES[code], icon: Languages })),
+    [language, uiLanguages],
+  );
   const styles = useStyles();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -108,15 +108,25 @@ export default function ProfileScreen() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [credits, setCredits] = useState(0);
   const [plan, setPlan] = useState<string | null>(null);
+  const [member, setMember] = useState(false);
   const [counts, setCounts] = useState({ presentations: 0, games: 0 });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [supportBadge, setSupportBadge] = useState(0);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
+  /**
+   * Only the first visit waits behind a spinner.
+   *
+   * Every focus re-reads, and it used to set `loading` each time — which swapped
+   * the whole screen for a spinner and mounted it again on every return to the
+   * tab. The figures are already on screen by then; they are updated in place.
+   */
+  const loaded = useRef(false);
   const load = useCallback(async (isRefresh = false) => {
-    if (!user) return;
-    if (isRefresh) setRefreshing(true); else setLoading(true);
+    if (!user) { setLoading(false); return; }
+    if (isRefresh) setRefreshing(true); else if (!loaded.current) setLoading(true);
 
     /**
      * Counted by the server, not fetched and measured here.
@@ -125,39 +135,51 @@ export default function ProfileScreen() {
      * the difference between reading "12" and downloading twelve decks to find
      * out there are twelve.
      */
-    const [profileResult, walletResult, membership, decks, games] = await Promise.all([
-      supabase.from("profiles")
-        .select("first_name,last_name,username,bio,avatar_url,organization,field_of_study")
-        .eq("id", user.id).single(),
-      supabase.from("credit_wallets").select("balance").eq("user_id", user.id).single(),
-      myMembership().catch(() => null),
-      supabase.from("presentations").select("id", { count: "exact", head: true }).eq("owner_id", user.id),
-      supabase.from("games").select("id", { count: "exact", head: true }).eq("owner_id", user.id),
-    ]);
+    try {
+      const [profileResult, walletResult, membership, decks, games] = await Promise.all([
+        supabase.from("profiles")
+          .select("first_name,last_name,username,bio,avatar_url,organization,field_of_study")
+          .eq("id", user.id).single(),
+        supabase.from("credit_wallets").select("balance").eq("user_id", user.id).single(),
+        myMembership().catch(() => null),
+        supabase.from("presentations").select("id", { count: "exact", head: true }).eq("owner_id", user.id),
+        supabase.from("games").select("id", { count: "exact", head: true }).eq("owner_id", user.id),
+      ]);
 
-    if (profileResult.error) setError(asErrorMessage(profileResult.error));
-    else {
-      setIdentity({
-        firstName: profileResult.data.first_name ?? "",
-        lastName: profileResult.data.last_name ?? "",
-        username: profileResult.data.username ?? "",
-        bio: profileResult.data.bio ?? "",
-        organization: profileResult.data.organization ?? "",
-        fieldOfStudy: profileResult.data.field_of_study ?? "",
-      });
-      setAvatarUrl(profileResult.data.avatar_url);
-      setError(null);
+      if (profileResult.error) setError(asErrorMessage(profileResult.error));
+      else {
+        setIdentity({
+          firstName: profileResult.data.first_name ?? "",
+          lastName: profileResult.data.last_name ?? "",
+          username: profileResult.data.username ?? "",
+          bio: profileResult.data.bio ?? "",
+          organization: profileResult.data.organization ?? "",
+          fieldOfStudy: profileResult.data.field_of_study ?? "",
+        });
+        setAvatarUrl(profileResult.data.avatar_url);
+        setError(null);
+      }
+      if (!walletResult.error) setCredits(walletResult.data.balance);
+      setPlan(membership?.member ? membership.planName : null);
+      setMember(Boolean(membership?.member));
+      setCounts({ presentations: decks.count ?? 0, games: games.count ?? 0 });
+    } catch (failure) {
+      // A dropped connection is a line on the screen, never a screen that
+      // stays a spinner or takes the tab down with it.
+      setError(asErrorMessage(failure));
+    } finally {
+      loaded.current = true;
+      setLoading(false);
+      setRefreshing(false);
     }
-    if (!walletResult.error) setCredits(walletResult.data.balance);
-    setPlan(membership?.member ? membership.planName : null);
-    setCounts({ presentations: decks.count ?? 0, games: games.count ?? 0 });
-    setLoading(false);
-    setRefreshing(false);
   }, [user]);
 
   // Re-read on focus, so a name changed on the edit screen is already right
   // when the person comes back rather than one pull-to-refresh later.
-  useFocusEffect(useCallback(() => { void load(); }, [load]));
+  useFocusEffect(useCallback(() => {
+    void load();
+    void supportUnread().then(setSupportBadge);
+  }, [load]));
 
   const fullName = [identity.firstName, identity.lastName].filter(Boolean).join(" ");
   const initials = [identity.firstName, identity.lastName]
@@ -166,9 +188,9 @@ export default function ProfileScreen() {
     .toUpperCase();
 
   const stats = [
-    { key: "decks", value: counts.presentations, label: "Taqdimot", accent: "violet" as AccentName, art: SlideCreateArt },
-    { key: "games", value: counts.games, label: "O‘yin", accent: "teal" as AccentName, glyph: Gamepad2 },
-    { key: "coins", value: credits, label: "J Tanga", accent: "gold" as AccentName, image: coinIcon },
+    { key: "decks", value: counts.presentations, label: t("stats.decks") },
+    { key: "games", value: counts.games, label: t("stats.games") },
+    { key: "coins", value: credits, label: t("stats.coins") },
   ];
 
   if (loading) return <View style={styles.centered}><ActivityIndicator color={colors.primary} size="large" /></View>;
@@ -180,30 +202,15 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={colors.primary} />}
       >
-        {/**
-          * The header is one object: a coloured field with the person in it.
-          *
-          * The top inset is measured rather than guessed at. The old number was
-          * 72 on iOS and 44 elsewhere, which on a phone with a Dynamic Island
-          * left a band of empty violet under the island and on one without it
-          * pushed the picture down for no reason. Asking the device puts the
-          * avatar as close to the top as the hardware allows on every one of
-          * them, and the actions sit under the name where nothing they do can
-          * reach the island's territory.
-          */}
-        <LinearGradient
-          colors={gradients.hero}
-          start={{ x: 0.1, y: 0 }}
-          end={{ x: 0.9, y: 1 }}
-          style={[styles.hero, { paddingTop: Math.max(insets.top, 24) + spacing.sm }]}
-        >
+        {/* The top inset is measured, so the banner sits under the island on
+            every phone rather than at a guessed distance from it. */}
+        <BrandSurface radius={28} style={[styles.banner, { marginTop: Math.max(insets.top, 24) + spacing.sm }]} />
+
+        <View style={styles.identity}>
+          {/* The lift lives outside the frame: a shadow on a view that clips its
+              children is clipped with them. */}
           <View style={styles.avatarLift}>
-            <LinearGradient
-              colors={["rgba(255,255,255,0.98)", "rgba(255,255,255,0.42)"]}
-              start={{ x: 0.2, y: 0 }}
-              end={{ x: 0.8, y: 1 }}
-              style={styles.avatarRing}
-            >
+            <View style={styles.avatarFrame}>
               {avatarUrl ? (
                 <Image
                   source={{ uri: avatarUrl }}
@@ -217,61 +224,49 @@ export default function ProfileScreen() {
                 <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.avatar, styles.avatarEmpty]}>
                   {initials
                     ? <Text style={styles.initials}>{initials}</Text>
-                    : <UserIcon color={brandInk.strong} size={48} strokeWidth={1.5} />}
+                    : <UserIcon color={brandInk.strong} size={44} strokeWidth={1.5} />}
                 </LinearGradient>
               )}
-            </LinearGradient>
-          </View>
-
-          <View style={styles.heroCopy}>
-            <Text style={styles.name} numberOfLines={1}>{fullName || "Ismingizni kiriting"}</Text>
-            <View style={styles.heroMeta}>
-              <Text style={styles.handle} numberOfLines={1}>
-                {identity.username ? `@${identity.username}` : user?.email}
-              </Text>
-              {plan ? (
-                <View style={styles.planChip}>
-                  {/* The plate is white in both themes, so its glyph takes the
-                      ink that belongs to the plate. `primaryDeep` lightens at
-                      night by design — on this chip that made the crown a pale
-                      violet mark on white, next to text that had stayed dark. */}
-                  <Crown color={brandInk.onPlate} size={12} strokeWidth={2.4} />
-                  <Text style={styles.planText} numberOfLines={1}>{plan}</Text>
-                </View>
-              ) : null}
             </View>
           </View>
 
-          <View style={styles.heroActions}>
-            {HERO_ACTIONS.map((action) => (
-              <Touchable
-                key={action.key}
-                accessibilityRole="button"
-                accessibilityLabel={action.label}
-                onPress={() => router.push(action.href)}
-                style={styles.heroAction}
-              >
-                <AccentIcon accent={action.accent} glyph={action.glyph} size={50} />
-                <Text style={styles.heroActionLabel} numberOfLines={1}>{action.label}</Text>
-              </Touchable>
-            ))}
+          <Text style={styles.name} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>{fullName || t("namePlaceholder")}</Text>
+          <View style={styles.meta}>
+            <Text style={styles.handle} numberOfLines={1}>
+              {identity.username ? `@${identity.username}` : user?.email}
+            </Text>
+            {plan ? (
+              <View style={styles.planChip}>
+                <Crown color={colors.primaryDeep} size={12} strokeWidth={2.4} />
+                <Text style={styles.planText} numberOfLines={1}>{plan}</Text>
+              </View>
+            ) : null}
           </View>
-        </LinearGradient>
+          {identity.organization || identity.fieldOfStudy ? (
+            <Text style={styles.study} numberOfLines={2}>
+              {[identity.organization, identity.fieldOfStudy].filter(Boolean).join(" · ")}
+            </Text>
+          ) : null}
+          {identity.bio ? <Text style={styles.bio}>{identity.bio}</Text> : null}
 
-        {/* Overlapping the field above, so the two read as one header. */}
+          <Touchable
+            accessibilityRole="button"
+            accessibilityLabel={t("edit")}
+            onPress={() => router.push("/(app)/profile-edit")}
+            style={styles.edit}
+          >
+            <Pencil color={colors.ink} size={15} strokeWidth={2.2} />
+            <Text style={styles.editText}>{t("edit")}</Text>
+          </Touchable>
+        </View>
+
+        {/* Three figures on one panel, divided by hairlines rather than boxed. */}
         <View style={styles.stats}>
           {stats.map((stat, at) => (
             <View key={stat.key} style={styles.statCell}>
               {at > 0 ? <View style={styles.statRule} /> : null}
-              <AccentIcon accent={stat.accent} glyph={stat.glyph} art={stat.art} image={stat.image} size={40} />
-              {/**
-                * One line, shrunk rather than wrapped.
-                *
-                * A balance is six digits long more often than it is not, and a
-                * six-digit figure that wraps takes the label under it off the
-                * card. `adjustsFontSizeToFit` keeps three columns on one
-                * baseline whatever is in them.
-                */}
+              {/* One line, shrunk rather than wrapped: a balance is six digits
+                  more often than not, and a wrapped figure pushes its label off. */}
               <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
                 {formatNumber(stat.value)}
               </Text>
@@ -280,92 +275,119 @@ export default function ProfileScreen() {
           ))}
         </View>
 
-        {identity.organization || identity.fieldOfStudy || identity.bio ? (
-          <View style={styles.about}>
-            {identity.organization || identity.fieldOfStudy ? (
-              <Text style={styles.study} numberOfLines={2}>
-                {[identity.organization, identity.fieldOfStudy].filter(Boolean).join(" · ")}
-              </Text>
-            ) : null}
-            {identity.bio ? <Text style={styles.bio}>{identity.bio}</Text> : null}
-          </View>
-        ) : null}
-
         {error ? <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View> : null}
 
-        {/**
-          * Which palette the app draws in.
-          *
-          * Three choices rather than two: "Tizim" is the default and the one
-          * most people never change — a phone that goes dark at sunset should
-          * take the app with it. The other two exist because some people want
-          * one or the other regardless, and an app that overrules them is an
-          * app they fight. Remembered on the device, because it is a property
-          * of the screen you are holding.
-          */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>KO‘RINISH</Text>
-          <SegmentedSwitch options={APPEARANCE} value={mode} onChange={setMode} />
-        </View>
+        {/* A member's allowance and the restart. Without a plan there is nothing
+            to count, and the way to one is the Tarif row below. */}
+        {member ? <View style={styles.section}><PlanUsageCard /></View> : null}
 
         {/* Above Sozlamalar, and never inside it — see the component. */}
         <MarathonProfileCard />
 
-        {/* Sozlamalar: the marketplace surfaces a person owns. */}
+        {/* "Tizim" is the default: a phone that goes dark at sunset should take
+            the app with it. Remembered on the device. */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>SOZLAMALAR</Text>
-          <View style={styles.rows}>
-            {SETTINGS.map((row) => (
-              <Touchable
-                key={row.href}
-                accessibilityRole="button"
-                accessibilityLabel={row.label}
-                onPress={() => router.push(row.href)}
-                style={styles.row}
-              >
-                <AccentIcon accent={row.accent} glyph={row.glyph} size={42} />
-                <View style={styles.rowCopy}>
-                  <Text style={styles.rowLabel} numberOfLines={1}>{row.label}</Text>
-                  <Text style={styles.rowDetail} numberOfLines={1}>{row.detail}</Text>
-                </View>
-                <ChevronRight color={colors.inkSoft} size={18} strokeWidth={2.2} />
-              </Touchable>
-            ))}
+          <Text style={styles.sectionTitle}>{t("sections.appearance")}</Text>
+          <SegmentedSwitch options={appearance} value={mode} onChange={setMode} />
+        </View>
+
+        {/* The app's language; a deck's own language is chosen when it is made. */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t("sections.language")}</Text>
+          <SegmentedSwitch options={languages} value={language} onChange={(next) => void setLanguage(next)} />
+        </View>
+
+        {/* Above Sozlamalar: somebody with a problem should not have to look for it. */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t("sections.support")}</Text>
+          <View style={styles.group}>
+            <View style={styles.groupClip}>
+              {SUPPORT.map((row, at) => (
+                <Pressable
+                  key={row.href}
+                  accessibilityRole="button"
+                  accessibilityLabel={t(`support.${row.key}.label`)}
+                  onPress={() => router.push(row.href)}
+                  style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+                >
+                  {at > 0 ? <View style={styles.rowRule} /> : null}
+                  <Tile glyph={row.glyph} />
+                  <View style={styles.rowCopy}>
+                    <Text style={styles.rowLabel} numberOfLines={1}>{t(`support.${row.key}.label`)}</Text>
+                    <Text style={styles.rowDetail} numberOfLines={1}>{t(`support.${row.key}.detail`)}</Text>
+                  </View>
+                  {row.href === "/(app)/support" && supportBadge > 0 ? (
+                    <View style={styles.supportBadge}><Text style={styles.supportBadgeText}>{supportBadge}</Text></View>
+                  ) : null}
+                  <ChevronRight color={colors.inkSoft} size={18} strokeWidth={2.2} />
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t("sections.settings")}</Text>
+          <View style={styles.group}>
+            <View style={styles.groupClip}>
+              {SETTINGS.map((row, at) => (
+                <Pressable
+                  key={row.href}
+                  accessibilityRole="button"
+                  accessibilityLabel={t(`settings.${row.key}.label`)}
+                  onPress={() => router.push(row.href)}
+                  style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+                >
+                  {at > 0 ? <View style={styles.rowRule} /> : null}
+                  <Tile glyph={row.glyph} />
+                  <View style={styles.rowCopy}>
+                    <Text style={styles.rowLabel} numberOfLines={1}>{t(`settings.${row.key}.label`)}</Text>
+                    <Text style={styles.rowDetail} numberOfLines={1}>{t(`settings.${row.key}.detail`)}</Text>
+                  </View>
+                  <ChevronRight color={colors.inkSoft} size={18} strokeWidth={2.2} />
+                </Pressable>
+              ))}
+            </View>
           </View>
         </View>
 
         {/**
           * Leaving, and ending.
           *
-          * Two different things, so they are two different weights: signing out
-          * is reversible and reads as an ordinary button, deletion is not and
-          * reads as the only red thing on the screen. They are separated by
-          * their own heading rather than sitting at the end of the settings
-          * list, because a permanent action should never be the row after
-          * "Chala kartalar" — that is a place a thumb arrives at by scrolling.
+          * Their own group under their own heading, never the row after "Chala
+          * kartalar" — that is where a thumb arrives by scrolling. Signing out is
+          * reversible and drawn like any row; deleting is not, and is the only
+          * red on the screen. The row opens a sheet; the sheet does the deleting.
           */}
         <View style={styles.section}>
-          <Touchable
-            accessibilityRole="button"
-            onPress={() => void signOut().catch((signOutError) => Alert.alert("Xatolik", asErrorMessage(signOutError)))}
-            style={styles.signOut}
-          >
-            <LogOut color={colors.inkMuted} size={icon.sm} strokeWidth={icon.stroke} />
-            <Text style={styles.signOutText}>Hisobdan chiqish</Text>
-          </Touchable>
-
-          <Touchable
-            accessibilityRole="button"
-            accessibilityLabel="Accountni o‘chirish"
-            onPress={() => setConfirmingDelete(true)}
-            style={styles.danger}
-          >
-            <Trash2 color={colors.onPrimary} size={icon.sm} strokeWidth={2.2} />
-            <Text style={styles.dangerText}>O‘CHIRISH</Text>
-          </Touchable>
-          <Text style={styles.dangerNote}>
-            Accountni o‘chirish — hisobingiz va shaxsiy ma’lumotlaringiz butunlay o‘chiriladi.
-          </Text>
+          <Text style={styles.sectionTitle}>{t("sections.account")}</Text>
+          <View style={styles.group}>
+            <View style={styles.groupClip}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => void signOut().catch((signOutError) => Alert.alert(t("common:error"), asErrorMessage(signOutError)))}
+                style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+              >
+                <Tile glyph={LogOut} tone="plain" />
+                <View style={styles.rowCopy}>
+                  <Text style={styles.rowLabel} numberOfLines={1}>{t("signOut")}</Text>
+                </View>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("deleteAccount")}
+                onPress={() => setConfirmingDelete(true)}
+                style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+              >
+                <View style={styles.rowRule} />
+                <Tile glyph={Trash2} tone="danger" />
+                <View style={styles.rowCopy}>
+                  <Text style={[styles.rowLabel, styles.dangerLabel]} numberOfLines={1}>{t("deleteAccount")}</Text>
+                  <Text style={styles.rowDetail} numberOfLines={2}>{t("deleteDetail")}</Text>
+                </View>
+              </Pressable>
+            </View>
+          </View>
         </View>
       </ScrollView>
 
@@ -374,111 +396,92 @@ export default function ProfileScreen() {
   );
 }
 
+/** A row's glyph on its tile. Every row draws it the same way; only deletion is red. */
+function Tile({ glyph: Glyph, tone = "brand" }: { glyph: LucideIcon; tone?: "brand" | "plain" | "danger" }) {
+  const { colors } = useTheme();
+  const styles = useStyles();
+  const ground = tone === "danger" ? colors.dangerSoft : tone === "plain" ? colors.surfaceMuted : colors.primarySoft;
+  const ink = tone === "danger" ? colors.danger : tone === "plain" ? colors.inkMuted : colors.primary;
+  return (
+    <View style={[styles.tile, { backgroundColor: ground }]}>
+      <Glyph color={ink} size={18} strokeWidth={2} />
+    </View>
+  );
+}
+
 const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.canvas },
-  // The hero bleeds to the edges, so padding moves onto the sections below it.
   content: { paddingBottom: BOTTOM_NAV_SPACE + spacing.xl, gap: spacing.lg },
-  hero: {
-    paddingHorizontal: spacing.xl,
-    // Room for the stats card, which sits over the last of it.
-    paddingBottom: spacing.xl + 40,
-    borderBottomLeftRadius: 36,
-    borderBottomRightRadius: 36,
-    alignItems: "center",
-    gap: spacing.md,
-  },
-  // The lift lives outside the ring, because a shadow on a view that clips its
-  // children is a shadow that is clipped with them.
+  banner: { height: 148, marginHorizontal: spacing.lg },
+  // Half the picture over the banner; the content's own gap is taken back too.
+  identity: { alignItems: "center", marginTop: -(FRAME / 2) - spacing.lg, paddingHorizontal: spacing.xl },
   avatarLift: {
-    borderRadius: (AVATAR + RING * 2) * 0.36,
+    borderRadius: FRAME * 0.345,
+    backgroundColor: colors.canvas,
     shadowColor: "#1A0736",
-    shadowOpacity: 0.34,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 10,
+    shadowOpacity: 0.28,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
   },
-  avatarRing: {
-    width: AVATAR + RING * 2,
-    height: AVATAR + RING * 2,
-    borderRadius: (AVATAR + RING * 2) * 0.36,
-    alignItems: "center",
-    justifyContent: "center",
+  avatarFrame: {
+    width: FRAME,
+    height: FRAME,
+    padding: RING,
+    borderRadius: FRAME * 0.345,
+    backgroundColor: colors.canvas,
   },
-  avatar: { width: AVATAR, height: AVATAR, borderRadius: AVATAR * 0.34, backgroundColor: colors.surfaceMuted },
+  avatar: { width: AVATAR, height: AVATAR, borderRadius: AVATAR * 0.33, backgroundColor: colors.surfaceMuted },
   avatarEmpty: { alignItems: "center", justifyContent: "center" },
-  initials: { fontFamily: "Manrope_700Bold", fontSize: 42, color: brandInk.strong, letterSpacing: 1 },
-  heroCopy: { alignItems: "center", gap: 4, maxWidth: "100%" },
-  name: { ...typography.title, color: brandInk.strong, textAlign: "center" },
-  heroMeta: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, flexWrap: "wrap" },
-  handle: { ...typography.body, color: brandInk.muted, flexShrink: 1 },
-  planChip: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 9, paddingVertical: 4, borderRadius: radius.sm, backgroundColor: brandInk.plate, maxWidth: 160 },
-  planText: { ...typography.caption, fontWeight: "700", color: brandInk.onPlate, flexShrink: 1 },
-  /**
-   * Three actions that fit whatever the phone is.
-   *
-   * Fixed widths and a fixed gap add up to 276 points, which is fine until the
-   * phone is 320 wide and the row is 272 — at which point the last button is
-   * simply off the side of the screen, on exactly the devices nobody tests on.
-   * Sharing the row instead means the arithmetic cannot come out wrong, and the
-   * cap stops the buttons drifting apart on a Max.
-   */
-  heroActions: { flexDirection: "row", justifyContent: "center", alignSelf: "stretch", gap: spacing.md, marginTop: spacing.xs },
-  heroAction: { flex: 1, maxWidth: 96, alignItems: "center", gap: 6 },
-  heroActionLabel: { ...typography.caption, color: brandInk.muted, textAlign: "center" },
+  initials: { fontFamily: "Manrope_700Bold", fontSize: 38, color: brandInk.strong, letterSpacing: 1 },
+  name: { ...typography.title, color: colors.ink, textAlign: "center", marginTop: spacing.md, maxWidth: "100%" },
+  meta: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, marginTop: 2, maxWidth: "100%" },
+  handle: { ...typography.body, color: colors.inkMuted, flexShrink: 1 },
+  planChip: {
+    flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 9, paddingVertical: 3,
+    borderRadius: radius.pill, backgroundColor: colors.primarySoft, maxWidth: 160,
+  },
+  planText: { ...typography.caption, fontFamily: "Manrope_700Bold", fontSize: 11.5, color: colors.primaryDeep, flexShrink: 1 },
+  study: { ...typography.caption, color: colors.inkSoft, textAlign: "center", marginTop: spacing.sm },
+  bio: { ...typography.body, fontSize: 14.5, color: colors.inkMuted, textAlign: "center", marginTop: spacing.sm },
+  edit: {
+    flexDirection: "row", alignItems: "center", gap: spacing.sm, height: 42, paddingHorizontal: spacing.xl - 4,
+    borderRadius: radius.pill, borderWidth: 1, borderColor: colors.borderStrong, backgroundColor: colors.surface,
+    marginTop: spacing.lg,
+  },
+  editText: { ...typography.bodyMedium, fontSize: 14, color: colors.ink },
   stats: {
     flexDirection: "row",
     alignItems: "stretch",
-    // Lifted onto the gradient, which is what makes the two one header.
-    marginTop: -40,
     marginHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.lg,
     borderRadius: radius.lg,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
     ...shadow,
   },
-  statCell: { flex: 1, alignItems: "center", gap: 6, paddingHorizontal: spacing.xs },
-  // A hairline between columns rather than three boxed cards: the divider is
-  // what makes them read as one panel of three figures.
+  statCell: { flex: 1, alignItems: "center", gap: 2, paddingHorizontal: spacing.sm },
   statRule: { position: "absolute", left: 0, top: 6, bottom: 6, width: 1, backgroundColor: colors.border },
-  statValue: { fontFamily: "Manrope_700Bold", fontSize: 19, lineHeight: 24, color: colors.ink, letterSpacing: -0.4 },
+  statValue: { fontFamily: "Manrope_800ExtraBold", fontSize: 22, lineHeight: 28, color: colors.ink, letterSpacing: -0.5 },
   statLabel: { ...typography.caption, color: colors.inkMuted },
-  about: { paddingHorizontal: spacing.xl, gap: 4 },
-  study: { ...typography.caption, color: colors.inkMuted },
-  bio: { ...typography.body, color: colors.ink },
   errorBox: { marginHorizontal: spacing.xl, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.dangerSoft },
   errorText: { ...typography.caption, color: colors.danger },
   section: { marginHorizontal: spacing.xl, gap: spacing.sm },
   sectionTitle: { ...typography.caption, fontFamily: "Manrope_700Bold", fontSize: 11, letterSpacing: 1.1, color: colors.inkSoft, marginLeft: spacing.xs },
-  rows: { gap: spacing.sm },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadow,
-  },
+  // The shadow on the outer view, the clipping on the inner: one view cannot do both on iOS.
+  group: { borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, ...shadow },
+  groupClip: { borderRadius: radius.lg - 1, overflow: "hidden" },
+  row: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.md + 2, paddingVertical: spacing.md, minHeight: 62 },
+  rowPressed: { backgroundColor: colors.surfaceMuted },
+  // Inset to the text, as a grouped list draws it: the tiles stand in one column.
+  rowRule: { position: "absolute", left: 64, right: 0, top: 0, height: 1, backgroundColor: colors.border },
+  tile: { width: 36, height: 36, borderRadius: 11, alignItems: "center", justifyContent: "center" },
   rowCopy: { flex: 1, gap: 1 },
   rowLabel: { ...typography.bodyMedium, color: colors.ink, fontSize: 15 },
+  supportBadge: { minWidth: 22, height: 22, paddingHorizontal: 6, borderRadius: 11, alignItems: "center", justifyContent: "center", backgroundColor: colors.primary },
+  supportBadgeText: { ...typography.caption, fontSize: 11, fontFamily: "Manrope_700Bold", color: colors.onPrimary },
   rowDetail: { ...typography.caption, fontSize: 11.5, color: colors.inkSoft },
-  signOut: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm,
-    height: 50, borderRadius: radius.md,
-    borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface,
-  },
-  signOutText: { ...typography.bodyMedium, color: colors.inkMuted },
-  danger: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm,
-    height: 52, borderRadius: radius.md,
-    backgroundColor: colors.danger,
-    marginTop: spacing.xs,
-  },
-  dangerText: { ...typography.bodyMedium, fontFamily: "Manrope_700Bold", color: colors.onPrimary, letterSpacing: 0.8 },
-  dangerNote: { ...typography.caption, color: colors.inkSoft, textAlign: "center", paddingHorizontal: spacing.md },
+  dangerLabel: { color: colors.danger },
 }));

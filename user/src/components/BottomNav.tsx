@@ -11,6 +11,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from "react-native-reanimated";
+import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "@/components/Avatar";
@@ -33,12 +34,13 @@ type TabBarProps = {
   };
 };
 
-const LABELS: Record<string, { label: string; icon: LucideIcon }> = {
-  index: { label: "Bosh sahifa", icon: House },
-  projects: { label: "Loyihalar", icon: Layers },
-  marketplace: { label: "Do‘kon", icon: Store },
-  games: { label: "O‘yinlar", icon: Gamepad2 },
-  profile: { label: "Profil", icon: User },
+/** Each tab's icon and the key of its name in the `nav` table. */
+const LABELS: Record<string, { label: "home" | "projects" | "store" | "games" | "profile"; icon: LucideIcon }> = {
+  index: { label: "home", icon: House },
+  projects: { label: "projects", icon: Layers },
+  marketplace: { label: "store", icon: Store },
+  games: { label: "games", icon: Gamepad2 },
+  profile: { label: "profile", icon: User },
 };
 
 const BAR_INSET = spacing.lg;
@@ -166,6 +168,7 @@ function NavItem({ label, icon: Icon, active, isProfile, avatarUrl, initials, on
  */
 export function BottomNav({ state, navigation }: TabBarProps) {
   const { colors, scheme } = useTheme();
+  const { t } = useTranslation("nav");
   const styles = useStyles();
   const { profile } = useAccount();
   const insets = useSafeAreaInsets();
@@ -233,7 +236,7 @@ export function BottomNav({ state, navigation }: TabBarProps) {
               return (
                 <NavItem
                   key={route.key}
-                  label={meta.label}
+                  label={t(meta.label)}
                   icon={meta.icon}
                   active={active}
                   isProfile={route.name === "profile"}

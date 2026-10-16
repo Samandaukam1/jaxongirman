@@ -1,5 +1,6 @@
 import { QrCode as QrGlyph, Share2, X } from "lucide-react-native";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Modal, Pressable, Share, Text, View } from "react-native";
 
 import { QrCode } from "@/components/QrCode";
@@ -26,6 +27,7 @@ export function MarathonShareRow({ campaign, candidateId, username }: {
   username: string | null;
 }) {
   const styles = useStyles();
+  const { t } = useTranslation(["marathon", "common"]);
   const { colors } = useTheme();
   const [qrOpen, setQrOpen] = useState(false);
   const link = candidateLink(campaign.id, candidateId);
@@ -35,7 +37,7 @@ export function MarathonShareRow({ campaign, candidateId, username }: {
       <View style={styles.row}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Havolani ulashish"
+          accessibilityLabel={t("shareLabel")}
           onPress={() => {
             void Share.share({ message: `${shareMessage(campaign.title, username)}\n${link}`, url: link })
               .catch(() => { /* dismissed */ });
@@ -43,12 +45,12 @@ export function MarathonShareRow({ campaign, candidateId, username }: {
           style={({ pressed }) => [styles.button, pressed && styles.pressed]}
         >
           <Share2 color={colors.ink} size={icon.sm} strokeWidth={icon.stroke} />
-          <Text style={styles.label}>Ulashish</Text>
+          <Text style={styles.label}>{t("share")}</Text>
         </Pressable>
 
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="QR kodni ko‘rsatish"
+          accessibilityLabel={t("qrLabel")}
           onPress={() => setQrOpen(true)}
           style={({ pressed }) => [styles.button, pressed && styles.pressed]}
         >
@@ -61,8 +63,8 @@ export function MarathonShareRow({ campaign, candidateId, username }: {
         <Pressable style={styles.backdrop} onPress={() => setQrOpen(false)} />
         <View style={styles.sheet}>
           <View style={styles.sheetHead}>
-            <Text style={styles.sheetTitle}>QR kod</Text>
-            <Pressable accessibilityRole="button" accessibilityLabel="Yopish" onPress={() => setQrOpen(false)}>
+            <Text style={styles.sheetTitle}>{t("qrTitle")}</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel={t("common:close")} onPress={() => setQrOpen(false)}>
               <X color={colors.inkMuted} size={icon.md} strokeWidth={icon.stroke} />
             </Pressable>
           </View>
@@ -73,7 +75,7 @@ export function MarathonShareRow({ campaign, candidateId, username }: {
 
           {username ? <Text style={styles.handle}>@{username}</Text> : null}
           <Text style={styles.hint}>
-            Kodni skanerlagan odam to‘g‘ridan-to‘g‘ri sizga ovoz berish sahifasiga tushadi.
+            {t("qrHint")}
           </Text>
         </View>
       </Modal>

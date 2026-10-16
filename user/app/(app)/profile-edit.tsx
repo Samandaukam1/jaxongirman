@@ -3,6 +3,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { Camera, User as UserIcon } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { ScreenHeader } from "@/components/ScreenHeader";
@@ -44,6 +45,7 @@ const USERNAME_RULE = /^[a-z0-9_]{3,24}$/;
 export default function ProfileEditScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation("profile");
   const router = useRouter();
   const { user } = useAuth();
   const [draft, setDraft] = useState<Draft>(EMPTY);
@@ -88,7 +90,7 @@ export default function ProfileEditScreen() {
   async function save() {
     if (!user) return;
     if (!usernameValid) {
-      setError("Username 3–24 ta kichik harf, raqam yoki pastki chiziqdan iborat bo‘lsin.");
+      setError(t("form.usernameRule"));
       return;
     }
     setSaving(true); setError(null);
@@ -104,7 +106,7 @@ export default function ProfileEditScreen() {
     if (saveError) {
       // The unique index is the only thing that can truthfully answer "is this
       // handle free?", so its rejection is what the person is told about.
-      setError(saveError.code === "23505" ? "Bu username band. Boshqasini tanlang." : asErrorMessage(saveError));
+      setError(saveError.code === "23505" ? t("form.usernameTaken") : asErrorMessage(saveError));
       setSaving(false);
       return;
     }
@@ -135,8 +137,8 @@ export default function ProfileEditScreen() {
        */
       const response = await fetch(asset.uri);
       const bytes = new Uint8Array(await response.arrayBuffer());
-      if (bytes.byteLength === 0) throw new Error("Rasm o‘qilmadi. Boshqa rasm tanlang.");
-      if (bytes.byteLength > 5 * 1024 * 1024) throw new Error("Rasm 5 MB dan katta. Kichikroq rasm tanlang.");
+      if (bytes.byteLength === 0) throw new Error(t("form.imageUnreadable"));
+      if (bytes.byteLength > 5 * 1024 * 1024) throw new Error(t("form.imageTooBig"));
 
       const contentType = avatarContentType(asset);
       const path = avatarObjectPath(user.id, Crypto.randomUUID(), contentType);
@@ -162,7 +164,7 @@ export default function ProfileEditScreen() {
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.screen}>
-      <ScreenHeader title="Profilni tahrirlash" />
+      <ScreenHeader title={t("edit")} />
       <ScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
@@ -170,7 +172,7 @@ export default function ProfileEditScreen() {
       >
         <View style={styles.avatarBlock}>
           <Pressable
-            accessibilityLabel="Profil rasmini o‘zgartirish"
+            accessibilityLabel={t("form.changePhoto")}
             disabled={uploading}
             onPress={() => void changeAvatar()}
             style={styles.avatarWrap}
@@ -184,7 +186,7 @@ export default function ProfileEditScreen() {
                 : <Camera color={colors.onPrimary} size={16} strokeWidth={2} />}
             </View>
           </Pressable>
-          <Text style={styles.avatarHint}>Rasmni almashtirish uchun bosing</Text>
+          <Text style={styles.avatarHint}>{t("form.photoHint")}</Text>
         </View>
 
         {error ? <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View> : null}
@@ -192,16 +194,16 @@ export default function ProfileEditScreen() {
         <View style={styles.card}>
           <View style={styles.pair}>
             <View style={styles.pairItem}>
-              <Text style={styles.label}>Ism</Text>
-              <TextInput value={draft.firstName} onChangeText={(value) => setDraft({ ...draft, firstName: value })} placeholder="Jahongir" placeholderTextColor={colors.inkSoft} style={styles.input} maxLength={60} />
+              <Text style={styles.label}>{t("form.firstName")}</Text>
+              <TextInput value={draft.firstName} onChangeText={(value) => setDraft({ ...draft, firstName: value })} placeholder={t("form.firstNamePlaceholder")} placeholderTextColor={colors.inkSoft} style={styles.input} maxLength={60} />
             </View>
             <View style={styles.pairItem}>
-              <Text style={styles.label}>Familiya</Text>
-              <TextInput value={draft.lastName} onChangeText={(value) => setDraft({ ...draft, lastName: value })} placeholder="Qurbonnazarov" placeholderTextColor={colors.inkSoft} style={styles.input} maxLength={60} />
+              <Text style={styles.label}>{t("form.lastName")}</Text>
+              <TextInput value={draft.lastName} onChangeText={(value) => setDraft({ ...draft, lastName: value })} placeholder={t("form.lastNamePlaceholder")} placeholderTextColor={colors.inkSoft} style={styles.input} maxLength={60} />
             </View>
           </View>
 
-          <Text style={styles.label}>Username</Text>
+          <Text style={styles.label}>{t("form.username")}</Text>
           <View style={[styles.usernameRow, !usernameValid && styles.inputInvalid]}>
             <Text style={styles.usernamePrefix}>@</Text>
             <TextInput
@@ -214,20 +216,20 @@ export default function ProfileEditScreen() {
               style={styles.usernameInput}
             />
           </View>
-          <Text style={styles.hint}>3–24 ta kichik harf, raqam yoki pastki chiziq.</Text>
+          <Text style={styles.hint}>{t("form.usernameHint")}</Text>
 
-          <Text style={styles.label}>O‘quv yurti yoki tashkilot</Text>
-          <TextInput value={draft.organization} onChangeText={(value) => setDraft({ ...draft, organization: value })} placeholder="O‘zbekiston jurnalistika universiteti" placeholderTextColor={colors.inkSoft} style={styles.input} maxLength={160} />
-          <Text style={styles.hint}>Obyektivka va ilmiy ishlarda shu nom ishlatiladi.</Text>
+          <Text style={styles.label}>{t("form.organization")}</Text>
+          <TextInput value={draft.organization} onChangeText={(value) => setDraft({ ...draft, organization: value })} placeholder={t("form.organizationPlaceholder")} placeholderTextColor={colors.inkSoft} style={styles.input} maxLength={160} />
+          <Text style={styles.hint}>{t("form.organizationHint")}</Text>
 
-          <Text style={styles.label}>Yo‘nalish</Text>
-          <TextInput value={draft.fieldOfStudy} onChangeText={(value) => setDraft({ ...draft, fieldOfStudy: value })} placeholder="Jurnalistika" placeholderTextColor={colors.inkSoft} style={styles.input} maxLength={160} />
+          <Text style={styles.label}>{t("form.field")}</Text>
+          <TextInput value={draft.fieldOfStudy} onChangeText={(value) => setDraft({ ...draft, fieldOfStudy: value })} placeholder={t("form.fieldPlaceholder")} placeholderTextColor={colors.inkSoft} style={styles.input} maxLength={160} />
 
-          <Text style={styles.label}>Bio</Text>
+          <Text style={styles.label}>{t("form.bio")}</Text>
           <TextInput
             value={draft.bio}
             onChangeText={(value) => setDraft({ ...draft, bio: value })}
-            placeholder="O‘zingiz haqingizda qisqacha…"
+            placeholder={t("form.bioPlaceholder")}
             placeholderTextColor={colors.inkSoft}
             multiline
             maxLength={280}
@@ -243,7 +245,7 @@ export default function ProfileEditScreen() {
         >
           {saving
             ? <ActivityIndicator color={colors.onPrimary} size="small" />
-            : <Text style={styles.saveText}>Saqlash</Text>}
+            : <Text style={styles.saveText}>{t("form.save")}</Text>}
         </Pressable>
       </ScrollView>
     </KeyboardAvoidingView>

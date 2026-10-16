@@ -1,5 +1,6 @@
 import { Gift, Sparkles, X } from "lucide-react-native";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Animated, Easing, Pressable, Text, View } from "react-native";
 
 import { radius, shadowLifted, spacing, typography } from "@/theme/tokens";
@@ -20,6 +21,7 @@ const BURST_RADIUS = 120;
 export function CelebrationOverlay({ amount, message, onClose }: { amount: number; message: string; onClose: () => void }) {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation(["misc", "common"]);
   // Created once by the lazy initialiser: an animated value is a stable object
   // that must survive re-renders, and state gives that without touching a ref
   // during render.
@@ -64,17 +66,17 @@ export function CelebrationOverlay({ amount, message, onClose }: { amount: numbe
           ))}
         </View>
 
-        <Pressable accessibilityLabel="Yopish" hitSlop={10} onPress={onClose} style={styles.close}>
+        <Pressable accessibilityLabel={t("common:close")} hitSlop={10} onPress={onClose} style={styles.close}>
           <X color={colors.inkMuted} size={18} strokeWidth={2} />
         </Pressable>
 
         <View style={styles.badge}><Gift color={colors.onPrimary} size={34} strokeWidth={1.9} /></View>
-        <Text style={styles.title}>Tabriklaymiz!</Text>
-        <Text style={styles.amount}>+{amount} tanga</Text>
+        <Text style={styles.title}>{t("celebrate.title")}</Text>
+        <Text style={styles.amount}>{t("celebrate.amount", { amount })}</Text>
         <Text style={styles.message}>{message}</Text>
 
         <Pressable onPress={onClose} style={styles.button}>
-          <Text style={styles.buttonText}>Ajoyib</Text>
+          <Text style={styles.buttonText}>{t("celebrate.ok")}</Text>
         </Pressable>
       </Animated.View>
     </View>

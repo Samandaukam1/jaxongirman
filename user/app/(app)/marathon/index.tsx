@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
 import { Clock, ShoppingBag, Sparkles, Store } from "lucide-react-native";
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 
 import { MarathonMilestoneModal } from "@/components/MarathonMilestoneModal";
@@ -33,6 +34,7 @@ import { makeStyles, useTheme } from "@/theme/ThemeProvider";
  */
 export default function MarathonScreen() {
   const styles = useStyles();
+  const { t } = useTranslation("marathon");
   const { colors } = useTheme();
   const { campaign, loading, error, skew, reload, join, joining } = useMarathonCampaign();
   const [refreshing, setRefreshing] = useState(false);
@@ -54,11 +56,11 @@ export default function MarathonScreen() {
   if (!loading && !campaign) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="TALABALAR MARAFONI" variant="back" />
+        <ScreenHeader title={t("title")} variant="back" />
         <EmptyState
           icon={Sparkles}
-          title="Marafon faol emas"
-          message="Talabalar marafoni hozircha ochilmagan. Boshlanganda sizga xabar beramiz."
+          title={t("inactive")}
+          message={t("inactiveBody")}
         />
       </View>
     );
@@ -66,7 +68,7 @@ export default function MarathonScreen() {
 
   return (
     <View style={styles.screen}>
-      <ScreenHeader title="TALABALAR MARAFONI" variant="back" />
+      <ScreenHeader title={t("title")} variant="back" />
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -102,42 +104,42 @@ export default function MarathonScreen() {
             {error ? <ErrorState message={error} onRetry={() => void reload()} /> : null}
 
             <View style={styles.card}>
-              <Text style={styles.cardTitle}>Mening holatim</Text>
+              <Text style={styles.cardTitle}>{t("myStatus")}</Text>
               {campaign.joined ? (
                 <>
                   <View style={styles.tallyRow}>
                     <View style={styles.tally}>
                       <Text style={styles.tallyValue}>{formatNumber(campaign.total_votes)}</Text>
-                      <Text style={styles.tallyLabel}>Jami ovoz</Text>
+                      <Text style={styles.tallyLabel}>{t("totalVotes")}</Text>
                     </View>
                     <View style={styles.tallyDivider} />
                     <View style={styles.tally}>
                       <Text style={styles.tallyValue}>{formatNumber(campaign.premium_votes)}</Text>
-                      <Text style={styles.tallyLabel}>Premium ovoz</Text>
+                      <Text style={styles.tallyLabel}>{t("premiumVotes")}</Text>
                     </View>
                   </View>
                   {claimed ? (
                     <Text style={styles.claimed}>
-                      {claimed.reward_percent}% mukofot so‘raldi — javobni kutmoqdasiz.
+                      {t("claimedWaiting", { percent: claimed.reward_percent })}
                     </Text>
                   ) : null}
                   <Text style={styles.cardHint}>
                     {next
-                      ? `Keyingi bosqichgacha ${formatNumber(Math.max(0, next.votes_required - campaign.total_votes))} ta ovoz va ${formatNumber(Math.max(0, next.premium_required - campaign.premium_votes))} ta Premium ovoz qoldi.`
-                      : "Barcha bosqichlar bosib o‘tilgan."}
+                      ? t("toNext", { votes: formatNumber(Math.max(0, next.votes_required - campaign.total_votes)), premium: formatNumber(Math.max(0, next.premium_required - campaign.premium_votes)) })
+                      : t("allDone")}
                   </Text>
                 </>
               ) : (
                 <>
                   <Text style={styles.cardHint}>
-                    Marafonda qatnashish uchun ro‘yxatdan o‘ting — shundan keyin sizga ovoz berish mumkin bo‘ladi.
+                    {t("joinBody")}
                   </Text>
-                  <PrimaryButton label="Qatnashish" loading={joining} onPress={() => void join()} />
+                  <PrimaryButton label={t("join")} loading={joining} onPress={() => void join()} />
                 </>
               )}
             </View>
 
-            <Text style={styles.sectionTitle}>SOVRINLAR</Text>
+            <Text style={styles.sectionTitle}>{t("prizes")}</Text>
             <MarathonRewards campaign={campaign} />
 
             <MarathonVoteButton />
@@ -158,7 +160,7 @@ export default function MarathonScreen() {
                   style={({ pressed }) => [styles.marketButton, pressed && styles.marketPressed]}
                 >
                   <ShoppingBag color={colors.primaryDeep} size={icon.sm} strokeWidth={icon.stroke} />
-                  <Text style={styles.marketLabel}>Ovoz marketplace</Text>
+                  <Text style={styles.marketLabel}>{t("voteMarket")}</Text>
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
@@ -166,14 +168,14 @@ export default function MarathonScreen() {
                   style={({ pressed }) => [styles.marketButton, pressed && styles.marketPressed]}
                 >
                   <Store color={colors.primaryDeep} size={icon.sm} strokeWidth={icon.stroke} />
-                  <Text style={styles.marketLabel}>Ovoz sotish</Text>
+                  <Text style={styles.marketLabel}>{t("sellVotes")}</Text>
                 </Pressable>
               </View>
             ) : null}
 
             {campaign.rules ? (
               <View style={styles.rules}>
-                <Text style={styles.sectionTitle}>QOIDALAR</Text>
+                <Text style={styles.sectionTitle}>{t("rules")}</Text>
                 <Text style={styles.rulesText}>{campaign.rules}</Text>
               </View>
             ) : null}

@@ -2,7 +2,9 @@ import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Check, Clock, Trophy, Users, X } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Image, ScrollView, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { GameAnswerInput, GameLeaderboardList, GameRevealPanel, GameStatsSummary } from "@/components/GameAnswerInput";
 import { GameAvatar } from "@/components/GameAvatar";
@@ -10,6 +12,7 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { ErrorState } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
 import { playerState, submitAnswer, subscribeToSession, type PlayerState } from "@/lib/games";
+import { formatNumber } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
 import { icon, radius, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
@@ -42,6 +45,8 @@ function publicUrl(path: string | null | undefined): string | undefined {
 export default function PlayGameScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation("play");
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
   const [state, setState] = useState<PlayerState | null>(null);
@@ -114,16 +119,16 @@ export default function PlayGameScreen() {
 
   if (error && !state) {
     return (
-      <View style={styles.safe}>
+      <View style={[styles.safe, { paddingTop: Math.max(insets.top, 20) + spacing.xs }]}>
         <ErrorState message={error} onRetry={() => void refresh()} />
       </View>
     );
   }
   if (!state) {
     return (
-      <View style={[styles.safe, styles.center]}>
+      <View style={[styles.safe, styles.center, { paddingTop: Math.max(insets.top, 20) + spacing.xs }]}>
         <ActivityIndicator color={colors.primary} size="large" />
-        <Text style={styles.waitText}>O‘yinga ulanmoqda...</Text>
+        <Text style={styles.waitText}>{t("player.connecting")}</Text>
       </View>
     );
   }
@@ -131,8 +136,8 @@ export default function PlayGameScreen() {
   const me = state.me;
 
   return (
-    <View style={styles.safe}>
-      {!connected ? <View style={styles.offline}><Text style={styles.offlineText}>Ulanish uzildi. Qayta ulanmoqda...</Text></View> : null}
+    <View style={[styles.safe, { paddingTop: Math.max(insets.top, 20) + spacing.xs }]}>
+      {!connected ? <View style={styles.offline}><Text style={styles.offlineText}>{t("player.offline")}</Text></View> : null}
 
       <View style={styles.header}>
         <GameAvatar id={me.avatar_id} size={40} />
@@ -141,18 +146,18 @@ export default function PlayGameScreen() {
           {me.team ? <Text style={styles.myTeam}>{me.team}</Text> : null}
         </View>
         <View style={styles.scorePill}>
-          <Text style={styles.scoreText}>{me.total_score.toLocaleString("uz-UZ")}</Text>
+          <Text style={styles.scoreText}>{formatNumber(me.total_score)}</Text>
         </View>
       </View>
 
       {state.status === "lobby" ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.primary} size="large" />
-          <Text style={styles.waitTitle}>Siz o‘yindasiz</Text>
-          <Text style={styles.waitText}>Boshlovchi o‘yinni boshlashini kutamiz.</Text>
+          <Text style={styles.waitTitle}>{t("player.inGame")}</Text>
+          <Text style={styles.waitText}>{t("player.waiting")}</Text>
           <View style={styles.playerCount}>
             <Users color={colors.inkMuted} size={icon.md} strokeWidth={icon.stroke} />
-            <Text style={styles.waitText}>{state.player_count} ishtirokchi</Text>
+            <Text style={styles.waitText}>{t("host.players", { count: state.player_count })}</Text>
           </View>
         </View>
       ) : null}
@@ -168,7 +173,7 @@ export default function PlayGameScreen() {
             adjustsFontSizeToFit
             minimumFontScale={0.5}
           >
-            {remaining > 0 ? remaining : "BOSHLADIK!"}
+            {remaining > 0 ? remaining : t("player.go")}
           </Text>
         </View>
       ) : null}
@@ -191,13 +196,13 @@ export default function PlayGameScreen() {
               ) : null}
             </>
           ) : (
-            <Text style={styles.prompt}>Katta ekranga qarang</Text>
+            <Text style={styles.prompt}>{t("player.lookUp")}</Text>
           )}
 
           {state.answered ? (
             <View style={styles.lockedBanner}>
               <Check color={colors.success} size={icon.lg} strokeWidth={icon.strokeBold} />
-              <Text style={styles.lockedText}>Javobingiz qabul qilindi</Text>
+              <Text style={styles.lockedText}>{t("player.accepted")}</Text>
             </View>
           ) : (
             <GameAnswerInput
@@ -217,21 +222,21 @@ export default function PlayGameScreen() {
               {state.reveal.my_answer.is_correct === true ? (
                 <>
                   <Check color={colors.onPrimary} size={34} strokeWidth={icon.strokeBold} />
-                  <Text style={styles.verdictTitle}>To‘g‘ri!</Text>
-                  <Text style={styles.verdictScore}>+{state.reveal.my_answer.score_awarded.toLocaleString("uz-UZ")}</Text>
+                  <Text style={styles.verdictTitle}>{t("player.correct")}</Text>
+                  <Text style={styles.verdictScore}>+{formatNumber(state.reveal.my_answer.score_awarded)}</Text>
                 </>
               ) : state.reveal.my_answer.is_correct === false ? (
                 <>
                   <X color={colors.onPrimary} size={34} strokeWidth={icon.strokeBold} />
-                  <Text style={styles.verdictTitle}>Noto‘g‘ri</Text>
+                  <Text style={styles.verdictTitle}>{t("wrong")}</Text>
                 </>
               ) : (
-                <Text style={styles.verdictTitle}>Javobingiz qabul qilindi</Text>
+                <Text style={styles.verdictTitle}>{t("player.accepted")}</Text>
               )}
             </View>
           ) : (
             <View style={[styles.verdict, styles.verdictNeutral]}>
-              <Text style={styles.verdictTitle}>Javob bermadingiz</Text>
+              <Text style={styles.verdictTitle}>{t("player.noAnswer")}</Text>
             </View>
           )}
 
@@ -254,7 +259,7 @@ export default function PlayGameScreen() {
 
       {state.status === "leaderboard" && state.leaderboard ? (
         <View style={styles.content}>
-          <Text style={styles.sectionTitle}>Natijalar jadvali</Text>
+          <Text style={styles.sectionTitle}>{t("leaderboard")}</Text>
           <GameLeaderboardList players={state.leaderboard.players} meId={me.player_id} />
         </View>
       ) : null}
@@ -265,20 +270,20 @@ export default function PlayGameScreen() {
           {me.rank && me.rank <= 3 ? (
             <View style={styles.myResult}>
               <Trophy color={colors.primary} size={icon.lg} strokeWidth={icon.stroke} />
-              <Text style={styles.myResultText}>Siz {me.rank}-o‘rinni egalladingiz!</Text>
+              <Text style={styles.myResultText}>{t("player.place", { rank: me.rank })}</Text>
             </View>
           ) : (
-            <Text style={styles.waitText}>Sizning o‘rningiz: {me.rank ?? "—"}</Text>
+            <Text style={styles.waitText}>{t("player.yourPlace", { rank: me.rank ?? "—" })}</Text>
           )}
           <GameLeaderboardList players={state.leaderboard.players} meId={me.player_id} />
-          <PrimaryButton label="O‘yingohga qaytish" onPress={() => router.replace("/(app)/(tabs)/games")} />
+          <PrimaryButton label={t("back")} onPress={() => router.replace("/(app)/(tabs)/games")} />
         </ScrollView>
       ) : null}
 
       {state.status === "cancelled" || state.status === "expired" ? (
         <View style={styles.center}>
-          <Text style={styles.waitTitle}>O‘yin to‘xtatildi</Text>
-          <PrimaryButton label="O‘yingohga qaytish" onPress={() => router.replace("/(app)/(tabs)/games")} />
+          <Text style={styles.waitTitle}>{t("player.stopped")}</Text>
+          <PrimaryButton label={t("back")} onPress={() => router.replace("/(app)/(tabs)/games")} />
         </View>
       ) : null}
     </View>
@@ -308,7 +313,7 @@ function Podium({ players }: { players: { id: string; nickname: string; avatar_i
 }
 
 const useStyles = makeStyles((colors) => ({
-  safe: { flex: 1, backgroundColor: colors.canvas, paddingTop: 54 },
+  safe: { flex: 1, backgroundColor: colors.canvas },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.md, padding: spacing.xl },
   content: { padding: spacing.xl, gap: spacing.lg, paddingBottom: spacing.xxxl },
   offline: { backgroundColor: colors.warning, paddingVertical: 6 },

@@ -1,6 +1,9 @@
 import * as Crypto from "expo-crypto";
 
 import { avatarContentType, type AvatarType } from "./avatar";
+import { i18n } from "../i18n";
+
+import { localizeError } from "./errors";
 import { supabase } from "./supabase";
 
 /**
@@ -35,8 +38,8 @@ export async function uploadPortrait(asset: {
 }, userId: string): Promise<string> {
   const response = await fetch(asset.uri);
   const bytes = new Uint8Array(await response.arrayBuffer());
-  if (bytes.byteLength === 0) throw new Error("Rasm o‘qilmadi. Boshqa rasm tanlang.");
-  if (bytes.byteLength > 20 * 1024 * 1024) throw new Error("Rasm 20 MB dan katta.");
+  if (bytes.byteLength === 0) throw new Error(i18n.t("tools:portrait.unreadable"));
+  if (bytes.byteLength > 20 * 1024 * 1024) throw new Error(i18n.t("tools:portrait.tooBig"));
 
   // Bytes rather than a Blob, for the reason set out in `avatar.ts`: a Blob
   // body makes `contentType` advisory and the bucket refuses what arrives.
@@ -56,8 +59,8 @@ export async function buildPortraitSheet(sourcePath: string): Promise<PortraitSh
   if (error) {
     const context = (error as { context?: unknown }).context;
     if (context && typeof (context as Response).json === "function") {
-      const body = await (context as Response).json().catch(() => null) as { error?: string } | null;
-      if (body?.error) throw new Error(body.error);
+      const body = await (context as Response).json().catch(() => null) as { error?: string; code?: string } | null;
+      if (body?.error) throw new Error(localizeError(body.error, body.code));
     }
     throw error;
   }
@@ -68,7 +71,7 @@ export async function buildPortraitSheet(sourcePath: string): Promise<PortraitSh
 /** A URL the phone may fetch, valid for long enough to save the file. */
 export async function sheetUrl(sheetPath: string): Promise<string> {
   const { data, error } = await supabase.storage.from("exports").createSignedUrl(sheetPath, 300);
-  if (error || !data) throw error ?? new Error("Havola olinmadi");
+  if (error || !data) throw error ?? new Error(i18n.t("tools:academic.noLink"));
   return data.signedUrl;
 }
 

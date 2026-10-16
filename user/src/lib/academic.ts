@@ -1,3 +1,6 @@
+import { i18n } from "../i18n";
+
+import { localizeError } from "./errors";
 import { supabase } from "./supabase";
 
 /**
@@ -70,7 +73,7 @@ export async function createWork(input: {
 }): Promise<Work> {
   const { data: user } = await supabase.auth.getUser();
   const owner = user.user?.id;
-  if (!owner) throw new Error("Tizimga kiring");
+  if (!owner) throw new Error(i18n.t("tools:academic.signIn"));
   const { data, error } = await supabase.from("academic_works").insert({
     owner_id: owner,
     kind: input.kind,
@@ -98,8 +101,8 @@ async function invoke<T>(body: Record<string, unknown>): Promise<T> {
   if (error) {
     const context = (error as { context?: unknown }).context;
     if (context && typeof (context as Response).json === "function") {
-      const payload = await (context as Response).json().catch(() => null) as { error?: string } | null;
-      if (payload?.error) throw new Error(payload.error);
+      const payload = await (context as Response).json().catch(() => null) as { error?: string; code?: string } | null;
+      if (payload?.error) throw new Error(localizeError(payload.error, payload.code));
     }
     throw error;
   }
@@ -116,6 +119,6 @@ export const writeNextSection = (workId: string) =>
 export async function workFile(workId: string, format: "docx" | "pdf"): Promise<string> {
   const { storagePath } = await invoke<{ storagePath: string }>({ workId, action: "document", format });
   const signed = await supabase.storage.from("exports").createSignedUrl(storagePath, 300);
-  if (signed.error || !signed.data) throw signed.error ?? new Error("Havola olinmadi");
+  if (signed.error || !signed.data) throw signed.error ?? new Error(i18n.t("tools:academic.noLink"));
   return signed.data.signedUrl;
 }

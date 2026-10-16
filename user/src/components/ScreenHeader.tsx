@@ -1,7 +1,9 @@
 import { useRouter } from "expo-router";
 import { ChevronLeft, X } from "lucide-react-native";
 import type { ReactNode } from "react";
-import { Platform, Pressable, Text, View } from "react-native";
+import { useTranslation } from "react-i18next";
+import { Pressable, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { icon, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
@@ -19,14 +21,18 @@ type Props = {
 export function ScreenHeader({ title, subtitle, variant = "back", onLeave, action }: Props) {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation(["misc", "common"]);
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const Glyph = variant === "close" ? X : ChevronLeft;
 
   return (
-    <View style={styles.header}>
+    // Measured, not guessed: a Dynamic Island, a notch and an SE each put the
+    // header right under their own status bar.
+    <View style={[styles.header, { paddingTop: Math.max(insets.top, 20) + spacing.xs }]}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={variant === "close" ? "Yopish" : "Orqaga"}
+        accessibilityLabel={variant === "close" ? t("common:close") : t("headerBack")}
         onPress={() => (onLeave ? onLeave() : router.back())}
         style={styles.button}
       >
@@ -49,7 +55,6 @@ const useStyles = makeStyles((colors) => ({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
-    paddingTop: Platform.OS === "ios" ? 58 : 28,
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.md,
   },

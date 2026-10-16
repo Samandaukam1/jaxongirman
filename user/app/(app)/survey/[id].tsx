@@ -1,10 +1,11 @@
-import { LATIN_ONLY_ERROR, formatUzPhone, isLatinText, normalizeUzPhone, type SurveyQuestionType } from "@jaxongirman/types";
+import { formatUzPhone, isLatinText, normalizeUzPhone, type SurveyQuestionType } from "@jaxongirman/types";
 import * as Crypto from "expo-crypto";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Check, CircleCheck, Clock, ImagePlus, Lock, ShieldCheck, X } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -59,7 +60,6 @@ type AnswerValue = {
 };
 
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
-const IMAGE_HELP = "Rasm hajmini kamaytirish uchun uni Telegram’dagi “Saqlangan xabarlar”ga yuborib, qayta yuklab olishingiz mumkin.";
 
 function extensionFor(mimeType: string): string {
   if (mimeType.includes("png")) return "png";
@@ -79,6 +79,7 @@ function extensionFor(mimeType: string): string {
 export default function SurveyRespondScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation(["survey", "common"]);
   const router = useRouter();
   const { user } = useAuth();
   const params = useLocalSearchParams<{ id?: string }>();
@@ -97,7 +98,7 @@ export default function SurveyRespondScreen() {
   const now = useNow(true, 1000);
 
   const load = useCallback(async () => {
-    if (!formId) { setLoadError("So‘rovnoma manzili noto‘g‘ri."); setLoading(false); return; }
+    if (!formId) { setLoadError(t("respond.badLink")); setLoading(false); return; }
     setLoading(true);
     const { data, error: requestError } = await supabase.rpc("open_survey", { p_form_id: formId });
     if (requestError) {
@@ -107,7 +108,7 @@ export default function SurveyRespondScreen() {
       setLoadError(null);
     }
     setLoading(false);
-  }, [formId]);
+  }, [formId, t]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -134,37 +135,39 @@ export default function SurveyRespondScreen() {
   }
 
   /** The first thing the server would reject, found before the round trip. */
-  const validation = useMemo<string | null>(() => {
+  // Plain rather than memoized: the React Compiler memoizes it, and a manual
+  // `useMemo` over the translator could not be preserved.
+  const validation: string | null = (() => {
     for (const question of questions) {
       const value = answers[question.id] ?? {};
       const text = (value.text ?? "").trim();
 
       if (question.type === "short_text" || question.type === "long_text") {
-        if (question.is_required && text === "") return `Savolga javob bering: ${question.label}`;
-        if (question.latin_only && !isLatinText(text)) return `${LATIN_ONLY_ERROR} (${question.label})`;
+        if (question.is_required && text === "") return t("respond.answer", { question: question.label });
+        if (question.latin_only && !isLatinText(text)) return `${t("respond.latin")} (${question.label})`;
       } else if (question.type === "phone") {
-        if (text === "") { if (question.is_required) return `Savolga javob bering: ${question.label}`; }
-        else if (!normalizeUzPhone(text)) return `Telefon raqamni +998 formatida kiriting: ${question.label}`;
+        if (text === "") { if (question.is_required) return t("respond.answer", { question: question.label }); }
+        else if (!normalizeUzPhone(text)) return t("respond.phone", { question: question.label });
       } else if (question.type === "number") {
         const raw = (value.number ?? "").trim();
-        if (raw === "") { if (question.is_required) return `Savolga javob bering: ${question.label}`; }
+        if (raw === "") { if (question.is_required) return t("respond.answer", { question: question.label }); }
         else {
           const parsed = Number(raw.replace(",", "."));
-          if (!Number.isFinite(parsed)) return `Raqam kiriting: ${question.label}`;
-          if (question.config.min !== undefined && parsed < question.config.min) return `Qiymat ${question.config.min} dan kichik bo‘lmasin: ${question.label}`;
-          if (question.config.max !== undefined && parsed > question.config.max) return `Qiymat ${question.config.max} dan katta bo‘lmasin: ${question.label}`;
+          if (!Number.isFinite(parsed)) return t("respond.number", { question: question.label });
+          if (question.config.min !== undefined && parsed < question.config.min) return t("respond.tooSmall", { min: question.config.min, question: question.label });
+          if (question.config.max !== undefined && parsed > question.config.max) return t("respond.tooBig", { max: question.config.max, question: question.label });
         }
       } else if (question.type === "date") {
-        if (question.is_required && !(value.date ?? "").trim()) return `Savolga javob bering: ${question.label}`;
+        if (question.is_required && !(value.date ?? "").trim()) return t("respond.answer", { question: question.label });
       } else if (question.type === "single_choice" || question.type === "multi_choice") {
-        if (question.is_required && (value.optionIds?.length ?? 0) === 0) return `Savolga javob bering: ${question.label}`;
+        if (question.is_required && (value.optionIds?.length ?? 0) === 0) return t("respond.answer", { question: question.label });
       } else if (question.type === "image") {
-        if (question.is_required && !value.image) return `Savolga javob bering: ${question.label}`;
-        if (value.image && value.image.sizeBytes > MAX_IMAGE_BYTES) return "Rasm hajmi 3 MB dan kichik bo‘lishi kerak.";
+        if (question.is_required && !value.image) return t("respond.answer", { question: question.label });
+        if (value.image && value.image.sizeBytes > MAX_IMAGE_BYTES) return t("respond.imageSize");
       }
     }
     return null;
-  }, [answers, questions]);
+  })();
 
   async function pickImage(question: OpenQuestion) {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.9 });
@@ -181,7 +184,7 @@ export default function SurveyRespondScreen() {
       sizeBytes = (await response.blob()).size;
     }
     if (sizeBytes > MAX_IMAGE_BYTES) {
-      Alert.alert("Rasm hajmi katta", `Rasm hajmi 3 MB dan kichik bo‘lishi kerak. Tanlangan rasm: ${formatBytes(sizeBytes)}.\n\n${IMAGE_HELP}`);
+      Alert.alert(t("respond.imageBig"), t("respond.imageBigBody", { size: formatBytes(sizeBytes), help: t("respond.imageHelp") }));
       return;
     }
     patch(question.id, { image: { uri: asset.uri, mimeType, sizeBytes, extension: extensionFor(mimeType) } });
@@ -252,7 +255,7 @@ export default function SurveyRespondScreen() {
   if (loading) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="So‘rovnoma" />
+        <ScreenHeader title={t("respond.title")} />
         <View style={styles.centered}><ActivityIndicator color={colors.primary} size="large" /></View>
       </View>
     );
@@ -261,8 +264,8 @@ export default function SurveyRespondScreen() {
   if (loadError || !form) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="So‘rovnoma" />
-        <View style={styles.content}><ErrorState message={loadError ?? "So‘rovnoma topilmadi"} onRetry={() => void load()} /></View>
+        <ScreenHeader title={t("respond.title")} />
+        <View style={styles.content}><ErrorState message={loadError ?? t("respond.notFound")} onRetry={() => void load()} /></View>
       </View>
     );
   }
@@ -277,17 +280,17 @@ export default function SurveyRespondScreen() {
         <ScreenHeader title={form.title} variant="close" onLeave={() => router.back()} />
         <View style={styles.centered}>
           <View style={styles.doneMark}><CircleCheck color={colors.onPrimary} size={36} strokeWidth={2.4} /></View>
-          <Text style={styles.doneTitle}>Javobingiz qabul qilindi</Text>
+          <Text style={styles.doneTitle}>{t("respond.done")}</Text>
           <Text style={styles.doneCopy}>
-            Rahmat! Javoblaringiz so‘rovnoma egasiga yuborildi.
+            {t("respond.thanks")}
           </Text>
           <Text style={styles.doneMeta}>
             {done?.expiresAt
-              ? `Ma’lumotlar ${formatShortDateTime(done.expiresAt)} gacha saqlanadi va so‘ng avtomatik o‘chiriladi.`
-              : `Javoblar ${form.retention_hours} soatdan so‘ng avtomatik o‘chiriladi.`}
+              ? t("respond.keptUntil", { date: formatShortDateTime(done.expiresAt) })
+              : t("respond.keptFor", { hours: form.retention_hours })}
           </Text>
           <View style={styles.doneAction}>
-            <PrimaryButton label="Yopish" onPress={() => router.back()} />
+            <PrimaryButton label={t("common:close")} onPress={() => router.back()} />
           </View>
         </View>
       </View>
@@ -302,7 +305,7 @@ export default function SurveyRespondScreen() {
       <View style={[styles.timer, closed && styles.timerClosed]}>
         <Clock color={closed ? colors.danger : colors.primary} size={15} strokeWidth={2.2} />
         {closed
-          ? <Text style={styles.timerClosedText}>{expired ? "Muddat tugagan" : "So‘rovnoma yopilgan"}</Text>
+          ? <Text style={styles.timerClosedText}>{expired ? t("respond.expired") : t("respond.closed")}</Text>
           : <CountdownText deadline={form.deadline} style={styles.timerText} />}
         <View style={styles.spacer} />
         <Text style={styles.progressText}>{answeredCount}/{questions.length}</Text>
@@ -317,11 +320,10 @@ export default function SurveyRespondScreen() {
         <View style={styles.privacy}>
           <ShieldCheck color={colors.primary} size={16} strokeWidth={2} />
           <View style={styles.privacyCopy}>
-            <Text style={styles.privacyTitle}>Maxfiylik</Text>
+            <Text style={styles.privacyTitle}>{t("respond.privacy")}</Text>
             <Text style={styles.privacyBody}>
               {form.privacy_note ? `${form.privacy_note}\n\n` : ""}
-              Javoblaringiz faqat “Yuborish” tugmasi bosilganda serverga yoziladi. Tugallanmagan javoblar saqlanmaydi.
-              Yuborilgan javoblar {form.retention_hours} soat davomida saqlanadi va so‘ng avtomatik o‘chiriladi.
+              {t("respond.privacyBody", { hours: form.retention_hours })}
             </Text>
           </View>
         </View>
@@ -330,7 +332,7 @@ export default function SurveyRespondScreen() {
           <View style={styles.closedCard}>
             <Lock color={colors.danger} size={18} strokeWidth={2} />
             <Text style={styles.closedText}>
-              Bu so‘rovnoma yangi javob qabul qilmayapti.
+              {t("respond.notAccepting")}
             </Text>
           </View>
         ) : null}
@@ -348,19 +350,19 @@ export default function SurveyRespondScreen() {
                   </Text>
                 </View>
                 {question.helper_text ? <Text style={styles.helper}>{question.helper_text}</Text> : null}
-                {question.latin_only ? <Text style={styles.latinBadge}>Faqat lotin alifbosida</Text> : null}
+                {question.latin_only ? <Text style={styles.latinBadge}>{t("respond.latinBadge")}</Text> : null}
 
                 {question.type === "short_text" || question.type === "long_text" ? (
                   <>
                     <TextInput
                       value={value.text ?? ""}
                       onChangeText={(text) => patch(question.id, { text })}
-                      placeholder="Javobingiz"
+                      placeholder={t("respond.answerPlaceholder")}
                       placeholderTextColor={colors.inkSoft}
                       multiline={question.type === "long_text"}
                       style={[styles.input, question.type === "long_text" && styles.multiline]}
                     />
-                    {question.latin_only && !isLatinText(value.text ?? "") ? <InlineError message={LATIN_ONLY_ERROR} /> : null}
+                    {question.latin_only && !isLatinText(value.text ?? "") ? <InlineError message={t("respond.latin")} /> : null}
                   </>
                 ) : null}
 
@@ -376,7 +378,7 @@ export default function SurveyRespondScreen() {
                       style={styles.input}
                     />
                     {(value.text ?? "").replace(/[^0-9]/g, "").length > 3 && !normalizeUzPhone(value.text ?? "")
-                      ? <InlineError message="Raqam to‘liq emas. Namuna: +998 90 123 45 67" />
+                      ? <InlineError message={t("respond.phoneIncomplete")} />
                       : null}
                   </>
                 ) : null}
@@ -444,21 +446,21 @@ export default function SurveyRespondScreen() {
                       <View style={styles.preview}>
                         <Image source={{ uri: value.image.uri }} style={styles.previewImage} />
                         <View style={styles.previewCopy}>
-                          <Text style={styles.previewName}>Rasm tanlandi</Text>
+                          <Text style={styles.previewName}>{t("respond.imagePicked")}</Text>
                           <Text style={styles.previewSize}>{formatBytes(value.image.sizeBytes)}</Text>
                         </View>
-                        <Pressable accessibilityLabel="Rasmni olib tashlash" onPress={() => patch(question.id, { image: null })} style={styles.previewRemove}>
+                        <Pressable accessibilityLabel={t("respond.removeImage")} onPress={() => patch(question.id, { image: null })} style={styles.previewRemove}>
                           <X color={colors.danger} size={16} strokeWidth={2.4} />
                         </Pressable>
                       </View>
                     ) : (
                       <Pressable accessibilityRole="button" onPress={() => void pickImage(question)} style={styles.imagePicker}>
                         <ImagePlus color={colors.primary} size={20} strokeWidth={2} />
-                        <Text style={styles.imagePickerText}>Rasm tanlash</Text>
+                        <Text style={styles.imagePickerText}>{t("respond.pickImage")}</Text>
                       </Pressable>
                     )}
-                    <Text style={styles.imageHint}>Maksimal hajm: 3 MB · jpg, png, webp</Text>
-                    <Text style={styles.imageHint}>{IMAGE_HELP}</Text>
+                    <Text style={styles.imageHint}>{t("respond.imageLimits")}</Text>
+                    <Text style={styles.imageHint}>{t("respond.imageHelp")}</Text>
                   </View>
                 ) : null}
               </View>
@@ -470,7 +472,7 @@ export default function SurveyRespondScreen() {
 
         {!closed ? (
           <PrimaryButton
-            label="Javoblarni yuborish"
+            label={t("respond.submit")}
             loading={submitting}
             disabled={Boolean(validation)}
             onPress={() => void submit()}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
 
@@ -67,6 +68,7 @@ type Provider = "apple" | "google";
 export function SocialAuthButtons({ onSignedIn }: { onSignedIn?: () => void }) {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation("auth");
   const [available, setAvailable] = useState<SocialAuthAvailability>({ apple: false, google: true });
   const [busy, setBusy] = useState<Provider | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -92,7 +94,7 @@ export function SocialAuthButtons({ onSignedIn }: { onSignedIn?: () => void }) {
       onSignedIn?.();
       return;
     }
-    if (result.error.code !== "cancelled") setError(result.error.message);
+    if (result.error.code !== "cancelled") setError(t(`error.${result.error.code}`));
   }
 
   if (!available.apple && !available.google) return null;
@@ -102,7 +104,7 @@ export function SocialAuthButtons({ onSignedIn }: { onSignedIn?: () => void }) {
       {available.apple ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Apple bilan davom etish"
+          accessibilityLabel={t("withApple")}
           disabled={busy !== null}
           onPress={() => void run("apple")}
           style={({ pressed }) => [styles.button, styles.apple, pressed && styles.pressed, busy !== null && busy !== "apple" && styles.dimmed]}
@@ -112,7 +114,7 @@ export function SocialAuthButtons({ onSignedIn }: { onSignedIn?: () => void }) {
           ) : (
             <>
               <AppleMark />
-              <Text style={[styles.label, styles.appleLabel]}>Apple bilan davom etish</Text>
+              <Text style={[styles.label, styles.appleLabel]}>{t("withApple")}</Text>
             </>
           )}
         </Pressable>
@@ -121,7 +123,7 @@ export function SocialAuthButtons({ onSignedIn }: { onSignedIn?: () => void }) {
       {available.google ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Google bilan davom etish"
+          accessibilityLabel={t("withGoogle")}
           disabled={busy !== null}
           onPress={() => void run("google")}
           style={({ pressed }) => [styles.button, styles.google, pressed && styles.pressed, busy !== null && busy !== "google" && styles.dimmed]}
@@ -131,7 +133,7 @@ export function SocialAuthButtons({ onSignedIn }: { onSignedIn?: () => void }) {
           ) : (
             <>
               <GoogleMark />
-              <Text style={[styles.label, styles.googleLabel]}>Google bilan davom etish</Text>
+              <Text style={[styles.label, styles.googleLabel]}>{t("withGoogle")}</Text>
             </>
           )}
         </Pressable>
@@ -141,7 +143,7 @@ export function SocialAuthButtons({ onSignedIn }: { onSignedIn?: () => void }) {
 
       <View style={styles.divider}>
         <View style={styles.rule} />
-        <Text style={styles.dividerText}>yoki email bilan</Text>
+        <Text style={styles.dividerText}>{t("orEmail")}</Text>
         <View style={styles.rule} />
       </View>
     </View>

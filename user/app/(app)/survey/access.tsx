@@ -2,6 +2,7 @@ import { DATA_COLLECTION_MODULE } from "@jaxongirman/types";
 import { useRouter } from "expo-router";
 import { CalendarClock, CircleCheck, CircleSlash, Info, ShieldCheck, Timer } from "lucide-react-native";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, ScrollView, Text, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -27,6 +28,7 @@ import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 export default function SurveyAccessScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation("survey");
   const router = useRouter();
   const policy = usePaymentPolicy();
   const [opening, setOpening] = useState(false);
@@ -50,7 +52,7 @@ export default function SurveyAccessScreen() {
   if (loading) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="Modulga kirish" />
+        <ScreenHeader title={t("access.title")} />
         <View style={styles.centered}><ActivityIndicator color={colors.primary} size="large" /></View>
       </View>
     );
@@ -59,8 +61,8 @@ export default function SurveyAccessScreen() {
   if (error || !state) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="Modulga kirish" />
-        <View style={styles.content}><ErrorState message={error ?? "Holat aniqlanmadi"} onRetry={() => void reload()} /></View>
+        <ScreenHeader title={t("access.title")} />
+        <View style={styles.content}><ErrorState message={error ?? t("access.unknown")} onRetry={() => void reload()} /></View>
       </View>
     );
   }
@@ -69,7 +71,7 @@ export default function SurveyAccessScreen() {
 
   return (
     <View style={styles.screen}>
-      <ScreenHeader title="Modulga kirish" subtitle={state.label ?? "Ma’lumotlarni yig‘ish"} />
+      <ScreenHeader title={t("access.title")} subtitle={state.label ?? t("module")} />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={[styles.statusCard, state.has_access ? styles.statusActive : styles.statusIdle]}>
@@ -77,54 +79,54 @@ export default function SurveyAccessScreen() {
             ? <CircleCheck color={colors.success} size={28} strokeWidth={2} />
             : <ShieldCheck color={colors.primary} size={28} strokeWidth={2} />}
           <Text style={styles.statusTitle}>
-            {state.has_access ? "Kirish faol" : enforced ? "Kirish huquqi yo‘q" : "Hozircha hamma uchun ochiq"}
+            {state.has_access ? t("access.active") : enforced ? t("access.denied") : t("access.open")}
           </Text>
           <Text style={styles.statusBody}>
             {state.has_access
-              ? `Modul ${state.expires_at ? formatDate(state.expires_at) : "—"} gacha ochiq · ${formatRemainingWindow(state.expires_at) ?? ""}`
+              ? t("access.activeBody", { date: state.expires_at ? formatDate(state.expires_at) : "—", left: formatRemainingWindow(state.expires_at) ?? "" })
               : enforced
-                ? "Modul cheklangan. Kirish huquqi berilgach, so‘rovnoma yaratish va javob berish ochiladi."
-                : "Modul sinov bosqichida barcha foydalanuvchilar uchun ochiq. Pullik kirish yoqilganda bu holat o‘zgaradi."}
+                ? t("access.deniedBody")
+                : t("access.openBody")}
           </Text>
         </View>
 
         <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Tarif shartlari</Text>
+          <Text style={styles.panelTitle}>{t("access.terms")}</Text>
 
           <View style={styles.row}>
             <CalendarClock color={colors.primary} size={18} strokeWidth={2} />
-            <Text style={styles.rowLabel}>Muddat</Text>
-            <Text style={styles.rowValue}>{state.duration_months} oy</Text>
+            <Text style={styles.rowLabel}>{t("access.duration")}</Text>
+            <Text style={styles.rowValue}>{t("access.months", { count: state.duration_months })}</Text>
           </View>
           <View style={styles.row}>
             <Info color={colors.primary} size={18} strokeWidth={2} />
-            <Text style={styles.rowLabel}>Narx</Text>
+            <Text style={styles.rowLabel}>{t("access.price")}</Text>
             <Text style={styles.rowValue}>
               {policy.showPrices ? formatPrice(state.price_amount, state.currency) : "—"}
             </Text>
           </View>
           <View style={styles.row}>
             <Timer color={colors.primary} size={18} strokeWidth={2} />
-            <Text style={styles.rowLabel}>Javoblar saqlanishi</Text>
-            <Text style={styles.rowValue}>{state.retention_hours} soat</Text>
+            <Text style={styles.rowLabel}>{t("access.retention")}</Text>
+            <Text style={styles.rowValue}>{t("access.hours", { count: state.retention_hours })}</Text>
           </View>
         </View>
 
         <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Kim uchun talab qilinadi</Text>
+          <Text style={styles.panelTitle}>{t("access.who")}</Text>
           <View style={styles.row}>
             {state.enforce_creator_access
               ? <CircleCheck color={colors.success} size={18} strokeWidth={2} />
               : <CircleSlash color={colors.inkSoft} size={18} strokeWidth={2} />}
-            <Text style={styles.rowLabel}>So‘rovnoma yaratuvchi</Text>
-            <Text style={styles.rowValue}>{state.enforce_creator_access ? "Talab qilinadi" : "Talab qilinmaydi"}</Text>
+            <Text style={styles.rowLabel}>{t("access.creator")}</Text>
+            <Text style={styles.rowValue}>{state.enforce_creator_access ? t("access.required") : t("access.notRequired")}</Text>
           </View>
           <View style={styles.row}>
             {state.enforce_respondent_access
               ? <CircleCheck color={colors.success} size={18} strokeWidth={2} />
               : <CircleSlash color={colors.inkSoft} size={18} strokeWidth={2} />}
-            <Text style={styles.rowLabel}>Javob beruvchi</Text>
-            <Text style={styles.rowValue}>{state.enforce_respondent_access ? "Talab qilinadi" : "Talab qilinmaydi"}</Text>
+            <Text style={styles.rowLabel}>{t("access.respondent")}</Text>
+            <Text style={styles.rowValue}>{state.enforce_respondent_access ? t("access.required") : t("access.notRequired")}</Text>
           </View>
         </View>
 
@@ -133,14 +135,14 @@ export default function SurveyAccessScreen() {
           <Text style={styles.noticeTitle}>
             {!policy.paymentsEnabled
               ? policy.unavailableMessage("module")
-              : state.payment_configured ? `To‘lov tizimi: ${state.payment_provider ?? "ulangan"}` : "To‘lov tizimi ulanmagan"}
+              : state.payment_configured ? t("access.provider", { provider: state.payment_provider ?? t("access.providerConnected") }) : t("access.noProvider")}
           </Text>
           <Text style={styles.noticeBody}>
             {!policy.paymentsEnabled
-              ? "Sizga berilgan kirish huquqi amal qiladi va modul odatdagidek ishlaydi."
+              ? t("access.iosBody")
               : state.payment_configured
-                ? "Kirish huquqini to‘lov orqali rasmiylashtirish mumkin."
-                : "Ilova orqali to‘lov hali qabul qilinmaydi. Kirish huquqi hozircha administrator tomonidan beriladi va u haqiqiy yozuv sifatida saqlanadi."}
+                ? t("access.readyBody")
+                : t("access.pendingBody")}
           </Text>
         </View>
 
@@ -148,7 +150,7 @@ export default function SurveyAccessScreen() {
           <>
             {buyError ? <InlineError message={buyError} /> : null}
             <PrimaryButton
-              label={`${formatPrice(state.price_amount, state.currency)} — kirish huquqini olish`}
+              label={t("access.buy", { price: formatPrice(state.price_amount, state.currency) })}
               loading={opening}
               onPress={() => void buyAccess()}
             />
@@ -156,8 +158,7 @@ export default function SurveyAccessScreen() {
         ) : null}
 
         <Text style={styles.privacy}>
-          Maxfiylik: yuborilgan javoblar {state.retention_hours} soat davomida saqlanadi va shundan so‘ng avtomatik o‘chiriladi.
-          Tugallanmagan javoblar serverga umuman yozilmaydi.
+          {t("access.privacy", { hours: state.retention_hours })}
         </Text>
       </ScrollView>
     </View>

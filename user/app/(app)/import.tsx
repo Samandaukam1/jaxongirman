@@ -3,6 +3,7 @@ import * as DocumentPicker from "expo-document-picker";
 import { useRouter } from "expo-router";
 import { Coins, FileUp, Info } from "lucide-react-native";
 import { useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -34,6 +35,7 @@ type Quote = { cost: number; balance: number; affordable: boolean };
 export default function ImportScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation("tools");
   const router = useRouter();
   const { user } = useAuth();
   const running = useRef(false);
@@ -77,11 +79,11 @@ export default function ImportScreen() {
     // fallback rather than the only check.
     const looksRight = asset.mimeType === PPTX_MIME || asset.name.toLowerCase().endsWith(".pptx");
     if (!looksRight) {
-      setError("Faqat .pptx fayllari qabul qilinadi. Eski .ppt formatini avval PowerPoint’da saqlang.");
+      setError(t("import.onlyPptx"));
       return;
     }
     if ((asset.size ?? 0) > MAX_BYTES) {
-      setError("Fayl 50 MB dan katta. Rasmlarni siqib, qaytadan urinib ko‘ring.");
+      setError(t("import.tooBig"));
       return;
     }
     setFile({ uri: asset.uri, name: asset.name, sizeBytes: asset.size ?? 0 });
@@ -104,7 +106,7 @@ export default function ImportScreen() {
     setError(null);
     setWarnings([]);
     try {
-      setStep("Fayl yuklanmoqda…");
+      setStep(t("import.uploading"));
       // `expo-crypto`, not the global. Hermes has no `crypto` object, so the
       // global form throws "Property 'crypto' doesn't exist" the moment an
       // import starts — which is every import, on every device. Every other
@@ -116,11 +118,11 @@ export default function ImportScreen() {
         uri: file.uri,
         contentType: PPTX_MIME,
         maxBytes: MAX_BYTES,
-        tooLargeMessage: "Fayl 50 MB dan katta. Rasmlarni siqib, qaytadan urinib ko‘ring.",
+        tooLargeMessage: t("import.tooBig"),
       });
       if (!uploaded.ok) throw new Error(uploaded.message);
 
-      setStep("Slaydlar o‘qilmoqda…");
+      setStep(t("import.reading"));
       const { data, error: importError } = await supabase.functions.invoke("import-pptx", {
         body: { storagePath, sourceName: file.name },
       });
@@ -155,7 +157,7 @@ export default function ImportScreen() {
       const technical = !(failure as { context?: unknown })?.context;
       if (technical && __DEV__) console.warn("pptx import failed", failure);
       setError(technical
-        ? "PowerPoint faylini import qilib bo‘lmadi. J Tanga yechilgan bo‘lsa, qaytariladi."
+        ? t("import.failed")
         : fromServer);
       setBusy(false);
       setStep(null);
@@ -164,10 +166,10 @@ export default function ImportScreen() {
 
   return (
     <View style={styles.screen}>
-      <ScreenHeader title="PowerPoint’dan yuklash" variant="close" />
+      <ScreenHeader title={t("import.title")} variant="close" />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.lead}>
-          Tayyor .pptx faylni yuklang — slaydlar, matnlar va rasmlar tahrirlanadigan holda ochiladi.
+          {t("import.lead")}
         </Text>
 
         <Pressable
@@ -177,24 +179,23 @@ export default function ImportScreen() {
           style={({ pressed }) => [styles.dropzone, pressed && styles.dropzonePressed, file && styles.dropzoneFilled]}
         >
           <View style={styles.dropzoneIcon}><FileUp color={colors.primary} size={26} strokeWidth={2} /></View>
-          <Text style={styles.dropzoneTitle}>{file ? file.name : "Fayl tanlang"}</Text>
+          <Text style={styles.dropzoneTitle}>{file ? file.name : t("import.pick")}</Text>
           <Text style={styles.dropzoneHint}>
-            {file ? `${(file.sizeBytes / 1_048_576).toFixed(1)} MB — almashtirish uchun bosing` : ".pptx, 50 MB gacha"}
+            {file ? t("import.replace", { size: (file.sizeBytes / 1_048_576).toFixed(1) }) : t("import.limits")}
           </Text>
         </Pressable>
 
         <View style={styles.note}>
           <Info color={colors.inkSoft} size={16} strokeWidth={2} />
           <Text style={styles.noteText}>
-            Animatsiyalar va o‘tishlar ko‘chmaydi. Diagrammalar o‘rni saqlanadi, lekin ularni qayta chizish kerak.
-            Taqdimotdan dastlabki 30 ta slayd olinadi.
+            {t("import.note")}
           </Text>
         </View>
 
         {warnings.length > 0 ? (
           <View style={styles.warnings}>
             {warnings.map((warning) => <Text key={warning} style={styles.warningText}>• {warning}</Text>)}
-            <Text style={styles.warningLead}>Tahrirlagichga o‘tilmoqda…</Text>
+            <Text style={styles.warningLead}>{t("import.opening")}</Text>
           </View>
         ) : null}
 
@@ -206,12 +207,11 @@ export default function ImportScreen() {
           <View style={styles.quote}>
             <View style={styles.quoteHead}>
               <Coins color={colors.primary} size={18} strokeWidth={2} />
-              <Text style={styles.quoteTitle}>{quote.cost} J Tanga</Text>
-              <Text style={styles.quoteBalance}>Balans: {quote.balance} J</Text>
+              <Text style={styles.quoteTitle}>{t("import.price", { cost: quote.cost })}</Text>
+              <Text style={styles.quoteBalance}>{t("import.balance", { balance: quote.balance })}</Text>
             </View>
             <Text style={styles.quoteBody}>
-              Tashqi PowerPoint faylini import qilish {quote.cost} J Tanga turadi. Import muvaffaqiyatli
-              tugagach, bu summa qaytarilmaydi. Texnik xatolik yuz bersa, tanga to‘liq qaytariladi.
+              {t("import.priceBody", { cost: quote.cost })}
             </Text>
 
             {quote.affordable ? (
@@ -224,11 +224,11 @@ export default function ImportScreen() {
                 <View style={[styles.checkbox, agreed && styles.checkboxOn]}>
                   {agreed ? <Text style={styles.checkboxTick}>✓</Text> : null}
                 </View>
-                <Text style={styles.agreeText}>Roziman, {quote.cost} J Tanga yechilishini tasdiqlayman.</Text>
+                <Text style={styles.agreeText}>{t("import.agree", { cost: quote.cost })}</Text>
               </Pressable>
             ) : (
               <Pressable accessibilityRole="button" onPress={() => router.push("/(app)/coins/buy")} style={styles.topUp}>
-                <Text style={styles.topUpText}>Tanga yetarli emas — to‘ldirish</Text>
+                <Text style={styles.topUpText}>{t("import.topUp")}</Text>
               </Pressable>
             )}
           </View>
@@ -244,7 +244,7 @@ export default function ImportScreen() {
         ) : (
           <PrimaryButton
             disabled={!file || (quote !== null && quote.cost > 0 && (!agreed || !quote.affordable))}
-            label="Import qilish"
+            label={t("import.run")}
             onPress={() => void run()}
           />
         )}

@@ -5,10 +5,14 @@ import {
   ShieldAlert, Sparkles, Store, Timer, Trophy, Vote, Wallet, X, type LucideIcon,
 } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, Platform, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
+import { useTranslation } from "react-i18next";
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Appear } from "@/components/Appear";
 import { CelebrationOverlay } from "@/components/CelebrationOverlay";
+import { i18n } from "@/i18n";
+import { formatClock, formatDayMonth, formatWeekdayShort } from "@/lib/datetime";
 import { asErrorMessage } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
 import { useAccount } from "@/providers/AccountProvider";
@@ -26,21 +30,17 @@ function dayKey(value: string | Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-const WEEKDAYS = ["Yak", "Du", "Se", "Cho", "Pay", "Ju", "Sha"];
-const MONTHS = ["yanvar", "fevral", "mart", "aprel", "may", "iyun", "iyul", "avgust", "sentabr", "oktabr", "noyabr", "dekabr"];
-
 function longDate(date: Date): string {
   const today = dayKey(new Date());
-  if (dayKey(date) === today) return "Bugun";
+  if (dayKey(date) === today) return i18n.t("inbox:today");
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
-  if (dayKey(date) === dayKey(yesterday)) return "Kecha";
-  return `${date.getDate()} ${MONTHS[date.getMonth()]}`;
+  if (dayKey(date) === dayKey(yesterday)) return i18n.t("inbox:yesterday");
+  return formatDayMonth(date);
 }
 
 function clockTime(value: string): string {
-  const date = new Date(value);
-  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  return formatClock(new Date(value));
 }
 
 /**
@@ -70,6 +70,8 @@ const CELEBRATED: readonly string[] = ["credit_gift", "credit_received"];
 export default function NotificationsScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation(["inbox", "common"]);
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
   const { setUnreadCount } = useAccount();
@@ -169,18 +171,18 @@ export default function NotificationsScreen() {
 
   return (
     <View style={styles.screen}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 20) + spacing.xs }]}>
         <View style={styles.headerCopy}>
-          <Text style={styles.title}>Xabarnomalar</Text>
-          <Text style={styles.subtitle}>{unread ? `${unread} ta o‘qilmagan xabar` : "Barchasi o‘qilgan"}</Text>
+          <Text style={styles.title}>{t("title")}</Text>
+          <Text style={styles.subtitle}>{unread ? t("unread", { count: unread }) : t("allRead")}</Text>
         </View>
         {unread > 0 ? (
-          <Pressable accessibilityLabel="Barchasini o‘qilgan deb belgilash" onPress={() => void markAll()} style={styles.headerButton}>
+          <Pressable accessibilityLabel={t("markAll")} onPress={() => void markAll()} style={styles.headerButton}>
             <CheckCheck color={colors.primary} size={icon.md} strokeWidth={icon.stroke} />
           </Pressable>
         ) : null}
         {/* Always reachable, whatever the list is doing underneath. */}
-        <Pressable accessibilityLabel="Yopish" onPress={() => router.back()} style={styles.headerButton}>
+        <Pressable accessibilityLabel={t("common:close")} onPress={() => router.back()} style={styles.headerButton}>
           <X color={colors.ink} size={icon.md} strokeWidth={icon.strokeBold} />
         </Pressable>
       </View>
@@ -189,11 +191,11 @@ export default function NotificationsScreen() {
         <View style={styles.calendarLabel}>
           <CalendarDays color={colors.primary} size={icon.sm} strokeWidth={icon.stroke} />
           <Text style={styles.calendarLabelText}>
-            {selectedDay ? `${longDate(new Date(selectedDay))} — ${visible.length} ta xabar` : "Kunni tanlang"}
+            {selectedDay ? t("dayCount", { day: longDate(new Date(selectedDay)), count: visible.length }) : t("pickDay")}
           </Text>
           {selectedDay ? (
             <Pressable onPress={() => setSelectedDay(null)} style={styles.clearChip}>
-              <Text style={styles.clearChipText}>Barchasi</Text>
+              <Text style={styles.clearChipText}>{t("all")}</Text>
             </Pressable>
           ) : null}
         </View>
@@ -204,7 +206,7 @@ export default function NotificationsScreen() {
             const count = countsByDay.get(key) ?? 0;
             return (
               <Pressable key={key} onPress={() => pickDay(date)} style={[styles.dayChip, active && styles.dayChipActive]}>
-                <Text style={[styles.dayName, active && styles.dayTextActive]}>{WEEKDAYS[date.getDay()]}</Text>
+                <Text style={[styles.dayName, active && styles.dayTextActive]}>{formatWeekdayShort(date)}</Text>
                 <Text style={[styles.dayNumber, active && styles.dayTextActive]}>{date.getDate()}</Text>
                 <View style={[styles.dayDot, count > 0 && styles.dayDotFilled, active && styles.dayDotActive]} />
               </Pressable>
@@ -227,8 +229,8 @@ export default function NotificationsScreen() {
           ListEmptyComponent={
             <View style={styles.centered}>
               <Bell color={colors.inkSoft} size={34} strokeWidth={1.6} />
-              <Text style={styles.emptyTitle}>{selectedDay ? "Bu kunda xabar yo‘q" : "Hozircha xabar yo‘q"}</Text>
-              <Text style={styles.emptyCopy}>Tanga, so‘rovnoma va tizim xabarlari shu yerda ko‘rinadi.</Text>
+              <Text style={styles.emptyTitle}>{selectedDay ? t("emptyDay") : t("empty")}</Text>
+              <Text style={styles.emptyCopy}>{t("emptyBody")}</Text>
             </View>
           }
           renderItem={({ item, index }) => {
@@ -264,7 +266,7 @@ export default function NotificationsScreen() {
 
 const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
-  header: { paddingTop: Platform.OS === "ios" ? 58 : 30, paddingHorizontal: spacing.xl, paddingBottom: spacing.md, flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  header: { paddingHorizontal: spacing.xl, paddingBottom: spacing.md, flexDirection: "row", alignItems: "center", gap: spacing.sm },
   headerCopy: { flex: 1 },
   title: { ...typography.title, color: colors.ink },
   subtitle: { ...typography.caption, color: colors.inkMuted, marginTop: 2 },

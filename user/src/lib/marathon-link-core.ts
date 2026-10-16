@@ -11,7 +11,7 @@
 export type MarathonInvite = { campaignId: string; candidateId: string };
 
 /** The production domain, and the right answer everywhere but a staging build. */
-export const DEFAULT_HOST = "https://jaxongirman.uz";
+export const DEFAULT_HOST = "https://jaxongirman.app";
 
 export function linkHost(configured: string | undefined): string {
   const trimmed = (configured ?? "").trim().replace(/\/+$/, "");
@@ -43,7 +43,7 @@ export function shareMessage(campaignTitle: string, username: string | null): st
 /**
  * Reads an invitation out of a URL, in either form it can arrive in.
  *
- * `https://jaxongirman.uz/marathon/<campaign>/<candidate>` from a camera, and
+ * `https://jaxongirman.app/marathon/<campaign>/<candidate>` from a camera, and
  * `jaxongirman://marathon/<campaign>/<candidate>` from anything that already
  * knows the app. Anything else answers null rather than guessing.
  */

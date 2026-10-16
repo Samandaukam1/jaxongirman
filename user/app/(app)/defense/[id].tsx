@@ -3,11 +3,13 @@ import { useLocalSearchParams } from "expo-router";
 import * as Sharing from "expo-sharing";
 import { ChevronLeft, ChevronRight, Download, RefreshCw, Sparkles } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Platform, Pressable, ScrollView, Text, View } from "react-native";
 
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { EmptyState, ErrorState } from "@/components/StateBlocks";
 import { defensePdf, defensePdfUrl, loadDefense, writeDefense, type Defense } from "@/lib/defense";
+import { localizeError } from "@/lib/errors";
 import { asErrorMessage } from "@/lib/format";
 import { icon, radius, shadow, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
@@ -27,6 +29,7 @@ import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 export default function DefenseScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation("tools");
   const { id } = useLocalSearchParams<{ id: string }>();
   const [defense, setDefense] = useState<Defense | null>(null);
   const [loading, setLoading] = useState(true);
@@ -76,7 +79,7 @@ export default function DefenseScreen() {
       }
       const { uri } = await FileSystem.downloadAsync(url, `${FileSystem.cacheDirectory}himoya-matni.pdf`);
       if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, { mimeType: "application/pdf", UTI: "com.adobe.pdf", dialogTitle: "Himoya matni" });
+        await Sharing.shareAsync(uri, { mimeType: "application/pdf", UTI: "com.adobe.pdf", dialogTitle: t("defense.title") });
       }
     } catch (downloadError) {
       setError(asErrorMessage(downloadError));
@@ -93,7 +96,7 @@ export default function DefenseScreen() {
   if (loading) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="Himoya matni" />
+        <ScreenHeader title={t("defense.title")} />
         <View style={styles.centered}><ActivityIndicator color={colors.primary} size="large" /></View>
       </View>
     );
@@ -103,18 +106,18 @@ export default function DefenseScreen() {
   if (!defense || defense.status === "failed") {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="Himoya matni" />
+        <ScreenHeader title={t("defense.title")} />
         <ScrollView contentContainerStyle={styles.content}>
           <EmptyState
             icon={Sparkles}
-            title={defense ? "Himoya matni yozilmadi" : "Himoya matni hali yo‘q"}
-            message={defense?.failureReason ?? "Taqdimot yonida turib nima deyishingizni Jaxongir AI yozib beradi."}
+            title={defense ? t("defense.failed") : t("defense.none")}
+            message={defense?.failureReason ? localizeError(defense.failureReason) : t("defense.intro")}
           />
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <Pressable onPress={() => void rewrite()} disabled={working !== null} style={[styles.primary, working !== null && styles.disabled]}>
             {working === "write"
               ? <ActivityIndicator color={colors.onPrimary} size="small" />
-              : <Text style={styles.primaryText}>Himoya matnini yozish</Text>}
+              : <Text style={styles.primaryText}>{t("defense.write")}</Text>}
           </Pressable>
         </ScrollView>
       </View>
@@ -124,10 +127,10 @@ export default function DefenseScreen() {
   if (defense.status === "generating") {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="Himoya matni" />
+        <ScreenHeader title={t("defense.title")} />
         <View style={styles.centered}>
           <ActivityIndicator color={colors.primary} size="large" />
-          <Text style={styles.waiting}>Yozilmoqda…</Text>
+          <Text style={styles.waiting}>{t("defense.writing")}</Text>
         </View>
       </View>
     );
@@ -136,19 +139,19 @@ export default function DefenseScreen() {
   const total = defense.sections.length;
   // −1 is the opening, `total` is the close: the script read end to end.
   const section = at >= 0 && at < total ? defense.sections[at] : null;
-  const heading = at < 0 ? "Kirish" : section ? `${section.slide_number}-slayd` : "Xulosa";
+  const heading = at < 0 ? t("defense.opening") : section ? t("defense.slide", { number: section.slide_number }) : t("defense.closing");
   const body = at < 0 ? defense.introduction : section ? section.speaker_text : defense.conclusion;
 
   return (
     <View style={styles.screen}>
-      <ScreenHeader title="Himoya matni" />
+      <ScreenHeader title={t("defense.title")} />
 
       <ScrollView ref={scroller} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {defense.stale ? (
           <Pressable onPress={() => void rewrite()} disabled={working !== null} style={styles.stale}>
             <RefreshCw color={colors.primaryDeep} size={icon.sm} strokeWidth={2} />
             <Text style={styles.staleText}>
-              {working === "write" ? "Yangilanmoqda…" : "Taqdimot o‘zgargan — matnni yangilash"}
+              {working === "write" ? t("defense.updating") : t("defense.stale")}
             </Text>
           </Pressable>
         ) : null}
@@ -162,13 +165,13 @@ export default function DefenseScreen() {
 
           {section?.key_point ? (
             <View style={styles.note}>
-              <Text style={styles.noteLabel}>Asosiy fikr</Text>
+              <Text style={styles.noteLabel}>{t("defense.keyPoint")}</Text>
               <Text style={styles.noteText}>{section.key_point}</Text>
             </View>
           ) : null}
           {section?.transition_to_next ? (
             <View style={styles.note}>
-              <Text style={styles.noteLabel}>Keyingi slaydga o‘tish</Text>
+              <Text style={styles.noteLabel}>{t("defense.transition")}</Text>
               <Text style={styles.noteText}>{section.transition_to_next}</Text>
             </View>
           ) : null}
@@ -177,16 +180,16 @@ export default function DefenseScreen() {
         <Pressable onPress={() => void download()} disabled={working !== null} style={[styles.secondary, working !== null && styles.disabled]}>
           {working === "pdf"
             ? <ActivityIndicator color={colors.primary} size="small" />
-            : <><Download color={colors.primary} size={icon.sm} strokeWidth={2} /><Text style={styles.secondaryText}>PDF yuklab olish</Text></>}
+            : <><Download color={colors.primary} size={icon.sm} strokeWidth={2} /><Text style={styles.secondaryText}>{t("defense.pdf")}</Text></>}
         </Pressable>
       </ScrollView>
 
       <View style={styles.pager}>
-        <Pressable accessibilityLabel="Oldingi" disabled={at <= -1} onPress={() => go(at - 1)} style={[styles.pagerButton, at <= -1 && styles.disabled]}>
+        <Pressable accessibilityLabel={t("defense.prev")} disabled={at <= -1} onPress={() => go(at - 1)} style={[styles.pagerButton, at <= -1 && styles.disabled]}>
           <ChevronLeft color={colors.primary} size={icon.md} strokeWidth={2.2} />
         </Pressable>
-        <Text style={styles.pagerLabel}>{at < 0 ? "Kirish" : at >= total ? "Xulosa" : `${at + 1} / ${total}`}</Text>
-        <Pressable accessibilityLabel="Keyingi" disabled={at >= total} onPress={() => go(at + 1)} style={[styles.pagerButton, at >= total && styles.disabled]}>
+        <Text style={styles.pagerLabel}>{at < 0 ? t("defense.opening") : at >= total ? t("defense.closing") : `${at + 1} / ${total}`}</Text>
+        <Pressable accessibilityLabel={t("defense.next")} disabled={at >= total} onPress={() => go(at + 1)} style={[styles.pagerButton, at >= total && styles.disabled]}>
           <ChevronRight color={colors.primary} size={icon.md} strokeWidth={2.2} />
         </Pressable>
       </View>

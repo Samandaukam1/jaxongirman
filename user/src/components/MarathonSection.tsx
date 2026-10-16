@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
 import { Clock, X } from "lucide-react-native";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 
 import { MarathonPoster } from "@/components/MarathonPoster";
@@ -25,6 +26,7 @@ import { makeStyles, useTheme } from "@/theme/ThemeProvider";
  */
 export function MarathonSection() {
   const styles = useStyles();
+  const { t } = useTranslation(["marathon", "common"]);
   const { colors } = useTheme();
   const router = useRouter();
   const { campaign, join, joining } = useMarathonCampaign();
@@ -51,13 +53,13 @@ export function MarathonSection() {
         <Text style={styles.clockText}>{formatCountdown(countdown)}</Text>
       </View>
 
-      <Text style={styles.rewardsTitle}>SOVRINLAR</Text>
+      <Text style={styles.rewardsTitle}>{t("prizes")}</Text>
       <MarathonRewards campaign={campaign} />
 
       {campaign.joined ? (
-        <PrimaryButton label="Marafon sahifasi" onPress={() => router.push("/(app)/marathon")} />
+        <PrimaryButton label={t("page")} onPress={() => router.push("/(app)/marathon")} />
       ) : (
-        <PrimaryButton label="Qatnashish" loading={joining} onPress={() => void join()} />
+        <PrimaryButton label={t("join")} loading={joining} onPress={() => void join()} />
       )}
 
       {campaign.rules ? (
@@ -66,7 +68,7 @@ export function MarathonSection() {
           onPress={() => setRulesOpen(true)}
           style={({ pressed }) => [styles.rulesButton, pressed && styles.rulesPressed]}
         >
-          <Text style={styles.rulesLabel}>Qoidalar</Text>
+          <Text style={styles.rulesLabel}>{t("rulesButton")}</Text>
         </Pressable>
       ) : null}
 
@@ -76,8 +78,8 @@ export function MarathonSection() {
         <Pressable style={styles.backdrop} onPress={() => setRulesOpen(false)} />
         <View style={styles.sheet}>
           <View style={styles.sheetHead}>
-            <Text style={styles.sheetTitle}>Qoidalar</Text>
-            <Pressable accessibilityRole="button" accessibilityLabel="Yopish" onPress={() => setRulesOpen(false)}>
+            <Text style={styles.sheetTitle}>{t("rulesButton")}</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel={t("common:close")} onPress={() => setRulesOpen(false)}>
               <X color={colors.inkMuted} size={icon.md} strokeWidth={icon.stroke} />
             </Pressable>
           </View>

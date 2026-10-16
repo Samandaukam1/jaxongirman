@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
 import { ShieldAlert } from "lucide-react-native";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Modal, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -32,6 +33,7 @@ type Props = {
 export function DeleteAccountSheet({ visible, onClose }: Props) {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation(["misc", "common"]);
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -54,7 +56,7 @@ export function DeleteAccountSheet({ visible, onClose }: Props) {
       onClose();
       router.replace("/(auth)/sign-in");
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "Hisobni o‘chirib bo‘lmadi");
+      setError(deleteError instanceof Error ? deleteError.message : t("deleteAccount.failed"));
       setBusy(false);
     }
   };
@@ -70,7 +72,7 @@ export function DeleteAccountSheet({ visible, onClose }: Props) {
     >
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Yopish"
+        accessibilityLabel={t("common:close")}
         style={styles.backdrop}
         onPress={() => { if (!busy) onClose(); }}
       >
@@ -83,10 +85,9 @@ export function DeleteAccountSheet({ visible, onClose }: Props) {
             <ShieldAlert color={colors.danger} size={26} strokeWidth={2} />
           </View>
 
-          <Text style={styles.title}>Hisobingizni butunlay o‘chirmoqchimisiz?</Text>
+          <Text style={styles.title}>{t("deleteAccount.title")}</Text>
           <Text style={styles.body}>
-            Bu amal natijasida akkauntingiz va unga tegishli o‘chirilishi kerak bo‘lgan shaxsiy
-            ma’lumotlar o‘chiriladi. Bu amalni ortga qaytarib bo‘lmaydi.
+            {t("deleteAccount.body")}
           </Text>
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -98,19 +99,19 @@ export function DeleteAccountSheet({ visible, onClose }: Props) {
               onPress={onClose}
               style={[styles.button, styles.cancel, busy && styles.dimmed]}
             >
-              <Text style={styles.cancelText}>BEKOR QILISH</Text>
+              <Text style={styles.cancelText}>{t("deleteAccount.cancel")}</Text>
             </Touchable>
 
             <Touchable
               accessibilityRole="button"
-              accessibilityLabel="Hisobni o‘chirish"
+              accessibilityLabel={t("deleteAccount.label")}
               disabled={busy}
               onPress={() => void remove()}
               style={[styles.button, styles.destructive]}
             >
               {busy
                 ? <ActivityIndicator color={colors.onPrimary} size="small" />
-                : <Text style={styles.destructiveText}>O‘CHIRISH</Text>}
+                : <Text style={styles.destructiveText}>{t("deleteAccount.confirm")}</Text>}
             </Touchable>
           </View>
         </Pressable>

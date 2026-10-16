@@ -1,5 +1,6 @@
 import { Crown, Store, Vote } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -29,6 +30,7 @@ import { makeStyles, useTheme } from "@/theme/ThemeProvider";
  */
 export default function SellVotesScreen() {
   const styles = useStyles();
+  const { t } = useTranslation("marathon");
   const { colors } = useTheme();
   const enabled = useVoteMarketEnabled();
   const { campaign } = useMarathonCampaign();
@@ -113,15 +115,15 @@ export default function SellVotesScreen() {
   if (!enabled) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="OVOZ SOTISH" variant="back" />
-        <EmptyState icon={Store} title="Bozor yopiq" message="Ovozlar bozori hozircha ochilmagan." />
+        <ScreenHeader title={t("sell.title")} variant="back" />
+        <EmptyState icon={Store} title={t("market.closed")} message={t("market.closedBody")} />
       </View>
     );
   }
 
   return (
     <View style={styles.screen}>
-      <ScreenHeader title="OVOZ SOTISH" variant="back" />
+      <ScreenHeader title={t("sell.title")} variant="back" />
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.options}>
@@ -139,8 +141,8 @@ export default function SellVotesScreen() {
                   ? <Crown color={kind === option ? colors.primary : colors.inkSoft} size={icon.sm} strokeWidth={icon.stroke} />
                   : <Vote color={kind === option ? colors.primary : colors.inkSoft} size={icon.sm} strokeWidth={icon.stroke} />}
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.optionLabel}>{option === "premium" ? "Premium ovoz" : "Bepul ovoz"}</Text>
-                  <Text style={styles.optionHint}>Mavjud: {formatNumber(held)} dona</Text>
+                  <Text style={styles.optionLabel}>{option === "premium" ? t("voting.premium") : t("voting.free")}</Text>
+                  <Text style={styles.optionHint}>{t("sell.held", { count: formatNumber(held) })}</Text>
                 </View>
               </Pressable>
             );
@@ -148,18 +150,18 @@ export default function SellVotesScreen() {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.fieldLabel}>1 dona narxi</Text>
+          <Text style={styles.fieldLabel}>{t("sell.unitPrice")}</Text>
           <TextInput
             keyboardType="number-pad"
             value={price}
             onChangeText={setPrice}
-            placeholder={floor !== null ? `Kamida ${formatSom(floor)}` : "Narx"}
+            placeholder={floor !== null ? t("sell.atLeast", { amount: formatSom(floor) }) : t("sell.price")}
             placeholderTextColor={colors.inkSoft}
             style={styles.input}
           />
           {floor !== null ? (
             <Text style={styles.fieldHint}>
-              Ushbu marafon uchun minimal bozor narxi: {formatSom(floor)}
+              {t("sell.floor", { amount: formatSom(floor) })}
             </Text>
           ) : null}
         </View>
@@ -168,49 +170,49 @@ export default function SellVotesScreen() {
             total comes from. */}
         {quote ? (
           <View style={styles.quote}>
-            <Row label="E’lon narxi" value={formatSom(quote.base_price)} />
-            <Row label={`${quote.seller_fee_rate}% sotuvchi komissiyasi`} value={`− ${formatSom(quote.seller_fee_amount)}`} />
+            <Row label={t("sell.listPrice")} value={formatSom(quote.base_price)} />
+            <Row label={t("sell.sellerFee", { rate: quote.seller_fee_rate })} value={`− ${formatSom(quote.seller_fee_amount)}`} />
             <View style={styles.quoteTotal}>
-              <Text style={styles.quoteTotalLabel}>Siz olasiz</Text>
+              <Text style={styles.quoteTotalLabel}>{t("sell.youGet")}</Text>
               <Text style={styles.quoteTotalValue}>{formatSom(quote.seller_net)}</Text>
             </View>
           </View>
         ) : null}
 
         {belowFloor ? (
-          <InlineError message="Narx ushbu marafon uchun ruxsat etilgan minimal bozor narxidan past." />
+          <InlineError message={t("sell.belowFloor")} />
         ) : null}
         {error ? <InlineError message={error} /> : null}
 
         <PrimaryButton
-          label="E’lonni joylash"
+          label={t("sell.post")}
           loading={saving}
           disabled={available < 1 || amount <= 0 || belowFloor}
           onPress={() => void submit()}
         />
         {available < 1 ? (
           <Text style={styles.note}>
-            Bu turdagi ovozingiz qolmagan — ishlatilgan yoki allaqachon sotuvda.
+            {t("sell.noneLeft")}
           </Text>
         ) : null}
 
         {mine.length > 0 ? (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>SOTUVDAGI E’LONLARIM</Text>
+            <Text style={styles.sectionTitle}>{t("sell.myLots")}</Text>
             {mine.map((lot) => (
               <View key={lot.listing_id} style={styles.row}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.rowTitle}>
-                    {lot.kind === "premium" ? "Premium ovoz" : "Bepul ovoz"} · {formatNumber(lot.remaining)} dona
+                    {t("sell.lot", { kind: lot.kind === "premium" ? t("voting.premium") : t("voting.free"), count: formatNumber(lot.remaining) })}
                   </Text>
-                  <Text style={styles.rowHint}>{formatSom(lot.unit_price)} / dona</Text>
+                  <Text style={styles.rowHint}>{t("sell.perPiece", { amount: formatSom(lot.unit_price) })}</Text>
                 </View>
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => void withdraw(lot.listing_id)}
                   style={({ pressed }) => [styles.withdraw, pressed && styles.withdrawPressed]}
                 >
-                  <Text style={styles.withdrawLabel}>Bekor qilish</Text>
+                  <Text style={styles.withdrawLabel}>{t("sell.withdraw")}</Text>
                 </Pressable>
               </View>
             ))}
@@ -219,15 +221,15 @@ export default function SellVotesScreen() {
 
         {sales.length > 0 ? (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>SOTILGANLAR</Text>
+            <Text style={styles.sectionTitle}>{t("sell.sold")}</Text>
             {sales.map((sale) => (
               <View key={sale.sale_id} style={styles.row}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.rowTitle}>
-                    {sale.kind === "premium" ? "Premium ovoz" : "Bepul ovoz"} · {formatNumber(sale.quantity)} dona
+                    {t("sell.lot", { kind: sale.kind === "premium" ? t("voting.premium") : t("voting.free"), count: formatNumber(sale.quantity) })}
                   </Text>
                   <Text style={styles.rowHint}>
-                    {sale.status === "released" ? "Yakunlandi" : sale.status === "escrow" ? "To‘lov kutilmoqda" : "Bekor qilindi"}
+                    {sale.status === "released" ? t("sell.released") : sale.status === "escrow" ? t("sell.escrow") : t("sell.cancelled")}
                   </Text>
                 </View>
                 <Text style={styles.rowValue}>{formatSom(sale.seller_net)}</Text>

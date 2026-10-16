@@ -1,16 +1,19 @@
-import { GAME_TYPE_LABELS, GAME_QUESTION_TYPES, type GameQuestionType } from "@jaxongirman/types";
+import { GAME_QUESTION_TYPES, type GameQuestionType } from "@jaxongirman/types";
 import * as Crypto from "expo-crypto";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Play, Plus, ShoppingBag, Sparkles, X } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { GameQuestionCard } from "@/components/GameQuestionCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { ErrorState, InlineError } from "@/components/StateBlocks";
+import { localizeError } from "@/lib/errors";
 import { asErrorMessage } from "@/lib/format";
+import { labelOf } from "@/lib/labels";
 import {
   createSession, generateGame, listQuestions, setGameStatus,
   type Game, type GameQuestion,
@@ -55,6 +58,7 @@ function defaultConfig(type: GameQuestionType): Record<string, unknown> {
 export default function GameEditorScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation(["games", "common"]);
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [game, setGame] = useState<Game | null>(null);
@@ -127,7 +131,7 @@ export default function GameEditorScreen() {
     setTypePicker(false);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Kirish talab qilinadi.");
+      if (!user) throw new Error(t("form.signIn"));
       const { data, error: insertError } = await supabase
         .from("game_questions")
         .insert({
@@ -148,10 +152,10 @@ export default function GameEditorScreen() {
   }
 
   async function removeQuestion(question: GameQuestion) {
-    Alert.alert("Savolni o‘chirish", "Bu savol butunlay o‘chiriladi.", [
-      { text: "Bekor qilish", style: "cancel" },
+    Alert.alert(t("editor.deleteTitle"), t("editor.deleteBody"), [
+      { text: t("common:cancel"), style: "cancel" },
       {
-        text: "O‘chirish", style: "destructive",
+        text: t("common:delete"), style: "destructive",
         onPress: () => void (async () => {
           const { error: deleteError } = await supabase.from("game_questions").delete().eq("id", question.id);
           if (deleteError) { setActionError(asErrorMessage(deleteError)); return; }
@@ -236,8 +240,8 @@ export default function GameEditorScreen() {
   if (error || !game) {
     return (
       <View style={styles.safe}>
-        <ScreenHeader title="O‘yin" onLeave={() => router.back()} />
-        <ErrorState message={error ?? "O‘yin topilmadi."} onRetry={() => void load()} />
+        <ScreenHeader title={t("editor.fallback")} onLeave={() => router.back()} />
+        <ErrorState message={error ?? t("editor.notFound")} onRetry={() => void load()} />
       </View>
     );
   }
@@ -247,8 +251,8 @@ export default function GameEditorScreen() {
       <View style={[styles.safe, styles.center, { gap: spacing.lg, padding: spacing.xl }]}>
         <Sparkles color={colors.primary} size={44} strokeWidth={icon.stroke} />
         <ActivityIndicator color={colors.primary} />
-        <Text style={styles.generatingTitle}>O‘yingoh yaratilmoqda...</Text>
-        <Text style={styles.generatingHint}>AI savollarni tuzmoqda. Tayyor bo‘lgach savollarni tekshirib chiqasiz — har birini o‘zgartirish mumkin.</Text>
+        <Text style={styles.generatingTitle}>{t("editor.generating")}</Text>
+        <Text style={styles.generatingHint}>{t("editor.generatingBody")}</Text>
       </View>
     );
   }
@@ -256,27 +260,27 @@ export default function GameEditorScreen() {
   if (game.status === "failed") {
     return (
       <View style={styles.safe}>
-        <ScreenHeader title="O‘yin" onLeave={() => router.back()} />
-        <ErrorState message={game.failure_reason ?? "O‘yin yaratilmadi."} onRetry={() => router.replace("/oyingoh/create")} />
+        <ScreenHeader title={t("editor.fallback")} onLeave={() => router.back()} />
+        <ErrorState message={game.failure_reason ? localizeError(game.failure_reason) : t("editor.failed")} onRetry={() => router.replace("/oyingoh/create")} />
       </View>
     );
   }
 
   return (
     <View style={styles.safe}>
-      <ScreenHeader title="O‘yin muharriri" subtitle={`${questions.length} savol`} onLeave={() => router.back()} />
+      <ScreenHeader title={t("editor.title")} subtitle={t("questions", { count: questions.length })} onLeave={() => router.back()} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {questions.length > 0 && game.source_type !== "manual" ? (
             <View style={styles.readyBanner}>
-              <Text style={styles.readyBannerText}>Tayyor — savollarni tekshirib chiqing</Text>
+              <Text style={styles.readyBannerText}>{t("editor.ready")}</Text>
             </View>
           ) : null}
 
           <TextInput
             style={styles.titleInput}
             defaultValue={game.title}
-            placeholder="O‘yin nomi"
+            placeholder={t("editor.name")}
             placeholderTextColor={colors.inkSoft}
             maxLength={160}
             onEndEditing={(event) => void saveMeta({ title: event.nativeEvent.text.trim() })}
@@ -284,7 +288,7 @@ export default function GameEditorScreen() {
           <TextInput
             style={styles.descriptionInput}
             defaultValue={game.description}
-            placeholder="Qisqa tavsif"
+            placeholder={t("editor.description")}
             placeholderTextColor={colors.inkSoft}
             maxLength={2000}
             multiline
@@ -308,26 +312,26 @@ export default function GameEditorScreen() {
 
           <Pressable style={styles.addButton} onPress={() => setTypePicker(true)}>
             <Plus color={colors.primary} size={icon.lg} strokeWidth={icon.strokeBold} />
-            <Text style={styles.addButtonText}>Savol qo‘shish</Text>
+            <Text style={styles.addButtonText}>{t("editor.addQuestion")}</Text>
           </Pressable>
 
           {actionError ? <InlineError message={actionError} /> : null}
 
           <PrimaryButton
-            label="Saqlash"
+            label={t("editor.save")}
             loading={busy === "ready"}
             disabled={busy !== null}
             onPress={() => void markReadyAnd("ready")}
           />
           <PrimaryButton
-            label="O‘yinni boshlash"
+            label={t("editor.start")}
             icon={Play}
             loading={busy === "host"}
             disabled={busy !== null}
             onPress={() => void markReadyAnd("host")}
           />
           <PrimaryButton
-            label="Do‘konda sotish"
+            label={t("editor.sell")}
             icon={ShoppingBag}
             tone="secondary"
             loading={busy === "sell"}
@@ -341,7 +345,7 @@ export default function GameEditorScreen() {
         <View style={styles.modalScrim}>
           <View style={styles.modalSheet}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Savol turi</Text>
+              <Text style={styles.modalTitle}>{t("editor.type")}</Text>
               <Pressable onPress={() => setTypePicker(false)} hitSlop={8}>
                 <X color={colors.inkMuted} size={icon.lg} strokeWidth={icon.stroke} />
               </Pressable>
@@ -349,7 +353,7 @@ export default function GameEditorScreen() {
             <ScrollView contentContainerStyle={{ gap: spacing.sm, paddingBottom: spacing.xl }}>
               {GAME_QUESTION_TYPES.map((type) => (
                 <Pressable key={type} style={styles.typeRow} onPress={() => void addQuestion(type)}>
-                  <Text style={styles.typeRowText}>{GAME_TYPE_LABELS[type]}</Text>
+                  <Text style={styles.typeRowText}>{labelOf("gameType", type)}</Text>
                 </Pressable>
               ))}
             </ScrollView>

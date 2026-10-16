@@ -2,6 +2,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { Check, Download, Plus, Trash2, User as UserIcon } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { ScreenHeader } from "@/components/ScreenHeader";
@@ -31,6 +32,7 @@ const EMPTY_RELATIVE: RelativeRow = { relation: "", name: "", born: "", work: ""
 export default function ObyektivkaScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation("tools");
   const [doc, setDoc] = useState<ObjectiveDoc | null>(null);
   const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState(false);
@@ -99,7 +101,7 @@ export default function ObyektivkaScreen() {
   if (loading || !doc) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="Obyektivka" />
+        <ScreenHeader title={t("objective.title")} />
         <View style={styles.centered}>
           {error ? <Text style={styles.error}>{error}</Text> : <ActivityIndicator color={colors.primary} size="large" />}
         </View>
@@ -120,7 +122,7 @@ export default function ObyektivkaScreen() {
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.screen}>
-      <ScreenHeader title="Obyektivka" />
+      <ScreenHeader title={t("objective.title")} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -141,7 +143,7 @@ export default function ObyektivkaScreen() {
             <Pressable
               key={entry.id}
               accessibilityRole="button"
-              accessibilityLabel={`${entry.label} maydoniga o‘tish`}
+              accessibilityLabel={t("objective.jumpTo", { field: entry.label })}
               onPress={() => inputs.current[entry.id]?.focus()}
               style={styles.sheetRow}
             >
@@ -171,7 +173,7 @@ export default function ObyektivkaScreen() {
           <TextInput
             value={doc.fullName}
             onChangeText={(value) => change({ ...doc, fullName: value })}
-            placeholder="Abdusattorov Pahlavon Abdurashid o‘g‘li"
+            placeholder={t("objective.namePlaceholder")}
             placeholderTextColor={colors.inkSoft}
             style={styles.input}
             maxLength={160}
@@ -198,8 +200,8 @@ export default function ObyektivkaScreen() {
         </View>
 
         <Section
-          title="Mehnat faoliyati"
-          hint="Har bir ish joyi alohida qator."
+          title={t("objective.work")}
+          hint={t("objective.workHint")}
           onAdd={() => change({ ...doc, work: [...doc.work, { ...EMPTY_WORK }] })}
         >
           {doc.work.map((row, index) => (
@@ -207,7 +209,7 @@ export default function ObyektivkaScreen() {
               <View style={styles.rowHead}>
                 <Text style={styles.rowNumber}>{index + 1}</Text>
                 <Pressable
-                  accessibilityLabel="Qatorni o‘chirish"
+                  accessibilityLabel={t("objective.removeRow")}
                   onPress={() => change({ ...doc, work: doc.work.filter((_, at) => at !== index) })}
                   style={styles.rowDelete}
                 >
@@ -217,14 +219,14 @@ export default function ObyektivkaScreen() {
               <TextInput
                 value={row.period}
                 onChangeText={(value) => change({ ...doc, work: doc.work.map((entry, at) => at === index ? { ...entry, period: value } : entry) })}
-                placeholder="2022-2024 yy."
+                placeholder={t("objective.years")}
                 placeholderTextColor={colors.inkSoft}
                 style={styles.input}
               />
               <TextInput
                 value={row.detail}
                 onChangeText={(value) => change({ ...doc, work: doc.work.map((entry, at) => at === index ? { ...entry, detail: value } : entry) })}
-                placeholder="Ish joyi va lavozimi"
+                placeholder={t("objective.workPlace")}
                 placeholderTextColor={colors.inkSoft}
                 style={styles.input}
                 multiline
@@ -234,8 +236,8 @@ export default function ObyektivkaScreen() {
         </Section>
 
         <Section
-          title="Yaqin qarindoshlar"
-          hint="Hujjatning ikkinchi sahifasidagi jadval."
+          title={t("objective.relatives")}
+          hint={t("objective.relativesHint")}
           onAdd={() => change({ ...doc, relatives: [...doc.relatives, { ...EMPTY_RELATIVE }] })}
         >
           {doc.relatives.map((row, index) => (
@@ -243,7 +245,7 @@ export default function ObyektivkaScreen() {
               <View style={styles.rowHead}>
                 <Text style={styles.rowNumber}>{index + 1}</Text>
                 <Pressable
-                  accessibilityLabel="Qatorni o‘chirish"
+                  accessibilityLabel={t("objective.removeRow")}
                   onPress={() => change({ ...doc, relatives: doc.relatives.filter((_, at) => at !== index) })}
                   style={styles.rowDelete}
                 >
@@ -270,7 +272,7 @@ export default function ObyektivkaScreen() {
         <View style={styles.photoNote}>
           <UserIcon color={colors.inkSoft} size={18} strokeWidth={1.8} />
           <Text style={styles.photoText}>
-            Rasm 3×4 bo‘limida yaratgan suratdan olinadi. Hali yaratmagan bo‘lsangiz, hujjat rasmsiz chiqadi.
+            {t("objective.photo")}
           </Text>
         </View>
 
@@ -292,7 +294,7 @@ export default function ObyektivkaScreen() {
         {saved ? (
           <View style={styles.savedRow}>
             <Check color={colors.success} size={15} strokeWidth={2.6} />
-            <Text style={styles.savedText}>Saqlandi</Text>
+            <Text style={styles.savedText}>{t("objective.saved")}</Text>
           </View>
         ) : null}
       </ScrollView>
@@ -308,6 +310,7 @@ function Section({ title, hint, onAdd, children }: {
 }) {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation("tools");
   return (
     <View style={styles.section}>
       <View style={styles.sectionHead}>
@@ -315,7 +318,7 @@ function Section({ title, hint, onAdd, children }: {
           <Text style={styles.sectionTitle}>{title}</Text>
           <Text style={styles.sectionHint}>{hint}</Text>
         </View>
-        <Pressable accessibilityLabel="Qator qo‘shish" onPress={onAdd} style={styles.add}>
+        <Pressable accessibilityLabel={t("objective.addRow")} onPress={onAdd} style={styles.add}>
           <Plus color={colors.primary} size={18} strokeWidth={2.4} />
         </Pressable>
       </View>

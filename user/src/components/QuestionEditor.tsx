@@ -1,10 +1,12 @@
 import {
-  SURVEY_QUESTION_LABELS, SURVEY_QUESTION_TYPES, questionHasOptions, supportsLatinOnly,
+  SURVEY_QUESTION_TYPES, questionHasOptions, supportsLatinOnly,
   type SurveyQuestionType,
 } from "@jaxongirman/types";
 import { ChevronDown, ChevronUp, Copy, GripVertical, Plus, Trash2, X } from "lucide-react-native";
+import { useTranslation } from "react-i18next";
 import { Pressable, Switch, Text, TextInput, View } from "react-native";
 
+import { i18n } from "@/i18n";
 import { radius, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
@@ -57,16 +59,16 @@ export function toPayload(questions: readonly DraftQuestion[]) {
 
 /** The first thing wrong with this draft, in the order a person would fix it. */
 export function firstQuestionProblem(questions: readonly DraftQuestion[]): string | null {
-  if (questions.length === 0) return "Kamida bitta savol qo‘shing.";
+  if (questions.length === 0) return i18n.t("survey:question.needOne");
   for (const [index, question] of questions.entries()) {
-    if (question.label.trim() === "") return `${index + 1}-savol matnini kiriting.`;
+    if (question.label.trim() === "") return i18n.t("survey:question.needLabel", { number: index + 1 });
     if (questionHasOptions(question.type)) {
       const filled = question.options.filter((option) => option.label.trim() !== "");
-      if (filled.length < 2) return `${index + 1}-savol uchun kamida 2 ta variant kiriting.`;
+      if (filled.length < 2) return i18n.t("survey:question.needOptions", { number: index + 1 });
     }
     const { min, max } = question.config;
     if (question.type === "number" && min !== undefined && max !== undefined && min > max) {
-      return `${index + 1}-savolda eng kichik qiymat eng kattasidan oshib ketgan.`;
+      return i18n.t("survey:question.badRange", { number: index + 1 });
     }
   }
   return null;
@@ -93,6 +95,7 @@ type Props = {
 export function QuestionEditor({ question, index, total, onChange, onRemove, onDuplicate, onMove }: Props) {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation(["survey", "labels"]);
   const hasOptions = questionHasOptions(question.type);
   const canBeLatin = supportsLatinOnly(question.type);
 
@@ -118,18 +121,18 @@ export function QuestionEditor({ question, index, total, onChange, onRemove, onD
     <View style={styles.card}>
       <View style={styles.head}>
         <GripVertical color={colors.inkSoft} size={18} strokeWidth={2} />
-        <Text style={styles.position}>{index + 1}-savol</Text>
+        <Text style={styles.position}>{t("question.position", { number: index + 1 })}</Text>
         <View style={styles.headActions}>
-          <Pressable accessibilityLabel="Yuqoriga" disabled={index === 0} onPress={() => onMove(index - 1)} style={[styles.iconButton, index === 0 && styles.iconDisabled]}>
+          <Pressable accessibilityLabel={t("question.up")} disabled={index === 0} onPress={() => onMove(index - 1)} style={[styles.iconButton, index === 0 && styles.iconDisabled]}>
             <ChevronUp color={colors.ink} size={16} strokeWidth={2.2} />
           </Pressable>
-          <Pressable accessibilityLabel="Pastga" disabled={index === total - 1} onPress={() => onMove(index + 1)} style={[styles.iconButton, index === total - 1 && styles.iconDisabled]}>
+          <Pressable accessibilityLabel={t("question.down")} disabled={index === total - 1} onPress={() => onMove(index + 1)} style={[styles.iconButton, index === total - 1 && styles.iconDisabled]}>
             <ChevronDown color={colors.ink} size={16} strokeWidth={2.2} />
           </Pressable>
-          <Pressable accessibilityLabel="Nusxalash" onPress={onDuplicate} style={styles.iconButton}>
+          <Pressable accessibilityLabel={t("question.duplicate")} onPress={onDuplicate} style={styles.iconButton}>
             <Copy color={colors.ink} size={15} strokeWidth={2} />
           </Pressable>
-          <Pressable accessibilityLabel="O‘chirish" onPress={onRemove} style={[styles.iconButton, styles.iconDanger]}>
+          <Pressable accessibilityLabel={t("question.remove")} onPress={onRemove} style={[styles.iconButton, styles.iconDanger]}>
             <Trash2 color={colors.danger} size={15} strokeWidth={2} />
           </Pressable>
         </View>
@@ -138,7 +141,7 @@ export function QuestionEditor({ question, index, total, onChange, onRemove, onD
       <TextInput
         value={question.label}
         onChangeText={(value) => patch({ label: value.slice(0, 200) })}
-        placeholder="Savol matni"
+        placeholder={t("question.label")}
         placeholderTextColor={colors.inkSoft}
         style={styles.labelInput}
         multiline
@@ -153,7 +156,7 @@ export function QuestionEditor({ question, index, total, onChange, onRemove, onD
             onPress={() => changeType(type)}
             style={[styles.typeChip, question.type === type && styles.typeChipActive]}
           >
-            <Text style={[styles.typeText, question.type === type && styles.typeTextActive]}>{SURVEY_QUESTION_LABELS[type]}</Text>
+            <Text style={[styles.typeText, question.type === type && styles.typeTextActive]}>{t(`labels:surveyQuestion.${type}`)}</Text>
           </Pressable>
         ))}
       </View>
@@ -161,7 +164,7 @@ export function QuestionEditor({ question, index, total, onChange, onRemove, onD
       <TextInput
         value={question.helper_text}
         onChangeText={(value) => patch({ helper_text: value.slice(0, 300) })}
-        placeholder="Yordamchi izoh (ixtiyoriy)"
+        placeholder={t("question.hint")}
         placeholderTextColor={colors.inkSoft}
         style={styles.helperInput}
       />
@@ -176,13 +179,13 @@ export function QuestionEditor({ question, index, total, onChange, onRemove, onD
                 onChangeText={(value) => patch({
                   options: question.options.map((item) => item.key === option.key ? { ...item, label: value.slice(0, 160) } : item),
                 })}
-                placeholder={`${optionIndex + 1}-variant`}
+                placeholder={t("question.option", { number: optionIndex + 1 })}
                 placeholderTextColor={colors.inkSoft}
                 style={styles.optionInput}
               />
               {question.options.length > 2 ? (
                 <Pressable
-                  accessibilityLabel="Variantni o‘chirish"
+                  accessibilityLabel={t("question.removeOption")}
                   onPress={() => patch({ options: question.options.filter((item) => item.key !== option.key) })}
                   style={styles.optionRemove}
                 >
@@ -197,7 +200,7 @@ export function QuestionEditor({ question, index, total, onChange, onRemove, onD
             style={styles.optionAdd}
           >
             <Plus color={colors.primary} size={15} strokeWidth={2.4} />
-            <Text style={styles.optionAddText}>Variant qo‘shish</Text>
+            <Text style={styles.optionAddText}>{t("question.addOption")}</Text>
           </Pressable>
         </View>
       ) : null}
@@ -205,7 +208,7 @@ export function QuestionEditor({ question, index, total, onChange, onRemove, onD
       {question.type === "number" ? (
         <View style={styles.rangeRow}>
           <View style={styles.rangeField}>
-            <Text style={styles.rangeLabel}>Eng kichik</Text>
+            <Text style={styles.rangeLabel}>{t("question.min")}</Text>
             <TextInput
               value={question.config.min === undefined ? "" : String(question.config.min)}
               onChangeText={(value) => patch({ config: { ...question.config, min: value === "" ? undefined : Number(value.replace(/[^0-9-]/g, "")) } })}
@@ -216,7 +219,7 @@ export function QuestionEditor({ question, index, total, onChange, onRemove, onD
             />
           </View>
           <View style={styles.rangeField}>
-            <Text style={styles.rangeLabel}>Eng katta</Text>
+            <Text style={styles.rangeLabel}>{t("question.max")}</Text>
             <TextInput
               value={question.config.max === undefined ? "" : String(question.config.max)}
               onChangeText={(value) => patch({ config: { ...question.config, max: value === "" ? undefined : Number(value.replace(/[^0-9-]/g, "")) } })}
@@ -231,13 +234,13 @@ export function QuestionEditor({ question, index, total, onChange, onRemove, onD
 
       {question.type === "image" ? (
         <Text style={styles.hint}>
-          Rasm hajmi 3 MB dan kichik bo‘lishi kerak. Javob beruvchiga hajmni kamaytirish bo‘yicha maslahat avtomatik ko‘rsatiladi.
+          {t("question.imageNote")}
         </Text>
       ) : null}
 
       <View style={styles.toggles}>
         <View style={styles.toggleRow}>
-          <Text style={styles.toggleLabel}>Majburiy savol</Text>
+          <Text style={styles.toggleLabel}>{t("question.required")}</Text>
           <Switch
             value={question.is_required}
             onValueChange={(value) => patch({ is_required: value })}
@@ -248,8 +251,8 @@ export function QuestionEditor({ question, index, total, onChange, onRemove, onD
         {canBeLatin ? (
           <View style={styles.toggleRow}>
             <View style={styles.toggleCopy}>
-              <Text style={styles.toggleLabel}>Faqat lotin alifbosida</Text>
-              <Text style={styles.toggleHint}>Kirill harflari yozilgan javob qabul qilinmaydi.</Text>
+              <Text style={styles.toggleLabel}>{t("question.latinOnly")}</Text>
+              <Text style={styles.toggleHint}>{t("question.latinOnlyHint")}</Text>
             </View>
             <Switch
               value={question.latin_only}

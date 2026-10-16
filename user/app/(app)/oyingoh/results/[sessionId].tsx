@@ -1,6 +1,7 @@
-import { GAME_TYPE_LABELS, type GameQuestionType } from "@jaxongirman/types";
+import type { GameQuestionType } from "@jaxongirman/types";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, ScrollView, Text, View } from "react-native";
 
 import { Appear } from "@/components/Appear";
@@ -8,6 +9,8 @@ import { GameLeaderboardList } from "@/components/GameAnswerInput";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { ErrorState } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
+import { labelOf } from "@/lib/labels";
+import { formatNumber } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
 import { radius, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
@@ -34,6 +37,7 @@ type QuestionAnalytics = {
 export default function GameResultsScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation("play");
   const router = useRouter();
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
   const [players, setPlayers] = useState<Player[]>([]);
@@ -57,7 +61,7 @@ export default function GameResultsScreen() {
           .eq("session_id", sessionId),
       ]);
       if (sessionResult.error) throw sessionResult.error;
-      setTitle((sessionResult.data.games as unknown as { title: string } | null)?.title ?? "O‘yin");
+      setTitle((sessionResult.data.games as unknown as { title: string } | null)?.title ?? t("results.fallback"));
       setPlayers((playerResult.data as Player[]) ?? []);
 
       const gameId = sessionResult.data.game_id;
@@ -86,7 +90,7 @@ export default function GameResultsScreen() {
     } finally {
       setLoading(false);
     }
-  }, [sessionId]);
+  }, [sessionId, t]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -98,7 +102,7 @@ export default function GameResultsScreen() {
   if (error) {
     return (
       <View style={styles.safe}>
-        <ScreenHeader title="Natijalar" onLeave={() => router.back()} />
+        <ScreenHeader title={t("results.title")} onLeave={() => router.back()} />
         <ErrorState message={error} onRetry={() => void load()} />
       </View>
     );
@@ -116,48 +120,48 @@ export default function GameResultsScreen() {
 
   return (
     <View style={styles.safe}>
-      <ScreenHeader title="Natijalar" subtitle={title} onLeave={() => router.back()} />
+      <ScreenHeader title={t("results.title")} subtitle={title} onLeave={() => router.back()} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.summaryGrid}>
-          <Summary value={String(players.length)} label="Ishtirokchi" />
-          <Summary value={averageScore.toLocaleString("uz-UZ")} label="O‘rtacha ball" />
+          <Summary value={String(players.length)} label={t("results.players")} />
+          <Summary value={formatNumber(averageScore)} label={t("results.average")} />
           <Summary
             value={totalAnswers ? `${Math.round((totalCorrect / totalAnswers) * 100)}%` : "—"}
-            label="To‘g‘ri javob"
+            label={t("results.correctShare")}
           />
         </View>
 
-        <Text style={styles.sectionTitle}>Natijalar jadvali</Text>
+        <Text style={styles.sectionTitle}>{t("leaderboard")}</Text>
         <GameLeaderboardList players={players.map((player, index) => ({ ...player, rank: player.rank ?? index + 1 }))} />
 
         {hardest || easiest ? (
           <>
-            <Text style={styles.sectionTitle}>Diqqatga sazovor</Text>
+            <Text style={styles.sectionTitle}>{t("results.notable")}</Text>
             {hardest ? (
               <View style={styles.noteCard}>
-                <Text style={styles.noteLabel}>Eng qiyin savol</Text>
+                <Text style={styles.noteLabel}>{t("results.hardest")}</Text>
                 <Text style={styles.noteText} numberOfLines={2}>{hardest.position + 1}. {hardest.prompt}</Text>
-                <Text style={styles.noteMeta}>{Math.round((hardest.correct / hardest.answers) * 100)}% to‘g‘ri</Text>
+                <Text style={styles.noteMeta}>{t("results.share", { percent: Math.round((hardest.correct / hardest.answers) * 100) })}</Text>
               </View>
             ) : null}
             {easiest && easiest.id !== hardest?.id ? (
               <View style={styles.noteCard}>
-                <Text style={styles.noteLabel}>Eng oson savol</Text>
+                <Text style={styles.noteLabel}>{t("results.easiest")}</Text>
                 <Text style={styles.noteText} numberOfLines={2}>{easiest.position + 1}. {easiest.prompt}</Text>
-                <Text style={styles.noteMeta}>{Math.round((easiest.correct / easiest.answers) * 100)}% to‘g‘ri</Text>
+                <Text style={styles.noteMeta}>{t("results.share", { percent: Math.round((easiest.correct / easiest.answers) * 100) })}</Text>
               </View>
             ) : null}
           </>
         ) : null}
 
-        <Text style={styles.sectionTitle}>Savollar bo‘yicha</Text>
+        <Text style={styles.sectionTitle}>{t("results.byQuestion")}</Text>
         {questions.map((question, index) => (
           <Appear key={question.id} index={index}>
             <View key={question.id} style={styles.questionCard}>
               <View style={styles.questionHead}>
                 <Text style={styles.questionIndex}>{question.position + 1}</Text>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.questionType}>{GAME_TYPE_LABELS[question.type]}</Text>
+                  <Text style={styles.questionType}>{labelOf("gameType", question.type)}</Text>
                   <Text style={styles.questionPrompt} numberOfLines={2}>{question.prompt}</Text>
                 </View>
               </View>
@@ -166,8 +170,8 @@ export default function GameResultsScreen() {
                 <View style={[styles.barRest, { flex: Math.max(question.answers - question.correct, 0) || 0.001 }]} />
               </View>
               <Text style={styles.questionMeta}>
-                {question.answers} javob · {question.correct} to‘g‘ri
-                {question.averageMs > 0 ? ` · o‘rtacha ${(question.averageMs / 1000).toFixed(1)}s` : ""}
+                {t("results.meta", { answers: question.answers, correct: question.correct })}
+                {question.averageMs > 0 ? t("results.average_ms", { seconds: (question.averageMs / 1000).toFixed(1) }) : ""}
               </Text>
             </View>
 

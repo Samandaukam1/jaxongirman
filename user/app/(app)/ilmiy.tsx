@@ -2,6 +2,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { BookOpen, Check, Download, Pause, Play, Sparkles } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { ScreenHeader } from "@/components/ScreenHeader";
@@ -25,6 +26,7 @@ import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 export default function IlmiyScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation("tools");
   const [works, setWorks] = useState<Work[]>([]);
   const [work, setWork] = useState<Work | null>(null);
   const [sections, setSections] = useState<Section[]>([]);
@@ -58,7 +60,7 @@ export default function IlmiyScreen() {
   }, []);
 
   async function start() {
-    if (!topic.trim()) { setError("Mavzuni yozing."); return; }
+    if (!topic.trim()) { setError(t("academic.needTopic")); return; }
     setBusy("create"); setError(null);
     try {
       const created = await createWork({ kind, topic, field, requirements });
@@ -110,7 +112,7 @@ export default function IlmiyScreen() {
           mimeType: format === "pdf"
             ? "application/pdf"
             : "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-          dialogTitle: "Ilmiy ish",
+          dialogTitle: t("academic.title"),
         });
       }
     } catch (downloadError) {
@@ -123,7 +125,7 @@ export default function IlmiyScreen() {
   if (loading) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="Ilmiy ish" />
+        <ScreenHeader title={t("academic.title")} />
         <View style={styles.centered}><ActivityIndicator color={colors.primary} size="large" /></View>
       </View>
     );
@@ -138,12 +140,12 @@ export default function IlmiyScreen() {
 
     return (
       <View style={styles.screen}>
-        <ScreenHeader title={KINDS.find((entry) => entry.kind === work.kind)?.label ?? "Ilmiy ish"} onLeave={() => setWork(null)} />
+        <ScreenHeader title={KINDS.some((entry) => entry.kind === work.kind) ? t(`academic.kind.${work.kind}.label`) : t("academic.title")} onLeave={() => setWork(null)} />
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <Text style={styles.topic}>{work.topic}</Text>
           <Text style={styles.meta}>
-            {ready}/{total} bo‘lim · {words} so‘z · {work.sources.length} manba
-            {work.empirical ? " · empirik" : ""}
+            {t("academic.meta", { ready, total, words, sources: work.sources.length })}
+            {work.empirical ? t("academic.empirical") : ""}
           </Text>
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -167,7 +169,7 @@ export default function IlmiyScreen() {
                   ? <Check color={colors.success} size={16} strokeWidth={2.6} />
                   : section.status === "writing"
                     ? <ActivityIndicator color={colors.primary} size="small" />
-                    : <Text style={styles.sectionWait}>kutilmoqda</Text>}
+                    : <Text style={styles.sectionWait}>{t("academic.waiting")}</Text>}
               </View>
               {section.body ? <Text style={styles.sectionBody} numberOfLines={6}>{section.body}</Text> : null}
             </View>
@@ -176,8 +178,8 @@ export default function IlmiyScreen() {
           {ready < total ? (
             <Pressable disabled={running} onPress={() => void run()} style={[styles.primary, running && styles.disabled]}>
               {running
-                ? <><ActivityIndicator color={colors.onPrimary} size="small" /><Text style={styles.primaryText}>Yozilmoqda…</Text></>
-                : <><Play color={colors.onPrimary} size={icon.sm} strokeWidth={2.2} /><Text style={styles.primaryText}>{ready > 0 ? "Davom ettirish" : "Yozishni boshlash"}</Text></>}
+                ? <><ActivityIndicator color={colors.onPrimary} size="small" /><Text style={styles.primaryText}>{t("academic.writing")}</Text></>
+                : <><Play color={colors.onPrimary} size={icon.sm} strokeWidth={2.2} /><Text style={styles.primaryText}>{ready > 0 ? t("academic.resume") : t("academic.start")}</Text></>}
             </Pressable>
           ) : null}
 
@@ -200,7 +202,7 @@ export default function IlmiyScreen() {
 
           {work.sources.length > 0 ? (
             <View style={styles.sources}>
-              <Text style={styles.sourcesTitle}>Manbalar</Text>
+              <Text style={styles.sourcesTitle}>{t("academic.sources")}</Text>
               {work.sources.map((source, index) => (
                 <Text key={`${source.title}-${index}`} style={styles.source}>
                   {index + 1}. {source.author ? `${source.author}. ` : ""}{source.title}
@@ -218,11 +220,11 @@ export default function IlmiyScreen() {
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.screen}>
-      <ScreenHeader title="Ilmiy ish" />
+      <ScreenHeader title={t("academic.title")} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        <Text style={styles.label}>Ish turi</Text>
+        <Text style={styles.label}>{t("academic.type")}</Text>
         <View style={styles.kinds}>
           {KINDS.map((entry) => (
             <Pressable
@@ -231,36 +233,36 @@ export default function IlmiyScreen() {
               style={[styles.kind, kind === entry.kind && styles.kindOn]}
             >
               <BookOpen color={kind === entry.kind ? colors.onPrimary : colors.primary} size={18} strokeWidth={2} />
-              <Text style={[styles.kindLabel, kind === entry.kind && styles.kindLabelOn]}>{entry.label}</Text>
-              <Text style={[styles.kindDetail, kind === entry.kind && styles.kindDetailOn]}>{entry.detail}</Text>
+              <Text style={[styles.kindLabel, kind === entry.kind && styles.kindLabelOn]}>{t(`academic.kind.${entry.kind}.label`)}</Text>
+              <Text style={[styles.kindDetail, kind === entry.kind && styles.kindDetailOn]}>{t(`academic.kind.${entry.kind}.detail`)}</Text>
             </Pressable>
           ))}
         </View>
 
-        <Text style={styles.label}>Mavzu</Text>
-        <TextInput value={topic} onChangeText={setTopic} placeholder="Masalan: Talabalar jurnalistikasining ijtimoiy roli" placeholderTextColor={colors.inkSoft} style={styles.input} multiline maxLength={300} />
+        <Text style={styles.label}>{t("academic.topic")}</Text>
+        <TextInput value={topic} onChangeText={setTopic} placeholder={t("academic.topicPlaceholder")} placeholderTextColor={colors.inkSoft} style={styles.input} multiline maxLength={300} />
 
-        <Text style={styles.label}>Yo‘nalish yoki fan</Text>
-        <TextInput value={field} onChangeText={setField} placeholder="Jurnalistika" placeholderTextColor={colors.inkSoft} style={styles.input} maxLength={160} />
+        <Text style={styles.label}>{t("academic.field")}</Text>
+        <TextInput value={field} onChangeText={setField} placeholder={t("academic.fieldPlaceholder")} placeholderTextColor={colors.inkSoft} style={styles.input} maxLength={160} />
 
-        <Text style={styles.label}>Talablar (ixtiyoriy)</Text>
-        <TextInput value={requirements} onChangeText={setRequirements} placeholder="Hajmi, uslubi, nima kiritilishi kerak…" placeholderTextColor={colors.inkSoft} style={[styles.input, styles.tall]} multiline maxLength={800} />
+        <Text style={styles.label}>{t("academic.requirements")}</Text>
+        <TextInput value={requirements} onChangeText={setRequirements} placeholder={t("academic.requirementsPlaceholder")} placeholderTextColor={colors.inkSoft} style={[styles.input, styles.tall]} multiline maxLength={800} />
 
         <Pressable disabled={busy !== null} onPress={() => void start()} style={[styles.primary, busy !== null && styles.disabled]}>
           {busy
-            ? <><ActivityIndicator color={colors.onPrimary} size="small" /><Text style={styles.primaryText}>{busy === "plan" ? "Manbalar izlanmoqda…" : "Tayyorlanmoqda…"}</Text></>
-            : <><Sparkles color={colors.onPrimary} size={icon.sm} strokeWidth={2.2} /><Text style={styles.primaryText}>Reja va manbalarni tayyorlash</Text></>}
+            ? <><ActivityIndicator color={colors.onPrimary} size="small" /><Text style={styles.primaryText}>{busy === "plan" ? t("academic.planning") : t("academic.preparing")}</Text></>
+            : <><Sparkles color={colors.onPrimary} size={icon.sm} strokeWidth={2.2} /><Text style={styles.primaryText}>{t("academic.plan")}</Text></>}
         </Pressable>
 
         {works.length > 0 ? (
           <>
-            <Text style={styles.label}>Boshlangan ishlar</Text>
+            <Text style={styles.label}>{t("academic.started")}</Text>
             {works.map((entry) => (
               <Pressable key={entry.id} onPress={() => void open(entry.id)} style={styles.workRow}>
                 <View style={styles.workCopy}>
                   <Text style={styles.workTopic} numberOfLines={1}>{entry.topic}</Text>
                   <Text style={styles.workMeta}>
-                    {KINDS.find((item) => item.kind === entry.kind)?.label} · {entry.status}
+                    {t(`academic.kind.${entry.kind}.label`)} · {t(`academic.status.${entry.status}`)}
                   </Text>
                 </View>
               </Pressable>

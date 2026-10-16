@@ -1,5 +1,6 @@
 import { Redirect } from "expo-router";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Text, View } from "react-native";
 
 import { useAuth } from "@/providers/AuthProvider";
@@ -13,6 +14,7 @@ import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 export default function AuthCallbackScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation("misc");
   const { session, loading } = useAuth();
   const [timedOut, setTimedOut] = useState(false);
 
@@ -27,7 +29,7 @@ export default function AuthCallbackScreen() {
   return (
     <View style={styles.screen}>
       <ActivityIndicator color={colors.primary} size="large" />
-      <Text style={styles.label}>Email tasdiqlanmoqda…</Text>
+      <Text style={styles.label}>{t("emailConfirming")}</Text>
     </View>
   );
 }

@@ -2,6 +2,7 @@ import { DATA_COLLECTION_MODULE } from "@jaxongirman/types";
 import { useFocusEffect, useRouter } from "expo-router";
 import { BookmarkCheck, ClipboardList, Plus, ShieldCheck } from "lucide-react-native";
 import { useCallback, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 
 import { Appear } from "@/components/Appear";
@@ -18,15 +19,15 @@ import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 type Tab = "created" | "participating";
 type Filter = "all" | "active" | "finished";
 
-const TABS: { key: Tab; label: string }[] = [
-  { key: "created", label: "Yaratganlarim" },
-  { key: "participating", label: "Qatnashganlarim" },
+const TABS: { key: Tab }[] = [
+  { key: "created" },
+  { key: "participating" },
 ];
 
-const FILTERS: { key: Filter; label: string }[] = [
-  { key: "all", label: "Barchasi" },
-  { key: "active", label: "Faol" },
-  { key: "finished", label: "Tugagan" },
+const FILTERS: { key: Filter }[] = [
+  { key: "all" },
+  { key: "active" },
+  { key: "finished" },
 ];
 
 function isFinished(item: SurveySummary): boolean {
@@ -38,6 +39,7 @@ function isFinished(item: SurveySummary): boolean {
 export default function SurveyModuleScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation("survey");
   const router = useRouter();
   const { state: access } = useModuleAccess(DATA_COLLECTION_MODULE);
 
@@ -77,12 +79,12 @@ export default function SurveyModuleScreen() {
   return (
     <View style={styles.screen}>
       <ScreenHeader
-        title="Ma’lumotlarni yig‘ish"
-        subtitle="So‘rovnoma yarating va natijalarni oling"
+        title={t("module")}
+        subtitle={t("moduleSubtitle")}
         action={
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Savol shablonlari"
+            accessibilityLabel={t("templates")}
             onPress={() => router.push("/(app)/survey/templates")}
             style={styles.headerAction}
           >
@@ -107,20 +109,20 @@ export default function SurveyModuleScreen() {
           <ShieldCheck color={access?.has_access ? colors.success : colors.primary} size={20} strokeWidth={2} />
           <View style={styles.accessCopy}>
             <Text style={styles.accessTitle}>
-              {access?.has_access ? "Modulga kirish faol" : creatorGate.allowed ? "Modul ochiq" : "Modulga kirish kerak"}
+              {access?.has_access ? t("accessActive") : creatorGate.allowed ? t("accessOpen") : t("accessNeeded")}
             </Text>
             <Text style={styles.accessBody}>
               {access?.has_access
-                ? "Ma’lumot: kirish muddati va shartlarini ko‘rish"
+                ? t("accessActiveBody")
                 : creatorGate.allowed
-                  ? "Hozircha barcha foydalanuvchilar uchun ochiq. Shartlarni ko‘rish"
+                  ? t("accessOpenBody")
                   : (creatorGate.reason ?? "")}
             </Text>
           </View>
         </Pressable>
 
         <PrimaryButton
-          label="Yangi so‘rovnoma"
+          label={t("newSurvey")}
           icon={Plus}
           disabled={!creatorGate.allowed}
           onPress={() => router.push("/(app)/survey/create")}
@@ -135,7 +137,7 @@ export default function SurveyModuleScreen() {
               onPress={() => setTab(item.key)}
               style={[styles.tab, tab === item.key && styles.tabActive]}
             >
-              <Text style={[styles.tabText, tab === item.key && styles.tabTextActive]}>{item.label}</Text>
+              <Text style={[styles.tabText, tab === item.key && styles.tabTextActive]}>{t(`tab.${item.key}`)}</Text>
               <Text style={[styles.tabCount, tab === item.key && styles.tabCountActive]}>
                 {item.key === "created" ? created.length : participating.length}
               </Text>
@@ -151,7 +153,7 @@ export default function SurveyModuleScreen() {
               onPress={() => setFilter(item.key)}
               style={[styles.filter, filter === item.key && styles.filterActive]}
             >
-              <Text style={[styles.filterText, filter === item.key && styles.filterTextActive]}>{item.label}</Text>
+              <Text style={[styles.filterText, filter === item.key && styles.filterTextActive]}>{t(`filter.${item.key}`)}</Text>
             </Pressable>
           ))}
         </View>
@@ -162,11 +164,11 @@ export default function SurveyModuleScreen() {
         {!loading && !error && visible.length === 0 ? (
           <EmptyState
             icon={ClipboardList}
-            title={tab === "created" ? "So‘rovnoma yaratmagansiz" : "Hech qanday so‘rovnomada qatnashmagansiz"}
+            title={tab === "created" ? t("noneCreated") : t("noneJoined")}
             message={
               tab === "created"
-                ? "Yangi so‘rovnoma tugmasi orqali savollaringizni tuzing, havolani ulashing va javoblarni jadvalda oling."
-                : "Sizga yuborilgan so‘rovnoma havolasini ochsangiz, u shu ro‘yxatda paydo bo‘ladi."
+                ? t("noneCreatedBody")
+                : t("noneJoinedBody")
             }
           />
         ) : null}
@@ -175,15 +177,16 @@ export default function SurveyModuleScreen() {
           {visible.map((item, index) => (
             <Appear key={item.id} index={index}>
               <SurveyCard
-                                item={item}
+                item={item}
+                onDeleted={() => setCreated((current) => current.filter((survey) => survey.id !== item.id))}
                 onPress={() => router.push(
                   item.is_owner
                     ? { pathname: "/(app)/survey/results/[id]", params: { id: item.id } }
                     : { pathname: "/(app)/survey/[id]", params: { id: item.id } },
                 )}
               />
-
-            </Appear>          ))}
+            </Appear>
+          ))}
         </View>
       </ScrollView>
     </View>

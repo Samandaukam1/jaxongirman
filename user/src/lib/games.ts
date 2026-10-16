@@ -1,8 +1,10 @@
 import type { GameQuestionType, GameRewardPlan, GameSessionStatus, Json, Tables } from "@jaxongirman/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
+import { i18n } from "../i18n";
+
 import { withNetworkRetry } from "./retry";
-import { supabase } from "./supabase";
+import { changesChannel, supabase } from "./supabase";
 
 /**
  * The O‘yingoh client surface: every server conversation a screen needs, typed
@@ -211,8 +213,7 @@ export async function generateGame(input: GenerateGameInput): Promise<{ gameId: 
  * 100.
  */
 export function subscribeToSession(sessionId: string, onChange: () => void): RealtimeChannel {
-  return supabase
-    .channel(`game-session-${sessionId}`)
+  return changesChannel(`game-session-${sessionId}`)
     .on("postgres_changes",
       { event: "UPDATE", schema: "public", table: "game_sessions", filter: `id=eq.${sessionId}` },
       onChange)
@@ -286,7 +287,7 @@ export const listMyMatches = async (): Promise<{ session_id: string; joined_at: 
       joined_at: row.joined_at,
       total_score: row.total_score,
       rank: row.rank,
-      game_title: ((row.game_sessions as unknown as { games: { title: string } | null }).games?.title) ?? "O‘yin",
+      game_title: ((row.game_sessions as unknown as { games: { title: string } | null }).games?.title) ?? i18n.t("games:fallbackTitle"),
     }));
 };
 

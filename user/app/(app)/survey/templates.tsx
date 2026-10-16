@@ -1,7 +1,8 @@
-import { SURVEY_QUESTION_LABELS, type SurveyQuestionType } from "@jaxongirman/types";
+import type { SurveyQuestionType } from "@jaxongirman/types";
 import { useFocusEffect, useRouter } from "expo-router";
 import { BookmarkCheck, Copy, FilePlus2, Pencil, Trash2 } from "lucide-react-native";
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Alert, Modal, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
 
 import { Appear } from "@/components/Appear";
@@ -34,6 +35,7 @@ type Template = {
 export default function SurveyTemplatesScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation(["survey", "labels", "common"]);
   const router = useRouter();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
@@ -97,10 +99,10 @@ export default function SurveyTemplatesScreen() {
   }
 
   function remove(template: Template) {
-    Alert.alert("Shablon o‘chirilsinmi?", `“${template.name}” butunlay o‘chiriladi.`, [
-      { text: "Bekor qilish", style: "cancel" },
+    Alert.alert(t("template.deleteTitle"), t("template.deleteBody", { name: template.name }), [
+      { text: t("common:cancel"), style: "cancel" },
       {
-        text: "O‘chirish",
+        text: t("common:delete"),
         style: "destructive",
         onPress: async () => {
           const { error: deleteError } = await supabase.from("survey_templates").delete().eq("id", template.id);
@@ -113,7 +115,7 @@ export default function SurveyTemplatesScreen() {
 
   return (
     <View style={styles.screen}>
-      <ScreenHeader title="Savol shablonlari" subtitle="Qayta ishlatiladigan savollar to‘plami" />
+      <ScreenHeader title={t("templates")} subtitle={t("template.subtitle")} />
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -123,7 +125,7 @@ export default function SurveyTemplatesScreen() {
         <View style={styles.note}>
           <BookmarkCheck color={colors.primary} size={16} strokeWidth={2} />
           <Text style={styles.noteText}>
-            Shablonlar faqat savollarni saqlaydi. Javob beruvchilarning javoblari shablonlarga hech qachon yozilmaydi.
+            {t("template.notice")}
           </Text>
         </View>
 
@@ -133,8 +135,8 @@ export default function SurveyTemplatesScreen() {
         {!loading && !error && templates.length === 0 ? (
           <EmptyState
             icon={FilePlus2}
-            title="Shablon yo‘q"
-            message="So‘rovnoma yaratishda “Savollarni shablon sifatida saqlash” tugmasini bossangiz, savollaringiz shu yerda to‘planadi."
+            title={t("template.none")}
+            message={t("template.noneBody")}
           />
         ) : null}
 
@@ -146,13 +148,13 @@ export default function SurveyTemplatesScreen() {
                   <View style={styles.cardCopy}>
                     <Text numberOfLines={1} style={styles.cardTitle}>{template.name}</Text>
                     <Text style={styles.cardMeta}>
-                      {template.questions.length} savol · {template.use_count} marta ishlatilgan · {formatShortDateTime(template.updated_at)}
+                      {t("template.meta", { count: template.questions.length, uses: template.use_count, date: formatShortDateTime(template.updated_at) })}
                     </Text>
                   </View>
-                  <Pressable accessibilityLabel="Nomini o‘zgartirish" onPress={() => { setRenaming(template); setDraftName(template.name); }} style={styles.iconButton}>
+                  <Pressable accessibilityLabel={t("template.rename")} onPress={() => { setRenaming(template); setDraftName(template.name); }} style={styles.iconButton}>
                     <Pencil color={colors.ink} size={15} strokeWidth={2} />
                   </Pressable>
-                  <Pressable accessibilityLabel="O‘chirish" onPress={() => remove(template)} style={[styles.iconButton, styles.iconDanger]}>
+                  <Pressable accessibilityLabel={t("common:delete")} onPress={() => remove(template)} style={[styles.iconButton, styles.iconDanger]}>
                     <Trash2 color={colors.danger} size={15} strokeWidth={2} />
                   </Pressable>
                 </View>
@@ -162,21 +164,21 @@ export default function SurveyTemplatesScreen() {
                     <View key={question.id} style={styles.questionRow}>
                       <View style={styles.dot} />
                       <Text numberOfLines={1} style={styles.questionLabel}>{question.label}</Text>
-                      <Text style={styles.questionType}>{SURVEY_QUESTION_LABELS[question.type]}</Text>
+                      <Text style={styles.questionType}>{t(`labels:surveyQuestion.${question.type}`)}</Text>
                     </View>
                   ))}
                   {template.questions.length > 5 ? (
-                    <Text style={styles.more}>+{template.questions.length - 5} ta savol</Text>
+                    <Text style={styles.more}>{t("template.more", { count: template.questions.length - 5 })}</Text>
                   ) : null}
                 </View>
 
                 <View style={styles.cardActions}>
                   <Pressable accessibilityRole="button" onPress={() => duplicate(template)} style={styles.secondaryAction}>
                     <Copy color={colors.primary} size={icon.xs} strokeWidth={2.2} />
-                    <Text style={styles.secondaryText}>Nusxadan tuzish</Text>
+                    <Text style={styles.secondaryText}>{t("template.copy")}</Text>
                   </Pressable>
                   <PrimaryButton
-                    label="So‘rovnoma yaratish"
+                    label={t("template.create")}
                     loading={busy === template.id}
                     onPress={() => void startFromTemplate(template)}
                     style={styles.primaryAction}
@@ -189,19 +191,19 @@ export default function SurveyTemplatesScreen() {
       </ScrollView>
 
       <Modal visible={renaming !== null} transparent animationType="fade" onRequestClose={() => setRenaming(null)}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Yopish" onPress={() => setRenaming(null)} style={styles.backdrop}>
+        <Pressable accessibilityRole="button" accessibilityLabel={t("common:close")} onPress={() => setRenaming(null)} style={styles.backdrop}>
           <Pressable style={styles.sheet} onPress={() => undefined}>
-            <Text style={styles.sheetTitle}>Shablon nomi</Text>
+            <Text style={styles.sheetTitle}>{t("template.name")}</Text>
             <TextInput
               value={draftName}
               onChangeText={(value) => setDraftName(value.slice(0, 120))}
-              placeholder="Yangi nom"
+              placeholder={t("template.newName")}
               placeholderTextColor={colors.inkSoft}
               autoFocus
               style={styles.input}
             />
             {error ? <InlineError message={error} /> : null}
-            <PrimaryButton label="Saqlash" loading={busy === renaming?.id} disabled={draftName.trim() === ""} onPress={() => void rename()} />
+            <PrimaryButton label={t("common:save")} loading={busy === renaming?.id} disabled={draftName.trim() === ""} onPress={() => void rename()} />
           </Pressable>
         </Pressable>
       </Modal>

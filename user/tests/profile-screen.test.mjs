@@ -6,15 +6,11 @@ import test from "node:test";
 /**
  * Two screens must not draw the same noun two different ways.
  *
- * Profil counts presentations and J Tanga. Loyihalar makes presentations and
- * the home screen shows J Tanga, and both of those already have a drawing for
- * the thing — a slide stack cut from the icon sheet, and the coin. Reaching for
- * a generic Lucide `Presentation` or `Coins` on Profil is how an app ends up
- * with two coins: nothing fails, nothing looks broken in isolation, and the
- * product quietly stops being one product.
- *
- * So the rule is checked rather than remembered. The same two files that
- * Loyihalar and the wallet import have to be the two files Profil imports.
+ * Profil counts presentations and J Tanga, and both already have a drawing
+ * elsewhere — the slide stack on Loyihalar, the coin on Bosh sahifa. Profil now
+ * shows the counts as figures alone; what must never happen is a generic Lucide
+ * `Presentation` or `Coins` creeping in beside them, which is how an app ends
+ * up with two coins without anything looking broken.
  */
 
 const ROOT = new URL("..", import.meta.url).pathname;
@@ -22,61 +18,48 @@ const read = (path) => readFileSync(join(ROOT, path), "utf8");
 
 const PROFILE = "app/(app)/(tabs)/profile.tsx";
 
-test("Taqdimot and J Tanga use the drawings the rest of the app already uses", () => {
+test("Profil never draws Taqdimot or J Tanga with a generic glyph", () => {
   const profile = read(PROFILE);
-  const projects = read("app/(app)/(tabs)/projects.tsx");
-
-  const slideArt = /import\s+SlideCreateArt\s+from\s+"([^"]+)"/.exec(projects);
-  assert.ok(slideArt, "Loyihalar taqdimot rasmini import qilmayapti — tekshiruv eskirgan");
-
-  assert.match(
-    profile,
-    new RegExp(`import\\s+SlideCreateArt\\s+from\\s+"[^"]*${slideArt[1].split("/").pop()}"`),
-    `Profil taqdimot uchun ${slideArt[1]} dan foydalanishi kerak`,
-  );
-  assert.match(
-    profile,
-    /import\s+coinIcon\s+from\s+"[^"]*assets\/coin\/coin-icon\.png"/,
-    "Profil J Tanga uchun mavjud coin assetidan foydalanishi kerak",
-  );
-
-  // And the fallbacks they replaced must be gone, or both would render.
   for (const generic of ["Presentation", "Coins"]) {
     assert.ok(
       !new RegExp(`\\b${generic}\\b[^\\n]*from "lucide-react-native"`).test(profile)
-        && !new RegExp(`Glyph:\\s*${generic}\\b`).test(profile),
-      `Profil hali ham umumiy ${generic} ikonkasini import qilyapti`,
+        && !new RegExp(`glyph:\\s*${generic}\\b`).test(profile),
+      `Profil umumiy ${generic} ikonkasini ishlatyapti`,
     );
   }
+  // If the coin is ever drawn here again, it is the coin the wallet draws.
+  const coin = /import\s+\w+\s+from\s+"([^"]*coin[^"]*)"/i.exec(profile);
+  if (coin) assert.match(coin[1], /assets\/coin\/coin-icon\.png$/, "Profil boshqa tanga rasmini ishlatyapti");
 });
 
 /**
- * The screen this replaced had eleven controls in one hue.
+ * One way to the tariff, and one way of drawing a row.
  *
- * Every icon was `colors.primary` at `strokeWidth={2}`, which is a list you
- * find your way around by counting rows rather than by looking. The fix was to
- * give each its own accent, and the way that regresses is not by someone
- * deleting the accents — it is by someone adding a twelfth row and copying the
- * old pattern for it. So the accents are counted, and they have to be distinct.
+ * The screen this replaced reached the tariff three times — a header tile, a
+ * "Premium tarif" strip and a settings row — and drew every control in its own
+ * hue, which read as busy rather than rich. The tariff is now one Sozlamalar
+ * row, and every row's tile is drawn by one component in one ink; red is kept
+ * for deleting the account. Both regress quietly, by somebody adding a shortcut
+ * or a colour to one row, so both are counted.
  */
-test("every accent named by Profil exists, and the menu rows do not repeat one", () => {
+test("Profil reaches the tariff once and draws every menu row the same way", () => {
   const profile = read(PROFILE);
-  const tokens = read("src/theme/tokens.ts");
+  const card = read("src/components/PlanUsageCard.tsx");
 
-  const known = new Set(
-    [...tokens.slice(tokens.indexOf("export const accents = {")).matchAll(/^\s{2}(\w+):/gm)].map((m) => m[1]),
-  );
-  assert.ok(known.size >= 5, `accents o‘qilmadi (${known.size})`);
+  const routes = [...profile.matchAll(/"\/\(app\)\/tarif"/g)];
+  assert.equal(routes.length, 1, `Profilda tarifga ${routes.length} ta yo‘l bor`);
+  assert.ok(!/Premium tarif/.test(card), "PlanUsageCard yana “Premium tarif” qatorini chizyapti");
 
-  const used = [...profile.matchAll(/accent:\s*"(\w+)"/g)].map((match) => match[1]);
-  assert.ok(used.length >= 8, `Profil accentlari topilmadi (${used.length})`);
-  for (const accent of used) assert.ok(known.has(accent), `noma'lum accent: ${accent}`);
-
-  // The five Sozlamalar rows, which are the block that used to be monochrome.
   const block = profile.slice(profile.indexOf("const SETTINGS = ["), profile.indexOf("] as const satisfies", profile.indexOf("const SETTINGS = [")));
-  const menu = [...block.matchAll(/accent:\s*"(\w+)"/g)].map((match) => match[1]);
-  assert.equal(menu.length, 5, "Sozlamalar qatorlari soni o‘zgargan");
-  assert.equal(new Set(menu).size, 5, `menyu ikonkalari bir xil rangda: ${menu.join(", ")}`);
+  // Rows name their words by key in the `profile` table, one key per row.
+  const rows = [...block.matchAll(/key:\s*"/g)];
+  assert.equal(rows.length, 5, "Sozlamalar qatorlari soni o‘zgargan");
+  assert.ok(!/accent:|color:|gradient/i.test(block), "Sozlamalar qatorlariga alohida rang qaytgan");
+  assert.ok(!/AccentIcon/.test(profile), "Profil yana har xil rangli ikonkalarga qaytgan");
+
+  // Every tile on the screen goes through Tile, and only deletion is red.
+  const tones = [...profile.matchAll(/<Tile\b[^>]*tone="(\w+)"/g)].map((match) => match[1]);
+  assert.deepEqual(tones.filter((tone) => tone === "danger").length, 1, "qizil faqat o‘chirishda bo‘lishi kerak");
 });
 
 /**
@@ -95,7 +78,8 @@ test("the delete button opens a confirmation and never deletes on its own", () =
   assert.match(profile, /onPress=\{\(\) => setConfirmingDelete\(true\)\}/, "qizil tugma tasdiqlash oynasini ochishi kerak");
   assert.match(profile, /<DeleteAccountSheet\s/, "tasdiqlash oynasi ulanmagan");
 
-  assert.match(sheet, /BEKOR QILISH/, "bekor qilish tugmasi yo‘q");
-  assert.match(sheet, /O‘CHIRISH/, "tasdiqlovchi tugma yozuvi yo‘q");
+  // The words live in the `misc` table; the sheet must still draw both buttons.
+  assert.match(sheet, /t\("deleteAccount\.cancel"\)/, "bekor qilish tugmasi yo‘q");
+  assert.match(sheet, /t\("deleteAccount\.confirm"\)/, "tasdiqlovchi tugma yozuvi yo‘q");
   assert.match(sheet, /forgetLocalAccount\(\)/, "o‘chirilgandan keyin lokal sessiya tozalanmaydi");
 });
