@@ -1,7 +1,8 @@
-import { SETTLEMENT_STATUS_LABELS, formatUzPhone, normalizeUzPhone } from "@jaxongirman/types";
+import { formatUzPhone, normalizeUzPhone } from "@jaxongirman/types";
 import { useFocusEffect } from "expo-router";
 import { CheckCircle2, Clock, CreditCard, Phone, Wallet } from "lucide-react-native";
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Alert, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -54,6 +55,7 @@ type Summary = {
 export default function EarningsScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation(["ledger", "common"]);
   const policy = usePaymentPolicy();
   const { user } = useAuth();
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -87,7 +89,7 @@ export default function EarningsScreen() {
   async function saveContact() {
     if (!user) return;
     const normalized = normalizeUzPhone(phone);
-    if (!normalized) { setContactError("Telefon raqamni +998 formatida kiriting."); return; }
+    if (!normalized) { setContactError(t("earnings.phoneFormat")); return; }
     setSavingContact(true);
     setContactError(null);
     const { error: saveError } = await supabase.from("seller_payout_contacts").upsert({
@@ -97,13 +99,13 @@ export default function EarningsScreen() {
     });
     setSavingContact(false);
     if (saveError) setContactError(asErrorMessage(saveError));
-    else Alert.alert("Saqlandi", "Buxgalter to‘lov vaqtida shu raqam orqali bog‘lanadi.");
+    else Alert.alert(t("earnings.saved"), t("earnings.savedBody"));
   }
 
   if (loading) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="Daromadlar" />
+        <ScreenHeader title={t("earnings.title")} />
         <View style={styles.content}><SkeletonCard lines={3} /><SkeletonCard lines={2} /></View>
       </View>
     );
@@ -112,8 +114,8 @@ export default function EarningsScreen() {
   if (error || !summary) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="Daromadlar" />
-        <View style={styles.content}><ErrorState message={error ?? "Ma’lumot topilmadi"} onRetry={() => void load()} /></View>
+        <ScreenHeader title={t("earnings.title")} />
+        <View style={styles.content}><ErrorState message={error ?? t("earnings.notFound")} onRetry={() => void load()} /></View>
       </View>
     );
   }
@@ -125,7 +127,7 @@ export default function EarningsScreen() {
     return (
       <PaymentUnavailable
         title={policy.unavailableMessage("marketplace")}
-        message="Hisob-kitob ma’lumotlaringiz saqlanib qoladi."
+        message={t("earnings.keptBody")}
         onLeave={undefined}
       />
     );
@@ -133,7 +135,7 @@ export default function EarningsScreen() {
 
   return (
     <View style={styles.screen}>
-      <ScreenHeader title="Daromadlar" subtitle={`${summary.sales_count} ta sotuv`} />
+      <ScreenHeader title={t("earnings.title")} subtitle={t("earnings.sales", { count: summary.sales_count })} />
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -141,17 +143,17 @@ export default function EarningsScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={colors.primary} />}
       >
         <View style={styles.headline}>
-          <Text style={styles.headlineLabel}>Jami daromad</Text>
+          <Text style={styles.headlineLabel}>{t("earnings.total")}</Text>
           <Text style={styles.headlineValue}>{formatSom(summary.net_total)}</Text>
           <View style={styles.headlineRow}>
             <View style={styles.headlineStat}>
               <Text style={styles.statValue}>{formatSom(summary.pending_total)}</Text>
-              <Text style={styles.statLabel}>To‘lov kutilmoqda</Text>
+              <Text style={styles.statLabel}>{t("earnings.pending")}</Text>
             </View>
             <View style={styles.headlineDivider} />
             <View style={styles.headlineStat}>
               <Text style={styles.statValue}>{formatSom(summary.paid_total)}</Text>
-              <Text style={styles.statLabel}>To‘langan</Text>
+              <Text style={styles.statLabel}>{t("earnings.paid")}</Text>
             </View>
           </View>
         </View>
@@ -160,12 +162,10 @@ export default function EarningsScreen() {
         <View style={styles.panel}>
           <View style={styles.panelHead}>
             <Phone color={colors.primary} size={18} strokeWidth={2} />
-            <Text style={styles.panelTitle}>Aloqa uchun raqam</Text>
+            <Text style={styles.panelTitle}>{t("earnings.contact")}</Text>
           </View>
           <Text style={styles.panelCopy}>
-            Daromadingizni to‘lashga 7 kun qolganda sizga xabarnoma keladi. Buxgalter shu raqam orqali
-            bog‘lanadi — Telegram profilingizni yuborishingiz yoki qo‘ng‘iroqni kutishingiz mumkin.
-            Bu haqda sizga SMS ham yuboriladi.
+            {t("earnings.contactBody")}
           </Text>
           <TextInput
             value={phone}
@@ -179,23 +179,23 @@ export default function EarningsScreen() {
           <TextInput
             value={telegram}
             onChangeText={(value) => setTelegram(value.replace(/[^A-Za-z0-9_@]/g, "").slice(0, 33))}
-            placeholder="Telegram username (ixtiyoriy)"
+            placeholder={t("earnings.telegram")}
             placeholderTextColor={colors.inkSoft}
             autoCapitalize="none"
             style={styles.input}
           />
           {contactError ? <InlineError message={contactError} /> : null}
-          <PrimaryButton label="Saqlash" tone="secondary" loading={savingContact} onPress={() => void saveContact()} />
+          <PrimaryButton label={t("common:save")} tone="secondary" loading={savingContact} onPress={() => void saveContact()} />
         </View>
 
         {/* ---------------------------------------------------- settlements */}
-        <Text style={styles.sectionTitle}>To‘lovlar tarixi</Text>
+        <Text style={styles.sectionTitle}>{t("earnings.history")}</Text>
 
         {summary.settlements.length === 0 ? (
           <EmptyState
             icon={Wallet}
-            title="Hali to‘lov qilinmagan"
-            message="Sotuvlaringiz to‘planganda buxgalter to‘lov tayyorlaydi va u shu yerda ko‘rinadi."
+            title={t("earnings.empty")}
+            message={t("earnings.emptyBody")}
           />
         ) : (
           <View style={styles.list}>
@@ -210,13 +210,13 @@ export default function EarningsScreen() {
                     <Text style={styles.settlementAmount}>{formatSom(settlement.payable_amount)}</Text>
                     <View style={[styles.badge, paid ? styles.badgePaid : styles.badgePending]}>
                       <Text style={[styles.badgeText, paid ? styles.badgeTextPaid : styles.badgeTextPending]}>
-                        {SETTLEMENT_STATUS_LABELS[settlement.status] ?? settlement.status}
+                        {(["draft", "pending", "paid", "cancelled"] as const).find((status) => status === settlement.status) ? t(`earnings.status.${settlement.status as "draft"}`) : settlement.status}
                       </Text>
                     </View>
                   </View>
 
                   <Text style={styles.settlementPeriod}>
-                    Davr: {formatDate(settlement.period_start)} — {formatDate(settlement.period_end)}
+                    {t("earnings.period", { from: formatDate(settlement.period_start), to: formatDate(settlement.period_end) })}
                   </Text>
 
                   {paid ? (
@@ -228,13 +228,13 @@ export default function EarningsScreen() {
                         </View>
                       ) : null}
                       <Text style={styles.settlementDate}>
-                        To‘langan: {settlement.paid_at ? formatShortDateTime(settlement.paid_at) : "—"}
+                        {t("earnings.paidAt", { date: settlement.paid_at ? formatShortDateTime(settlement.paid_at) : "—" })}
                       </Text>
-                      {settlement.reference ? <Text style={styles.reference}>Izoh: {settlement.reference}</Text> : null}
+                      {settlement.reference ? <Text style={styles.reference}>{t("earnings.note", { note: settlement.reference })}</Text> : null}
                     </>
                   ) : (
                     <Text style={styles.settlementDate}>
-                      Tayyorlangan: {formatShortDateTime(settlement.created_at)}
+                      {t("earnings.preparedAt", { date: formatShortDateTime(settlement.created_at) })}
                     </Text>
                   )}
 

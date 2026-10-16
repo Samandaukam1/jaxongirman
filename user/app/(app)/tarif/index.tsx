@@ -4,19 +4,24 @@ import {
 } from "@jaxongirman/tariff-card";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+import type { TFunction } from "i18next";
 import { Check, Crown, Info, RotateCcw, Sparkles, X } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Alert, Modal, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 
 import { Appear } from "@/components/Appear";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { ErrorState, SkeletonCard } from "@/components/StateBlocks";
+import { formatDate } from "@/lib/datetime";
 import { asErrorMessage } from "@/lib/format";
+import { formatNumber, formatSom } from "@/lib/money";
 import { createSubscriptionOrder } from "@/lib/orders";
 import {
   myMembership, myUsage, restartPreview, subscriptionPlans, type RestartPreview,
   type Membership, type TariffPlan,
 } from "@/lib/subscription";
+import { useLanguage } from "@/providers/LanguageProvider";
 import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
 import { brandInk, gradients, icon, radius, shadow, shadowLifted, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
@@ -39,6 +44,8 @@ export default function TariffScreen() {
   const styles = useStyles();
   const router = useRouter();
   const policy = usePaymentPolicy();
+  const { t } = useTranslation(["wallet", "common"]);
+  const { language } = useLanguage();
 
   const [plans, setPlans] = useState<TariffPlan[]>([]);
   const [membership, setMembership] = useState<Membership | null>(null);
@@ -104,25 +111,24 @@ export default function TariffScreen() {
     if (!restart?.member || !restart.planCode) return;
     const spent = restart.used.reduce((sum, entry) => sum + entry.used, 0);
     Alert.alert(
-      "Tarifni qayta boshlash",
-      `Yangi davr bugundan boshlanadi va ${restart.planName ?? "tarif"} uchun to‘liq narx to‘lanadi.\n\n`
-      + `Hozirgi davringizdan qolgan ${restart.remainingDays} kun bekor qilinadi va yangi davrga qo‘shilmaydi.`
-      + (spent > 0 ? `\nIshlatilgan ${spent} ta imkoniyat yangilanadi.` : ""),
+      t("tariff.restart"),
+      t("wallet:tariff.restartBody", { plan: restart.planName ?? t("wallet:tariff.restartPlan"), days: restart.remainingDays })
+      + (spent > 0 ? t("wallet:tariff.restartSpent", { count: spent }) : ""),
       [
-        { text: "Bekor qilish", style: "cancel" },
-        { text: "Qayta boshlash", style: "destructive", onPress: () => void buy(restart.planCode!, true) },
+        { text: t("common:cancel"), style: "cancel" },
+        { text: t("tariff.restartConfirm"), style: "destructive", onPress: () => void buy(restart.planCode!, true) },
       ],
     );
   }
 
-  const lines = usageLines(usage);
-  const nextReset = resetLabel(usage.find((row) => row.resets_at)?.resets_at);
+  const lines = usageLines(usage, language);
+  const nextReset = resetLabel(usage.find((row) => row.resets_at)?.resets_at, language);
 
   return (
     <View style={styles.screen}>
       <ScreenHeader
-        title="Tarif"
-        subtitle={membership?.member ? membership.planName ?? "Faol obuna" : "Imkoniyatlarni kengaytiring"}
+        title={t("tariff.title")}
+        subtitle={membership?.member ? membership.planName ?? t("tariff.active") : t("tariff.extend")}
       />
 
       <ScrollView
@@ -146,7 +152,7 @@ export default function TariffScreen() {
               </View>
               {membership.expiresAt ? (
                 <Text style={styles.statusExpiry}>
-                  {new Date(membership.expiresAt).toLocaleDateString("uz-UZ", { day: "numeric", month: "long" })}gacha
+                  {t("tariff.until", { date: formatDate(membership.expiresAt) })}
                 </Text>
               ) : null}
             </View>
@@ -178,7 +184,7 @@ export default function TariffScreen() {
             {/* Offered only to somebody who has something to give up: shown
                 without a membership it is a second, more confusing way to buy
                 one. */}
-            {restart?.member ? (
+            {restart?.member && policy.paymentsEnabled ? (
               <Pressable
                 accessibilityRole="button"
                 disabled={opening !== null}
@@ -186,7 +192,7 @@ export default function TariffScreen() {
                 style={[styles.restart, opening !== null && styles.restartBusy]}
               >
                 <RotateCcw color={brandInk.strong} size={icon.sm} strokeWidth={2.1} />
-                <Text style={styles.restartText}>Tarifni qayta boshlash</Text>
+                <Text style={styles.restartText}>{t("tariff.restart")}</Text>
               </Pressable>
             ) : null}
           </LinearGradient>
@@ -197,7 +203,7 @@ export default function TariffScreen() {
             halfway through making something is the worse way to learn it. */}
         {!loading && membership && !membership.member && lines.length > 0 ? (
           <View style={styles.freeCard}>
-            <Text style={styles.freeTitle}>Hozirgi bepul limitingiz</Text>
+            <Text style={styles.freeTitle}>{t("tariff.freeLimit")}</Text>
             {lines.map((line) => (
               <View key={line.key} style={styles.freeRow}>
                 <Text style={styles.freeLabel}>{line.label}</Text>
@@ -216,7 +222,7 @@ export default function TariffScreen() {
         ) : null}
 
         {plans.map((plan, index) => {
-          const price = priceLine(plan);
+          const price = priceLine(plan, language);
           const owned = membership?.planCode === plan.code;
           return (
             <Appear key={plan.code} index={index}>
@@ -236,11 +242,11 @@ export default function TariffScreen() {
                 <Text style={styles.priceUnit}>{price.unit}</Text>
               </View>
               {plan.compareAtAmount > plan.priceAmount ? (
-                <Text style={styles.compareAt}>{plan.compareAtAmount.toLocaleString("uz-UZ")} so‘m</Text>
+                <Text style={styles.compareAt}>{formatSom(plan.compareAtAmount)}</Text>
               ) : null}
 
               <View style={styles.features}>
-                {cardLines(plan).map((line) => (
+                {[...coinLines(plan, t), ...cardLines(plan, language)].map((line) => (
                   <View key={line.key} style={styles.featureRow}>
                     <View style={styles.tick}>
                       <Check color={colors.primary} size={12} strokeWidth={3} />
@@ -264,14 +270,14 @@ export default function TariffScreen() {
                     <ActivityIndicator color={colors.onPrimary} size="small" />
                   ) : (
                     <Text style={styles.ctaText}>
-                      {owned ? "Muddatni uzaytirish" : plan.ctaLabel || "Tarifni tanlash"}
+                      {owned ? t("tariff.renew") : plan.ctaLabel || t("tariff.choose")}
                     </Text>
                   )}
                 </Pressable>
               ) : null}
 
               <Pressable accessibilityRole="button" onPress={() => setDetailFor(plan)} style={styles.detailLink}>
-                <Text style={styles.detailLinkText}>Barcha imkoniyatlar</Text>
+                <Text style={styles.detailLinkText}>{t("tariff.allFeatures")}</Text>
               </Pressable>
             </View>
             </Appear>
@@ -279,7 +285,7 @@ export default function TariffScreen() {
         })}
 
         {!loading && plans.length === 0 && !error ? (
-          <Text style={styles.emptyNote}>Hozircha sotuvda tarif yo‘q.</Text>
+          <Text style={styles.emptyNote}>{t("tariff.none")}</Text>
         ) : null}
       </ScrollView>
 
@@ -289,12 +295,12 @@ export default function TariffScreen() {
         <View style={styles.sheet}>
           <View style={styles.sheetHead}>
             <Text style={styles.sheetTitle}>{detailFor?.name ?? ""}</Text>
-            <Pressable accessibilityRole="button" accessibilityLabel="Yopish" onPress={() => setDetailFor(null)} style={styles.sheetClose}>
+            <Pressable accessibilityRole="button" accessibilityLabel={t("common:close")} onPress={() => setDetailFor(null)} style={styles.sheetClose}>
               <X color={colors.ink} size={icon.md} strokeWidth={2} />
             </Pressable>
           </View>
           <ScrollView contentContainerStyle={styles.sheetBody} showsVerticalScrollIndicator={false}>
-            {detailFor ? detailSections(detailFor).map((section) => (
+            {detailFor ? detailSections(detailFor, language).map((section) => (
               <View key={section.key} style={styles.section}>
                 <Text style={styles.sectionTitle}>{section.title}</Text>
                 {section.rows.map((row) => (
@@ -386,3 +392,20 @@ const useStyles = makeStyles((colors) => ({
   sectionValue: { ...typography.bodyMedium, color: colors.ink },
   sectionValueOff: { color: colors.inkSoft },
 }));
+
+/**
+ * What a coin tariff gives, before its other perks: the month's J Tanga, the
+ * decks they make at the tariff's own rate, and what happens at the month's end.
+ */
+function coinLines(plan: TariffPlan, t: TFunction<"wallet">): { key: string; label: string }[] {
+  if (plan.billingModel !== "coins" || plan.includedCoins <= 0) return [];
+  const lines = [{ key: "coins", label: t("tariff.monthlyCoins", { coins: formatNumber(plan.includedCoins) }) }];
+  if (plan.presentationUnits > 0) {
+    lines.push({
+      key: "decks",
+      label: t("tariff.decks", { units: plan.presentationUnits, pages: plan.pagesPerUnit, total: plan.presentationUnits * plan.pagesPerUnit }),
+    });
+  }
+  lines.push({ key: "rollover", label: t("tariff.rollover") });
+  return lines;
+}

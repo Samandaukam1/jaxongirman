@@ -1,5 +1,8 @@
 import type { Tables } from "@jaxongirman/types";
 
+import { i18n } from "../i18n";
+
+import { localizeError } from "./errors";
 import { supabase } from "./supabase";
 import { clientPlatform } from "@/providers/PaymentPolicyProvider";
 
@@ -160,7 +163,7 @@ async function callPay(body: Record<string, unknown>): Promise<PayStart | PayRes
         { error?: string; code?: string; recoverable?: boolean; restartRequired?: boolean } | null;
       if (payload?.error) {
         throw new OrderPaymentError(
-          payload.error,
+          localizeError(payload.error, payload.code),
           payload.code ?? "payment_failed",
           payload.recoverable === true,
           payload.restartRequired === true,
@@ -170,8 +173,8 @@ async function callPay(body: Record<string, unknown>): Promise<PayStart | PayRes
     const detail = error instanceof Error && error.message.trim() ? error.message.trim() : "";
     throw new OrderPaymentError(
       detail && !/undefined is not a function/i.test(detail)
-        ? `To‘lov amalga oshmadi. ${detail}`
-        : "To‘lov amalga oshmadi. Aloqani tekshirib, qayta urinib ko‘ring.",
+        ? i18n.t("checkout:failedDetail", { detail: localizeError(detail) })
+        : i18n.t("checkout:failedNetwork"),
       "payment_failed",
       false,
     );

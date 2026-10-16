@@ -1,6 +1,7 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { Receipt } from "lucide-react-native";
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { RefreshControl, ScrollView, Text, View } from "react-native";
 
 import { Appear } from "@/components/Appear";
@@ -15,27 +16,13 @@ import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type Row = Awaited<ReturnType<typeof myOrders>>[number];
 
-const PURPOSE_LABELS: Record<string, string> = {
-  subscription: "Tarif",
-  jcoin: "J Coin",
-  data_collection: "Ma’lumotlarni yig‘ish",
-  marketplace_presentation: "Taqdimot",
-  marketplace_reference: "Referat",
-  marketplace_independent_work: "Mustaqil ish",
-  marketplace_game: "O‘yin",
-  other_marketplace_product: "Material",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  pending: "Kutilmoqda",
-  awaiting_verification: "Tasdiqlanmoqda",
-  processing: "Amalga oshirilmoqda",
-  paid: "To‘langan",
-  failed: "Amalga oshmadi",
-  cancelled: "Bekor qilingan",
-  refunded: "Qaytarilgan",
-  expired: "Muddati tugagan",
-};
+/** Purposes and statuses the tables name; anything newer is shown by its own key. */
+const PURPOSES = [
+  "subscription", "jcoin", "data_collection", "marketplace_presentation", "marketplace_reference",
+  "marketplace_independent_work", "marketplace_game", "other_marketplace_product", "marathon_votes",
+] as const;
+const STATUSES = ["pending", "awaiting_verification", "processing", "paid", "failed", "cancelled", "refunded", "expired"] as const;
+const known = <T extends string>(list: readonly T[], value: string): value is T => (list as readonly string[]).includes(value);
 
 /**
  * Payment history.
@@ -47,6 +34,7 @@ const STATUS_LABELS: Record<string, string> = {
 export default function OrdersScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation(["ledger", "checkout"]);
   const router = useRouter();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,7 +57,7 @@ export default function OrdersScreen() {
 
   return (
     <View style={styles.screen}>
-      <ScreenHeader title="To‘lovlar tarixi" onLeave={() => router.back()} />
+      <ScreenHeader title={t("orders.title")} onLeave={() => router.back()} />
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -83,8 +71,8 @@ export default function OrdersScreen() {
         {!loading && !error && rows.length === 0 ? (
           <EmptyState
             icon={Receipt}
-            title="Hali to‘lov qilinmagan"
-            message="Xaridlaringiz shu yerda buyurtma raqami bilan ko‘rinadi."
+            title={t("orders.empty")}
+            message={t("orders.emptyBody")}
           />
         ) : null}
 
@@ -92,9 +80,9 @@ export default function OrdersScreen() {
           <Appear key={row.order_number} index={index}>
             <View style={styles.row}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.title} numberOfLines={1}>{row.title || PURPOSE_LABELS[row.purpose] || "Xarid"}</Text>
+                <Text style={styles.title} numberOfLines={1}>{row.title || (known(PURPOSES, row.purpose) ? t(`checkout:purpose.${row.purpose}`) : t("checkout:purchase"))}</Text>
                 <Text style={styles.meta}>
-                  {PURPOSE_LABELS[row.purpose] ?? row.purpose} · {row.order_number}
+                  {known(PURPOSES, row.purpose) ? t(`checkout:purpose.${row.purpose}`) : row.purpose} · {row.order_number}
                 </Text>
                 <Text style={styles.meta}>{formatShortDateTime(row.paid_at ?? row.created_at)}</Text>
               </View>
@@ -112,7 +100,7 @@ export default function OrdersScreen() {
                       : ["failed", "cancelled", "expired"].includes(row.status) ? styles.badgeTextFailed
                       : styles.badgeTextPending,
                   ]}>
-                    {STATUS_LABELS[row.status] ?? row.status}
+                    {known(STATUSES, row.status) ? t(`orders.status.${row.status}`) : row.status}
                   </Text>
                 </View>
               </View>

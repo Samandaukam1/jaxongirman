@@ -1,13 +1,15 @@
 import type { Tables } from "@jaxongirman/types";
 import { useRouter } from "expo-router";
-import { CreditCard, Info, PackageOpen } from "lucide-react-native";
+import { ChevronRight, CreditCard, Crown, Info, PackageOpen, Presentation } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 
 import coinIcon from "../../../assets/coin/coin-icon.png";
 import { Appear } from "@/components/Appear";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { EmptyState, ErrorState, SkeletonCard } from "@/components/StateBlocks";
+import { localized } from "@/lib/content";
 import { asErrorMessage } from "@/lib/format";
 import { formatCoins, formatNumber, formatPrice } from "@/lib/money";
 import { createJcoinOrder } from "@/lib/orders";
@@ -21,7 +23,11 @@ type Package = Tables<"coin_packages">;
 type PaymentConfig = { provider: string | null; configured: boolean };
 
 /**
- * Buying tanga.
+ * J Tanga do‘koni.
+ *
+ * Two things are sold here and they are kept apart on purpose: J Tanga, spent
+ * on any service at the buyer's rate, and presentation pages, spent on decks
+ * only and never turned into J Tanga. The tariffs are one tap away.
  *
  * The catalogue is whatever the admin console has published — no package is
  * hard-coded here. When no payment provider is wired up, the screen says so and
@@ -32,6 +38,7 @@ export default function BuyCoinsScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
   const router = useRouter();
+  const { t } = useTranslation("wallet", { keyPrefix: "shop" });
   const { balance } = useAccount();
   const [packages, setPackages] = useState<Package[]>([]);
   const [payments, setPayments] = useState<PaymentConfig>({ provider: null, configured: false });
@@ -40,6 +47,8 @@ export default function BuyCoinsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [opening, setOpening] = useState<string | null>(null);
+  /** When the catalogue was read: sale windows are judged against it. */
+  const [readAt, setReadAt] = useState(() => Date.now());
 
   /**
    * Opens an order and hands off to checkout. The package id is all that is
@@ -67,6 +76,7 @@ export default function BuyCoinsScreen() {
       ]);
       if (packagesResult.error) throw packagesResult.error;
       setPackages(packagesResult.data ?? []);
+      setReadAt(Date.now());
 
       const value = settingsResult.data?.value as PaymentConfig | null;
       setPayments({ provider: value?.provider ?? null, configured: Boolean(value?.configured) });
@@ -81,9 +91,15 @@ export default function BuyCoinsScreen() {
 
   useEffect(() => { void load(); }, [load]);
 
+  // A pack outside its sale window is not offered; the server refuses it anyway.
+  const onSale = packages.filter((item) =>
+    (!item.starts_at || Date.parse(item.starts_at) <= readAt) && (!item.ends_at || Date.parse(item.ends_at) > readAt));
+  const pagePackages = onSale.filter((item) => item.presentation_pages > 0);
+  const coinPackages = onSale.filter((item) => item.presentation_pages === 0);
+
   return (
     <View style={styles.screen}>
-      <ScreenHeader title="Tangalarni sotib olish" subtitle={`Balans: ${formatCoins(balance)}`} />
+      <ScreenHeader title={t("title")} subtitle={t("balance", { balance: formatCoins(balance) })} />
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -98,9 +114,7 @@ export default function BuyCoinsScreen() {
             <Info color={colors.warning} size={18} strokeWidth={2} />
             <View style={styles.noticeCopy}>
               <Text style={styles.noticeTitle}>{policy.unavailableMessage("jcoin")}</Text>
-              <Text style={styles.noticeBody}>
-                Mavjud J Coin balansingizdan ilovada odatdagidek foydalanishingiz mumkin.
-              </Text>
+              <Text style={styles.noticeBody}>{t("iosBalance")}</Text>
             </View>
           </View>
         ) : null}
@@ -112,12 +126,10 @@ export default function BuyCoinsScreen() {
             <Info color={payments.configured ? colors.success : colors.warning} size={18} strokeWidth={2} />
             <View style={styles.noticeCopy}>
               <Text style={styles.noticeTitle}>
-                {payments.configured ? `To‘lov tizimi: ${payments.provider ?? "ulangan"}` : "To‘lov tizimi hali ulanmagan"}
+                {payments.configured ? t("provider", { provider: payments.provider ?? t("providerConnected") }) : t("providerMissing")}
               </Text>
               <Text style={styles.noticeBody}>
-                {payments.configured
-                  ? "To‘lovni tanlangan paket orqali amalga oshirishingiz mumkin."
-                  : "Hozircha ilova orqali to‘lov qabul qilinmaydi. Paketlar narxi ko‘rsatilgan, lekin xarid qilish imkoni to‘lov provayderi ulangach ochiladi."}
+                {payments.configured ? t("providerReadyBody") : t("providerMissingBody")}
               </Text>
             </View>
           </View>
@@ -129,13 +141,72 @@ export default function BuyCoinsScreen() {
         {!loading && policy.paymentsEnabled && !error && packages.length === 0 ? (
           <EmptyState
             icon={PackageOpen}
-            title="Paketlar hali e’lon qilinmagan"
-            message="Administrator tanga paketlarini sozlagach, ular shu yerda narxi bilan ko‘rinadi."
+            title={t("noPackages")}
+            message={t("noPackagesBody")}
           />
         ) : null}
 
+        {/* Tariffs: a month of J Tanga at a lower page rate. */}
+        {!loading ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/(app)/tarif")}
+            style={({ pressed }) => [styles.tariffLink, pressed && styles.packagePressed]}
+          >
+            <View style={styles.tariffIcon}><Crown color={colors.primary} size={20} strokeWidth={2.1} /></View>
+            <View style={styles.packageCopy}>
+              <Text style={styles.tariffTitle}>{t("tariffs")}</Text>
+              <Text style={styles.packageDescription}>{t("tariffsBody")}</Text>
+            </View>
+            <ChevronRight color={colors.inkSoft} size={18} strokeWidth={2} />
+          </Pressable>
+        ) : null}
+
+        {(policy.paymentsEnabled ? pagePackages : []).length > 0 ? (
+          <View style={styles.sectionHead}>
+            <Text style={styles.sectionTitle}>{t("forDecks")}</Text>
+            <Text style={styles.sectionNote}>{t("forDecksBody")}</Text>
+          </View>
+        ) : null}
         <View style={styles.list}>
-          {(policy.paymentsEnabled ? packages : []).map((item, index) => (
+          {(policy.paymentsEnabled ? pagePackages : []).map((item, index) => (
+            <Appear key={item.id} index={index}>
+              <Pressable
+                disabled={!payments.configured || opening !== null}
+                onPress={() => void buy(item.id)}
+                style={({ pressed }) => [styles.package, styles.pagesPackage, pressed && payments.configured && styles.packagePressed]}
+                accessibilityRole={payments.configured ? "button" : undefined}
+              >
+                <View style={styles.pagesIcon}><Presentation color={colors.primary} size={22} strokeWidth={2} /></View>
+                <View style={styles.packageCopy}>
+                  <Text style={styles.packageLabel}>{t("decksOnly")}</Text>
+                  <Text style={styles.packageCoins}>{t("pages", { count: formatNumber(item.presentation_pages) })}</Text>
+                  <Text style={styles.packageDescription}>{localized(item.label, item.label_i18n)}</Text>
+                </View>
+                <View style={styles.packagePrice}>
+                  <Text style={styles.priceValue}>{formatPrice(Number(item.price_amount), item.currency)}</Text>
+                  <View style={[styles.priceState, payments.configured ? styles.priceStateReady : styles.priceStateLocked]}>
+                    {opening === item.id ? <ActivityIndicator color={colors.success} size="small" /> : (
+                      <CreditCard color={payments.configured ? colors.success : colors.inkSoft} size={13} strokeWidth={2} />
+                    )}
+                    <Text style={[styles.priceStateText, payments.configured ? styles.priceStateTextReady : null]}>
+                      {opening === item.id ? t("opening") : payments.configured ? t("buy") : t("waiting")}
+                    </Text>
+                  </View>
+                </View>
+              </Pressable>
+            </Appear>
+          ))}
+        </View>
+
+        {(policy.paymentsEnabled ? coinPackages : []).length > 0 ? (
+          <View style={styles.sectionHead}>
+            <Text style={styles.sectionTitle}>{t("coins")}</Text>
+            <Text style={styles.sectionNote}>{t("coinsBody")}</Text>
+          </View>
+        ) : null}
+        <View style={styles.list}>
+          {(policy.paymentsEnabled ? coinPackages : []).map((item, index) => (
             <Appear key={item.id} index={index}>
               <Pressable
                 key={item.id}
@@ -148,12 +219,12 @@ export default function BuyCoinsScreen() {
               >
                 <Image source={coinIcon} resizeMode="contain" style={styles.packageCoin} />
                 <View style={styles.packageCopy}>
-                  <Text style={styles.packageLabel}>{item.label}</Text>
+                  <Text style={styles.packageLabel}>{localized(item.label, item.label_i18n)}</Text>
                   <Text style={styles.packageCoins}>
                     {formatCoins(item.coins)}
-                    {item.bonus_coins > 0 ? <Text style={styles.packageBonus}>  +{formatNumber(item.bonus_coins)} bonus</Text> : null}
+                    {item.bonus_coins > 0 ? <Text style={styles.packageBonus}>  {t("bonus", { count: formatNumber(item.bonus_coins) })}</Text> : null}
                   </Text>
-                  {item.description ? <Text style={styles.packageDescription}>{item.description}</Text> : null}
+                  {item.description ? <Text style={styles.packageDescription}>{localized(item.description, item.description_i18n)}</Text> : null}
                 </View>
                 <View style={styles.packagePrice}>
                   <Text style={styles.priceValue}>{formatPrice(Number(item.price_amount), item.currency)}</Text>
@@ -164,7 +235,7 @@ export default function BuyCoinsScreen() {
                       <CreditCard color={payments.configured ? colors.success : colors.inkSoft} size={13} strokeWidth={2} />
                     )}
                     <Text style={[styles.priceStateText, payments.configured ? styles.priceStateTextReady : null]}>
-                      {opening === item.id ? "Ochilmoqda…" : payments.configured ? "Sotib olish" : "Kutilmoqda"}
+                      {opening === item.id ? t("opening") : payments.configured ? t("buy") : t("waiting")}
                     </Text>
                   </View>
                 </View>
@@ -175,7 +246,7 @@ export default function BuyCoinsScreen() {
 
         {!loading && packages.length > 0 && !payments.configured ? (
           <Text style={styles.footnote}>
-            Narxlar administrator panelida boshqariladi. To‘lov provayderi ulangach, har bir paket yonida to‘lov tugmasi paydo bo‘ladi.
+            {t("footnote")}
           </Text>
         ) : null}
       </ScrollView>
@@ -195,6 +266,17 @@ const useStyles = makeStyles((colors) => ({
   noticeBody: { ...typography.caption, color: colors.inkMuted, lineHeight: 18 },
 
   list: { gap: spacing.md },
+  sectionHead: { gap: 2, marginTop: spacing.xs },
+  sectionTitle: { ...typography.heading, fontSize: 17, color: colors.ink },
+  sectionNote: { ...typography.caption, color: colors.inkMuted, lineHeight: 18 },
+  tariffLink: {
+    flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.lg,
+    borderRadius: radius.lg, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.border,
+  },
+  tariffIcon: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface },
+  tariffTitle: { ...typography.bodyMedium, color: colors.ink },
+  pagesPackage: { borderColor: colors.primary },
+  pagesIcon: { width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: colors.primarySoft },
   packagePressed: { transform: [{ scale: 0.985 }], opacity: 0.94 },
   package: {
     flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.lg,

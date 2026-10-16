@@ -1,5 +1,6 @@
 import type { Plan, PlanFeatures, QuotaStatus } from "@jaxongirman/tariff-card";
 
+import { localized, localizedOr } from "./content";
 import { supabase } from "./supabase";
 
 /**
@@ -13,30 +14,45 @@ import { supabase } from "./supabase";
  */
 
 /** The plan as the card reads it, plus what the checkout needs to open an order. */
-export type TariffPlan = Plan & { isFeatured: boolean; compareAtAmount: number };
+export type TariffPlan = Plan & {
+  isFeatured: boolean;
+  compareAtAmount: number;
+  /** `coins`: a month of J Tanga (OSON, MAZZA, BEMALOL); `quota`: the old weekly count. */
+  billingModel: "coins" | "quota";
+  includedCoins: number;
+  presentationUnits: number;
+  pagesPerUnit: number;
+};
 
 export async function subscriptionPlans(): Promise<TariffPlan[]> {
   const { data, error } = await supabase
     .from("subscription_plans")
-    .select("code, name, subtitle, description, badge, cta_label, price_amount, compare_at_amount, currency, period_days, features, is_featured")
+    // Every column, so a server without the tariff economy's columns still answers.
+    .select("*")
     .eq("is_active", true)
     .order("sort_order")
     .order("created_at");
   if (error) throw error;
 
-  return (data ?? []).map((row) => ({
+  return (data ?? []).filter((row) => (row as { is_visible?: boolean }).is_visible !== false).map((row) => ({
     code: row.code,
-    name: row.name,
-    subtitle: row.subtitle ?? "",
-    description: row.description ?? "",
-    badge: row.badge ?? "",
-    ctaLabel: row.cta_label ?? "",
+    // Operator-written words, in the app's language where they have been translated.
+    name: localized(row.name, row.name_i18n),
+    subtitle: localized(row.subtitle ?? "", row.subtitle_i18n),
+    description: localized(row.description ?? "", row.description_i18n),
+    badge: localized(row.badge ?? "", row.badge_i18n),
+    // An untranslated button label gives way to the app's own "choose plan".
+    ctaLabel: localizedOr(row.cta_label ?? "", row.cta_label_i18n, ""),
     priceAmount: row.price_amount,
     compareAtAmount: row.compare_at_amount ?? 0,
     currency: row.currency,
     periodDays: row.period_days,
     features: (row.features ?? {}) as PlanFeatures,
     isFeatured: Boolean(row.is_featured),
+    billingModel: (row as { billing_model?: string }).billing_model === "coins" ? "coins" : "quota",
+    includedCoins: (row as { included_coins?: number }).included_coins ?? 0,
+    presentationUnits: (row as { presentation_units?: number }).presentation_units ?? 0,
+    pagesPerUnit: (row as { pages_per_unit?: number }).pages_per_unit ?? 10,
   }));
 }
 
@@ -57,14 +73,14 @@ export async function myMembership(): Promise<Membership> {
     member?: boolean;
     status?: string;
     expires_at?: string | null;
-    plan?: { code?: string; name?: string } | null;
+    plan?: { code?: string; name?: string; name_i18n?: unknown } | null;
   };
   return {
     member: Boolean(answer.member),
     status: answer.status ?? "inactive",
     expiresAt: answer.expires_at ?? null,
     planCode: answer.plan?.code ?? null,
-    planName: answer.plan?.name ?? null,
+    planName: answer.plan?.name ? localized(answer.plan.name, answer.plan.name_i18n) : null,
   };
 }
 

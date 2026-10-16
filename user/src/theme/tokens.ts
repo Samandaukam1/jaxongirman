@@ -15,6 +15,11 @@ import { Platform } from "react-native";
 export const gradients = {
   primary: ["#8B54E8", "#6C34C9"] as const,
   hero: ["#7B41DC", "#3F1780"] as const,
+  /**
+   * The base of `BrandSurface`: deeper than `hero` and darkest at the far
+   * corner, because the light on it is drawn separately rather than baked in.
+   */
+  surface: ["#563BD0", "#3F21A3", "#251068"] as const,
   success: ["#16A77B", "#0B7F5C"] as const,
   danger: ["#D9455F", "#9E2036"] as const,
   /**

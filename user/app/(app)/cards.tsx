@@ -2,6 +2,7 @@ import { formatCardPan, formatStoredCardExpiry, type Tables } from "@jaxongirman
 import { useFocusEffect } from "expo-router";
 import { CreditCard, ShieldCheck, Trash2 } from "lucide-react-native";
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 
 import { useAuth } from "@/providers/AuthProvider";
@@ -28,6 +29,7 @@ export default function CardsScreen() {
   const { user } = useAuth();
   const { colors } = useTheme();
   const styles = useStyles();
+  const { t } = useTranslation(["ledger", "common"]);
   const [cards, setCards] = useState<PartialCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -52,18 +54,18 @@ export default function CardsScreen() {
 
   function remove(card: PartialCard) {
     Alert.alert(
-      "Karta o‘chirilsinmi?",
-      `${formatCardPan(card.display_pan)} ro‘yxatdan olib tashlanadi. Keyingi to‘lovda kartani qaytadan kiritishingiz mumkin.`,
+      t("cards.askTitle"),
+      t("cards.askBody", { card: formatCardPan(card.display_pan) }),
       [
-        { text: "Bekor qilish", style: "cancel" },
+        { text: t("common:cancel"), style: "cancel" },
         {
-          text: "O‘chirish",
+          text: t("common:delete"),
           style: "destructive",
           onPress: async () => {
             setBusyId(card.id);
             const { error: deleteError } = await supabase.from("partial_cards").delete().eq("id", card.id);
             setBusyId(null);
-            if (deleteError) Alert.alert("O‘chirilmadi", asErrorMessage(deleteError));
+            if (deleteError) Alert.alert(t("cards.failed"), asErrorMessage(deleteError));
             else void load(true);
           },
         },
@@ -73,7 +75,7 @@ export default function CardsScreen() {
 
   return (
     <View style={styles.screen}>
-      <ScreenHeader title="Chala kartalar" subtitle="To‘lovda ishlatilgan kartalar" />
+      <ScreenHeader title={t("cards.title")} subtitle={t("cards.subtitle")} />
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -83,8 +85,7 @@ export default function CardsScreen() {
         <View style={styles.notice}>
           <ShieldCheck color={colors.primary} size={18} strokeWidth={2} />
           <Text style={styles.noticeText}>
-            To‘liq karta raqami saqlanmaydi. Faqat boshi va oxiri eslab qolinadi — o‘rtadagi 4 ta raqamni
-            har to‘lovda o‘zingiz kiritasiz. CVV va tasdiqlash kodi hech qachon saqlanmaydi.
+            {t("cards.notice")}
           </Text>
         </View>
 
@@ -94,8 +95,8 @@ export default function CardsScreen() {
         {!loading && !error && cards.length === 0 ? (
           <EmptyState
             icon={CreditCard}
-            title="Saqlangan karta yo‘q"
-            message="Do‘kondan birinchi xaridni amalga oshirganingizda karta shu yerda niqoblangan ko‘rinishda paydo bo‘ladi."
+            title={t("cards.empty")}
+            message={t("cards.emptyBody")}
           />
         ) : null}
 
@@ -108,12 +109,12 @@ export default function CardsScreen() {
                   <Text style={styles.pan}>{formatCardPan(card.display_pan)}</Text>
                   <Text style={styles.meta}>
                     {formatStoredCardExpiry(card.expiry_month, card.expiry_year)}
-                    {card.last_used_at ? ` · oxirgi: ${formatShortDateTime(card.last_used_at)}` : ""}
+                    {card.last_used_at ? t("cards.lastUsed", { date: formatShortDateTime(card.last_used_at) }) : ""}
                   </Text>
                 </View>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="Kartani o‘chirish"
+                  accessibilityLabel={t("cards.remove")}
                   disabled={busyId === card.id}
                   onPress={() => remove(card)}
                   style={styles.remove}

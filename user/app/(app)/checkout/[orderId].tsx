@@ -13,12 +13,14 @@ import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { CheckCircle2, CreditCard, ShieldCheck } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { PaymentUnavailable } from "@/components/PaymentUnavailable";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { ErrorState, InlineError } from "@/components/StateBlocks";
+import { localizeError } from "@/lib/errors";
 import { formatSom } from "@/lib/money";
 import {
   OrderPaymentError, orderStatus, payStart, payVerify, type Order,
@@ -34,24 +36,20 @@ const RESEND_SECONDS = 60;
 
 type PartialCard = Tables<"partial_cards">;
 
-const PURPOSE_LABELS: Record<string, string> = {
-  subscription: "Tarif",
-  jcoin: "J Coin",
-  data_collection: "Ma’lumotlarni yig‘ish moduli",
-  marketplace_presentation: "Taqdimot",
-  marketplace_reference: "Referat",
-  marketplace_independent_work: "Mustaqil ish",
-  marketplace_game: "O‘yin",
-  other_marketplace_product: "Material",
-  marathon_votes: "Marafon ovozlari",
-};
+/** The order purposes the `checkout` table names; anything else is shown by its own name. */
+const PURPOSES = [
+  "subscription", "jcoin", "data_collection", "marketplace_presentation", "marketplace_reference",
+  "marketplace_independent_work", "marketplace_game", "other_marketplace_product", "marathon_votes",
+] as const;
+type Purpose = (typeof PURPOSES)[number];
+const isPurpose = (value: string): value is Purpose => (PURPOSES as readonly string[]).includes(value);
 
-/** Where a paid order sends you. */
-const DESTINATIONS: Record<string, { label: string; path: string }> = {
-  jcoin: { label: "Hamyonni ochish", path: "/(app)/(tabs)/profile" },
-  subscription: { label: "Profilga o‘tish", path: "/(app)/(tabs)/profile" },
-  data_collection: { label: "Modulni ochish", path: "/(app)/survey" },
-  marathon_votes: { label: "Marafonga o‘tish", path: "/(app)/marathon" },
+/** Where a paid order sends you; the button's words are in the `checkout` table under `destination`. */
+const DESTINATIONS: Record<string, { label: "jcoin" | "subscription" | "data_collection" | "marathon_votes"; path: string }> = {
+  jcoin: { label: "jcoin", path: "/(app)/(tabs)/profile" },
+  subscription: { label: "subscription", path: "/(app)/(tabs)/profile" },
+  data_collection: { label: "data_collection", path: "/(app)/survey" },
+  marathon_votes: { label: "marathon_votes", path: "/(app)/marathon" },
 };
 
 /**
@@ -71,6 +69,7 @@ const DESTINATIONS: Record<string, { label: string; path: string }> = {
  * paid — which the server writes only after the provider confirms the receipt.
  */
 export default function OrderCheckoutScreen() {
+  const { t } = useTranslation(["checkout", "common"]);
   const { colors } = useTheme();
   const styles = useStyles();
   const router = useRouter();
@@ -100,7 +99,7 @@ export default function OrderCheckoutScreen() {
   const submitting = useRef(false);
 
   const load = useCallback(async () => {
-    if (!orderId) { setLoadError("Buyurtma topilmadi."); setLoading(false); return; }
+    if (!orderId) { setLoadError(t("notFound")); setLoading(false); return; }
     try {
       const [row, cardsResult] = await Promise.all([
         orderStatus(orderId),
@@ -110,11 +109,11 @@ export default function OrderCheckoutScreen() {
           .eq("is_active", true)
           .order("last_used_at", { ascending: false, nullsFirst: false }),
       ]);
-      if (!row) { setLoadError("Buyurtma topilmadi."); return; }
+      if (!row) { setLoadError(t("notFound")); return; }
       setOrder(row);
       if (cardsResult.error) {
         setCards([]);
-        setCardsError("Chala kartalar yuklanmadi. Yangi kartani kiritishingiz mumkin.");
+        setCardsError(t("cardsFailed"));
       } else {
         setCards(cardsResult.data ?? []);
         setCardsError(null);
@@ -124,11 +123,11 @@ export default function OrderCheckoutScreen() {
       if (row.status === "paid") setStep("done");
       setLoadError(null);
     } catch {
-      setLoadError("Buyurtma yuklanmadi.");
+      setLoadError(t("loadFailed"));
     } finally {
       setLoading(false);
     }
-  }, [orderId]);
+  }, [orderId, t]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -175,7 +174,7 @@ export default function OrderCheckoutScreen() {
         : panDigits.length === 16 ? panDigits : null;
       const paymentExpiry = expiryValidation.valid ? expiryValidation.normalized : null;
       if (!paymentPan || !paymentExpiry) {
-        setError("Karta ma’lumotlarini tekshirib, qayta kiriting.");
+        setError(t("checkCard"));
         return;
       }
 
@@ -203,9 +202,7 @@ export default function OrderCheckoutScreen() {
         return;
       }
       if (!started.attemptId) {
-        throw new Error(
-          "To‘lov urinishi ochilmadi. Agar SMS kelgan bo‘lsa, «To‘lash» tugmasini qayta bosing — kod saqlanib qoladi.",
-        );
+        throw new Error(t("noAttempt"));
       }
       setAttemptId(started.attemptId);
       setMaskedCard(started.maskedCard);
@@ -213,7 +210,7 @@ export default function OrderCheckoutScreen() {
       setStep("otp");
       setResendIn(RESEND_SECONDS);
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "To‘lov boshlanmadi.");
+      setError(failure instanceof Error ? failure.message : t("notStarted"));
       if (failure instanceof OrderPaymentError && !failure.recoverable) await load();
     } finally {
       setBusy(false);
@@ -233,13 +230,13 @@ export default function OrderCheckoutScreen() {
       const verifyRequest = payVerify(orderId, attemptId, code);
       setCode("");
       const result = await verifyRequest;
-      if (result.status !== "paid") throw new Error("To‘lov tasdiqlanmadi.");
+      if (result.status !== "paid") throw new Error(t("notConfirmed"));
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setAttemptId(null);
       setStep("done");
       await Promise.all([load(), refreshWallet()]);
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "To‘lov amalga oshmadi.");
+      setError(failure instanceof Error ? failure.message : t("failed"));
       if (failure instanceof OrderPaymentError) {
         // `verify` atomically consumes its one-time provider token, including
         // when the code was mistyped. A retry therefore starts from card entry;
@@ -275,29 +272,30 @@ export default function OrderCheckoutScreen() {
   if (loadError || !order) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="To‘lov" variant="close" onLeave={() => router.back()} />
-        <ErrorState message={loadError ?? "Buyurtma topilmadi."} onRetry={() => void load()} />
+        <ScreenHeader title={t("title")} variant="close" onLeave={() => router.back()} />
+        <ErrorState message={loadError ?? t("notFound")} onRetry={() => void load()} />
       </View>
     );
   }
 
   const closed = ["failed", "cancelled", "expired"].includes(order.status);
-  const destination = DESTINATIONS[order.purpose] ?? { label: "Kutubxonaga o‘tish", path: "/(app)/marketplace/library" };
+  const destination = DESTINATIONS[order.purpose] ?? { label: "library" as const, path: "/(app)/marketplace/library" };
+  const purposeLabel = isPurpose(order.purpose) ? t(`purpose.${order.purpose}`) : null;
 
   /* ------------------------------------------------------------------ done */
   if (step === "done") {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="To‘lov" variant="close" onLeave={() => router.replace(destination.path)} />
+        <ScreenHeader title={t("title")} variant="close" onLeave={() => router.replace(destination.path)} />
         <View style={styles.successWrap}>
           <CheckCircle2 color={colors.success} size={64} strokeWidth={2} />
-          <Text style={styles.successTitle}>To‘lov muvaffaqiyatli</Text>
+          <Text style={styles.successTitle}>{t("success")}</Text>
           <Text style={styles.orderNumber}>{order.order_number}</Text>
           <Text style={styles.successAmount}>{formatSom(order.total_amount)}</Text>
           {maskedCard ? <Text style={styles.cardHint}>{maskedCard}</Text> : null}
-          <PrimaryButton label={destination.label} onPress={() => router.replace(destination.path)} />
+          <PrimaryButton label={t(`destination.${destination.label}`)} onPress={() => router.replace(destination.path)} />
           <Pressable onPress={() => router.replace("/(app)/orders")}>
-            <Text style={styles.linkText}>To‘lovlar tarixi</Text>
+            <Text style={styles.linkText}>{t("history")}</Text>
           </Pressable>
         </View>
       </View>
@@ -307,7 +305,7 @@ export default function OrderCheckoutScreen() {
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.screen}>
       <ScreenHeader
-        title={step === "otp" ? "Tasdiqlash" : "To‘lov"}
+        title={step === "otp" ? t("confirmTitle") : t("title")}
         variant="close"
         onLeave={() => {
           if (step !== "otp") { router.back(); return; }
@@ -325,41 +323,41 @@ export default function OrderCheckoutScreen() {
           <Text style={styles.summaryTitle}>
             {(order.metadata as { title?: string; label?: string } | null)?.title
               ?? (order.metadata as { label?: string } | null)?.label
-              ?? PURPOSE_LABELS[order.purpose] ?? "Xarid"}
+              ?? purposeLabel ?? t("purchase")}
           </Text>
-          <Text style={styles.summaryKind}>{PURPOSE_LABELS[order.purpose] ?? order.purpose}</Text>
+          <Text style={styles.summaryKind}>{purposeLabel ?? order.purpose}</Text>
           <View style={styles.line}>
-            <Text style={styles.lineLabel}>Mahsulot</Text>
+            <Text style={styles.lineLabel}>{t("product")}</Text>
             <Text style={styles.lineValue}>{formatSom(order.subtotal)}</Text>
           </View>
           {order.buyer_fee > 0 ? (
             <View style={styles.line}>
-              <Text style={styles.lineLabel}>Xizmat haqi ({order.buyer_fee_rate}%)</Text>
+              <Text style={styles.lineLabel}>{t("fee", { rate: order.buyer_fee_rate })}</Text>
               <Text style={styles.lineValue}>{formatSom(order.buyer_fee)}</Text>
             </View>
           ) : null}
           <View style={styles.divider} />
           <View style={styles.line}>
-            <Text style={styles.totalLabel}>To‘lanadi</Text>
+            <Text style={styles.totalLabel}>{t("total")}</Text>
             <Text style={styles.total}>{formatSom(order.total_amount)}</Text>
           </View>
           <Text style={styles.snapshotNote}>
-            {order.order_number} · narx xarid boshlanganda qayd etilgan va o‘zgarmaydi.
+            {t("snapshot", { number: order.order_number })}
           </Text>
         </View>
 
         {closed ? (
           <>
-            <InlineError message={order.failure_message ?? "Bu buyurtma yopilgan."} />
-            <PrimaryButton label="Ortga" tone="secondary" onPress={() => router.back()} />
+            <InlineError message={order.failure_message ? localizeError(order.failure_message) : t("closed")} />
+            <PrimaryButton label={t("common:back")} tone="secondary" onPress={() => router.back()} />
           </>
         ) : step === "card" ? (
           <>
             <View style={styles.field}>
-              <Text style={styles.label}>Karta raqami</Text>
+              <Text style={styles.label}>{t("cardNumber")}</Text>
               {selectedCard ? (
                 <>
-                  <Text style={styles.hint}>Yetishmayotgan 4 ta raqamni kiriting</Text>
+                  <Text style={styles.hint}>{t("missingHint")}</Text>
                   <View style={styles.panRow}>
                     <Text style={styles.panPart}>{formatCardPan(selectedCard.display_pan.slice(0, 8))}</Text>
                     <TextInput
@@ -369,7 +367,7 @@ export default function OrderCheckoutScreen() {
                       placeholder="XXXX"
                       placeholderTextColor={colors.borderStrong}
                       style={styles.panInput}
-                      accessibilityLabel="Yetishmayotgan to‘rt raqam"
+                      accessibilityLabel={t("missingLabel")}
                       autoComplete="off"
                       textContentType="none"
                       autoFocus
@@ -387,7 +385,7 @@ export default function OrderCheckoutScreen() {
                   placeholderTextColor={colors.inkSoft}
                   autoComplete="off"
                   textContentType="none"
-                  accessibilityLabel="Karta raqami"
+                  accessibilityLabel={t("cardNumber")}
                 />
               )}
             </View>
@@ -395,7 +393,7 @@ export default function OrderCheckoutScreen() {
             {cardsError ? <Text style={styles.cardsError}>{cardsError}</Text> : null}
             {cards.length > 0 ? (
               <View style={styles.cardsBlock}>
-                <Text style={styles.cardsTitle}>Chala kartalardan</Text>
+                <Text style={styles.cardsTitle}>{t("partialCards")}</Text>
                 {cards.map((card) => {
                   const active = selectedCard?.id === card.id;
                   const expired = isStoredCardExpired(card.expiry_month, card.expiry_year);
@@ -419,7 +417,7 @@ export default function OrderCheckoutScreen() {
                         <Text style={styles.savedCardPan}>{formatCardPan(card.display_pan)}</Text>
                         <Text style={[styles.savedCardExpiry, expired && styles.savedCardExpiryExpired]}>
                           {formatStoredCardExpiry(card.expiry_month, card.expiry_year)}
-                          {expired ? " · muddati tugagan" : ""}
+                          {expired ? t("expiredSuffix") : ""}
                         </Text>
                       </View>
                       {active ? <CheckCircle2 color={colors.primary} size={19} strokeWidth={2.2} /> : null}
@@ -430,7 +428,7 @@ export default function OrderCheckoutScreen() {
             ) : null}
 
             <View style={styles.field}>
-              <Text style={styles.label}>Amal qilish muddati</Text>
+              <Text style={styles.label}>{t("expiry")}</Text>
               {selectedCard ? (
                 <View style={styles.readOnlyExpiry}>
                   <Text style={styles.readOnlyExpiryText}>
@@ -445,14 +443,14 @@ export default function OrderCheckoutScreen() {
                   keyboardType="number-pad"
                   placeholder="MM/YY"
                   placeholderTextColor={colors.inkSoft}
-                  accessibilityLabel="Amal qilish muddati"
+                  accessibilityLabel={t("expiry")}
                 />
               )}
               {!selectedCard && cardDigits(expiry).length === 4 && !expiryValidation.valid ? (
                 <Text style={styles.validationError}>
                   {expiryValidation.error === "invalid_month"
-                    ? "Oy 01–12 oralig‘ida bo‘lsin."
-                    : "Kartaning amal qilish muddati tugagan."}
+                    ? t("badMonth")
+                    : t("cardExpired")}
                 </Text>
               ) : null}
             </View>
@@ -461,7 +459,7 @@ export default function OrderCheckoutScreen() {
               <ShieldCheck color={colors.success} size={18} strokeWidth={2} />
               <View style={styles.assuranceCopy}>
                 <Text style={styles.assuranceText}>
-                  Karta raqami Payme’ga to‘lov uchun uzatiladi va Jaxongirman bazasida saqlanmaydi.
+                  {t("assurance")}
                 </Text>
                 <Text style={styles.paymeBrand}>Powered by Payme</Text>
               </View>
@@ -470,7 +468,7 @@ export default function OrderCheckoutScreen() {
             {error ? <InlineError message={error} /> : null}
 
             <PrimaryButton
-              label={busy ? "TO‘LOV AMALGA OSHIRILMOQDA..." : `${formatSom(order.total_amount)} to‘lash`}
+              label={busy ? t("paying") : t("pay", { amount: formatSom(order.total_amount) })}
               icon={CreditCard}
               loading={busy}
               disabled={!canSubmitCard}
@@ -480,9 +478,9 @@ export default function OrderCheckoutScreen() {
         ) : (
           <>
             <View style={styles.field}>
-              <Text style={styles.label}>Tasdiqlash kodi</Text>
+              <Text style={styles.label}>{t("code")}</Text>
               <Text style={styles.hint}>
-                {maskedCard ? `${maskedCard} — ` : ""}kartaga bog‘langan raqamga SMS yuborildi.
+                {maskedCard ? `${maskedCard} — ` : ""}{t("smsSent")}
               </Text>
               <TextInput
                 style={[styles.input, styles.codeInput]}
@@ -493,13 +491,13 @@ export default function OrderCheckoutScreen() {
                 placeholderTextColor={colors.inkSoft}
                 autoFocus
               />
-              {sandbox ? <Text style={styles.hint}>Sinov rejimi: kod 111111.</Text> : null}
+              {sandbox ? <Text style={styles.hint}>{t("sandbox")}</Text> : null}
             </View>
 
             {error ? <InlineError message={error} /> : null}
 
             <PrimaryButton
-              label={busy ? "Tasdiqlanmoqda..." : "TASDIQLASH"}
+              label={busy ? t("confirming") : t("confirm")}
               loading={busy}
               disabled={!attemptId || code.length < 4 || busy}
               onPress={() => void submitCode()}
@@ -515,7 +513,7 @@ export default function OrderCheckoutScreen() {
               }}
             >
               <Text style={[styles.linkText, resendIn > 0 && styles.linkDisabled]}>
-                {resendIn > 0 ? `Kod kelmadimi? ${resendIn}s` : "Kod kelmadimi? Kartani qayta kiriting"}
+                {resendIn > 0 ? t("resendIn", { seconds: resendIn }) : t("resend")}
               </Text>
             </Pressable>
           </>

@@ -3,6 +3,7 @@ import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { ArrowLeft, Check, Search, Send, UserRound } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import coinIcon from "../../../assets/coin/coin-icon.png";
@@ -42,6 +43,7 @@ export default function SendCoinsScreen() {
   const router = useRouter();
   const { balance, refresh } = useAccount();
 
+  const { t } = useTranslation(["wallet", "common"]);
   const [query, setQuery] = useState("");
   const [matches, setMatches] = useState<Match[]>([]);
   const [searching, setSearching] = useState(false);
@@ -93,7 +95,7 @@ export default function SendCoinsScreen() {
   const amountProblem = amount <= 0
     ? null
     : amount > balance
-      ? "Balansda yetarli tanga yo‘q."
+      ? t("send.notEnough")
       : null;
 
   async function send() {
@@ -121,7 +123,7 @@ export default function SendCoinsScreen() {
   if (sentAmount !== null && recipient) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="Yuborildi" variant="close" onLeave={() => router.back()} />
+        <ScreenHeader title={t("send.sent")} variant="close" onLeave={() => router.back()} />
         <View style={styles.successBody}>
           <View style={styles.successMark}>
             <Check color={colors.onPrimary} size={34} strokeWidth={2.6} />
@@ -131,16 +133,16 @@ export default function SendCoinsScreen() {
             <Image source={coinIcon} resizeMode="contain" style={styles.successCoin} />
           </View>
           <Text style={styles.successCopy}>
-            {recipient.full_name?.trim() || `@${recipient.username}`} hisobiga o‘tkazildi.
+            {t("send.sentTo", { name: recipient.full_name?.trim() || `@${recipient.username}` })}
           </Text>
-          <Text style={styles.successBalance}>Yangi balans: {formatCoins(balance)}</Text>
+          <Text style={styles.successBalance}>{t("send.newBalance", { balance: formatCoins(balance) })}</Text>
           <View style={styles.successActions}>
             <PrimaryButton
-              label="Yana yuborish"
+              label={t("send.again")}
               tone="secondary"
               onPress={() => { setSentAmount(null); setRecipient(null); setAmountText(""); setNote(""); setQuery(""); }}
             />
-            <PrimaryButton label="Yopish" onPress={() => router.back()} />
+            <PrimaryButton label={t("common:close")} onPress={() => router.back()} />
           </View>
         </View>
       </View>
@@ -149,7 +151,7 @@ export default function SendCoinsScreen() {
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.screen}>
-      <ScreenHeader title="Tangalarni yuborish" subtitle={`Balans: ${formatCoins(balance)}`} />
+      <ScreenHeader title={t("send.title")} subtitle={t("shop.balance", { balance: formatCoins(balance) })} />
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {recipient ? (
@@ -157,22 +159,22 @@ export default function SendCoinsScreen() {
             <View style={styles.recipientCard}>
               <Avatar uri={recipient.avatar_url} initials={initialsFor(recipient)} size={52} />
               <View style={styles.recipientCopy}>
-                <Text numberOfLines={1} style={styles.recipientName}>{recipient.full_name?.trim() || "Foydalanuvchi"}</Text>
+                <Text numberOfLines={1} style={styles.recipientName}>{recipient.full_name?.trim() || t("send.user")}</Text>
                 <Text style={styles.recipientHandle}>@{recipient.username}</Text>
               </View>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Boshqa foydalanuvchi tanlash"
+                accessibilityLabel={t("send.changeLabel")}
                 onPress={() => { setRecipient(null); setError(null); }}
                 style={styles.changeButton}
               >
                 <ArrowLeft color={colors.primary} size={icon.sm} strokeWidth={icon.strokeBold} />
-                <Text style={styles.changeText}>O‘zgartirish</Text>
+                <Text style={styles.changeText}>{t("send.change")}</Text>
               </Pressable>
             </View>
 
             <View style={styles.amountCard}>
-              <Text style={styles.fieldLabel}>Qancha yuboriladi</Text>
+              <Text style={styles.fieldLabel}>{t("send.howMuch")}</Text>
               <View style={styles.amountRow}>
                 <Image source={coinIcon} resizeMode="contain" style={styles.amountCoin} />
                 <TextInput
@@ -182,26 +184,26 @@ export default function SendCoinsScreen() {
                   placeholder="0"
                   placeholderTextColor={colors.inkSoft}
                   style={styles.amountInput}
-                  accessibilityLabel="Yuboriladigan tangalar miqdori"
+                  accessibilityLabel={t("send.amountLabel")}
                 />
-                <Text style={styles.amountUnit}>tanga</Text>
+                <Text style={styles.amountUnit}>{t("send.unit")}</Text>
               </View>
               <View style={styles.balanceHint}>
-                <Text style={styles.balanceHintText}>Joriy balans: {formatCoins(balance)}</Text>
+                <Text style={styles.balanceHintText}>{t("send.current", { balance: formatCoins(balance) })}</Text>
                 {balance > 0 ? (
                   <Pressable accessibilityRole="button" onPress={() => setAmountText(String(balance))}>
-                    <Text style={styles.balanceMax}>Hammasi</Text>
+                    <Text style={styles.balanceMax}>{t("send.all")}</Text>
                   </Pressable>
                 ) : null}
               </View>
             </View>
 
             <View style={styles.noteBlock}>
-              <Text style={styles.fieldLabel}>Izoh (ixtiyoriy)</Text>
+              <Text style={styles.fieldLabel}>{t("send.note")}</Text>
               <TextInput
                 value={note}
                 onChangeText={(value) => setNote(value.slice(0, 200))}
-                placeholder="Masalan: kurs uchun rahmat"
+                placeholder={t("send.notePlaceholder")}
                 placeholderTextColor={colors.inkSoft}
                 multiline
                 style={styles.noteInput}
@@ -213,14 +215,14 @@ export default function SendCoinsScreen() {
             {error ? <InlineError message={error} /> : null}
 
             <PrimaryButton
-              label={amount > 0 ? `${formatCoins(amount)} yuborish` : "Miqdorni kiriting"}
+              label={amount > 0 ? t("send.sendAmount", { amount: formatCoins(amount) }) : t("send.enterAmount")}
               icon={Send}
               loading={sending}
               disabled={amount <= 0 || Boolean(amountProblem)}
               onPress={() => void send()}
             />
             <Text style={styles.disclaimer}>
-              O‘tkazma bekor qilinmaydi. Har bir o‘tkazma serverda atomik tarzda bajariladi va tarixga yoziladi.
+              {t("send.final")}
             </Text>
           </>
         ) : (
@@ -230,12 +232,12 @@ export default function SendCoinsScreen() {
               <TextInput
                 value={query}
                 onChangeText={(value) => setQuery(value.replace(/[^A-Za-z0-9_@]/g, "").replace(/^@/, "").toLowerCase())}
-                placeholder="Username bo‘yicha qidiring"
+                placeholder={t("send.search")}
                 placeholderTextColor={colors.inkSoft}
                 autoCapitalize="none"
                 autoCorrect={false}
                 style={styles.searchInput}
-                accessibilityLabel="Username qidirish"
+                accessibilityLabel={t("send.searchLabel")}
               />
               {searching ? <ActivityIndicator color={colors.primary} size="small" /> : null}
             </View>
@@ -245,16 +247,16 @@ export default function SendCoinsScreen() {
             {trimmedQuery.length < MIN_QUERY_LENGTH ? (
               <EmptyState
                 icon={UserRound}
-                title="Kimga yuboramiz?"
-                message="Foydalanuvchi username’ining kamida 2 ta harfini kiriting. O‘zingizga tanga yubora olmaysiz."
+                title={t("send.whom")}
+                message={t("send.whomBody")}
               />
             ) : null}
 
             {trimmedQuery.length >= MIN_QUERY_LENGTH && !searching && matches.length === 0 && !searchError ? (
               <EmptyState
                 icon={Search}
-                title="Foydalanuvchi topilmadi"
-                message={`“${trimmedQuery}” bo‘yicha hech kim topilmadi. Username to‘g‘ri yozilganini tekshiring.`}
+                title={t("send.notFound")}
+                message={t("send.notFoundBody", { query: trimmedQuery })}
               />
             ) : null}
 
@@ -268,7 +270,7 @@ export default function SendCoinsScreen() {
                 >
                   <Avatar uri={match.avatar_url} initials={initialsFor(match)} size={44} />
                   <View style={styles.matchCopy}>
-                    <Text numberOfLines={1} style={styles.matchName}>{match.full_name?.trim() || "Foydalanuvchi"}</Text>
+                    <Text numberOfLines={1} style={styles.matchName}>{match.full_name?.trim() || t("send.user")}</Text>
                     <Text style={styles.matchHandle}>@{match.username}</Text>
                   </View>
                   <Send color={colors.primary} size={icon.sm} strokeWidth={icon.stroke} />

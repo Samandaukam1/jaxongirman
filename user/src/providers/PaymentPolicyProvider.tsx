@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type PropsWithChildren } from "react";
 import { Platform } from "react-native";
 
+import { i18n } from "@/i18n";
 import { supabase } from "@/lib/supabase";
 
 /**
@@ -28,6 +29,8 @@ type Policy = {
   provider: string | null;
   showPrices: boolean;
   copy: Partial<Record<PaymentCopyKey, string>>;
+  /** The same sentences in English and Russian, where the operator wrote them. */
+  copyI18n: Partial<Record<"en" | "ru", Partial<Record<PaymentCopyKey, string>>>>;
 };
 
 type PolicyContext = Policy & {
@@ -45,14 +48,9 @@ const FALLBACK: Policy = {
   provider: null,
   showPrices: true,
   copy: {},
+  copyI18n: {},
 };
 
-const DEFAULT_COPY: Record<PaymentCopyKey, string> = {
-  subscription: "Tarif iOS ilovasida mavjud emas.",
-  jcoin: "J Coin iOS ilovasida mavjud emas.",
-  marketplace: "Do‘kon iOS ilovasida vaqtincha mavjud emas.",
-  module: "Bu modul iOS ilovasida mavjud emas.",
-};
 
 const Context = createContext<PolicyContext | null>(null);
 
@@ -70,6 +68,7 @@ export function PaymentPolicyProvider({ children }: PropsWithChildren) {
       const row = data as unknown as {
         payments_enabled: boolean; provider_configured: boolean; provider: string | null;
         show_prices: boolean; copy: Partial<Record<PaymentCopyKey, string>>;
+        copy_i18n?: Partial<Record<"en" | "ru", Partial<Record<PaymentCopyKey, string>>>>;
       };
       setPolicy({
         paymentsEnabled: row.payments_enabled !== false,
@@ -77,6 +76,7 @@ export function PaymentPolicyProvider({ children }: PropsWithChildren) {
         provider: row.provider ?? null,
         showPrices: row.show_prices !== false,
         copy: row.copy ?? {},
+        copyI18n: row.copy_i18n ?? {},
       });
     } catch {
       // Deliberately silent and open: see FALLBACK.
@@ -92,7 +92,13 @@ export function PaymentPolicyProvider({ children }: PropsWithChildren) {
     ...policy,
     loading,
     refresh,
-    unavailableMessage: (key) => policy.copy[key] ?? DEFAULT_COPY[key],
+    // The console's own wording is Uzbek, so it is used as written only in
+    // Uzbek; the other languages read the table's sentence.
+    // The operator's sentence in the app's language when they wrote one; the
+    // app's own sentence otherwise (the console's Uzbek is used in Uzbek only).
+    unavailableMessage: (key) => (i18n.language === "uz"
+      ? policy.copy[key]
+      : policy.copyI18n[i18n.language as "en" | "ru"]?.[key]) ?? i18n.t(`wallet:unavailable.${key}`),
   }), [loading, policy, refresh]);
 
   return <Context.Provider value={value}>{children}</Context.Provider>;

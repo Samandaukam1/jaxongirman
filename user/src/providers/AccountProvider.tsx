@@ -2,7 +2,7 @@ import type { Tables } from "@jaxongirman/types";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type PropsWithChildren } from "react";
 
 import { asErrorMessage } from "@/lib/format";
-import { supabase } from "@/lib/supabase";
+import { changesChannel, supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
 
 type Profile = Pick<Tables<"profiles">, "id" | "full_name" | "first_name" | "last_name" | "username" | "avatar_url">;
@@ -79,8 +79,7 @@ export function AccountProvider({ children }: PropsWithChildren) {
   // device should move this number without anyone pulling to refresh.
   useEffect(() => {
     if (!user) return;
-    const channel = supabase
-      .channel(`account-${user.id}`)
+    const channel = changesChannel(`account-${user.id}`)
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "credit_wallets", filter: `user_id=eq.${user.id}` },
