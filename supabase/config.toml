@@ -393,6 +393,13 @@ deno_version = 2
 [functions.generate-presentation]
 verify_jwt = false
 
+# Checks the caller itself (requestContext) and only ever deletes their own work.
+[functions.delete-work]
+verify_jwt = false
+
+[functions.marketplace-publish]
+verify_jwt = false
+
 [functions.edit-presentation]
 verify_jwt = false
 
