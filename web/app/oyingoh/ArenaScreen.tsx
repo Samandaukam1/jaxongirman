@@ -1,6 +1,6 @@
 "use client";
 
-import { GAME_TYPE_LABELS, type GameQuestionType } from "@jaxongirman/types";
+import type { GameQuestionType } from "@jaxongirman/types";
 import { Maximize, Minimize } from "lucide-react";
 import QRCode from "qrcode";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -12,6 +12,7 @@ import { supabase } from "@/lib/supabase";
 
 import { QrVideoExperience } from "@/app/_qr/QrVideoExperience";
 
+import { ARENA_WORDS, arenaLanguage } from "./arena-words";
 import { GameAvatar } from "./GameAvatar";
 
 const ROTATE_MS = 30_000;
@@ -27,6 +28,8 @@ type Snapshot = {
   game_selected: boolean;
   status: "lobby" | "countdown" | "question" | "question_result" | "leaderboard" | "finished" | "cancelled" | "expired";
   game_title: string;
+  /** The language the game's questions are written in (202610190002). */
+  game_language?: string;
   join_token: string;
   join_code: string;
   current_index: number;
@@ -333,6 +336,8 @@ export function ArenaScreen({ handoff, experienceRow }: {
   }
 
   const question = snapshot?.question;
+  // From the lobby on, the screen speaks the game's language.
+  const words = ARENA_WORDS[arenaLanguage(snapshot?.game_language)];
   const options = question?.config.options ?? [];
   const reveal = snapshot?.reveal;
   const correct = reveal?.config?.correct;
@@ -357,14 +362,14 @@ export function ArenaScreen({ handoff, experienceRow }: {
         <div className="arena-lobby">
           <div className="arena-lobby-main">
             <p className="eyebrow">JAXONGIRMAN O&lsquo;YINGOH</p>
-            <h1 className="arena-title">{snapshot.game_title || "O‘yingoh"}</h1>
-            {joinQr ? <img className="arena-qr" src={joinQr} alt="O‘yinga qo‘shilish uchun QR kod" width={300} height={300} /> : null}
-            <p className="arena-code-label">Kod</p>
+            <h1 className="arena-title">{snapshot.game_title || words.fallbackTitle}</h1>
+            {joinQr ? <img className="arena-qr" src={joinQr} alt={words.qrAlt} width={300} height={300} /> : null}
+            <p className="arena-code-label">{words.code}</p>
             <p className="arena-code">{spacedCode}</p>
-            <p className="arena-join-hint">Telefoningiz orqali qo&lsquo;shiling</p>
+            <p className="arena-join-hint">{words.joinHint}</p>
           </div>
           <div className="arena-players">
-            <p className="arena-players-count">{snapshot.player_count} ishtirokchi</p>
+            <p className="arena-players-count">{words.players(snapshot.player_count)}</p>
             <div className="arena-player-grid">
               {snapshot.players.map((player) => (
                 <div className="arena-player" key={player.id}>
@@ -381,7 +386,7 @@ export function ArenaScreen({ handoff, experienceRow }: {
       {snapshot?.status === "countdown" ? (
         <div className="arena-center">
           <p className={`arena-countdown${remaining > 0 ? "" : " is-go"}`}>
-            {remaining > 0 ? remaining : "BOSHLADIK!"}
+            {remaining > 0 ? remaining : words.go}
           </p>
         </div>
       ) : null}
@@ -389,12 +394,12 @@ export function ArenaScreen({ handoff, experienceRow }: {
       {(snapshot?.status === "question" || snapshot?.status === "question_result") && question ? (
         <div className="arena-question">
           <div className="arena-question-head">
-            <span className="arena-pill">{GAME_TYPE_LABELS[question.type]}</span>
+            <span className="arena-pill">{words.types[question.type]}</span>
             <span className="arena-pill">{snapshot.current_index + 1} / {snapshot.question_count}</span>
             {snapshot.status === "question" ? (
               <>
                 <span className={`arena-timer${remaining <= 5 ? " urgent" : ""}`}>{remaining}</span>
-                <span className="arena-pill">{snapshot.answered_count ?? 0} / {snapshot.player_count} javob</span>
+                <span className="arena-pill">{words.answered(snapshot.answered_count ?? 0, snapshot.player_count)}</span>
                 <span className="arena-answered-bar" aria-hidden>
                   <i style={{
                     width: `${Math.round(((snapshot.answered_count ?? 0) / Math.max(snapshot.player_count, 1)) * 100)}%`,
@@ -413,11 +418,11 @@ export function ArenaScreen({ handoff, experienceRow }: {
           {question.type === "true_false" ? (
             <div className="arena-options two">
               <div className="arena-option" style={{ background: "#17B283" }}>
-                <span className="arena-option-glyph">✓</span><span>ROST</span>
+                <span className="arena-option-glyph">✓</span><span>{words.truth}</span>
                 {snapshot.status === "question_result" && correct === true ? <span className="arena-correct">✓</span> : null}
               </div>
               <div className="arena-option" style={{ background: "#D9455F" }}>
-                <span className="arena-option-glyph">✕</span><span>YOLG‘ON</span>
+                <span className="arena-option-glyph">✕</span><span>{words.lie}</span>
                 {snapshot.status === "question_result" && correct === false ? <span className="arena-correct">✓</span> : null}
               </div>
             </div>
@@ -442,11 +447,11 @@ export function ArenaScreen({ handoff, experienceRow }: {
               })}
             </div>
           ) : question.type === "word_cloud" && reveal ? (
-            <WordCloud words={reveal.stats.words} />
+            <WordCloud words={reveal.stats.words} empty={words.noWords} />
           ) : snapshot.status === "question_result" ? (
-            <RevealText question={question} config={reveal?.config ?? {}} />
+            <RevealText question={question} config={reveal?.config ?? {}} closed={words.closed} />
           ) : (
-            <p className="arena-await">Telefoningizda javob bering</p>
+            <p className="arena-await">{words.answerOnPhone}</p>
           )}
 
           {snapshot.status === "question_result" && reveal?.explanation ? (
@@ -454,9 +459,9 @@ export function ArenaScreen({ handoff, experienceRow }: {
           ) : null}
           {snapshot.status === "question_result" && reveal ? (
             <p className="arena-stats">
-              {reveal.stats.answers} javob
+              {words.answers(reveal.stats.answers)}
               {reveal.stats.correct + reveal.stats.incorrect > 0
-                ? ` · ${Math.round((reveal.stats.correct / (reveal.stats.correct + reveal.stats.incorrect)) * 100)}% to‘g‘ri`
+                ? ` · ${words.correctShare(Math.round((reveal.stats.correct / (reveal.stats.correct + reveal.stats.incorrect)) * 100))}`
                 : ""}
             </p>
           ) : null}
@@ -465,7 +470,7 @@ export function ArenaScreen({ handoff, experienceRow }: {
 
       {snapshot?.status === "leaderboard" && snapshot.leaderboard ? (
         <div className="arena-board">
-          <h1 className="arena-title">Natijalar jadvali</h1>
+          <h1 className="arena-title">{words.leaderboard}</h1>
           {/* In team mode the teams lead: the individual board is still shown
               below it, because a player wants to find their own name. */}
           {snapshot.team_mode && snapshot.leaderboard.teams.length > 0 ? (
@@ -473,8 +478,8 @@ export function ArenaScreen({ handoff, experienceRow }: {
               {snapshot.leaderboard.teams.map((team) => (
                 <div className="arena-team" key={team.team}>
                   <span className="arena-team-name">{team.team}</span>
-                  <span className="arena-team-meta">{team.players} ishtirokchi</span>
-                  <span className="arena-team-score">{team.total_score.toLocaleString("uz-UZ")}</span>
+                  <span className="arena-team-meta">{words.players(team.players)}</span>
+                  <span className="arena-team-score">{team.total_score.toLocaleString(words.locale)}</span>
                 </div>
               ))}
             </div>
@@ -484,30 +489,30 @@ export function ArenaScreen({ handoff, experienceRow }: {
               <span className="arena-board-rank">{player.rank}</span>
               <GameAvatar id={player.avatar_id} size={44} />
               <span className="arena-board-name">{player.nickname}</span>
-              <span className="arena-board-score">{player.total_score.toLocaleString("uz-UZ")}</span>
+              <span className="arena-board-score">{player.total_score.toLocaleString(words.locale)}</span>
             </div>
           ))}
         </div>
       ) : null}
 
       {snapshot?.status === "finished" && snapshot.leaderboard ? (
-        <Finish players={snapshot.leaderboard.players} />
+        <Finish players={snapshot.leaderboard.players} words={words} />
       ) : null}
 
       {snapshot?.status === "cancelled" || snapshot?.status === "expired" ? (
         <div className="arena-center">
-          <h1 className="arena-title">O&lsquo;yin to&lsquo;xtatildi</h1>
-          <button className="store-button" type="button" onClick={() => void openSession()}>Yangi o&lsquo;yin</button>
+          <h1 className="arena-title">{words.stopped}</h1>
+          <button className="store-button" type="button" onClick={() => void openSession()}>{words.newGame}</button>
         </div>
       ) : null}
     </main>
   );
 }
 
-function WordCloud({ words }: { words: Record<string, number> }) {
+function WordCloud({ words, empty }: { words: Record<string, number>; empty: string }) {
   const entries = Object.entries(words ?? {}).sort((a, b) => b[1] - a[1]).slice(0, 30);
   const peak = entries[0]?.[1] ?? 1;
-  if (entries.length === 0) return <p className="arena-await">Hech kim javob yozmadi</p>;
+  if (entries.length === 0) return <p className="arena-await">{empty}</p>;
   return (
     <div className="arena-cloud">
       {entries.map(([word, count]) => (
@@ -519,9 +524,10 @@ function WordCloud({ words }: { words: Record<string, number> }) {
   );
 }
 
-function RevealText({ question, config }: {
+function RevealText({ question, config, closed }: {
   question: NonNullable<Snapshot["question"]>;
   config: Record<string, unknown>;
+  closed: string;
 }) {
   if (question.type === "fill_blank") {
     const answers = Array.isArray(config.answers) ? config.answers as string[] : [];
@@ -549,10 +555,13 @@ function RevealText({ question, config }: {
       </ul>
     );
   }
-  return <p className="arena-await">Javoblar yopildi</p>;
+  return <p className="arena-await">{closed}</p>;
 }
 
-function Finish({ players }: { players: { id: string; nickname: string; avatar_id: number; total_score: number; rank: number }[] }) {
+function Finish({ players, words }: {
+  players: { id: string; nickname: string; avatar_id: number; total_score: number; rank: number }[];
+  words: (typeof ARENA_WORDS)[keyof typeof ARENA_WORDS];
+}) {
   const order = [players.find((p) => p.rank === 2), players.find((p) => p.rank === 1), players.find((p) => p.rank === 3)];
   const medals = ["🥈", "🥇", "🥉"];
   const heights = [180, 250, 140];
@@ -573,9 +582,9 @@ function Finish({ players }: { players: { id: string; nickname: string; avatar_i
 
       {/* Named, because "G'oliblar" is a heading and a person's name is the
           thing the room is looking for. */}
-      <p className="arena-finish-eyebrow">O‘yin yakunlandi</p>
+      <p className="arena-finish-eyebrow">{words.finished}</p>
       <h1 className="arena-finish-title">
-        {champion ? <><span className="arena-crown" aria-hidden>👑</span>{champion.nickname}</> : "G‘oliblar"}
+        {champion ? <><span className="arena-crown" aria-hidden>👑</span>{champion.nickname}</> : words.winners}
       </h1>
 
       <div className="arena-podium">
@@ -584,7 +593,7 @@ function Finish({ players }: { players: { id: string; nickname: string; avatar_i
             <span className="arena-podium-medal" aria-hidden>{medals[index]}</span>
             <GameAvatar id={player.avatar_id} size={index === 1 ? 116 : 82} />
             <span className="arena-podium-name">{player.nickname}</span>
-            <span className="arena-podium-score">{player.total_score.toLocaleString("uz-UZ")}</span>
+            <span className="arena-podium-score">{player.total_score.toLocaleString(words.locale)}</span>
             <div
               className="arena-podium-block"
               style={{ height: heights[index], animationDelay: `${[240, 0, 420][index]}ms` }}
@@ -603,7 +612,7 @@ function Finish({ players }: { players: { id: string; nickname: string; avatar_i
             <span className="arena-finish-chip" key={player.id}>
               <b>{player.rank}</b>
               {player.nickname}
-              <i>{player.total_score.toLocaleString("uz-UZ")}</i>
+              <i>{player.total_score.toLocaleString(words.locale)}</i>
             </span>
           ))}
         </div>

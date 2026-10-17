@@ -35,7 +35,29 @@ type RequestBody = {
   questionCount?: number;
   types?: string[];
   categoryId?: string | null;
+  /** The language the questions are written in; a deck's own when made from one. */
+  language?: string;
 };
+
+/**
+ * A game is written in one language, chosen when it is made — as a deck is.
+ * The instructions to the model stay in Uzbek; one line says which language
+ * every question, option and explanation must be in. No translation pass.
+ */
+const GAME_LANGUAGES = ["uz", "en", "ru"] as const;
+type GameLanguage = (typeof GAME_LANGUAGES)[number];
+const isGameLanguage = (value: unknown): value is GameLanguage =>
+  typeof value === "string" && (GAME_LANGUAGES as readonly string[]).includes(value);
+
+const WRITE_IN: Record<GameLanguage, string> = {
+  uz: "- Barcha matn o‘zbek lotin alifbosida (o‘ va g‘ harflari bilan), imloviy xatosiz bo‘lsin. Turkcha yoki ruscha so‘z aralashmasin.",
+  en: "- Write every question, option, answer and explanation in English (these instructions are in Uzbek; the answer is not). Correct spelling, no words from other languages.",
+  ru: "- Все вопросы, варианты, ответы и пояснения пишите на русском языке, кириллицей (инструкции на узбекском, ответ — нет). Без ошибок и слов из других языков.",
+};
+
+const NEW_GAME_TITLE: Record<GameLanguage, string> = { uz: "Yangi o‘yin", en: "New game", ru: "Новая игра" };
+
+const CYRILLIC = /[Ѐ-ӿ]/;
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -73,7 +95,7 @@ const questionSchema = {
   ],
   properties: {
     type: { type: "string", enum: [...AI_TYPES] },
-    prompt: { type: "string", description: "Savol matni, o‘zbek lotin alifbosida" },
+    prompt: { type: "string", description: "Savol matni, so‘ralgan tilda" },
     explanation: { type: "string", description: "To‘g‘ri javob izohi, 1-2 gap" },
     /**
      * No `enum` on a number, however much one is wanted here.
@@ -240,11 +262,11 @@ function audienceLine(audience: string): string {
   }
 }
 
-function systemPrompt(): string {
+function systemPrompt(language: GameLanguage): string {
   return [
     "Sen Jaxongirman O‘yingoh uchun bilim o‘yinlari tuzadigan metodistsan.",
     "Qoidalar:",
-    "- Barcha matn o‘zbek lotin alifbosida, imloviy xatosiz bo‘lsin. Turkcha yoki ruscha so‘z aralashmasin.",
+    WRITE_IN[language],
     "- Har bir savol faktik jihatdan aniq, bir ma’noli va auditoriyaga mos bo‘lsin.",
     "- Noto‘g‘ri variantlar ham mantiqli bo‘lsin — bir qarashda sezilib turmasin.",
     "- Bir xil savolni takrorlama; savollar mavzuni har tomondan qamrasin.",
@@ -254,7 +276,7 @@ function systemPrompt(): string {
   ].join("\n");
 }
 
-function userPrompt(source: string, difficulty: string, audience: string, count: number, types: AiType[], onlyFromSource: boolean): string {
+function userPrompt(source: string, difficulty: string, audience: string, count: number, types: AiType[], onlyFromSource: boolean, language: GameLanguage): string {
   return [
     source,
     "",
@@ -265,6 +287,9 @@ function userPrompt(source: string, difficulty: string, audience: string, count:
     onlyFromSource
       ? "MUHIM: Savollar FAQAT yuqoridagi manba matnidagi ma’lumotlarga asoslansin. Manbada yo‘q faktni qo‘shma."
       : "Savollar mavzu bo‘yicha ishonchli, tekshirilgan faktlarga asoslansin.",
+    // Said last as well as in the system prompt: a source written in another
+    // language is the likeliest reason for a model to drift.
+    WRITE_IN[language].slice(2),
   ].join("\n");
 }
 
@@ -468,6 +493,7 @@ type GenerationTask = {
   count: number;
   types: AiType[];
   safetyIdentifier: string;
+  language: GameLanguage;
   /** When set, replace exactly this question instead of filling the game. */
   replaceQuestionId?: string;
   replacePosition?: number;
@@ -557,11 +583,11 @@ async function runGeneration(task: GenerationTask): Promise<void> {
       }
       model = writer.writingModel;
 
-      const system = systemPrompt();
+      const system = systemPrompt(task.language);
       stage("game_generation_ai_started", task, { model, batches: batchSizes(task.count).length });
       try {
         game = await writeInBatches(task, writer, system, (batch, index) =>
-          userPrompt(task.source, task.difficulty, task.audience, batch, task.types, task.onlyFromSource)
+          userPrompt(task.source, task.difficulty, task.audience, batch, task.types, task.onlyFromSource, task.language)
           + (index === 0 ? "" : `\n\nDIQQAT: bu shu o‘yinning ${index + 1}-to‘plami. Oldingi to‘plamlardagi savollarni takrorlama.`),
           (batchUsage) => {
             usage = {
@@ -651,7 +677,7 @@ async function runGeneration(task: GenerationTask): Promise<void> {
       await service.from("games").update({
         status: "draft",
         failure_reason: null,
-        title: current?.title?.trim() ? current.title : clean(game.title, 160) || "Yangi o‘yin",
+        title: current?.title?.trim() ? current.title : clean(game.title, 160) || NEW_GAME_TITLE[task.language],
         description: current?.description?.trim() ? current.description : clean(game.description, 2000),
       }).eq("id", task.gameId);
     }
@@ -667,7 +693,7 @@ async function runGeneration(task: GenerationTask): Promise<void> {
       provider_cost_usd: ((usage.input_tokens ?? 0) / 1_000_000) * pricing.inputPerMillion
         + ((usage.output_tokens ?? 0) / 1_000_000) * pricing.outputPerMillion,
       request_id: requestId,
-      metadata: { game_id: task.gameId, count: mapped.length },
+      metadata: { game_id: task.gameId, count: mapped.length, language: task.language },
     });
     stage("game_generation_completed", task, { saved: mapped.length });
   } catch (failure) {
@@ -722,13 +748,13 @@ Deno.serve(async (request) => {
       }
       const { data: question, error } = await service
         .from("game_questions")
-        .select("id, game_id, owner_id, position, type, prompt, games!game_questions_game_owner_fkey(title, source_presentation_id)")
+        .select("id, game_id, owner_id, position, type, prompt, games!game_questions_game_owner_fkey(title, source_presentation_id, language)")
         .eq("id", body.questionId)
         .eq("game_id", body.gameId)
         .single();
       if (error || !question) throw new HttpError(404, "Savol topilmadi.", "question_not_found");
       if (question.owner_id !== context.user.id) throw new HttpError(403, "Bu o‘yin sizga tegishli emas.", "not_owner");
-      const gameRow = question.games as unknown as { title: string; source_presentation_id: string | null };
+      const gameRow = question.games as unknown as { title: string; source_presentation_id: string | null; language: string | null };
 
       let source = `Mavzu: ${gameRow.title}`;
       if (gameRow.source_presentation_id) {
@@ -742,6 +768,8 @@ Deno.serve(async (request) => {
         difficulty, audience, count: 1,
         types: [(question.type as AiType) ?? "single_choice"],
         safetyIdentifier,
+        // A replacement question is in the game's language, whatever the app's.
+        language: isGameLanguage(gameRow.language) ? gameRow.language : "uz",
         replaceQuestionId: body.questionId,
         replacePosition: question.position,
       };
@@ -759,6 +787,8 @@ Deno.serve(async (request) => {
     let presentationId: string | null = null;
     let title = "";
 
+    let language: GameLanguage = isGameLanguage(body.language) ? body.language : "uz";
+
     if (mode === "presentation") {
       if (!body.presentationId || !uuidPattern.test(body.presentationId)) {
         throw new HttpError(400, "presentationId is required", "invalid_request");
@@ -767,6 +797,12 @@ Deno.serve(async (request) => {
       onlyFromSource = true;
       sourceType = "presentation";
       presentationId = body.presentationId;
+      // A quiz about a deck is asked in the deck's language unless the person
+      // chose otherwise.
+      if (!isGameLanguage(body.language)) {
+        const { data: deck } = await service.from("presentations").select("language").eq("id", body.presentationId).maybeSingle();
+        if (isGameLanguage(deck?.language)) language = deck.language;
+      }
     } else if (mode === "text") {
       const text = clean(body.text, 20_000);
       if (text.length < 80) throw new HttpError(400, "Matn juda qisqa — kamida bir necha jumla kerak.", "text_too_short");
@@ -776,8 +812,23 @@ Deno.serve(async (request) => {
     } else {
       const topic = clean(body.topic, 300);
       if (topic.length < 3) throw new HttpError(400, "Mavzuni yozing.", "invalid_topic");
+      // The rule decks keep: an Uzbek game is written in Latin, so a topic in
+      // Cyrillic is refused with the same sentence the app already knows.
+      if (language === "uz" && CYRILLIC.test(topic)) {
+        throw new HttpError(400, "Mavzuni lotin yozuvida kiriting.", "cyrillic_topic");
+      }
       source = `Mavzu: ${topic}`;
       title = topic.slice(0, 160);
+    }
+
+    // The operator's switch for languages the AI writes in is the one decks
+    // use; Uzbek can never be switched off.
+    if (language !== "uz") {
+      const { data: setting } = await service.from("app_settings").select("value").eq("key", "i18n.languages").maybeSingle();
+      const enabled = (setting?.value as { deck?: unknown } | null)?.deck;
+      if (Array.isArray(enabled) && !enabled.includes(language)) {
+        throw new HttpError(400, "Bu tilda o‘yin yaratish hozircha o‘chirilgan.", "language_disabled");
+      }
     }
 
     const { data: created, error: createError } = await service
@@ -790,6 +841,7 @@ Deno.serve(async (request) => {
         source_presentation_id: presentationId,
         difficulty,
         audience,
+        language,
         category_id: body.categoryId && uuidPattern.test(body.categoryId) ? body.categoryId : null,
       })
       .select("id")
@@ -798,7 +850,7 @@ Deno.serve(async (request) => {
 
     const task: GenerationTask = {
       service, ownerId: context.user.id, gameId: created.id, source, onlyFromSource,
-      difficulty, audience, count, types, safetyIdentifier,
+      difficulty, audience, count, types, safetyIdentifier, language,
     };
     const work = runGeneration(task);
     if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(work);
