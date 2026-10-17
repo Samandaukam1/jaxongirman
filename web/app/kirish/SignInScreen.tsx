@@ -14,6 +14,16 @@ type Collected = { status: "pending" | "approved" | "used" | "expired" | "unknow
 const POLL_MS = 1500;
 
 /**
+ * Where a signed-in browser goes: the web app, or the page inside it that sent
+ * the person here (`?next=/app/...`). Only a path on this site is accepted, so
+ * the parameter cannot send anybody elsewhere.
+ */
+function destination(): string {
+  const next = new URLSearchParams(window.location.search).get("next");
+  return next && next.startsWith("/app") && !next.startsWith("//") ? next : "/app";
+}
+
+/**
  * Signing in with the phone.
  *
  * The page opens a request and shows its code — after the same film the
@@ -49,10 +59,10 @@ export function SignInScreen({ experienceRow }: { experienceRow: unknown | null 
     }
   }, []);
 
-  // Already signed in here: straight to the account.
+  // Already signed in here: straight into the app.
   useEffect(() => {
     void supabase.auth.getSession().then(({ data }) => {
-      if (data.session) window.location.replace("/hisob");
+      if (data.session) window.location.replace(destination());
       else void open();
     });
   }, [open]);
@@ -78,7 +88,7 @@ export function SignInScreen({ experienceRow }: { experienceRow: unknown | null 
             void open();
             return;
           }
-          window.location.replace("/hisob");
+          window.location.replace(destination());
         } else if (answer.status !== "pending") {
           void open();
         }
@@ -92,12 +102,12 @@ export function SignInScreen({ experienceRow }: { experienceRow: unknown | null 
   /**
    * The other two ways in, for somebody without the phone at hand: the same
    * Google and Apple accounts the app signs in with. They come back to the
-   * account page, which reads the session from the address.
+   * web app's callback, which reads the session from the address.
    */
   async function withProvider(provider: "google" | "apple") {
     const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider,
-      options: { redirectTo: `${window.location.origin}/hisob` },
+      options: { redirectTo: `${window.location.origin}/app/auth/callback` },
     });
     if (oauthError) setError("Kirish ochilmadi. Birozdan so‘ng qayta urinib ko‘ring.");
   }

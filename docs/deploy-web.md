@@ -13,9 +13,13 @@ npx vercel deploy --prod --yes
 
 The build runs on Vercel, not here: the production variables are marked
 Sensitive, so `vercel pull` writes them empty and a local `vercel build` fails
-`web/lib/env-guard.ts` by design. The root [.vercelignore](../.vercelignore)
-keeps the upload to the site and its packages — without it the CLI would send
-the 2.8 GB `font-library/` and the mascot work in `output/`.
+`web/lib/env-guard.ts` by design. The build command first exports the Expo app
+from `user/` into `web/public/app`, then builds the Next.js site. The generated
+app runs at `/app` and stays out of Git; every deployment rebuilds it.
+
+The root [.vercelignore](../.vercelignore) includes the site, shared packages,
+and the Expo app's source, assets and config. Native projects, `.ipa` files,
+the 2.8 GB `font-library/` and mascot work in `output/` stay off the upload.
 
 The site is a workspace inside this monorepo, so Vercel deploys it by pointing at
 a subdirectory rather than by needing its own repository.
@@ -33,6 +37,11 @@ a subdirectory rather than by needing its own repository.
    | `NEXT_PUBLIC_SUPABASE_URL` | `https://xkdlaavvyianxerxxjpo.supabase.co` |
    | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | the publishable (anon) key |
    | `NEXT_PUBLIC_APP_URL` | the deployment origin, e.g. `https://jaxongirman.uz` |
+
+   The build command passes these same values to the Expo export as
+   `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY` and
+   `EXPO_PUBLIC_APP_URL`, keeping the site and browser app on the same project.
+   No separate Expo environment variables are needed for the web deployment.
 
    A build without the first two fails deliberately rather than shipping a page
    that rejects every request — see [web/lib/env-guard.ts](../web/lib/env-guard.ts).

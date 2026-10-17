@@ -1,7 +1,7 @@
-# The public site is web/ and the packages it builds from. Everything else in
-# this monorepo — 2.8 GB of font sources, 3D mascot work, the apps' native
-# projects — stays off a site upload. The two workspace manifests stay, because
-# `npm install` reads every workspace the root package.json names.
+# The site builds web/ and the browser app from user/. Keep their source,
+# assets, config and shared packages; leave font sources, mascot work and native
+# projects off the upload. Both app manifests stay because npm reads every
+# workspace named by the root package.json.
 /font-library
 /output
 /docs
@@ -9,6 +9,19 @@
 /supabase
 /user/*
 !/user/package.json
+!/user/app.json
+!/user/app.config.js
+!/user/babel.config.js
+!/user/metro.config.js
+!/user/tsconfig.json
+!/user/app/
+!/user/app/**
+!/user/src/
+!/user/src/**
+!/user/assets/
+!/user/assets/**
+!/user/types/
+!/user/types/**
 /admin/*
 !/admin/package.json
 /web/.next

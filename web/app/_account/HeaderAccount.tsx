@@ -5,9 +5,9 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 /**
- * The account link in the header: "Hisobga kirish" for a visitor, "Hisobim"
- * once this browser is signed in. Rendered empty until the session is read,
- * so the wrong word never flashes.
+ * The account link in the header: "Hisobga kirish" for a visitor, "Ilovani
+ * ochish" — the web app at /app — once this browser is signed in. Rendered
+ * empty until the session is read, so the wrong word never flashes.
  */
 export function HeaderAccount() {
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
@@ -21,8 +21,8 @@ export function HeaderAccount() {
 
   if (signedIn === null) return <span className="header-account is-pending" aria-hidden />;
   return (
-    <a className="header-account" href={signedIn ? "/hisob" : "/kirish"}>
-      {signedIn ? "Hisobim" : "Hisobga kirish"}
+    <a className="header-account" href={signedIn ? "/app" : "/kirish"}>
+      {signedIn ? "Ilovani ochish" : "Hisobga kirish"}
     </a>
   );
 }
