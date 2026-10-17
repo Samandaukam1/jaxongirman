@@ -400,6 +400,10 @@ verify_jwt = false
 [functions.marketplace-publish]
 verify_jwt = false
 
+# Checks the caller itself (requestContext); approves a QR sign-in for the caller only.
+[functions.web-sign-in]
+verify_jwt = false
+
 [functions.edit-presentation]
 verify_jwt = false
 

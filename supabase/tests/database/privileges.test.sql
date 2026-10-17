@@ -55,7 +55,11 @@ select is(
     'presentation_pairing_rotate',
     'presentation_screen_command',
     'presentation_screen_snapshot',
-    'presentation_session_open'
+    'presentation_session_open',
+    -- The website signs in before anybody is signed in on it (202610190004):
+    -- it opens a request and collects it with the secret only it holds.
+    'web_sign_in_collect',
+    'web_sign_in_open'
   ],
   'only pairing, screen-capability and scan-landing entry points are callable by a signed-out caller'
 );
