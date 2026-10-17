@@ -9,6 +9,7 @@ import { bodyJson, errorResponse, HttpError, json } from "../_shared/http.ts";
 import { renderPdf } from "../_shared/pdf-export.ts";
 import { exportByCloning } from "../_shared/pptx-clone-export.ts";
 import { renderChartPptx, renderPptx } from "../_shared/pptx-export.ts";
+import { allRows } from "../_shared/rows.ts";
 
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void } | undefined;
 
@@ -228,11 +229,17 @@ async function cloneIfTemplate(service: SupabaseClient, presentationId: string) 
     return { ok: false as const, reason: "Dizayn sahifalari shablonga bog‘lanmagan — qayta import qiling." };
   }
 
-  const elements = await service
-    .from("slide_elements")
-    .select("id, slide_id, type, x, y, width, height, rotation, z_index, opacity, style, content")
-    .in("slide_id", (slides.data ?? []).map((slide) => slide.id));
-  if (elements.error) {
+  let elements: { data: Record<string, unknown>[] };
+  try {
+    elements = {
+      data: await allRows((from, to) => service
+        .from("slide_elements")
+        .select("id, slide_id, type, x, y, width, height, rotation, z_index, opacity, style, content")
+        .in("slide_id", (slides.data ?? []).map((slide) => slide.id))
+        .order("id")
+        .range(from, to)),
+    };
+  } catch {
     return { ok: false as const, reason: "Slayd elementlari o‘qilmadi. Qayta urinib ko‘ring." };
   }
 

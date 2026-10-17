@@ -102,15 +102,35 @@ async function loadBook(pdf: PDFDocument): Promise<Book> {
   };
 }
 
+/**
+ * A word's width, measured once per face and size.
+ *
+ * Measuring runs the face's shaper over the text. The wrap used to measure the
+ * whole line again for every word it tried to add — for a twenty-slide script,
+ * thousands of shapings of ever-longer lines, most of the time the PDF took.
+ */
+const widths = new WeakMap<PDFFont, Map<string, number>>();
+function measured(font: PDFFont, text: string, size: number): number {
+  let known = widths.get(font);
+  if (!known) widths.set(font, known = new Map());
+  const key = `${size}|${text}`;
+  let width = known.get(key);
+  if (width === undefined) known.set(key, width = font.widthOfTextAtSize(text, size));
+  return width;
+}
+
 /** Greedy wrap. A script is prose; nothing here needs justification. */
 function wrap(text: string, font: PDFFont, size: number, width: number): string[] {
   const lines: string[] = [];
+  const space = measured(font, " ", size);
   for (const paragraph of text.split("\n")) {
     let line = "";
+    let lineWidth = 0;
     for (const word of paragraph.split(/\s+/).filter(Boolean)) {
-      const candidate = line ? `${line} ${word}` : word;
-      if (font.widthOfTextAtSize(candidate, size) <= width) line = candidate;
-      else { if (line) lines.push(line); line = word; }
+      const wordWidth = measured(font, word, size);
+      if (!line) { line = word; lineWidth = wordWidth; }
+      else if (lineWidth + space + wordWidth <= width) { line = `${line} ${word}`; lineWidth += space + wordWidth; }
+      else { lines.push(line); line = word; lineWidth = wordWidth; }
     }
     lines.push(line);
   }

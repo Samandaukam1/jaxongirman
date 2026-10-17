@@ -34,6 +34,7 @@
  */
 import { preflight } from "../_shared/cors.ts";
 import { bodyJson, errorResponse, HttpError, json } from "../_shared/http.ts";
+import { allRows } from "../_shared/rows.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js";
 
 type Body = { sessionId?: string; screenToken?: string };
@@ -108,13 +109,18 @@ Deno.serve(async (request) => {
       .order("position");
     if (slides.error) throw slides.error;
 
-    const elements = await service
-      .from("slide_elements")
-      .select("id,slide_id,type,x,y,width,height,rotation,z_index,opacity,locked,style,content")
-      .eq("presentation_id", presentationId)
-      .eq("owner_id", ownerId)
-      .order("z_index");
-    if (elements.error) throw elements.error;
+    // Every element, a thousand at a time: a long deck is more than one page
+    // of the API, and the rows past it were the words on the slides.
+    const elements = {
+      data: await allRows((from, to) => service
+        .from("slide_elements")
+        .select("id,slide_id,type,x,y,width,height,rotation,z_index,opacity,locked,style,content")
+        .eq("presentation_id", presentationId)
+        .eq("owner_id", ownerId)
+        .order("z_index")
+        .order("id")
+        .range(from, to)),
+    };
 
     // Signed side by side: a deck of twenty photographs is twenty round trips,
     // and the screen is waiting on all of them before it draws anything.

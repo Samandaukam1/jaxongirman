@@ -62,8 +62,9 @@ test("the author's requirements reach the prompts", () => {
 
 test("the create screen offers no design picker, and sources and requirements are buttons", () => {
   assert.ok(!/DesignPicker|loadRemoteDesigns|generativeDesign/.test(CREATE_SCREEN), "a design catalogue is still offered");
-  assert.match(CREATE_SCREEN, /title="Manbalar"/, "Manbalar is not a button");
-  assert.match(CREATE_SCREEN, /title="Talablar"/, "Talablar is not a button");
+  // The words live in the i18n tables now; the buttons name their keys.
+  assert.match(CREATE_SCREEN, /title=\{t\("sources\.title"\)\}/, "Manbalar is not a button");
+  assert.match(CREATE_SCREEN, /title=\{t\("requirements\.title"\)\}/, "Talablar is not a button");
   assert.match(CREATE_SCREEN, /requirements: requirements\.trim\(\) \|\| null/, "requirements are not sent");
   assert.ok(!/<FormField[^>]*label="Foydalanilgan manbalar"/.test(CREATE_SCREEN), "sources are still an inline text area");
 });

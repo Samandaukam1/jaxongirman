@@ -29,9 +29,17 @@ import { loadExportDeck } from "../_shared/export-deck.ts";
 import { geminiWriter } from "../_shared/gemini.ts";
 import { bodyJson, errorResponse, HttpError, json } from "../_shared/http.ts";
 import { renderPdf } from "../_shared/pdf-export.ts";
+import { allRows } from "../_shared/rows.ts";
 import { ProviderUnavailable } from "../_shared/writer.ts";
 
-type Body = { presentationId?: string; action?: "write" | "pdf" };
+type Body = {
+  presentationId?: string;
+  action?: "write" | "pdf" | "slides";
+  /** For `pdf`: the slides an earlier `slides` request drew, so this one only sets the script. */
+  slidesPath?: string | null;
+  /** For `pdf`: set the script without slide pictures (the slides could not be drawn). */
+  noSlides?: boolean;
+};
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -65,6 +73,16 @@ async function drawDeck(service: SupabaseClient, presentationId: string, ownerId
   }
 }
 
+/** The slides a `slides` request drew, with the number of each page. Null when they are gone. */
+async function keptSlides(service: SupabaseClient, presentationId: string, path: string) {
+  const [stored, slides] = await Promise.all([
+    service.storage.from("exports").download(path),
+    service.from("slides").select("position").eq("presentation_id", presentationId).order("position"),
+  ]);
+  if (stored.error || !stored.data || slides.error || !slides.data) return null;
+  return { pdf: new Uint8Array(await stored.data.arrayBuffer()), numbers: slides.data.map((slide) => slide.position + 1) };
+}
+
 async function readDeck(service: SupabaseClient, presentationId: string, ownerId: string) {
   const presentation = await service
     .from("presentations")
@@ -78,13 +96,15 @@ async function readDeck(service: SupabaseClient, presentationId: string, ownerId
     throw new HttpError(409, "Taqdimot hali tayyor emas.", "not_ready");
   }
 
-  const [slides, elements, profile] = await Promise.all([
+  const [slides, elementRows, profile] = await Promise.all([
     service.from("slides").select("id, position, title").eq("presentation_id", presentationId).order("position"),
-    service.from("slide_elements").select("slide_id, type, content").eq("presentation_id", presentationId),
+    // Every element: the script must speak to the last slides of a long deck too.
+    allRows((from, to) => service.from("slide_elements").select("id, slide_id, type, content")
+      .eq("presentation_id", presentationId).order("id").range(from, to)),
     service.from("profiles").select("organization").eq("id", ownerId).maybeSingle(),
   ]);
   if (slides.error) throw slides.error;
-  if (elements.error) throw elements.error;
+  const elements = { data: elementRows };
 
   const bySlide = new Map<string, string[]>();
   for (const element of elements.data ?? []) {
@@ -225,6 +245,25 @@ Deno.serve(async (request) => {
     const service = context ? context.serviceClient : serviceClient();
     const ownerId = internal ?? context!.user.id;
 
+    /**
+     * The script PDF is two requests, each well inside what the runtime gives
+     * one: `slides` draws the deck and keeps it beside the export, then `pdf`
+     * sets the script around those pages. In one request a long deck drawn
+     * twice — once as a PDF, once parsed back into the script — ran past the
+     * runtime's CPU limit, the worker was stopped mid-render, and the phone
+     * only heard that it failed. `pdf` alone still draws the deck inline, for
+     * builds that do not ask for `slides` first.
+     */
+    const slidesPath = `${ownerId}/${presentationId}/himoya-slaydlar.pdf`;
+    if (body.action === "slides") {
+      const drawn = await drawDeck(service, presentationId, ownerId);
+      if (!drawn) return json({ ok: false });
+      const kept = await service.storage.from("exports")
+        .upload(slidesPath, drawn.pdf, { contentType: "application/pdf", upsert: true });
+      if (kept.error) return json({ ok: false });
+      return json({ ok: true, slidesPath, pages: drawn.numbers.length });
+    }
+
     if (body.action === "pdf") {
       const stored = await service
         .from("presentation_defenses")
@@ -252,13 +291,19 @@ Deno.serve(async (request) => {
           conclusion: stored.data.conclusion,
           sections: (stored.data.sections ?? []) as never,
         },
-        deck: await drawDeck(service, presentationId, ownerId),
+        deck: body.noSlides
+          ? null
+          : body.slidesPath === slidesPath
+            ? await keptSlides(service, presentationId, slidesPath)
+            : await drawDeck(service, presentationId, ownerId),
       });
 
       const path = `${ownerId}/${presentationId}/himoya-matni.pdf`;
       const upload = await service.storage.from("exports")
         .upload(path, bytes, { contentType: "application/pdf", upsert: true });
       if (upload.error) throw upload.error;
+      // The drawn slides were only ever a step on the way here.
+      if (body.slidesPath === slidesPath) await service.storage.from("exports").remove([slidesPath]).catch(() => {});
 
       return json({ ok: true, storagePath: path, sizeBytes: bytes.byteLength });
     }

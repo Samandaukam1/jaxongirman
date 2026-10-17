@@ -422,19 +422,36 @@ function drawText(page: PDFPage, element: ExportElement, style: JsonObject, cont
   });
 }
 
-async function embedImage(pdf: PDFDocument, asset: ExportAsset): Promise<PDFImage | null> {
-  if (asset.mimeType === "image/png") return await pdf.embedPng(asset.bytes);
-  if (asset.mimeType === "image/jpeg") return await pdf.embedJpg(asset.bytes);
-  return null;
+/**
+ * Each picture embedded once per file, however many slides show it.
+ *
+ * A national-ornament deck lays the same paper texture under every page and
+ * the same band on most of them: forty image rows, seven pictures. Embedded per
+ * row, a twenty-page deck decoded one large PNG twenty times and wrote it
+ * twenty times — a 14 MB file and seconds of work, enough for the edge runtime
+ * to stop the export (and every defence script PDF that draws the deck). The
+ * loader already hands back the same asset object for the same file, so the
+ * object is the key.
+ */
+type ImageBook = Map<ExportAsset, Promise<PDFImage | null>>;
+
+function embedImage(pdf: PDFDocument, asset: ExportAsset, book: ImageBook): Promise<PDFImage | null> {
+  const known = book.get(asset);
+  if (known) return known;
+  const pending = asset.mimeType === "image/png"
+    ? pdf.embedPng(asset.bytes)
+    : asset.mimeType === "image/jpeg" ? pdf.embedJpg(asset.bytes) : Promise.resolve(null);
+  book.set(asset, pending);
+  return pending;
 }
 
-async function drawImage(page: PDFPage, pdf: PDFDocument, element: ExportElement, style: JsonObject, asset: ExportAsset | null) {
+async function drawImage(page: PDFPage, pdf: PDFDocument, element: ExportElement, style: JsonObject, asset: ExportAsset | null, book: ImageBook) {
   if (!asset) {
     const kind = string(object(element.content).kind, "image");
     drawPlaceholder(page, element, kind === "video" ? "Video" : "Rasm");
     return;
   }
-  const image = await embedImage(pdf, asset);
+  const image = await embedImage(pdf, asset, book);
   if (!image) {
     drawPlaceholder(page, element, "Rasm formati");
     return;
@@ -665,6 +682,7 @@ export async function renderPdf(deck: ExportDeck, assets: ExportAssetLoader): Pr
   const fonts = await FontBook.open(pdf, deck.elements
     .filter((element) => element.type === "text" || element.type === "table")
     .map((element) => object(element.style)));
+  const images: ImageBook = new Map();
 
   for (const slide of deck.slides) {
     const page = pdf.addPage([MODEL_WIDTH, MODEL_HEIGHT]);
@@ -685,7 +703,7 @@ export async function renderPdf(deck: ExportDeck, assets: ExportAssetLoader): Pr
       if (element.type === "shape") drawShape(page, element, style);
       else if (element.type === "line") drawLine(page, element, style);
       else if (element.type === "text") drawText(page, element, style, content, fonts);
-      else if (element.type === "image") await drawImage(page, pdf, element, style, await assets.forElement(element));
+      else if (element.type === "image") await drawImage(page, pdf, element, style, await assets.forElement(element), images);
       else if (element.type === "icon") drawIcon(page, element, style, content);
       else if (element.type === "chart") drawChart(page, element, style, content, fonts);
       else if (element.type === "table") drawTable(page, element, style, content, fonts);
