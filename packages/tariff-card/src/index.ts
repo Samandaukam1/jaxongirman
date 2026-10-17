@@ -25,8 +25,7 @@ type Words = {
   presentations: (period: "day" | "week" | "month", n: number) => string;
   slidesUpTo: (n: number) => string;
   unlocks: (n: number) => string;
-  tradeBoth: string;
-  tradeBuy: string;
+  tradeSell: string;
   editProjects: string;
   gamesUnlimited: string;
   gamesDaily: (n: number) => string;
@@ -37,7 +36,7 @@ type Words = {
   sections: { presentation: string; marathon: string; marketplace: string; game: string; pptx: string; jcoin: string };
   rows: {
     limit: string; slideCount: string; rollover: string; unlock: string;
-    buy: string; sell: string; edit: string; present: string; download: string; resale: string;
+    sell: string; edit: string; present: string; download: string; resale: string;
     freeGames: string; afterFree: string; externalPptx: string; outsidePlan: string; withJcoin: string;
   };
   usage: Record<string, string>;
@@ -58,8 +57,7 @@ const WORDS: Record<CardLanguage, Words> = {
     presentations: (period, n) => `${{ day: "Kuniga", week: "Haftasiga", month: "Oyiga" }[period]} ${n} ta prezentatsiya`,
     slidesUpTo: (n) => `Har birida ${n} tagacha slayd`,
     unlocks: (n) => `Haftasiga ${n} ta premium ochish`,
-    tradeBoth: "Marketplace xarid va savdosi",
-    tradeBuy: "Marketplace xaridi",
+    tradeSell: "Marketplace’da sotish",
     editProjects: "Marketplace loyihalarini tahrirlash",
     gamesUnlimited: "Cheksiz O‘yingoh o‘yinlari",
     gamesDaily: (n) => `Kuniga ${n} ta O‘yingoh o‘yini`,
@@ -70,7 +68,7 @@ const WORDS: Record<CardLanguage, Words> = {
     sections: { presentation: "Prezentatsiyalar", marathon: "Marafonlar", marketplace: "Marketplace", game: "O‘yingoh", pptx: "PPTX", jcoin: "J Tanga" },
     rows: {
       limit: "limit", slideCount: "Slayd soni", rollover: "Ishlatilmagan limit keyingi davrga", unlock: "Premium ochish",
-      buy: "Xarid qilish", sell: "Sotish", edit: "Tahrirlash", present: "Taqdimot qilish", download: "Yuklab olish", resale: "Qayta sotish",
+      sell: "Sotish", edit: "Tahrirlash", present: "Taqdimot qilish", download: "Yuklab olish", resale: "Qayta sotish",
       freeGames: "Bepul o‘yinlar", afterFree: "Limitdan keyin", externalPptx: "Tashqi PPTX namoyishi",
       outsidePlan: "Barcha tarifdan tashqari amallar", withJcoin: "J Tanga bilan",
     },
@@ -90,8 +88,7 @@ const WORDS: Record<CardLanguage, Words> = {
     presentations: (period, n) => `${n} presentations a ${period}`,
     slidesUpTo: (n) => `Up to ${n} slides each`,
     unlocks: (n) => `${n} premium unlocks a week`,
-    tradeBoth: "Marketplace buying and selling",
-    tradeBuy: "Marketplace buying",
+    tradeSell: "Selling on Marketplace",
     editProjects: "Edit Marketplace projects",
     gamesUnlimited: "Unlimited O‘yingoh games",
     gamesDaily: (n) => `${n} O‘yingoh games a day`,
@@ -102,7 +99,7 @@ const WORDS: Record<CardLanguage, Words> = {
     sections: { presentation: "Presentations", marathon: "Marathons", marketplace: "Marketplace", game: "O‘yingoh", pptx: "PPTX", jcoin: "J Tanga" },
     rows: {
       limit: "limit", slideCount: "Number of slides", rollover: "Unused limit carries over", unlock: "Premium unlocks",
-      buy: "Buying", sell: "Selling", edit: "Editing", present: "Presenting", download: "Downloading", resale: "Reselling",
+      sell: "Selling", edit: "Editing", present: "Presenting", download: "Downloading", resale: "Reselling",
       freeGames: "Free games", afterFree: "After the limit", externalPptx: "Presenting an outside PPTX",
       outsidePlan: "Everything outside the plan", withJcoin: "With J Tanga",
     },
@@ -122,8 +119,7 @@ const WORDS: Record<CardLanguage, Words> = {
     presentations: (period, n) => `Презентаций в ${{ day: "день", week: "неделю", month: "месяц" }[period]}: ${n}`,
     slidesUpTo: (n) => `До ${n} слайдов в каждой`,
     unlocks: (n) => `Премиум-открытий в неделю: ${n}`,
-    tradeBoth: "Покупки и продажи в Marketplace",
-    tradeBuy: "Покупки в Marketplace",
+    tradeSell: "Продажа в Marketplace",
     editProjects: "Редактирование проектов Marketplace",
     gamesUnlimited: "Безлимитные игры O‘yingoh",
     gamesDaily: (n) => `Игр O‘yingoh в день: ${n}`,
@@ -134,7 +130,7 @@ const WORDS: Record<CardLanguage, Words> = {
     sections: { presentation: "Презентации", marathon: "Марафоны", marketplace: "Marketplace", game: "O‘yingoh", pptx: "PPTX", jcoin: "J Tanga" },
     rows: {
       limit: "лимит", slideCount: "Количество слайдов", rollover: "Неиспользованный лимит переносится", unlock: "Премиум-открытия",
-      buy: "Покупка", sell: "Продажа", edit: "Редактирование", present: "Показ", download: "Скачивание", resale: "Перепродажа",
+      sell: "Продажа", edit: "Редактирование", present: "Показ", download: "Скачивание", resale: "Перепродажа",
       freeGames: "Бесплатные игры", afterFree: "После лимита", externalPptx: "Показ внешнего PPTX",
       outsidePlan: "Всё, что вне тарифа", withJcoin: "За J Tanga",
     },
@@ -239,10 +235,10 @@ export function cardLines(plan: Plan, language: CardLanguage = "uz"): FeatureLin
     lines.push({ key: "marathon_unlock", included: true, label: words.unlocks(unlock.limit ?? 0) });
   }
 
-  if (f.marketplace_buy?.enabled && f.marketplace_sell?.enabled) {
-    lines.push({ key: "marketplace_trade", included: true, label: words.tradeBoth });
-  } else if (f.marketplace_buy?.enabled) {
-    lines.push({ key: "marketplace_trade", included: true, label: words.tradeBuy });
+  // Buying from the shop is open to everyone (202610190001); selling is what a
+  // plan adds, so it is the only shop line a card may claim.
+  if (f.marketplace_sell?.enabled) {
+    lines.push({ key: "marketplace_trade", included: true, label: words.tradeSell });
   }
 
   if (f.marketplace_edit?.enabled) {
@@ -327,7 +323,6 @@ export function detailSections(plan: Plan, language: CardLanguage = "uz"): Detai
       key: "marketplace",
       title: words.sections.marketplace,
       rows: [
-        { label: rows.buy, value: f.marketplace_buy?.enabled ? YES : NO, included: Boolean(f.marketplace_buy?.enabled) },
         { label: rows.sell, value: f.marketplace_sell?.enabled ? YES : NO, included: Boolean(f.marketplace_sell?.enabled) },
         { label: rows.edit, value: f.marketplace_edit?.enabled ? YES : NO, included: Boolean(f.marketplace_edit?.enabled) },
         { label: rows.present, value: f.marketplace_present?.enabled ? YES : NO, included: Boolean(f.marketplace_present?.enabled) },

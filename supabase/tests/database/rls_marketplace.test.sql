@@ -101,20 +101,19 @@ select is(
 -- ---------------------------------------------------------------- checkout --
 
 /**
- * The shop is a members' economy now.
+ * Anyone signed in may buy; selling needs a live plan.
  *
- * Browsing stays open — a shop nobody may look into has nothing to sell a
- * subscription with — but buying and selling need a live plan, and the refusal
- * comes from the database rather than from a hidden button.
+ * Buying opened up in 202610190001. Selling is still a plan feature, and the
+ * refusal comes from the database rather than from a hidden button.
  */
 select set_config('request.jwt.claim.sub', 'e2220000-0000-0000-0000-000000000002', true);
-select throws_ok(
-  $$select public.marketplace_create_checkout('d0000000-0000-0000-0000-000000000001', 'no-plan')$$,
-  '42501', null, 'somebody without a plan cannot buy'
+select lives_ok(
+  $$select public.assert_marketplace_member('buy')$$,
+  'somebody without a plan may buy'
 );
 select throws_ok(
   $$select public.marketplace_save_product(null, 'presentation', 'Nomsiz')$$,
-  '42501', null, 'and cannot sell'
+  '42501', 'Do‘konda sotish uchun tarifni faollashtiring.', 'but cannot sell'
 );
 
 -- Both buyer and seller are members from here on: the rest of this file is

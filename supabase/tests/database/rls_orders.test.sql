@@ -77,13 +77,13 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', 'aa110000-0000-0000-0000-0000000000d1', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
--- Buying is member-only, and the refund rule has to be agreed to. Both are
--- refused here before the plan is granted, because the useful thing to prove is
--- that the path the app actually takes enforces them — a gate on the door
--- nobody uses is not a gate.
+-- Buying needs no plan (202610190001), but the refund rule still has to be
+-- agreed to. Asked before any plan exists, on the path the app actually takes:
+-- the refusal a plan-less buyer meets is the refund rule, never the plan.
 select throws_ok(
-  $$select public.order_create_marketplace('dd440000-0000-0000-0000-0000000000d4'::uuid, 'android', true)$$,
-  '42501', null, 'without a plan there is no marketplace purchase');
+  $$select public.order_create_marketplace('dd440000-0000-0000-0000-0000000000d4'::uuid, 'android', false)$$,
+  '42501', 'Xaridni tasdiqlash uchun qaytarish shartlariga rozilik bering.',
+  'without a plan the only refusal is the refund rule');
 
 reset role;
 insert into public.subscription_plans (code, name, price_amount, period_days, features)

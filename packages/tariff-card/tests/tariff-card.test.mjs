@@ -94,10 +94,12 @@ test("an allowance with no ceiling says so rather than showing a number", () => 
 test("a switched-off capability leaves the card but appears in the detail", () => {
   const noSelling = { ...plan, features: { ...plan.features, marketplace_sell: { enabled: false } } };
   const labels = cardLines(noSelling).map((l) => l.label);
-  assert.ok(!labels.includes("Marketplace xarid va savdosi"), "the card stops claiming it");
-  assert.ok(labels.includes("Marketplace xaridi"), "and says what is actually included");
+  assert.ok(!labels.includes("Marketplace’da sotish"), "the card stops claiming it");
+  assert.ok(!labels.some((label) => /xarid/i.test(label)), "and never sells buying, which is open to everyone");
+  assert.ok(cardLines(plan).map((l) => l.label).includes("Marketplace’da sotish"), "a plan that sells says so");
 
   const marketplace = detailSections(noSelling).find((s) => s.key === "marketplace");
+  assert.ok(!marketplace.rows.some((r) => r.label === "Xarid qilish"), "buying is no row of a plan");
   const sell = marketplace.rows.find((r) => r.label === "Sotish");
   assert.equal(sell.included, false, "the detail says plainly that it is not included");
   assert.equal(sell.value, "✕");

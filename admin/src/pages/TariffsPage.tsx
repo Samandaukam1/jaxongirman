@@ -67,8 +67,9 @@ const GROUPS: { title: string; items: { key: string; label: string; kind: "limit
   {
     title: "Marketplace",
     items: [
-      { key: "marketplace_access", label: "Kirish", kind: "toggle" },
-      { key: "marketplace_buy", label: "Xarid qilish", kind: "toggle" },
+      // Buying is open to every signed-in account (202610190001), so it is no
+      // longer something a plan switches on.
+      { key: "marketplace_access", label: "Kirish (sotish uchun)", kind: "toggle" },
       { key: "marketplace_sell", label: "Sotish", kind: "toggle" },
       { key: "marketplace_edit", label: "Tahrirlash", kind: "toggle" },
       { key: "marketplace_present", label: "Taqdimot qilish", kind: "toggle" },
