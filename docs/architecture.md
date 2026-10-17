@@ -28,6 +28,57 @@ flowchart LR
 
 The mobile flow is email/password auth → recent presentations and wallet → topic/file create form → live generation steps → element editor → asynchronous PDF or editable PowerPoint export. Export jobs report progress, write to private Storage, and are downloaded through short-lived authenticated URLs. The editor persists atomic operations and inverse history, while local state provides immediate interaction.
 
+## Presenting a deck
+
+The projector (`web/app/taqdimot`) and the presenter's phone share a private
+broadcast channel named by the session's realtime token. A slide change is
+shown on both at once: the device that moved sends `slide` on that channel and
+then commands the database with the exact slide (`goto`), which stays the one
+record of where the talk is. Answers that arrive after a newer move do not pull
+the screen back (`settledSlide`, `packages/types/src/presenting.ts`); a move the
+database never confirms is checked against it after a few seconds. Before this a
+slide moved only after two network trips — phone to database, database to
+projector — which on a hall's Wi-Fi read as a frozen app.
+
+An external PowerPoint is uploaded by the phone's native uploader straight from
+disk with progress (`streamLocalFile`), never read into JavaScript first, and
+`import-pptx` stores its pictures six at a time.
+
+## Devices, and signing in on the website
+
+Every signed-in phone or browser is one `auth.sessions` row; clients name
+themselves per session (`device_register`) and the account lists and removes
+devices from the app (Profil → Qurilmalar) and the site (`/hisob`). A device
+may remove one that signed in after it at any time, and an earlier one only
+after it has itself been signed in for two hours — a stolen phone cannot lock
+its owner out. A fresh sign-in is announced to the other devices: a
+`new_device` notification and a "bu sizmisiz?" card on the home screen.
+A removed device learns it on its next check-in and signs itself out.
+
+The website signs in three ways: Google, Apple, or the phone. For the phone,
+`/kirish` opens a request (`web_sign_in_open`: a token for the QR, a secret the
+browser keeps), the app approves it (`web-sign-in`, which mints a one-time
+magic-link hash with the admin API), and only the browser holding the secret
+collects that hash, once (`web_sign_in_collect`), and turns it into a session.
+
+## Reading a whole deck
+
+The REST API answers at most a thousand rows per request. A long deck in some
+styles is more than a thousand elements, so every reader of `slide_elements`
+pages through them (`loadDeckElements` in the app, `allRows` in functions);
+the cut-off rows were the top layers, which is why long decks showed pages
+without their words. The script PDF is drawn in two requests (`slides`, then
+`pdf`) and the deck PDF embeds each picture once, so neither runs past the
+edge runtime's CPU limit.
+
+## Money
+
+No client can write a balance, a ledger row, an order or an entitlement.
+Coins arrive only through a payment the provider confirmed (server only), an
+admin's grant (admin role checked) or another person's transfer (taken from
+them; plan coins cannot be sent). `supabase/tests/database/money_guards.test.sql`
+fails if a change opens another way.
+
 ## O‘yingoh surfaces
 
 A live match spans three devices, and the trust model is the presentation

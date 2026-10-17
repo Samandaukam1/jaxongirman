@@ -60,6 +60,14 @@ branch, but no paid subscription order existed in the meantime. A coin
 tariff's month is granted through `plan_lot_grant`. `pages_10` grants exactly
 ten bought pages, keyed by the order, so a repeated callback grants nothing.
 
+## Shop
+
+Buying from the shop needs no tariff (`202610190001`): `assert_marketplace_member('buy')`
+only asks that somebody is signed in, and what a purchase unlocks — download,
+presenting, hosting a bought game — was never tied to a plan. Selling still needs
+a plan with `marketplace_access` and `marketplace_sell`. Tariff cards no longer
+list buying; the console's tariff builder has no "Xarid qilish" switch.
+
 ## Admin
 
 `/iqtisod` (J Tanga iqtisodiyoti) runs on `admin_economy_overview`. Price

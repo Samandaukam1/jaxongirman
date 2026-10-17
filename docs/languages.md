@@ -37,6 +37,21 @@ source of every table.
 - Every `ai_usage` row of a deck carries `metadata.language`; the console shows
   tokens and cost per language.
 
+## O‘yingoh language
+
+- A game is written in one language (`games.language`, `uz`/`en`/`ru`), chosen
+  on the create screen like a deck's; a quiz made from a deck takes the deck's.
+  `generate-game` adds one "write in" line to its prompts and logs
+  `metadata.language`. The operator's deck-language switch applies to games
+  too (`language_disabled`), and an Uzbek game refuses a Cyrillic topic.
+- The projector (`web/app/oyingoh/arena-words.ts`) frames a game in its own
+  language from the lobby on — true/false, answers, results — read from
+  `game_screen_snapshot.game_language`. The pairing screens before a game is
+  chosen stay Uzbek.
+- Grading folds «ё» into «е» and every apostrophe variant into one
+  (`game_normalize_text`, repaired in `202610190002`: ’ and ‘ used to be dropped,
+  so «O‘zbekiston» never matched «O'zbekiston»).
+
 ## Operator content and switches (`/tillar` in the console)
 
 - Plan, coin package and material type words carry `*_i18n` objects

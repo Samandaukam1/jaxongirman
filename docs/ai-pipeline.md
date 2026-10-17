@@ -52,6 +52,23 @@ Cards, list rows and bullet rows carry an icon, and content pages may carry thei
 
 A ten-slide deck is three model calls (research, outline, copy) on the writing model configured by `GEMINI_WRITING_MODEL`; photographs come from free stock providers through `image-resolution-service`. Each call is priced from `ai.provider_pricing` into `ai_usage`, and the deck's total into `presentations.generation_cost_usd`; the admin's *Liquid Glass dizayn* page shows the average against the premium plan's price.
 
+## The author's own pictures
+
+Up to six pictures, a caption each, can be added on the create screen. The phone
+shrinks each (long side 1600 px, JPEG) and uploads it straight to the deck's own
+folder, `presentation-assets/<owner>/<deck>/source-N.jpg` — the only path a
+phone may write there (`202610190003`). `generate-presentation` registers them
+as `presentation_assets` (`metadata.role = slide_image`, caption in `alt_text`).
+
+The pipeline reads them first, before documents, and attaches them in order; the
+outline prompt lists them as `user-image-N` with their captions and asks for one
+photo page per picture. `placeSourceImages` (`glass/content.ts`) then makes sure
+every picture has a page whatever the model did — a stock photo page gives way
+first, numbers last — and tells the writer what each picture shows. Those pages
+skip the stock search and stay photo pages even with little text. A picture no
+page ended up showing is deleted as soon as the deck is built; the rest live as
+long as the deck (`delete-work` empties the folder). There is no library.
+
 ## Uploaded source privacy
 
 User uploads stay in private Storage and are passed to the model only as context for that deck. Provider keys and service-role access exist only in the Edge runtime.
@@ -84,3 +101,6 @@ console reads O‘yingoh cost from, and both are rate limited per account throug
 Games generated from a presentation pass the deck's own text as the source with
 an instruction to use nothing else, which is the whole reason that flow exists:
 the questions have to be about what the room just watched.
+
+Each game is written in its own language (`games.language`); see
+[languages.md](languages.md).
