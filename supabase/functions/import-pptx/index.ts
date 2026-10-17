@@ -102,7 +102,7 @@ Deno.serve(async (request) => {
     }
 
     const slideRows: Record<string, unknown>[] = [];
-    const elementRows: Record<string, unknown>[] = [];
+    const items: { element: ImportedElement; slideId: string; content: Record<string, unknown>; stored: boolean }[] = [];
 
     for (const [index, slide] of deck.slides.entries()) {
       const slideId = crypto.randomUUID();
@@ -116,28 +116,46 @@ Deno.serve(async (request) => {
         background: slide.background,
         speaker_notes: slide.speakerNotes,
       });
-
       for (const element of slide.elements) {
-        const content = { ...element.content };
-        if (element.media) {
-          const extension = EXTENSION_BY_MIME[element.media.mime] ?? "png";
-          const assetPath = `${context.user.id}/${presentationId}/${crypto.randomUUID()}.${extension}`;
-          const upload = await context.serviceClient.storage.from(ASSET_BUCKET)
-            .upload(assetPath, element.media.bytes, { contentType: element.media.mime, upsert: false });
-          // A picture that will not store is dropped rather than left as an
-          // element pointing at nothing the editor can draw.
-          if (upload.error) continue;
-          content.storageBucket = ASSET_BUCKET;
-          content.storagePath = assetPath;
-        }
-        elementRows.push(elementRow(element, slideId, presentationId, context.user.id, content));
+        items.push({ element, slideId, content: { ...element.content }, stored: !element.media });
       }
     }
 
+    /**
+     * The pictures, several at a time.
+     *
+     * One after another, a deck with forty photographs spent most of its import
+     * waiting on forty round trips to storage — long enough for the phone to
+     * look frozen and, on a slow day, for the function to run out of time.
+     * Six at once keeps the order of the slides (each element keeps its place)
+     * without asking storage for everything at the same instant.
+     */
+    const pictures = items.filter((entry) => entry.element.media);
+    const userId = context.user.id;
+    await inParallel(pictures, 6, async (entry) => {
+      const media = entry.element.media!;
+      const extension = EXTENSION_BY_MIME[media.mime] ?? "png";
+      const assetPath = `${userId}/${presentationId}/${crypto.randomUUID()}.${extension}`;
+      const upload = await context!.serviceClient.storage.from(ASSET_BUCKET)
+        .upload(assetPath, media.bytes, { contentType: media.mime, upsert: false });
+      // A picture that will not store is dropped rather than left as an
+      // element pointing at nothing the editor can draw.
+      if (upload.error) return;
+      entry.content.storageBucket = ASSET_BUCKET;
+      entry.content.storagePath = assetPath;
+      entry.stored = true;
+    });
+
+    const elementRows = items
+      .filter((entry) => entry.stored)
+      .map((entry) => elementRow(entry.element, entry.slideId, presentationId!, userId, entry.content));
+
     const slideInsert = await context.serviceClient.from("slides").insert(slideRows);
     if (slideInsert.error) throw slideInsert.error;
-    if (elementRows.length > 0) {
-      const elementInsert = await context.serviceClient.from("slide_elements").insert(elementRows);
+    // In chunks, as the generator does: one insert of a few thousand rows is
+    // the request most likely to time out.
+    for (let start = 0; start < elementRows.length; start += 400) {
+      const elementInsert = await context.serviceClient.from("slide_elements").insert(elementRows.slice(start, start + 400));
       if (elementInsert.error) throw elementInsert.error;
     }
 
@@ -192,6 +210,18 @@ Deno.serve(async (request) => {
     return errorResponse(error);
   }
 });
+
+/** Runs `work` over `items`, at most `limit` at a time. */
+async function inParallel<T>(items: readonly T[], limit: number, work: (item: T) => Promise<void>): Promise<void> {
+  let next = 0;
+  const lane = async () => {
+    while (next < items.length) {
+      const item = items[next++]!;
+      await work(item);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, lane));
+}
 
 function elementRow(
   element: ImportedElement,
