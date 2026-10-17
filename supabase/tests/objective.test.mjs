@@ -4,7 +4,7 @@ import test from "node:test";
 import { buildEdgeModules } from "../scripts/build-edge.mjs";
 
 const edge = buildEdgeModules();
-const { FIELDS, RELATIVE_COLUMNS, missingFields, objectiveBlocks } = await import(`${edge}/objective.js`);
+const { FIELDS, RELATIVE_COLUMNS, missingFields, objectiveBlocks, sinceLine } = await import(`${edge}/objective.js`);
 const { buildDocx, cmToEmu, cmToTwips, escapeXml } = await import(`${edge}/docx.js`);
 const { unzip } = await import(`${edge}/unzip.js`);
 
@@ -159,4 +159,14 @@ test("a photograph is carried into the package and pointed at", async () => {
 
 test("text that would break the XML is escaped rather than shipped", () => {
   assert.equal(escapeXml('a & b < c > "d"'), "a &amp; b &lt; c &gt; &quot;d&quot;");
+});
+
+test("the date above the institution reads the way the form writes it", () => {
+  assert.equal(sinceLine("2024-yil 9-sentabr"), "2024-yil 9-sentabrdan:", "the -dan a person forgets is added");
+  assert.equal(sinceLine("2024-yil 9-sentabrdan"), "2024-yil 9-sentabrdan:", "and never twice");
+  assert.equal(sinceLine("2019-yil 1-mart:"), "2019-yil 1-martdan:", "a colon typed by hand is not doubled");
+  assert.equal(sinceLine("09.09.2024"), "09.09.2024:", "a date ending in a digit is left as typed");
+  assert.equal(sinceLine("  "), "-", "an empty date is a dash, like every other field");
+  const header = words(blocks()).find((line) => line.startsWith("2024-yil"));
+  assert.equal(header, "2024-yil 9-sentabrdan:");
 });

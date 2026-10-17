@@ -87,6 +87,22 @@ export const RELATIVE_COLUMNS = [
 /** An empty field prints as a dash, which is what the paper form does. */
 const said = (value: string | undefined): string => (value ?? "").trim() || "-";
 
+/**
+ * The date the current post or study began, the way the form writes it above
+ * the institution: "2024-yil 9-sentabrdan:".
+ *
+ * The form's field used to be labelled only "Sana", and people typed a date and
+ * nothing else. A date that ends in a word — a month, "yil" — gets the "-dan"
+ * the form expects; one that ends in a digit ("09.09.2024") is left as typed,
+ * because "dan" after a digit is not how anybody writes it.
+ */
+export function sinceLine(value: string | undefined): string {
+  const date = (value ?? "").trim().replace(/\s*:+\s*$/, "");
+  if (!date) return "-";
+  if (/dan$/i.test(date) || !/\p{L}$/u.test(date)) return `${date}:`;
+  return `${date}dan:`;
+}
+
 const labelled = (label: string, value: string | undefined): Block[] => [
   paragraph([{ text: label, bold: true }], { spaceAfter: 0 }),
   paragraph(said(value), { spaceAfter: 6 }),
@@ -117,7 +133,7 @@ export function objectiveBlocks(objective: Objective, options: { textWidthCm: nu
    * much the left-hand column grows.
    */
   const headerLeft: Block[] = [
-    paragraph(`${said(objective.fields.issued_on)} :`, { spaceAfter: 4 }),
+    paragraph(sinceLine(objective.fields.issued_on), { spaceAfter: 4 }),
     paragraph([{ text: said(objective.fields.institution), bold: true }], { spaceAfter: 0 }),
   ];
   const photoCell: Cell = {
