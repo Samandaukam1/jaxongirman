@@ -9,6 +9,7 @@
     "ios": "expo run:ios",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
+    "export:web": "rm -rf ../web/public/app && EXPO_WEB_BASE_URL=/app expo export --platform web --clear --output-dir ../web/public/app",
     "eas-build-pre-install": "node scripts/check-google-scheme.mjs"
   },
   "dependencies": {

@@ -31,15 +31,25 @@ export type DeviceRow = {
 
 export type DeviceAlert = { session_id: string; platform: string; name: string | null; signed_in_at: string; can_revoke: boolean };
 
-/** "iPhone 15 Pro", "Pixel 8" — or the system's own word when the model is unknown. */
+/** "Chrome · macOS" from a browser's user agent — the same words the website uses. */
+export function browserName(agent: string): string {
+  const browser = /Edg\//.test(agent) ? "Edge" : /OPR\/|Opera/.test(agent) ? "Opera" : /YaBrowser/.test(agent) ? "Yandex"
+    : /Firefox\//.test(agent) ? "Firefox" : /Chrome\//.test(agent) ? "Chrome" : /Safari\//.test(agent) ? "Safari" : "Brauzer";
+  const system = /Windows/.test(agent) ? "Windows" : /Android/.test(agent) ? "Android" : /iPhone|iPad|iPod/.test(agent) ? "iOS"
+    : /Mac OS X|Macintosh/.test(agent) ? "macOS" : /CrOS/.test(agent) ? "ChromeOS" : /Linux/.test(agent) ? "Linux" : null;
+  return system ? `${browser} · ${system}` : browser;
+}
+
+/** "iPhone 15 Pro", "Pixel 8", "Chrome · macOS" — or the system's own word when the model is unknown. */
 function thisDeviceName(): string {
+  if (Platform.OS === "web") return browserName(typeof navigator === "undefined" ? "" : navigator.userAgent);
   return Device.modelName?.trim() || (Platform.OS === "ios" ? "iPhone" : "Android");
 }
 
 /** Names this device for this session. False when the session was taken out. */
 export async function registerDevice(): Promise<boolean> {
   const { data, error } = await supabase.rpc("device_register", {
-    p_platform: Platform.OS === "ios" ? "ios" : "android",
+    p_platform: Platform.OS === "ios" ? "ios" : Platform.OS === "web" ? "web" : "android",
     p_name: thisDeviceName(),
     p_app_version: Constants.expoConfig?.version ?? undefined,
   });

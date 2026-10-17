@@ -1,4 +1,5 @@
 import * as FileSystem from "expo-file-system/legacy";
+import { Platform } from "react-native";
 
 import { i18n } from "@/i18n";
 import { env } from "@/lib/env";
@@ -91,6 +92,7 @@ export async function streamLocalFile(options: {
   if (!token) return { ok: false, message: i18n.t("misc:upload.signIn") };
 
   const url = `${env.supabaseUrl}/storage/v1/object/${options.bucket}/${options.path}`;
+  if (Platform.OS === "web") return sendFromBrowser(url, token, options);
   const task = FileSystem.createUploadTask(url, localFileUrl(options.uri), {
     httpMethod: "POST",
     uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
@@ -119,3 +121,35 @@ export async function streamLocalFile(options: {
   }
 }
 
+/**
+ * The browser's half of `streamLocalFile`: the picked file is already a Blob
+ * behind its `blob:` URL, and XMLHttpRequest is what reports upload progress.
+ */
+async function sendFromBrowser(
+  url: string,
+  token: string,
+  options: { path: string; uri: string; contentType: string; onProgress?: (share: number) => void },
+): Promise<UploadOutcome> {
+  let body: Blob;
+  try {
+    body = await (await fetch(options.uri)).blob();
+  } catch {
+    return { ok: false, message: i18n.t("misc:upload.unreadable") };
+  }
+  return new Promise((resolve) => {
+    const request = new XMLHttpRequest();
+    request.open("POST", url);
+    request.setRequestHeader("Authorization", `Bearer ${token}`);
+    request.setRequestHeader("apikey", env.supabaseAnonKey);
+    request.setRequestHeader("Content-Type", options.contentType);
+    request.setRequestHeader("x-upsert", "false");
+    request.upload.onprogress = (event) => {
+      if (event.lengthComputable && event.total > 0) options.onProgress?.(Math.min(1, event.loaded / event.total));
+    };
+    request.onload = () => resolve(request.status >= 200 && request.status < 300
+      ? { ok: true, path: options.path, bytes: body.size }
+      : { ok: false, message: i18n.t("misc:upload.failed") });
+    request.onerror = () => resolve({ ok: false, message: i18n.t("misc:upload.failed") });
+    request.send(body);
+  });
+}

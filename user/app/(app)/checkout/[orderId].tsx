@@ -22,6 +22,7 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { CountUp, Rise, SuccessMark } from "@/components/SuccessMoment";
 import { ErrorState, InlineError } from "@/components/StateBlocks";
+import { lockedOnWeb } from "@/components/WebLocked";
 import { localizeError } from "@/lib/errors";
 import { formatSom } from "@/lib/money";
 import {
@@ -70,7 +71,7 @@ const DESTINATIONS: Record<string, { label: "jcoin" | "subscription" | "data_col
  * success state is only ever reached from a response that says the order is
  * paid — which the server writes only after the provider confirms the receipt.
  */
-export default function OrderCheckoutScreen() {
+function OrderCheckoutScreen() {
   const { t } = useTranslation(["checkout", "common"]);
   const { colors } = useTheme();
   const styles = useStyles();
@@ -604,3 +605,6 @@ const useStyles = makeStyles((colors) => ({
   successActions: { alignSelf: "stretch", gap: spacing.sm, marginTop: spacing.xxl },
   successLink: { paddingVertical: spacing.sm },
 }));
+
+// Not in a browser yet: see WebLocked.
+export default lockedOnWeb(OrderCheckoutScreen);

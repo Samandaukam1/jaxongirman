@@ -3,6 +3,11 @@ import { translations } from "../define";
 /** Shared pieces: the route error, state blocks, the celebration, account deletion and uploads. */
 export default translations(
   {
+    webLocked: {
+      title: "Bu bo‘lim saytda hali ishlamaydi",
+      body: "Hozircha u faqat telefondagi Jaxongirman ilovasida ishlaydi. Saytga ham tez orada qo‘shamiz.",
+      back: "Ortga qaytish",
+    },
     routeError: {
       title: "Nimadir noto‘g‘ri ketdi",
       body: "Bu sahifani ochishda kutilmagan xatolik yuz berdi. Ma’lumotlaringiz joyida — qayta urinib ko‘ring.",
@@ -24,6 +29,11 @@ export default translations(
     upload: { unreadable: "Fayl o‘qilmadi. Boshqa fayl tanlang.", tooLarge: "Fayl juda katta.", failed: "Fayl yuklanmadi. Internetni tekshirib qayta urinib ko‘ring.", signIn: "Faylni yuklash uchun qaytadan kiring." },
   },
   {
+    webLocked: {
+      title: "This isn’t available on the website yet",
+      body: "For now it works only in the Jaxongirman app on your phone. It is coming to the website soon.",
+      back: "Go back",
+    },
     routeError: {
       title: "Something went wrong",
       body: "An unexpected error occurred while opening this page. Your data is safe — please try again.",
@@ -45,6 +55,11 @@ export default translations(
     upload: { unreadable: "The file couldn't be read. Choose another one.", tooLarge: "The file is too large.", failed: "The file didn't upload. Check your connection and try again.", signIn: "Sign in again to upload the file." },
   },
   {
+    webLocked: {
+      title: "На сайте это пока не работает",
+      body: "Сейчас это доступно только в приложении Jaxongirman на телефоне. Скоро добавим и на сайт.",
+      back: "Вернуться",
+    },
     routeError: {
       title: "Что-то пошло не так",
       body: "При открытии страницы произошла непредвиденная ошибка. Ваши данные на месте — попробуйте ещё раз.",

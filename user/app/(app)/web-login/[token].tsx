@@ -9,6 +9,7 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { InlineError } from "@/components/StateBlocks";
 import { Rise, SuccessMark } from "@/components/SuccessMoment";
+import { lockedOnWeb } from "@/components/WebLocked";
 import { asFunctionErrorMessage } from "@/lib/format";
 import { approveWebLogin, inspectWebLogin, webLoginToken, type WebRequest } from "@/lib/webLogin";
 import { radius, spacing, typography } from "@/theme/tokens";
@@ -23,7 +24,7 @@ import { makeStyles, useTheme } from "@/theme/ThemeProvider";
  * sending a code and asking for it to be scanned — and lets the browser in
  * only on an explicit tap.
  */
-export default function WebLoginConfirmScreen() {
+function WebLoginConfirmScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
   const { t } = useTranslation(["profile", "common"]);
@@ -162,3 +163,6 @@ const useStyles = makeStyles((colors) => ({
   doneTitle: { ...typography.title, color: colors.ink, textAlign: "center" },
   doneBody: { ...typography.body, color: colors.inkMuted, textAlign: "center" },
 }));
+
+// Not in a browser yet: see WebLocked.
+export default lockedOnWeb(WebLoginConfirmScreen);

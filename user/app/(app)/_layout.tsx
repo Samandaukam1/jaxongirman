@@ -1,6 +1,7 @@
 import { Redirect, Stack } from "expo-router";
 
 import { useResumeMarathonInvite } from "@/lib/useResumeMarathonInvite";
+import { DesktopShell } from "@/components/DesktopShell";
 import { RouteError } from "@/components/RouteError";
 import { AccountProvider } from "@/providers/AccountProvider";
 import { PaymentPolicyProvider } from "@/providers/PaymentPolicyProvider";
@@ -23,6 +24,7 @@ export default function AppLayout() {
     // the session rather than outliving it.
     <AccountProvider>
       <PaymentPolicyProvider>
+        <DesktopShell>
           <Stack
             screenOptions={{
               headerShown: false,
@@ -106,6 +108,7 @@ export default function AppLayout() {
             />
             <Stack.Screen name="pair/[token]" />
           </Stack>
+        </DesktopShell>
       </PaymentPolicyProvider>
     </AccountProvider>
   );

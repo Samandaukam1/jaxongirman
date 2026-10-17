@@ -79,7 +79,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
       user: session?.user ?? null,
       loading,
       signOut: async () => {
-        const { error } = await supabase.auth.signOut();
+        // This device only. The default is every session the account has, which
+        // would take the phone out when somebody leaves the website (and the
+        // other way round); taking other devices out is Qurilmalar's job.
+        const { error } = await supabase.auth.signOut({ scope: "local" });
         if (error) throw error;
       },
     }),

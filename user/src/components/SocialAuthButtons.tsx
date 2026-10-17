@@ -1,3 +1,4 @@
+import { QrCode } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
@@ -7,6 +8,7 @@ import {
   getSocialAuthAvailability, signInWithApple, signInWithGoogle,
   type SocialAuthAvailability,
 } from "@/lib/auth/social-auth";
+import { siteSignInUrl } from "@/lib/web";
 import { radius, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
@@ -99,6 +101,9 @@ export function SocialAuthButtons({ onSignedIn }: { onSignedIn?: () => void }) {
 
   if (!available.apple && !available.google) return null;
 
+  // In a browser, the phone that is already signed in can let it in by code.
+  const phoneSignIn = siteSignInUrl();
+
   return (
     <View style={styles.wrapper}>
       {available.apple ? (
@@ -136,6 +141,19 @@ export function SocialAuthButtons({ onSignedIn }: { onSignedIn?: () => void }) {
               <Text style={[styles.label, styles.googleLabel]}>{t("withGoogle")}</Text>
             </>
           )}
+        </Pressable>
+      ) : null}
+
+      {phoneSignIn ? (
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel={t("withPhone")}
+          disabled={busy !== null}
+          onPress={() => window.location.assign(phoneSignIn)}
+          style={({ pressed }) => [styles.button, styles.google, pressed && styles.pressed, busy !== null && styles.dimmed]}
+        >
+          <QrCode color={colors.primaryDeep} size={19} strokeWidth={2} />
+          <Text style={[styles.label, styles.googleLabel]}>{t("withPhone")}</Text>
         </Pressable>
       ) : null}
 

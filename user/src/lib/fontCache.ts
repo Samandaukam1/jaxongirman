@@ -1,5 +1,6 @@
 import * as FileSystem from "expo-file-system/legacy";
 import * as Font from "expo-font";
+import { Platform } from "react-native";
 
 import { faceId, type FontFace } from "@/lib/fontLibrary";
 import { supabase } from "@/lib/supabase";
@@ -58,6 +59,15 @@ export async function loadFace(slug: string, face: FontFace): Promise<string | n
 
   const attempt = (async () => {
     try {
+      if (Platform.OS === "web") {
+        // A browser keeps its own cache and has no folder to write to: the
+        // face loads from a signed URL as an @font-face.
+        const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(face.storagePath, 3600);
+        if (error || !data?.signedUrl) return false;
+        await Font.loadAsync({ [name]: data.signedUrl });
+        registered.add(name);
+        return true;
+      }
       await ensureDirectory();
       const target = `${DIRECTORY}${face.hash}.${face.format}`;
       const info = await FileSystem.getInfoAsync(target);

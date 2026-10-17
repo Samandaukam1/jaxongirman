@@ -37,6 +37,7 @@ export default function DeckScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
+  const [room, setRoom] = useState<number | null>(null);
   const params = useLocalSearchParams<{ id: string; withGame?: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const wantsGame = params.withGame === "1";
@@ -149,7 +150,11 @@ export default function DeckScreen() {
   }
 
   const back = () => (router.canGoBack() ? router.back() : router.replace("/(app)/(tabs)/projects"));
-  const slideWidth = Math.min(screenWidth - spacing.lg * 2, 720);
+  // A browser window is measured where the page actually sits (beside the side
+  // menu, in its column), not across the whole screen.
+  const slideWidth = Platform.OS === "web" && room
+    ? Math.min(room - spacing.lg * 2, 1100)
+    : Math.min(screenWidth - spacing.lg * 2, 720);
 
   if (!deck) {
     return (
@@ -178,7 +183,7 @@ export default function DeckScreen() {
   const { presentation, slides, elements } = deck;
 
   return (
-    <View style={styles.screen}>
+    <View style={styles.screen} onLayout={Platform.OS === "web" ? (event) => setRoom(event.nativeEvent.layout.width) : undefined}>
       <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.md, paddingBottom: insets.bottom + spacing.xxl }]} showsVerticalScrollIndicator={false}>
         <View style={styles.headerRow}>
           <Pressable accessibilityRole="button" accessibilityLabel={t("common:back")} onPress={back} style={styles.round}>

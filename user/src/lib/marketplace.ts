@@ -4,9 +4,11 @@ import type {
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { useCallback, useEffect, useState } from "react";
+import { Platform } from "react-native";
 
 import { i18n } from "../i18n";
 
+import { saveInBrowser } from "./browserFile";
 import { localized } from "./content";
 import { asErrorMessage } from "./format";
 import { supabase } from "./supabase";
@@ -150,6 +152,11 @@ export async function downloadPurchasedFile(
   if (!payload.url) throw new Error(i18n.t("market:library.noLink"));
 
   const safeName = (payload.filename ?? "material").replace(/[^A-Za-z0-9._-]+/g, "-");
+  if (Platform.OS === "web") {
+    // Straight into the browser's downloads; there is no file on disk to share.
+    await saveInBrowser(payload.url, safeName);
+    return { uri: "", filename: safeName, mimeType: payload.mimeType ?? "application/octet-stream" };
+  }
   const target = `${FileSystem.cacheDirectory}${safeName}`;
   const result = await FileSystem.downloadAsync(payload.url, target);
   return { uri: result.uri, filename: safeName, mimeType: payload.mimeType ?? "application/octet-stream" };
@@ -157,6 +164,7 @@ export async function downloadPurchasedFile(
 
 /** Opens the platform share sheet for a file already on disk. */
 export async function shareFile(uri: string, mimeType: string): Promise<boolean> {
+  if (Platform.OS === "web") return true; // saved by downloadPurchasedFile already
   if (!(await Sharing.isAvailableAsync())) return false;
   await Sharing.shareAsync(uri, { mimeType, dialogTitle: i18n.t("market:library.openDialog") });
   return true;

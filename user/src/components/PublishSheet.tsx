@@ -2,7 +2,7 @@ import { useRouter } from "expo-router";
 import { CheckCircle2, Clock3, ShieldCheck, Store, X } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { captureRef } from "react-native-view-shot";
 
@@ -10,6 +10,7 @@ import { FormField } from "@/components/FormField";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { Rise, SuccessMark } from "@/components/SuccessMoment";
 import { MODEL_HEIGHT, MODEL_WIDTH, SlideCanvas } from "@/components/SlideCanvas";
+import { WebLockedNotice } from "@/components/WebLocked";
 import type { Deck } from "@/lib/deck";
 import { asFunctionErrorMessage } from "@/lib/format";
 import { formatNumber } from "@/lib/money";
@@ -140,6 +141,15 @@ export function PublishSheet({ visible, deck, onClose }: { visible: boolean; dec
   /** A reason said in the app's language when this build knows its code, otherwise as the server wrote it. */
   function reasonText(reason: { code: string; message: string }): string {
     return i18n.exists(`market:publish.reason.${reason.code}`) ? t(`publish.reason.${reason.code as "disabled"}`) : reason.message;
+  }
+
+  // The cover is captured from the drawn slide, which is not tried in a browser yet.
+  if (Platform.OS === "web") {
+    return (
+      <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+        <WebLockedNotice onBack={onClose} />
+      </Modal>
+    );
   }
 
   return (

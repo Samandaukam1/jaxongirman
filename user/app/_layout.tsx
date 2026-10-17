@@ -13,7 +13,9 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import "@/i18n";
+import "@/lib/webShims";
 import { SuccessToastProvider } from "@/components/SuccessToast";
+import { WebAlertHost } from "@/components/WebAlertHost";
 import { AuthProvider } from "@/providers/AuthProvider";
 import { LanguageProvider } from "@/providers/LanguageProvider";
 import { ThemeProvider, useTheme } from "@/theme/ThemeProvider";
@@ -54,6 +56,7 @@ export default function RootLayout() {
             <LanguageProvider>
               <SuccessToastProvider>
                 <ThemedShell />
+                <WebAlertHost />
               </SuccessToastProvider>
             </LanguageProvider>
           </AuthProvider>

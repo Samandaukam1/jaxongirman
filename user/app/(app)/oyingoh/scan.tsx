@@ -9,6 +9,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { InlineError } from "@/components/StateBlocks";
+import { lockedOnWeb } from "@/components/WebLocked";
 import { asErrorMessage } from "@/lib/format";
 import { claimPairing } from "@/lib/games";
 import { icon, radius, spacing, typography } from "@/theme/tokens";
@@ -36,7 +37,7 @@ function extractToken(raw: string): string | null {
  * the host remote — so a presenter can walk up to a screen and decide what to
  * run afterwards.
  */
-export default function HostScanScreen() {
+function HostScanScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
   const { t } = useTranslation("games");
@@ -135,3 +136,6 @@ const useStyles = makeStyles((colors) => ({
   },
   linkText: { ...typography.body, color: colors.primary, textAlign: "center" },
 }));
+
+// Not in a browser yet: see WebLocked.
+export default lockedOnWeb(HostScanScreen);

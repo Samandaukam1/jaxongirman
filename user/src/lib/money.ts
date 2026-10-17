@@ -27,8 +27,13 @@ export function formatCoins(value: number): string {
   return i18n.t("common:coinAmount", { amount: formatNumber(value) });
 }
 
-/** "11 000 UZS" — a configured price, in whatever currency it was configured in. */
+/**
+ * A configured price. So'm is written in the reader's word for it ("so‘m",
+ * "UZS", "сум"), like every other som amount; another currency, should one be
+ * configured, keeps its code.
+ */
 export function formatPrice(amount: number, currency: string): string {
+  if (currency.trim().toUpperCase() === "UZS") return formatSom(amount);
   return `${formatNumber(amount)} ${currency}`;
 }
 

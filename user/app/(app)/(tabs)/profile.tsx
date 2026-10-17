@@ -6,7 +6,7 @@ import {
 } from "lucide-react-native";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, Alert, Image, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Platform, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BOTTOM_NAV_SPACE } from "@/components/BottomNav";
@@ -334,7 +334,7 @@ export default function ProfileScreen() {
           <Text style={styles.sectionTitle}>{t("sections.settings")}</Text>
           <View style={styles.group}>
             <View style={styles.groupClip}>
-              {SETTINGS.map((row, at) => (
+              {SETTINGS.filter((row) => row.key !== "web" || Platform.OS !== "web").map((row, at) => (
                 <Pressable
                   key={row.href}
                   accessibilityRole="button"

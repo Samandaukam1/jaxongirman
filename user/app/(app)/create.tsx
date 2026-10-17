@@ -13,7 +13,7 @@ import {
 } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, Alert, BackHandler, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, BackHandler, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -27,6 +27,7 @@ import { asFunctionErrorMessage } from "@/lib/format";
 import { hasCyrillic, toLatin } from "@/lib/script";
 import { MAX_SOURCE_IMAGES, pickSourceImages, removeSourceImages, uploadSourceImages, type SourceImage } from "@/lib/sourceImages";
 import { supabase } from "@/lib/supabase";
+import { readLocalBytes } from "@/lib/upload";
 import { fetchQuote, fetchWallet, quoteSummary, type Quote } from "@/lib/wallet";
 import { useAuth } from "@/providers/AuthProvider";
 import { useLanguage } from "@/providers/LanguageProvider";
@@ -137,6 +138,7 @@ export default function CreatePresentationScreen() {
   // The header's back button is the only way out of this screen, so Android's
   // system back must not quietly throw away a half-filled form either.
   useEffect(() => {
+    if (Platform.OS !== "android") return;
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => true);
     return () => subscription.remove();
   }, []);
@@ -243,8 +245,11 @@ export default function CreatePresentationScreen() {
       const extension = asset.name.includes(".") ? `.${asset.name.split(".").pop()?.toLowerCase()}` : "";
       const safeBase = asset.name.replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9_-]+/g, "-").slice(0, 60) || "source";
       const path = `${user.id}/${presentationId}/${Crypto.randomUUID()}-${safeBase}${extension}`;
-      const content = await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.Base64 });
-      const { error } = await supabase.storage.from("user-uploads").upload(path, decode(content), {
+      // A browser hands over a blob: URL, which the file system module cannot read.
+      const body = Platform.OS === "web"
+        ? await readLocalBytes(asset.uri)
+        : decode(await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.Base64 }));
+      const { error } = await supabase.storage.from("user-uploads").upload(path, body, {
         contentType: asset.mimeType ?? "application/octet-stream",
         upsert: false,
       });

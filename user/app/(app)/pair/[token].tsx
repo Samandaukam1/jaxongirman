@@ -6,6 +6,7 @@ import { ActivityIndicator, Text, View } from "react-native";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { ErrorState } from "@/components/StateBlocks";
+import { lockedOnWeb } from "@/components/WebLocked";
 import { asErrorMessage } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
 import { spacing, typography } from "@/theme/tokens";
@@ -18,7 +19,7 @@ import { makeStyles, useTheme } from "@/theme/ThemeProvider";
  * useful rather than nowhere. The claim is the same server call the in-app
  * scanner makes, with the same one-use guarantee.
  */
-export default function PairScreen() {
+function PairScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
   const { t } = useTranslation("present");
@@ -78,3 +79,6 @@ const useStyles = makeStyles((colors) => ({
   content: { paddingHorizontal: spacing.xl, gap: spacing.lg },
   copy: { ...typography.body, color: colors.inkMuted },
 }));
+
+// Not in a browser yet: see WebLocked.
+export default lockedOnWeb(PairScreen);

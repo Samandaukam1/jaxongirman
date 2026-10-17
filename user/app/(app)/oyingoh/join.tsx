@@ -14,6 +14,7 @@ import { GlassPanel } from "@/components/Glass";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { InlineError } from "@/components/StateBlocks";
+import { lockedOnWeb } from "@/components/WebLocked";
 import { asErrorMessage } from "@/lib/format";
 import { isTransport } from "@/lib/retry";
 import { joinGame, joinGameByCode } from "@/lib/games";
@@ -40,7 +41,7 @@ type Step = "scan" | "identity";
  * a dice for somebody who just wants to play, a few groups for somebody
  * looking for themselves — and none of them is a question to answer.
  */
-export default function JoinGameScreen() {
+function JoinGameScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
   const { t } = useTranslation(["games", "errors"]);
@@ -308,3 +309,6 @@ const useStyles = makeStyles((colors) => ({
     borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
   },
 }));
+
+// Not in a browser yet: see WebLocked.
+export default lockedOnWeb(JoinGameScreen);

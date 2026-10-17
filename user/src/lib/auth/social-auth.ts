@@ -4,6 +4,7 @@ import * as Crypto from "expo-crypto";
 import { Platform } from "react-native";
 
 import { supabase } from "@/lib/supabase";
+import { webAppUrl } from "@/lib/web";
 
 import {
   appleFullName, authError, classifyAuthError, getGoogleAuthConfig,
@@ -76,6 +77,8 @@ export type SocialAuthAvailability = { apple: boolean; google: boolean };
 export async function getSocialAuthAvailability(
   apple: AppleModule = AppleAuthentication,
 ): Promise<SocialAuthAvailability> {
+  // A browser signs in through the provider's own page, which every browser has.
+  if (Platform.OS === "web") return { apple: true, google: true };
   let appleReady = false;
   if (Platform.OS === "ios") {
     try {
@@ -107,9 +110,29 @@ async function makeNonce(): Promise<{ raw: string; hashed: string }> {
   return { raw, hashed };
 }
 
+/**
+ * The browser's way in: the provider's page, then back to the app's callback,
+ * where `completeAuthRedirect` turns the returned tokens into the session (the
+ * same path an email confirmation takes). The page leaves, so there is no
+ * result to hand back; a refusal before leaving is the only answer.
+ */
+async function signInOnWeb(provider: "apple" | "google"): Promise<SocialAuthResult> {
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider,
+    options: { redirectTo: webAppUrl("/auth/callback") },
+  });
+  if (error) {
+    const classified = classifyAuthError(error);
+    note(provider, classified.code);
+    return { ok: false, error: classified };
+  }
+  return { ok: false, error: authError("cancelled") };
+}
+
 export async function signInWithApple(
   apple: AppleModule = AppleAuthentication,
 ): Promise<SocialAuthResult> {
+  if (Platform.OS === "web") return signInOnWeb("apple");
   try {
     if (Platform.OS !== "ios" || !(await apple.isAvailableAsync())) {
       return { ok: false, error: authError("apple_unavailable") };
@@ -184,8 +207,9 @@ function loadGoogle(): GoogleModule | null {
 }
 
 export async function signInWithGoogle(
-  google: GoogleModule | null = loadGoogle(),
+  google: GoogleModule | null = Platform.OS === "web" ? null : loadGoogle(),
 ): Promise<SocialAuthResult> {
+  if (Platform.OS === "web") return signInOnWeb("google");
   const config = googleAuthConfig();
 
   // iOS is checked separately and strictly. The Google SDK raises an

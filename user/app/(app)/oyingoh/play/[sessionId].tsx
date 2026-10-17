@@ -11,6 +11,7 @@ import { GameAnswerInput, GameLeaderboardList, GameRevealPanel, GameStatsSummary
 import { GameAvatar } from "@/components/GameAvatar";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ErrorState } from "@/components/StateBlocks";
+import { lockedOnWeb } from "@/components/WebLocked";
 import { asErrorMessage } from "@/lib/format";
 import { playerState, submitAnswer, subscribeToSession, type PlayerState } from "@/lib/games";
 import { formatNumber } from "@/lib/money";
@@ -43,7 +44,7 @@ function publicUrl(path: string | null | undefined): string | undefined {
  * every wake refetches this player's own sanitised state, so a hundred phones
  * carry a hundred small payloads instead of one broadcast that leaks answers.
  */
-export default function PlayGameScreen() {
+function PlayGameScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
   const { t } = useTranslation("play");
@@ -375,3 +376,6 @@ const useStyles = makeStyles((colors) => ({
   myResult: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm },
   myResultText: { ...typography.bodyMedium, color: colors.primaryDeep },
 }));
+
+// Not in a browser yet: see WebLocked.
+export default lockedOnWeb(PlayGameScreen);

@@ -45,8 +45,13 @@ module.exports = ({ config }) => {
     );
   }
 
+  // The website serves the browser build under a path of its own (`/app`, see
+  // web/next.config.ts). Set only for that export; phone builds never see it.
+  const webBase = (process.env.EXPO_WEB_BASE_URL ?? "").trim();
+
   return {
     ...config,
+    ...(webBase ? { experiments: { ...config.experiments, baseUrl: webBase } } : {}),
     ios: {
       ...config.ios,
       // Apple requires this entitlement for the button to work at all, and

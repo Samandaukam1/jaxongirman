@@ -47,6 +47,7 @@
     "test:pairing": "node supabase/tests/pairing-smoke.mjs",
     "dev:web": "npm run dev --workspace=@jaxongirman/web",
     "build:web": "npm run build --workspace=@jaxongirman/web",
+    "build:webapp": "npm run export:web --workspace=@jaxongirman/user",
     "test:oyingoh": "node supabase/tests/oyingoh-smoke.mjs",
     "test:orderpay": "node supabase/tests/order-pay-smoke.mjs",
     "jslayd:migrate": "node supabase/scripts/migrate-designs-to-jslayd.mjs",

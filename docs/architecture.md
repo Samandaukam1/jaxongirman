@@ -48,7 +48,7 @@ disk with progress (`streamLocalFile`), never read into JavaScript first, and
 
 Every signed-in phone or browser is one `auth.sessions` row; clients name
 themselves per session (`device_register`) and the account lists and removes
-devices from the app (Profil → Qurilmalar) and the site (`/hisob`). A device
+devices from Profil → Qurilmalar (on a phone, or in the web app at `/app/devices`). A device
 may remove one that signed in after it at any time, and an earlier one only
 after it has itself been signed in for two hours — a stolen phone cannot lock
 its owner out. A fresh sign-in is announced to the other devices: a
@@ -60,6 +60,26 @@ The website signs in three ways: Google, Apple, or the phone. For the phone,
 browser keeps), the app approves it (`web-sign-in`, which mints a one-time
 magic-link hash with the admin API), and only the browser holding the secret
 collects that hash, once (`web_sign_in_collect`), and turns it into a session.
+
+## The app in a browser
+
+The same screens run on the website at `/app` — the Expo app exported for the
+web (`npm run build:webapp` writes it to `web/public/app`, ignored by git, and
+the site is then deployed with it; `EXPO_WEB_BASE_URL=/app` is set only for
+that export). Same origin as the site, so the session `/kirish` creates is the
+session the app reads; `/kirish` ends in `/app` (or its `?next=`), and the old
+`/hisob` redirects to `/app/profile`. A wide window gets a side menu and a
+centred column (`DesktopShell`); a phone's browser gets the phone layout.
+Browser-only behaviour lives behind `Platform.OS === "web"`: `Alert.alert` is
+drawn by `WebAlertHost`, `Share.share` copies when there is no share sheet,
+files are saved through the browser (`browserFile`), uploads go by
+XMLHttpRequest, Google and Apple sign in through the provider page.
+
+What has not been made or checked in a browser yet says so instead of half
+working (`lockedOnWeb`): the camera scanners, the phone as a remote, the
+O‘yingoh join/host/play screens, phone pairing links, payment checkout and
+saved cards, and publishing a deck to the shop. Unlock one by removing its
+`lockedOnWeb` once it works in a browser.
 
 ## Reading a whole deck
 

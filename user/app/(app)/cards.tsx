@@ -9,6 +9,7 @@ import { useAuth } from "@/providers/AuthProvider";
 import { Appear } from "@/components/Appear";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { EmptyState, ErrorState, SkeletonCard } from "@/components/StateBlocks";
+import { lockedOnWeb } from "@/components/WebLocked";
 import { formatShortDateTime } from "@/lib/datetime";
 import { asErrorMessage } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
@@ -25,7 +26,7 @@ type PartialCard = Tables<"partial_cards">;
  * mean the app holds a card number the buyer never re-entered, and a new card
  * simply appears the next time one is used.
  */
-export default function CardsScreen() {
+function CardsScreen() {
   const { user } = useAuth();
   const { colors } = useTheme();
   const styles = useStyles();
@@ -142,3 +143,6 @@ const useStyles = makeStyles((colors) => ({
   meta: { ...typography.caption, color: colors.inkSoft },
   remove: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: colors.dangerSoft },
 }));
+
+// Not in a browser yet: see WebLocked.
+export default lockedOnWeb(CardsScreen);

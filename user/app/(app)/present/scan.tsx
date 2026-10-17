@@ -8,6 +8,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-nati
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { InlineError } from "@/components/StateBlocks";
+import { lockedOnWeb } from "@/components/WebLocked";
 import { asErrorMessage } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
 import { radius, spacing, typography } from "@/theme/tokens";
@@ -28,7 +29,7 @@ function extractToken(raw: string): string | null {
  * follows is what actually binds the session to this account, and the server
  * refuses a code that has already been used or has rotated away.
  */
-export default function ScanScreen() {
+function ScanScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
   const { t } = useTranslation(["present", "common"]);
@@ -151,3 +152,6 @@ const useStyles = makeStyles((colors) => ({
   hint: { ...typography.caption, color: colors.inkMuted, textAlign: "center", lineHeight: 18 },
   cancel: { ...typography.bodyMedium, color: colors.inkSoft, textAlign: "center" },
 }));
+
+// Not in a browser yet: see WebLocked.
+export default lockedOnWeb(ScanScreen);

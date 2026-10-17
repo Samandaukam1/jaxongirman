@@ -8,6 +8,7 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-nat
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { InlineError } from "@/components/StateBlocks";
+import { lockedOnWeb } from "@/components/WebLocked";
 import { formatDayMonth, formatClock } from "@/lib/datetime";
 import { browserOf, webLoginHistory, webLoginToken, type WebSignIn } from "@/lib/webLogin";
 import { radius, spacing, typography } from "@/theme/tokens";
@@ -21,7 +22,7 @@ import { makeStyles, useTheme } from "@/theme/ThemeProvider";
  * The camera keeps reading while the code is on screen, so a code that was
  * not the site's is remembered and not reported on every frame.
  */
-export default function WebLoginScreen() {
+function WebLoginScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
   const { t } = useTranslation("profile");
@@ -135,3 +136,6 @@ const useStyles = makeStyles((colors) => ({
   rowDetail: { ...typography.caption, color: colors.inkMuted },
   empty: { ...typography.caption, color: colors.inkMuted },
 }));
+
+// Not in a browser yet: see WebLocked.
+export default lockedOnWeb(WebLoginScreen);

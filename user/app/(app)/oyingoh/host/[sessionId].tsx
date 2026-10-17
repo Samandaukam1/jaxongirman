@@ -13,6 +13,7 @@ import { GameAvatar } from "@/components/GameAvatar";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { ErrorState, InlineError } from "@/components/StateBlocks";
+import { lockedOnWeb } from "@/components/WebLocked";
 import { asErrorMessage } from "@/lib/format";
 import {
   advanceSession, configureSession, hostState, listHostable, reviewAnswer, subscribeToSession,
@@ -54,7 +55,7 @@ const REWARD_STEPS: (keyof GameRewardPlan & ("first" | "second" | "third" | "par
 const RESULT_SECONDS = 6;
 const LEADERBOARD_SECONDS = 8;
 
-export default function HostGameScreen() {
+function HostGameScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
   const { t } = useTranslation(["play", "games", "common"]);
@@ -591,3 +592,6 @@ const useStyles = makeStyles((colors) => ({
   reviewGood: { backgroundColor: colors.success },
   reviewBad: { backgroundColor: colors.danger },
 }));
+
+// Not in a browser yet: see WebLocked.
+export default lockedOnWeb(HostGameScreen);

@@ -20,6 +20,7 @@ import { ActivityIndicator, Alert, Image, Pressable, ScrollView, Text, View } fr
 import { PresentationPreview, type PresentationPreviewHandle } from "@/components/PresentationPreview";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { ErrorState, InlineError } from "@/components/StateBlocks";
+import { lockedOnWeb } from "@/components/WebLocked";
 import { loadDeckElements } from "@/lib/deck";
 import { asErrorMessage } from "@/lib/format";
 import { launchPresentationGame, presentationHasGame } from "@/lib/games";
@@ -109,7 +110,7 @@ async function hydrateImages(rows: Element[]): Promise<Element[]> {
 }
 
 /** The phone renders and manipulates the same deck that the projector follows. */
-export default function RemoteScreen() {
+function RemoteScreen() {
   const { user } = useAuth();
   const { colors } = useTheme();
   const styles = useStyles();
@@ -687,3 +688,6 @@ const useStyles = makeStyles((colors) => ({
   endButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, height: 52, borderRadius: radius.md, borderWidth: 1, borderColor: colors.dangerSoft, backgroundColor: colors.surface },
   endText: { ...typography.bodyMedium, color: colors.danger, fontSize: 14 },
 }));
+
+// Not in a browser yet: see WebLocked.
+export default lockedOnWeb(RemoteScreen);

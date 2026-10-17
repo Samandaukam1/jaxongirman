@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect } from "react";
+import { lockedOnWeb } from "@/components/WebLocked";
 
 /**
  * The deep-link target for `jaxongirman://game-pair/<token>`.
@@ -12,7 +13,7 @@ import { useEffect } from "react";
  * Renders nothing — the host scanner does the claiming, and a visible frame here
  * would only flash.
  */
-export default function GamePairDeepLinkScreen() {
+function GamePairDeepLinkScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ token?: string }>();
   const token = typeof params.token === "string" ? params.token : "";
@@ -25,3 +26,6 @@ export default function GamePairDeepLinkScreen() {
 
   return null;
 }
+
+// Not in a browser yet: see WebLocked.
+export default lockedOnWeb(GamePairDeepLinkScreen);

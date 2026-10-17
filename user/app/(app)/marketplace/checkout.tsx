@@ -19,6 +19,7 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { ErrorState, InlineError } from "@/components/StateBlocks";
+import { lockedOnWeb } from "@/components/WebLocked";
 import { asFunctionErrorMessage } from "@/lib/format";
 import { formatSom } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
@@ -47,7 +48,7 @@ const RESEND_SECONDS = 60;
  * provider has been handed it. There is no saved token to reuse — every payment
  * is a fresh card, a fresh code and a fresh receipt.
  */
-export default function CheckoutScreen() {
+function CheckoutScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
   const { t } = useTranslation(["market", "checkout", "common"]);
@@ -568,3 +569,6 @@ const useStyles = makeStyles((colors) => ({
   privacyText: { ...typography.caption, color: colors.inkMuted, lineHeight: 18 },
   paymeBrand: { ...typography.caption, color: colors.primaryDeep, fontFamily: "Manrope_700Bold" },
 }));
+
+// Not in a browser yet: see WebLocked.
+export default lockedOnWeb(CheckoutScreen);

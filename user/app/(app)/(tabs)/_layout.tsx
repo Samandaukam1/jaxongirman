@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 
 import { BottomNav } from "@/components/BottomNav";
 import { RouteError } from "@/components/RouteError";
+import { useDesktop } from "@/lib/useDesktop";
 import { useTheme } from "@/theme/ThemeProvider";
 
 /** A screen that throws shows a retry, rather than closing the app. */
@@ -18,9 +19,11 @@ export const ErrorBoundary = RouteError;
 export default function TabsLayout() {
   const { colors } = useTheme();
   const { t } = useTranslation("nav");
+  // On a desktop the side menu is the navigation; the bar would be a second one.
+  const desktop = useDesktop();
   return (
     <Tabs
-      tabBar={(props) => <BottomNav {...props} />}
+      tabBar={(props) => (desktop ? null : <BottomNav {...props} />)}
       screenOptions={{
         headerShown: false,
         // A short cross-fade rather than an instant swap. Nothing slides —

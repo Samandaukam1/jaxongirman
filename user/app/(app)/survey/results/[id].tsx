@@ -5,15 +5,17 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Clock, Download, Link2, Lock, Pencil, Play, Users } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, Share, Text, View } from "react-native";
+import { ActivityIndicator, Image, Platform, Pressable, RefreshControl, ScrollView, Share, Text, View } from "react-native";
 
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { CountdownText } from "@/components/SurveyCard";
 import { EmptyState, ErrorState, InlineError, SkeletonCard } from "@/components/StateBlocks";
 import { useSuccessToast } from "@/components/SuccessToast";
+import { saveInBrowser } from "@/lib/browserFile";
 import { formatShortDateTime, useNow } from "@/lib/datetime";
 import { asErrorMessage, asFunctionErrorMessage } from "@/lib/format";
 import { changesChannel, supabase } from "@/lib/supabase";
+import { webAppUrl } from "@/lib/web";
 import { icon, radius, shadow, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
@@ -129,7 +131,7 @@ export default function SurveyResultsScreen() {
   }
 
   async function shareLink() {
-    const url = Linking.createURL(`/survey/${formId}`);
+    const url = Platform.OS === "web" ? webAppUrl(`/survey/${formId}`) : Linking.createURL(`/survey/${formId}`);
     await Share.share({
       message: t("results.shareMessage", { title: summary?.form.title ?? t("respond.title"), url }),
     });
@@ -143,7 +145,12 @@ export default function SurveyResultsScreen() {
       const url = (data as { url?: string })?.url;
       if (!url) throw new Error(t("results.noExport"));
 
-      const target = `${FileSystem.cacheDirectory}${(summary?.form.title ?? "survey").replace(/[^A-Za-z0-9]+/g, "-").toLowerCase()}.${format}`;
+      const fileName = `${(summary?.form.title ?? "survey").replace(/[^A-Za-z0-9]+/g, "-").toLowerCase()}.${format}`;
+      if (Platform.OS === "web") {
+        await saveInBrowser(url, fileName);
+        return;
+      }
+      const target = `${FileSystem.cacheDirectory}${fileName}`;
       const download = await FileSystem.downloadAsync(url, target);
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(download.uri, {

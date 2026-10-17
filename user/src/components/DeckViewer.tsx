@@ -1,10 +1,12 @@
-import { memo, useCallback, useRef, useState } from "react";
-import { FlatList, Pressable, Text, View, type ListRenderItemInfo, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
+import { useFocusEffect } from "expo-router";
+import { ChevronLeft, ChevronRight } from "lucide-react-native";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { FlatList, Platform, Pressable, Text, View, type ListRenderItemInfo, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 
 import { MODEL_HEIGHT, MODEL_WIDTH, SlideCanvas } from "@/components/SlideCanvas";
 import { useSlideGroups, type Element, type Slide } from "@/lib/deck";
 import { radius, shadowLifted, spacing, typography } from "@/theme/tokens";
-import { makeStyles } from "@/theme/ThemeProvider";
+import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type Props = {
   slides: Slide[];
@@ -40,6 +42,9 @@ const Page = memo(function Page({ slide, elements, width, revision }: { slide: S
 export function DeckViewer({ slides, elements, width, revision = 0 }: Props) {
   const styles = useStyles();
   const [index, setIndex] = useState(0);
+  // The page in view, for the key handler, which outlives any one render.
+  const shown = useRef(0);
+  useEffect(() => { shown.current = index; }, [index]);
   const list = useRef<FlatList<Slide>>(null);
   const bySlide = useSlideGroups(elements);
   const gap = spacing.md;
@@ -54,10 +59,25 @@ export function DeckViewer({ slides, elements, width, revision = 0 }: Props) {
     <Page slide={item} elements={bySlide.get(item.id) ?? EMPTY} width={width} revision={revision} />
   ), [bySlide, revision, width]);
 
-  const jump = (target: number) => {
-    list.current?.scrollToOffset({ offset: target * (width + gap), animated: true });
-    setIndex(target);
-  };
+  const jump = useCallback((target: number) => {
+    const next = Math.max(0, Math.min(slides.length - 1, target));
+    list.current?.scrollToOffset({ offset: next * (width + gap), animated: true });
+    setIndex(next);
+  }, [gap, slides.length, width]);
+
+  // A browser has no swipe: the arrow keys page, while this screen is the one
+  // in front and nobody is typing.
+  useFocusEffect(useCallback(() => {
+    if (Platform.OS !== "web") return undefined;
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
+      if (event.key === "ArrowRight") { event.preventDefault(); jump(shown.current + 1); }
+      if (event.key === "ArrowLeft") { event.preventDefault(); jump(shown.current - 1); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [jump]));
 
   return (
     <View style={styles.wrap}>
@@ -78,9 +98,17 @@ export function DeckViewer({ slides, elements, width, revision = 0 }: Props) {
         windowSize={3}
         maxToRenderPerBatch={2}
         getItemLayout={(_, at) => ({ length: width + gap, offset: (width + gap) * at, index: at })}
-        style={{ height: pageHeight + spacing.lg }}
+        // On the web the list is exactly one page wide, so the last page can be
+        // scrolled to the start like the others; a phone keeps the peek.
+        style={[{ height: pageHeight + spacing.lg }, Platform.OS === "web" ? { width, flexGrow: 0 } : null]}
         contentContainerStyle={styles.track}
       />
+      {Platform.OS === "web" && slides.length > 1 ? (
+        <>
+          <Arrow side="left" disabled={index === 0} top={spacing.sm + pageHeight / 2} left={spacing.md} onPress={() => jump(index - 1)} />
+          <Arrow side="right" disabled={index === slides.length - 1} top={spacing.sm + pageHeight / 2} left={width - spacing.md - ARROW} onPress={() => jump(index + 1)} />
+        </>
+      ) : null}
       <View style={styles.pager}>
         <View style={styles.dots}>
           {slides.length <= 14
@@ -98,13 +126,42 @@ export function DeckViewer({ slides, elements, width, revision = 0 }: Props) {
 }
 
 const EMPTY: Element[] = [];
+const ARROW = 44;
+
+/** Paging with a mouse: a round button on the edge of the slide in view. */
+function Arrow({ side, disabled, top, left, onPress }: { side: "left" | "right"; disabled: boolean; top: number; left: number; onPress: () => void }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
+  const Icon = side === "left" ? ChevronLeft : ChevronRight;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={side === "left" ? "‹" : "›"}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ hovered }: { hovered?: boolean; pressed: boolean }) => [
+        styles.arrow, { top: top - ARROW / 2, left }, hovered && styles.arrowHover, disabled && styles.arrowOff,
+      ]}
+    >
+      <Icon color={colors.ink} size={22} strokeWidth={2.2} />
+    </Pressable>
+  );
+}
 
 function Gap() {
   return <View style={{ width: spacing.md }} />;
 }
 
 const useStyles = makeStyles((colors) => ({
-  wrap: { gap: spacing.sm },
+  wrap: { gap: spacing.sm, position: "relative" },
+  arrow: {
+    position: "absolute", width: ARROW, height: ARROW, borderRadius: ARROW / 2,
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
+    boxShadow: "0 6px 18px rgba(25, 10, 60, 0.18)",
+  },
+  arrowHover: { backgroundColor: colors.surfaceMuted },
+  arrowOff: { opacity: 0 },
   track: { paddingVertical: spacing.sm },
   page: { borderRadius: radius.lg, overflow: "hidden", backgroundColor: colors.surface, ...shadowLifted },
   pager: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md },
