@@ -6,7 +6,7 @@ import type { PresentationStyle } from "./presentation-types.ts";
 import { resolveCitations } from "./glass/sources.ts";
 import { composeGlassDeck, deckSources, findPictures, glassRows, inventDesign, libraryFaces, notesSources, pictureWishes, writeOutline, writeSlides, type Call } from "./glass-engine.ts";
 import type { Picture } from "./glass/compose.ts";
-import { readOutline, readSlide } from "./glass/content.ts";
+import { placeSourceImages, readOutline, readSlide, type SourceImage } from "./glass/content.ts";
 import { readDesignRequest, type DeckStyle } from "./glass/dna.ts";
 
 /** How each style is named to the author, in the generation steps. */
@@ -126,14 +126,36 @@ function base64(bytes: Uint8Array): string {
  * A file that cannot be read is skipped, never fatal. Somebody who attached a
  * spreadsheet to a deck about mining wants the deck.
  */
+type UploadAsset = {
+  storage_bucket?: string | null; storage_path?: string | null; mime_type?: string | null; byte_size?: number | null;
+  alt_text?: string | null; metadata?: unknown;
+};
+
+/** An author's picture that was read, under the key its page will ask for. */
+type LoadedImage = SourceImage & { bucket: string; path: string };
+
+/** The position of an author's picture (1–6), or null for any other upload. */
+function slideImageIndex(asset: UploadAsset): number | null {
+  const metadata = asset.metadata as { role?: unknown; index?: unknown } | null;
+  return metadata?.role === "slide_image" && typeof metadata.index === "number" ? metadata.index : null;
+}
+
 async function readAttachments(
   service: SupabaseClient,
-  assets: Array<{ storage_bucket?: string | null; storage_path?: string | null; mime_type?: string | null; byte_size?: number | null }>,
-): Promise<Attachment[]> {
+  assets: UploadAsset[],
+): Promise<{ attachments: Attachment[]; images: LoadedImage[] }> {
   const attachments: Attachment[] = [];
+  const images: LoadedImage[] = [];
   let budget = ATTACHMENT_BUDGET;
 
-  for (const asset of assets.slice(0, 5)) {
+  // The author's pictures first and in their order: the outline names them by
+  // that order, and each is a few hundred kilobytes, so documents still fit.
+  const ordered = [
+    ...assets.filter((asset) => slideImageIndex(asset) !== null).sort((a, b) => slideImageIndex(a)! - slideImageIndex(b)!),
+    ...assets.filter((asset) => slideImageIndex(asset) === null),
+  ];
+
+  for (const asset of ordered.slice(0, 11)) {
     if (!asset.storage_path) continue;
     if (asset.byte_size && asset.byte_size > budget) continue;
 
@@ -149,9 +171,51 @@ async function readAttachments(
 
     attachments.push({ mimeType, data: base64(bytes) });
     budget -= bytes.byteLength;
+
+    const index = slideImageIndex(asset);
+    if (index !== null && asset.storage_bucket) {
+      images.push({
+        key: `user-image-${index}`,
+        caption: (asset.alt_text ?? "").trim().slice(0, 300),
+        bucket: asset.storage_bucket,
+        path: asset.storage_path,
+      });
+    }
   }
 
-  return attachments;
+  return { attachments, images };
+}
+
+/**
+ * The author's pictures no page ended up showing, removed as soon as the deck
+ * is built.
+ *
+ * A picture lives exactly as long as the deck that shows it; one the deck does
+ * not show has no reason to stay in storage. Never fatal — at worst the folder
+ * keeps it until the deck itself is deleted.
+ */
+async function dropUnusedImages(
+  input: PipelineInput,
+  images: readonly LoadedImage[],
+  elementRows: readonly Record<string, unknown>[],
+): Promise<void> {
+  if (!images.length) return;
+  const shown = new Set<string>();
+  for (const row of elementRows) {
+    const path = (row.content as { storagePath?: unknown } | null)?.storagePath;
+    if (typeof path === "string") shown.add(path);
+  }
+  const unused = images.filter((image) => !shown.has(image.path));
+  if (!unused.length) return;
+  try {
+    const paths = unused.map((image) => image.path);
+    const removed = await input.service.storage.from(unused[0]!.bucket).remove(paths);
+    if (removed.error) throw removed.error;
+    await input.service.from("presentation_assets").delete()
+      .eq("presentation_id", input.presentationId).in("storage_path", paths);
+  } catch (failure) {
+    console.error(JSON.stringify({ event: "source_images_not_dropped", job_id: input.jobId, detail: String((failure as Error)?.message ?? failure).slice(0, 200) }));
+  }
 }
 
 /**
@@ -294,9 +358,8 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
     }));
 
     const context = await runStage(input.service, input, "understanding_topic", async () => {
-      if (mode === "mock") return { attachments: [] as Attachment[] };
-      const attachments = await readAttachments(input.service, prepared.assets);
-      return { attachments };
+      if (mode === "mock") return { attachments: [] as Attachment[], images: [] as LoadedImage[] };
+      return await readAttachments(input.service, prepared.assets);
     }, (value) => value.attachments.length ? `${value.attachments.length} ta material kontekst sifatida tayyorlandi` : "Mavzu tahlilga tayyorlandi");
 
     // The deck always opens with a title page and an agenda and closes with a
@@ -423,6 +486,7 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
       research,
       entered: prepared.sources,
       attachments: context.attachments,
+      images: context.images,
       pricing: await providerPricing(input.service),
     });
 
@@ -559,6 +623,8 @@ async function runGlass(params: {
   };
   entered: string[];
   attachments: Attachment[];
+  /** The author's pictures that were read, each already in the deck's folder. */
+  images: LoadedImage[];
   pricing: { for(model: string): { inputPerMillion: number; outputPerMillion: number } };
 }): Promise<number> {
   const { input, writer, presentation } = params;
@@ -570,8 +636,9 @@ async function runGlass(params: {
   const language = deckLanguageOf(presentation);
 
   const outline = await runStage(input.service, input, "creating_outline", async () => {
-    if (mock) return readOutline(mockGlassOutline(presentation.topic, count), { topic: presentation.topic, count });
-    return await writeOutline({ writer, language, topic: presentation.topic, count, research, requirements, attachments: params.attachments, calls });
+    const images = params.images.map(({ key, caption }) => ({ key, caption }));
+    if (mock) return placeSourceImages(readOutline(mockGlassOutline(presentation.topic, count), { topic: presentation.topic, count }), images);
+    return await writeOutline({ writer, language, topic: presentation.topic, count, research, requirements, attachments: params.attachments, images, calls });
   }, (value) => `${value.slides.length} ta mazmun slaydi rejalashtirildi`);
 
   const written = await withDeadline(runStage(input.service, input, "writing_content", async () => {
@@ -593,12 +660,14 @@ async function runGlass(params: {
   }, (value) => `Dizayn yaratildi: ${STYLE_NAMES[value.dna.style]}, ${value.dna.fonts.display.family} + ${value.dna.fonts.body.family}, ${value.dna.direction.mode === "dark" ? "qorong‘i" : "yorug‘"} kompozitsiya`);
 
   const pictures = await runStage(input.service, input, "finding_assets", async () => {
-    if (mock) return new Map<string, Picture>();
-    return await findPictures({
+    const found = mock ? new Map<string, Picture>() : await findPictures({
       service: input.service, ownerId: input.ownerId, presentationId: input.presentationId,
       topic: presentation.topic,
       wanted: pictureWishes(outline, written.slides),
     });
+    // The author's own pictures need no search: each is in the deck's folder.
+    for (const image of params.images) found.set(image.key, { bucket: image.bucket, path: image.path });
+    return found;
   }, (value) => value.size ? `${value.size} ta fotosurat topildi` : "Fotosuratsiz kompozitsiya tanlandi");
 
   await runStage(input.service, input, "generating_images", async () => pictures.size,
@@ -623,6 +692,8 @@ async function runGlass(params: {
   }), (value) => `${value.length} ta sahifa noldan kompozitsiya qilindi`);
 
   const rows = glassRows(pages, { ownerId: input.ownerId, presentationId: input.presentationId, newId: () => crypto.randomUUID() });
+
+  await dropUnusedImages(input, params.images, rows.elementRows);
 
   await runStage(input.service, input, "building_slides", async () => {
     const cleared = await input.service.from("slides").delete().eq("presentation_id", input.presentationId);

@@ -19,8 +19,8 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js";
 import { hashOf, turn } from "./glass/color.ts";
 import { composeDeck, pageFaults, type ComposedSlide, type Picture } from "./glass/compose.ts";
 import {
-  contentPrompt, contentSchema, outlinePrompt, outlineSchema, readOutline, readSlide, slideFromOutline, sourcesFromNotes,
-  type DeckOutline, type SlideContent,
+  contentPrompt, contentSchema, isSourceImageKey, outlinePrompt, outlineSchema, placeSourceImages, readOutline, readSlide, slideFromOutline, sourcesFromNotes,
+  type DeckOutline, type SlideContent, type SourceImage,
 } from "./glass/content.ts";
 import { buildDNA, candidateFaces, PALETTES, readArtDirection, type ArtDirection, type DeckStyle, type DesignDNA, type DesignRequest, type FontPick } from "./glass/dna.ts";
 import { inBatches } from "./glass/batches.ts";
@@ -58,10 +58,12 @@ export async function writeOutline(input: {
   research: string;
   requirements: string;
   attachments: readonly Attachment[];
+  /** The author's own pictures, in the order they are attached. */
+  images?: readonly SourceImage[];
   calls: Call[];
 }): Promise<DeckOutline> {
   const answer = await input.writer.structured<unknown>({
-    prompt: outlinePrompt({ language: input.language, topic: input.topic, count: input.count, research: input.research, requirements: input.requirements, attachments: input.attachments.length > 0 }),
+    prompt: outlinePrompt({ language: input.language, topic: input.topic, count: input.count, research: input.research, requirements: input.requirements, attachments: input.attachments.length > 0, images: input.images }),
     system: systemFor(input.language),
     schemaName: "glass_outline",
     schema: outlineSchema(input.count),
@@ -69,7 +71,7 @@ export async function writeOutline(input: {
     maxOutputTokens: 2_400 + input.count * 120,
   });
   input.calls.push({ operation: "presentation_outline", usage: answer.usage, provider: answer.provider, model: answer.model, attempts: answer.attempts });
-  return readOutline(answer.data, { topic: input.topic, count: input.count });
+  return placeSourceImages(readOutline(answer.data, { topic: input.topic, count: input.count }), input.images ?? []);
 }
 
 /** Pages per copy call: small enough to answer quickly, large enough to stay cheap. */
@@ -413,6 +415,9 @@ export function glassRows(pages: ComposedSlide[], input: { ownerId: string; pres
 export function pictureWishes(outline: DeckOutline, slides: SlideContent[]): { query: string; title: string; orientation: "landscape" | "portrait" | "square" }[] {
   return [
     { query: outline.coverQuery, title: outline.shortTitle, orientation: "portrait" as const },
-    ...slides.filter((slide) => slide.kind === "photo" && slide.imageQuery).map((slide) => ({ query: slide.imageQuery!, title: slide.title, orientation: "portrait" as const })),
+    // The author's own pictures are already in the deck's folder; only the
+    // other photo pages are searched for.
+    ...slides.filter((slide) => slide.kind === "photo" && slide.imageQuery && !isSourceImageKey(slide.imageQuery))
+      .map((slide) => ({ query: slide.imageQuery!, title: slide.title, orientation: "portrait" as const })),
   ];
 }

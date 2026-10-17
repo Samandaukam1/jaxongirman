@@ -20,6 +20,12 @@ type RequestBody = {
   teacherName?: string | null;
   sources?: string[];
   uploadPaths?: string[];
+  /**
+   * The author's own pictures for the slides, each with what it shows. The
+   * phone has already put every one in the deck's folder in
+   * `presentation-assets` as `source-N.jpg`. Older builds leave it out.
+   */
+  images?: { path?: unknown; caption?: unknown }[];
   idempotencyKey?: string;
   /**
    * The J Tanga the author agreed to on the price screen. Sent by builds that
@@ -181,6 +187,32 @@ Deno.serve(async (request) => {
         if (assetError) {
           await context.serviceClient.rpc("fail_generation", { p_job_id: job.job_id, p_error_code: "asset_registration_failed", p_error_message: assetError.message });
           throw assetError;
+        }
+      }
+
+      // The author's pictures: only `source-N.jpg` in this deck's own folder,
+      // once each, six at most; the caption is what the outline is told the
+      // picture shows. Their lifetime is the deck's (see 202610190003).
+      const seen = new Set<number>();
+      const imageRows = (Array.isArray(body.images) ? body.images as NonNullable<RequestBody["images"]> : []).flatMap((image) => {
+        const path = typeof image?.path === "string" ? image.path : "";
+        const match = path.match(/\/source-([1-6])\.jpg$/);
+        if (!match || path !== `${prefix}source-${match[1]}.jpg`) return [];
+        const index = Number(match[1]);
+        if (seen.has(index)) return [];
+        seen.add(index);
+        const caption = typeof image?.caption === "string" ? image.caption.replace(/\s+/g, " ").trim().slice(0, 300) : "";
+        return [{
+          presentation_id: body.presentationId, owner_id: context.user.id, kind: "upload",
+          storage_bucket: "presentation-assets", storage_path: path, mime_type: "image/jpeg",
+          alt_text: caption || null, metadata: { role: "slide_image", index },
+        }];
+      }).slice(0, 6);
+      if (imageRows.length) {
+        const { error: imageError } = await context.serviceClient.from("presentation_assets").insert(imageRows);
+        if (imageError) {
+          await context.serviceClient.rpc("fail_generation", { p_job_id: job.job_id, p_error_code: "asset_registration_failed", p_error_message: imageError.message });
+          throw imageError;
         }
       }
     }

@@ -50,6 +50,20 @@ export type SlideContent = {
 
 export type OutlineEntry = { title: string; kind: SlideKind; focus: string; imageQuery: string | null };
 
+/**
+ * One of the author's own photographs, by the key its page asks for.
+ *
+ * The author may add up to six pictures, a caption each, when ordering the
+ * deck. A page shows one by naming its key — `user-image-2` — as its
+ * `imageQuery`; the photo search never sees such a key, because the picture is
+ * already in the deck's own folder.
+ */
+export type SourceImage = { key: string; caption: string };
+
+export function isSourceImageKey(value: string | null | undefined): boolean {
+  return typeof value === "string" && /^user-image-[1-6]$/.test(value);
+}
+
 export type DeckOutline = {
   /** The model's art direction, read by `readArtDirection`. Never trusted as-is. */
   art: unknown;
@@ -195,7 +209,9 @@ export function outlinePrompt(input: {
   research: string;
   requirements: string;
   attachments: boolean;
+  images?: readonly SourceImage[];
 }): string {
+  const images = input.images ?? [];
   return [
     `Mavzu: ${input.topic}`,
     `Mazmun slaydlari soni: ${input.count} ta (muqova, reja, adabiyotlar va yakuniy slaydni server o‘zi qo‘shadi — ularni rejalashtirmang).`,
@@ -219,6 +235,14 @@ export function outlinePrompt(input: {
     "- coverQuery va imageQuery: suratga olsa bo‘ladigan aniq predmet, mavzuning asosiy otini albatta qo‘shing (masalan quyosh energetikasi → «solar panels field», «solar power plant workers»). Mavhum so‘zlar («potential», «landscape», «future», «concept») ishlatmang.",
     `- ${ANSWER_IN[input.language ?? "uz"]}`,
     input.attachments ? "- Biriktirilgan fayllar asosiy manba hisoblanadi." : "",
+    images.length ? [
+      "",
+      "MUALLIF RASMLARI — slaydlarda ko‘rsatiladi (biriktirilgan rasmlar shu tartibda):",
+      ...images.map((image, index) => `${index + 1}. ${image.key} — ${image.caption || "izohsiz; rasmning o‘ziga qarang"}`),
+      "- Har bir muallif rasmi uchun bitta kind=photo slayd rejalashtiring va imageQuery maydoniga rasm kalitini aynan yozing (masalan «user-image-1»).",
+      "- Shu slaydning title va focus'i rasmda ko‘rinib turgan narsa haqida bo‘lsin; izohdan foydalaning, rasmda yo‘q narsani yozmang.",
+      "- Muallif rasmlari uchun inglizcha qidiruv so‘zi yozmang — ular tayyor.",
+    ].join("\n") : "",
     input.research ? `\nTEKSHIRILGAN MA’LUMOTLAR:\n${input.research}` : "",
   ].filter((line) => line !== "").join("\n");
 }
@@ -334,6 +358,68 @@ export function varyKinds(slides: OutlineEntry[]): OutlineEntry[] {
     used.set(slide.kind, (used.get(slide.kind) ?? 0) + 1);
   });
   return out;
+}
+
+/** Which pages give up their kind for an author's picture first: numbers last. */
+const YIELDS: readonly SlideKind[] = ["photo", "bullets", "cards", "statement", "process", "timeline", "comparison", "quote", "stats", "chart"];
+
+/**
+ * Every author's picture on a page of its own, whatever the model did.
+ *
+ * The model is asked to give each picture a photo page and name its key. What
+ * it named is read leniently ("User image 2" is `user-image-2`) and once each;
+ * a key it invented goes back to being an ordinary page. A picture still
+ * without a page then takes one: a photo page that only had a stock search
+ * first, otherwise the page whose kind costs least to give up, as far as
+ * possible from the pictures already placed. Runs before the copy is written,
+ * so the writer writes the page as a photo page, told what the picture shows.
+ */
+export function placeSourceImages(outline: DeckOutline, images: readonly SourceImage[]): DeckOutline {
+  if (!images.length) return outline;
+  const slides = outline.slides.map((slide) => ({ ...slide }));
+  const byKey = new Map(images.map((image) => [image.key, image]));
+  const placed = new Map<string, number>();
+
+  slides.forEach((slide, index) => {
+    const match = slide.imageQuery?.match(/user[\s_-]*image[\s_-]*(\d+)/i);
+    if (!match) return;
+    const key = `user-image-${match[1]}`;
+    if (byKey.has(key) && !placed.has(key)) {
+      slide.kind = "photo";
+      slide.imageQuery = key;
+      placed.set(key, index);
+    } else {
+      slide.imageQuery = null;
+    }
+  });
+
+  for (const image of images) {
+    if (placed.has(image.key)) continue;
+    const taken = new Set(placed.values());
+    const distance = (index: number) => taken.size
+      ? Math.min(...[...taken].map((at) => Math.abs(at - index)))
+      : slides.length;
+    let best = -1;
+    for (const kind of YIELDS) {
+      const options = slides
+        .map((slide, index) => ({ slide, index }))
+        .filter(({ slide, index }) => !taken.has(index) && slide.kind === kind);
+      if (!options.length) continue;
+      best = options.reduce((a, b) => distance(b.index) > distance(a.index) ? b : a).index;
+      break;
+    }
+    if (best < 0) break;
+    slides[best] = { ...slides[best]!, kind: "photo", imageQuery: image.key };
+    placed.set(image.key, best);
+  }
+
+  // The writer is told what each picture shows, so the page talks about it.
+  for (const [key, index] of placed) {
+    const caption = byKey.get(key)?.caption;
+    const slide = slides[index]!;
+    if (caption && !slide.focus.includes(caption)) slide.focus = clip(`${slide.focus} Rasmda: ${caption}`, 400);
+  }
+  return { ...outline, slides };
 }
 
 function points(value: unknown, max: number): Point[] {
@@ -465,6 +551,11 @@ export function settle(slide: SlideContent): SlideContent {
     case "bullets":
     case "photo":
       if (enough(2)) return { ...slide, points: slide.points.slice(0, slide.kind === "photo" ? 3 : 5) };
+      // The author's own picture is the reason the page exists: it stays a
+      // photo page with whatever words it has, never a statement without it.
+      if (slide.kind === "photo" && isSourceImageKey(slide.imageQuery)) {
+        return { ...slide, lead: slide.lead || slide.points[0]?.text || slide.title };
+      }
       return settle({ ...slide, kind: "statement" });
     case "statement":
     default:
@@ -479,7 +570,7 @@ export function settle(slide: SlideContent): SlideContent {
 /** The page written from the outline alone, when the copy call failed. */
 export function slideFromOutline(entry: OutlineEntry): SlideContent {
   return settle({
-    kind: "statement",
+    kind: isSourceImageKey(entry.imageQuery) ? "photo" : "statement",
     title: entry.title,
     eyebrow: "",
     lead: entry.focus,
