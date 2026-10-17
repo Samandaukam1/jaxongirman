@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "buildCommand": "EXPO_PUBLIC_SUPABASE_URL=\"$NEXT_PUBLIC_SUPABASE_URL\" EXPO_PUBLIC_SUPABASE_ANON_KEY=\"$NEXT_PUBLIC_SUPABASE_ANON_KEY\" EXPO_PUBLIC_APP_URL=\"$NEXT_PUBLIC_APP_URL\" npm run export:web --workspace=@jaxongirman/user && npm run build --workspace=@jaxongirman/web",
-  "installCommand": "npm install",
+  "installCommand": "cd .. && npm install --workspace=@jaxongirman/web --workspace=@jaxongirman/user",
   "headers": [
     {
       "source": "/.well-known/apple-app-site-association",
