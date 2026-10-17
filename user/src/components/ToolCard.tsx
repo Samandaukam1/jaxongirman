@@ -1,11 +1,12 @@
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import { memo, useMemo, type FC } from "react";
+import { memo, useMemo } from "react";
 import { Platform, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import Animated, { useAnimatedStyle, type SharedValue } from "react-native-reanimated";
-import Svg, { Path, type SvgProps } from "react-native-svg";
+import Svg, { Path } from "react-native-svg";
 
 import { Touchable } from "@/components/Touchable";
+import type { Art as ToolDrawing } from "@/components/toolArt";
 import { withAlpha } from "@/theme/color";
 import { radius, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
@@ -28,10 +29,10 @@ import { makeStyles, useTheme } from "@/theme/ThemeProvider";
  * on top. The row still reads as one system — one corner, one type, one lift —
  * and each card is now the colour of the thing it makes.
  *
- * `art` is one of the icons in `assets/icons`, compiled from its SVG.
+ * `art` is one of the drawings in `toolArt`.
  */
 
-export type ToolArt = FC<SvgProps>;
+export type ToolArt = ToolDrawing;
 
 /**
  * How far the artwork shrinks as the page scrolls, as a fraction of the way

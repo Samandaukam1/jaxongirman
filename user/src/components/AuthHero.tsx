@@ -2,7 +2,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Gamepad2, House, Layers, Store, User, type LucideIcon } from "lucide-react-native";
 import { Image, Text, View } from "react-native";
 
-import appIcon from "../../assets/icon.png";
+import appIcon from "../../assets/icon-320.png";
 import coinIcon from "../../assets/coin/coin-icon.png";
 import { typography } from "@/theme/tokens";
 import { makeStyles } from "@/theme/ThemeProvider";

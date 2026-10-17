@@ -1,14 +1,10 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { memo, useMemo, type FC } from "react";
+import { memo, useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import type { SvgProps } from "react-native-svg";
 
-import PortraitArt from "../../assets/icons/1.svg";
-import ObjectiveArt from "../../assets/icons/2.svg";
-import ScientificArt from "../../assets/icons/3.svg";
-import SlideCreateArt from "../../assets/icons/4.svg";
 import { DeleteWorkButton } from "@/components/DeleteWorkButton";
 import { Touchable } from "@/components/Touchable";
+import { ObjectiveArt, PortraitArt, ScientificArt, SlideCreateArt, type Art } from "@/components/toolArt";
 import { kindLabel, statusLabel, type Project, type ProjectKind } from "@/lib/projects";
 import { withAlpha } from "@/theme/color";
 import { radius, shadow, spacing, toolTint, typography } from "@/theme/tokens";
@@ -27,7 +23,7 @@ import { makeStyles, useTheme } from "@/theme/ThemeProvider";
  * title; a green cap and a blue document are read before the words are.
  */
 
-type Mark = { art: FC<SvgProps>; tint: string };
+type Mark = { art: Art; tint: string };
 
 const MARK: Record<ProjectKind, Mark> = {
   presentation: { art: SlideCreateArt, tint: toolTint.slideCreate },

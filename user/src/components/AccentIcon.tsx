@@ -1,9 +1,8 @@
 import { LinearGradient } from "expo-linear-gradient";
 import type { LucideIcon } from "lucide-react-native";
-import type { FC } from "react";
 import { Image, Platform, StyleSheet, View, type ImageSourcePropType, type ViewStyle } from "react-native";
-import type { SvgProps } from "react-native-svg";
 
+import type { Art } from "@/components/toolArt";
 import { withAlpha } from "@/theme/color";
 import { accents, brandInk, type AccentName } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
@@ -41,7 +40,7 @@ type Props = {
   /** The footprint. Everything inside is derived from it. */
   size?: number;
   glyph?: LucideIcon;
-  art?: FC<SvgProps>;
+  art?: Art;
   image?: ImageSourcePropType;
   /**
    * Sitting on the brand gradient rather than on a card.

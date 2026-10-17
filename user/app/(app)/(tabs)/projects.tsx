@@ -19,12 +19,6 @@ import coinIcon from "../../../assets/coin/coin-icon.png";
  * here come from the picture, not the digit, and anyone changing a mapping
  * later has something to check it against.
  */
-import PortraitArt from "../../../assets/icons/1.svg";
-import ObjectiveArt from "../../../assets/icons/2.svg";
-import ScientificArt from "../../../assets/icons/3.svg";
-import SlideCreateArt from "../../../assets/icons/4.svg";
-import PowerPointArt from "../../../assets/icons/5.svg";
-import PresentArt from "../../../assets/icons/6.svg";
 import { Appear } from "@/components/Appear";
 import { BOTTOM_NAV_SPACE } from "@/components/BottomNav";
 import { MarathonVoteButton } from "@/components/MarathonVoteButton";
@@ -32,6 +26,7 @@ import { MarathonVoteButton } from "@/components/MarathonVoteButton";
 import { ProjectRow } from "@/components/ProjectRow";
 import { EmptyState, ErrorState, SkeletonCard } from "@/components/StateBlocks";
 import { HeroToolCard, ToolCard, type ToolArt } from "@/components/ToolCard";
+import { ObjectiveArt, PortraitArt, PowerPointArt, PresentArt, ScientificArt, SlideCreateArt } from "@/components/toolArt";
 import { Touchable } from "@/components/Touchable";
 import { asErrorMessage } from "@/lib/format";
 import { blend, withAlpha } from "@/theme/color";
