@@ -2,6 +2,7 @@ import type { Json } from "./database.generated";
 
 export * from "./avatars";
 export * from "./payment-cards";
+export * from "./presenting";
 
 /**
  * Account roles, ordered from least to most privileged. `super_admin` is a
@@ -367,7 +368,8 @@ export type NotificationKind =
   | "credit_gift" | "system" | "presentation"
   | "survey_invite" | "survey_deadline" | "survey_completed"
   | "project_ready" | "marketplace_sale" | "marketplace_purchase"
-  | "credit_received" | "credit_sent" | "subscription_expiry";
+  | "credit_received" | "credit_sent" | "subscription_expiry"
+  | "new_device";
 
 /**
  * Where a notification leads when its row carries no explicit `deep_link`.
@@ -384,6 +386,7 @@ export const NOTIFICATION_FALLBACK_ROUTES: Partial<Record<NotificationKind, stri
   presentation: "/(app)/(tabs)/projects",
   marketplace_sale: "/(app)/(tabs)/marketplace",
   marketplace_purchase: "/(app)/(tabs)/marketplace",
+  new_device: "/(app)/devices",
 };
 
 export type { Database, Enums, Json, Tables, TablesInsert, TablesUpdate } from "./database.generated";

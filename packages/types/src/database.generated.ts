@@ -1389,6 +1389,7 @@ export type Database = {
           featured_at: string | null
           id: string
           is_free: boolean
+          language: string
           owner_id: string
           question_count: number
           sessions_count: number
@@ -1411,6 +1412,7 @@ export type Database = {
           featured_at?: string | null
           id?: string
           is_free?: boolean
+          language?: string
           owner_id: string
           question_count?: number
           sessions_count?: number
@@ -1433,6 +1435,7 @@ export type Database = {
           featured_at?: string | null
           id?: string
           is_free?: boolean
+          language?: string
           owner_id?: string
           question_count?: number
           sessions_count?: number
@@ -5811,6 +5814,45 @@ export type Database = {
         }
         Relationships: []
       }
+      user_devices: {
+        Row: {
+          app_version: string | null
+          confirmed_at: string | null
+          created_at: string
+          last_seen_at: string
+          name: string | null
+          platform: string
+          revoked_at: string | null
+          session_id: string
+          signed_in_at: string
+          user_id: string
+        }
+        Insert: {
+          app_version?: string | null
+          confirmed_at?: string | null
+          created_at?: string
+          last_seen_at?: string
+          name?: string | null
+          platform: string
+          revoked_at?: string | null
+          session_id: string
+          signed_in_at: string
+          user_id: string
+        }
+        Update: {
+          app_version?: string | null
+          confirmed_at?: string | null
+          created_at?: string
+          last_seen_at?: string
+          name?: string | null
+          platform?: string
+          revoked_at?: string | null
+          session_id?: string
+          signed_in_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -5952,6 +5994,51 @@ export type Database = {
           verified?: boolean
           verified_at?: string | null
           verified_by?: string | null
+        }
+        Relationships: []
+      }
+      web_sign_in_sessions: {
+        Row: {
+          approved_at: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          ip: string | null
+          otp_hash: string | null
+          secret_hash: string
+          status: string
+          token_hash: string
+          used_at: string | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          approved_at?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          ip?: string | null
+          otp_hash?: string | null
+          secret_hash: string
+          status?: string
+          token_hash: string
+          used_at?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          approved_at?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          ip?: string | null
+          otp_hash?: string | null
+          secret_hash?: string
+          status?: string
+          token_hash?: string
+          used_at?: string | null
+          user_agent?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -7208,6 +7295,7 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["app_role"]
       }
+      current_session_id: { Args: never; Returns: string }
       current_subscription: {
         Args: { p_user_id?: string }
         Returns: {
@@ -7230,6 +7318,40 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      device_alerts: {
+        Args: never
+        Returns: {
+          can_revoke: boolean
+          name: string
+          platform: string
+          session_id: string
+          signed_in_at: string
+        }[]
+      }
+      device_confirm: { Args: { p_session_id: string }; Returns: undefined }
+      device_list: {
+        Args: never
+        Returns: {
+          app_version: string
+          can_revoke: boolean
+          confirmed: boolean
+          is_current: boolean
+          last_seen_at: string
+          name: string
+          platform: string
+          revoke_from: string
+          session_id: string
+          signed_in_at: string
+          user_agent: string
+        }[]
+      }
+      device_register: {
+        Args: { p_app_version?: string; p_name?: string; p_platform: string }
+        Returns: Json
+      }
+      device_revoke: { Args: { p_session_id: string }; Returns: Json }
+      device_revoke_others: { Args: never; Returns: Json }
+      device_seniority: { Args: never; Returns: string }
       economy_current: {
         Args: never
         Returns: {
@@ -8547,6 +8669,20 @@ export type Database = {
         }
         Returns: string
       }
+      web_sign_in_client_ip: { Args: never; Returns: string }
+      web_sign_in_collect: {
+        Args: { p_secret: string; p_session_id: string }
+        Returns: Json
+      }
+      web_sign_in_history: {
+        Args: never
+        Returns: {
+          approved_at: string
+          used_at: string
+          user_agent: string
+        }[]
+      }
+      web_sign_in_open: { Args: { p_user_agent?: string }; Returns: Json }
     }
     Enums: {
       app_role:
@@ -8671,6 +8807,7 @@ export type Database = {
         | "marathon_vote"
         | "marathon_milestone"
         | "support_reply"
+        | "new_device"
       order_purpose:
         | "subscription"
         | "jcoin"
@@ -9020,6 +9157,7 @@ export const Constants = {
         "marathon_vote",
         "marathon_milestone",
         "support_reply",
+        "new_device",
       ],
       order_purpose: [
         "subscription",
