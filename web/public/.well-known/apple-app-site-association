@@ -21,6 +21,10 @@
           {
             "/": "/marathon/*",
             "comment": "A scanned candidate QR opens the app on that candidate's vote sheet."
+          },
+          {
+            "/": "/web-login/*",
+            "comment": "A scanned website sign-in QR opens the app on the confirmation."
           }
         ]
       }

@@ -2,9 +2,13 @@
 
 import {
   RESET_PRESENTATION_VIEWPORT,
+  SLIDE_HOLD_MS,
   SLIDE_MODEL_HEIGHT,
   SLIDE_MODEL_WIDTH,
   clampPresentationViewport,
+  settledSlide,
+  slideAfter,
+  type PendingSlide,
   type PresentationScreenDeck,
   type PresentationViewport,
   type RenderableSlide,
@@ -136,9 +140,58 @@ export function PairingScreen({ experienceRow }: { experienceRow: unknown | null
   const sessionRef = useRef<Session | null>(null);
   const mounted = useRef(true);
   const stageRef = useRef<HTMLDivElement | null>(null);
+  /** The private channel shared with the phone, kept to send this screen's own moves. */
+  const viewportChannel = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  /** The slide last moved to — by the phone or by this keyboard — while the database catches up. */
+  const pendingSlide = useRef<PendingSlide | null>(null);
   const connected = databaseConnected && (!realtimeToken || broadcastConnected);
 
   useEffect(() => { sessionRef.current = session; }, [session]);
+
+  /**
+   * A row from the database, shown without undoing a move still on its way.
+   * A new deck revision drops the loaded deck, as before.
+   */
+  const applyRow = useCallback((row: Session) => {
+    if (sessionRef.current?.deck_revision !== undefined && row.deck_revision !== sessionRef.current.deck_revision) {
+      setDeck(null);
+      setDeckError(null);
+      pendingSlide.current = null;
+    }
+    const settled = settledSlide(row.current_slide, pendingSlide.current, Date.now());
+    pendingSlide.current = settled.pending;
+    const next = settled.slide === row.current_slide ? row : { ...row, current_slide: settled.slide };
+    sessionRef.current = next;
+    setSession(next);
+    setViewport(settled.slide === row.current_slide ? viewportOf(row) : { ...RESET_PRESENTATION_VIEWPORT });
+  }, []);
+
+  /** Shows `slide` at once; `tell` also moves the phone over the shared channel. */
+  const showSlide = useCallback((slide: number, tell: boolean) => {
+    const current = sessionRef.current;
+    if (!current) return;
+    pendingSlide.current = { slide, at: Date.now() };
+    const next = { ...current, current_slide: slide };
+    sessionRef.current = next;
+    setSession(next);
+    setViewport({ ...RESET_PRESENTATION_VIEWPORT });
+    if (tell) void viewportChannel.current?.send({ type: "broadcast", event: "slide", payload: { slide } });
+  }, []);
+
+  /** What the database says, read again — for a move that was never confirmed. */
+  const reread = useCallback(async () => {
+    if (!sessionId || !screenToken) return;
+    const { data } = await supabase.rpc("presentation_screen_snapshot", { p_session_id: sessionId, p_screen_token: screenToken });
+    if (!data) return;
+    pendingSlide.current = null;
+    applyRow(data as unknown as Session);
+  }, [applyRow, screenToken, sessionId]);
+
+  useEffect(() => {
+    if (!pendingSlide.current) return;
+    const timer = setTimeout(() => { if (pendingSlide.current) void reread(); }, SLIDE_HOLD_MS + 500);
+    return () => clearTimeout(timer);
+  }, [reread, session?.current_slide]);
 
   const drawToken = useCallback(async (next: string) => {
     currentToken.current = next;
@@ -229,16 +282,7 @@ export function PairingScreen({ experienceRow }: { experienceRow: unknown | null
       .channel(`presentation-session-${sessionId}`)
       .on("postgres_changes",
         { event: "UPDATE", schema: "public", table: "presentation_sessions", filter: `id=eq.${sessionId}` },
-        (payload) => {
-          const next = payload.new as Session;
-          if (sessionRef.current?.deck_revision !== undefined
-            && next.deck_revision !== sessionRef.current.deck_revision) {
-            setDeck(null);
-            setDeckError(null);
-          }
-          setSession(next);
-          setViewport(viewportOf(next));
-        })
+        (payload) => applyRow(payload.new as Session))
       .subscribe((status) => {
         if (!subscribed) return;
         setDatabaseConnected(status === "SUBSCRIBED");
@@ -252,14 +296,7 @@ export function PairingScreen({ experienceRow }: { experienceRow: unknown | null
                 if (snapshotError) console.error("presentation_screen_snapshot failed", snapshotError);
                 return;
               }
-              const next = data as unknown as Session;
-              if (sessionRef.current?.deck_revision !== undefined
-                && next.deck_revision !== sessionRef.current.deck_revision) {
-                setDeck(null);
-                setDeckError(null);
-              }
-              setSession(next);
-              setViewport(viewportOf(next));
+              applyRow(data as unknown as Session);
             });
           }
         }
@@ -268,7 +305,7 @@ export function PairingScreen({ experienceRow }: { experienceRow: unknown | null
       subscribed = false;
       void supabase.removeChannel(channel);
     };
-  }, [screenToken, sessionId]);
+  }, [applyRow, screenToken, sessionId]);
 
   useEffect(() => {
     if (!realtimeToken) return;
@@ -281,6 +318,14 @@ export function PairingScreen({ experienceRow }: { experienceRow: unknown | null
         if (!message || message.slide !== sessionRef.current?.current_slide) return;
         setViewport({ scale: message.scale, translateX: message.translate_x, translateY: message.translate_y });
       })
+      // The phone's move, before its command reaches the database: the slide
+      // changes here as soon as the presenter taps.
+      .on("broadcast", { event: "slide" }, ({ payload }) => {
+        const slide = Number((payload as { slide?: unknown } | null)?.slide);
+        const current = sessionRef.current;
+        if (!current || !Number.isInteger(slide) || slide < 0 || slide >= current.slide_count) return;
+        if (slide !== current.current_slide) showSlide(slide, false);
+      })
       .on("broadcast", { event: "oyingoh" }, ({ payload }) => {
         const message = payload as { session_id?: unknown; screen_token?: unknown } | null;
         if (typeof message?.session_id !== "string" || typeof message?.screen_token !== "string") return;
@@ -289,11 +334,13 @@ export function PairingScreen({ experienceRow }: { experienceRow: unknown | null
       .subscribe((status) => {
         if (subscribed) setBroadcastConnected(status === "SUBSCRIBED");
       });
+    viewportChannel.current = channel;
     return () => {
       subscribed = false;
+      if (viewportChannel.current === channel) viewportChannel.current = null;
       void supabase.removeChannel(channel);
     };
-  }, [realtimeToken]);
+  }, [realtimeToken, showSlide]);
 
   const loadDeck = useCallback(async () => {
     if (!sessionId || !screenToken) return;
@@ -372,23 +419,31 @@ export function PairingScreen({ experienceRow }: { experienceRow: unknown | null
   }, []);
 
   const command = useCallback(async (name: "next" | "previous" | "goto", value?: number) => {
-    if (!sessionId || !screenToken) return;
+    const current = sessionRef.current;
+    if (!sessionId || !screenToken || !current) return;
+    // The arrow keys move this screen and the phone at once; the database is
+    // told the exact slide, so presses that overtake each other end in one place.
+    const target = slideAfter(name, current.current_slide, current.slide_count, value);
+    if (target === current.current_slide) return;
+    showSlide(target, true);
     const { data, error: commandError } = await supabase.rpc("presentation_screen_command", {
       p_session_id: sessionId,
       p_screen_token: screenToken,
-      p_command: name,
-      p_value: value,
+      p_command: "goto",
+      p_value: target,
     });
     if (commandError) {
       console.error("presentation_screen_command failed", commandError);
       setError("Slayd almashtirilmadi. Ulanish tiklangach qayta urinib ko‘ring.");
+      void reread().then(() => {
+        const settled = sessionRef.current?.current_slide;
+        if (typeof settled === "number") void viewportChannel.current?.send({ type: "broadcast", event: "slide", payload: { slide: settled } });
+      });
     } else if (data) {
-      const next = data as unknown as Session;
       setError(null);
-      setSession(next);
-      setViewport(viewportOf(next));
+      applyRow(data as unknown as Session);
     }
-  }, [screenToken, sessionId]);
+  }, [applyRow, reread, screenToken, sessionId, showSlide]);
 
   useEffect(() => {
     if (!active) return;
@@ -442,7 +497,7 @@ export function PairingScreen({ experienceRow }: { experienceRow: unknown | null
         {!connected ? <div className="presentation-connection">Ulanish uzildi. Qayta ulanmoqda...</div> : null}
         {session.slide_count < 1 ? (
           <div className="presentation-waiting">
-            <RotateCw aria-hidden />
+            <RotateCw aria-hidden className="is-turning" />
             <h1>Taqdimot tanlanmoqda</h1>
             <p>Telefoningizdan ko‘rsatmoqchi bo‘lgan taqdimotni tanlang.</p>
           </div>

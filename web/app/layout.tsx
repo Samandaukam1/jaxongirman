@@ -7,6 +7,8 @@ import { STORE_ANDROID, STORE_IOS } from "@/lib/stores";
 
 import "./globals.css";
 
+import { HeaderAccount } from "@/app/_account/HeaderAccount";
+
 /**
  * Two faces. Manrope is the app's own, so the site and the phone read as one
  * product; Bricolage Grotesque sets the headlines, where a display cut with
@@ -62,6 +64,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <a href="/tarif">Tarif</a>
                 <a href="/dokon">Do&lsquo;kon</a>
               </nav>
+              <HeaderAccount />
               <a className="header-cta" href="/taqdimot">
                 Taqdimot qilish
                 <span aria-hidden>→</span>

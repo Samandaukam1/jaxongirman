@@ -41,6 +41,15 @@ export function pairUrl(token: string): string {
   return `${publicOrigin()}/pair/${token}`;
 }
 
+/**
+ * The code the sign-in page shows: a real link, so a phone's own camera opens
+ * the app on the confirmation (Universal / App Link), and a phone without the
+ * app lands on a page that says what to do.
+ */
+export function webLoginUrl(token: string): string {
+  return `${publicOrigin()}/web-login/${token}`;
+}
+
 /** The same, for the phone that will run a match on the big screen. */
 export function gamePairUrl(token: string): string {
   return `${publicOrigin()}/game-pair/${token}`;
