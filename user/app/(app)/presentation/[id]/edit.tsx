@@ -11,10 +11,12 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View, type LayoutChangeEvent, type ListRenderItemInfo } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { runOnJS, runOnUI, useAnimatedKeyboard, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
+import { useReanimatedKeyboardAnimation } from "react-native-keyboard-controller";
+import Animated, { runOnJS, runOnUI, useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { DeckFontSheet } from "@/components/DeckFontSheet";
+import { Spin } from "@/components/Spin";
 import { ElementPicker } from "@/components/ElementPicker";
 import { ElementToolbar, type ToolPanel } from "@/components/ElementToolbar";
 import { SelectionOverlay, type TransformPatch } from "@/components/SelectionOverlay";
@@ -275,9 +277,15 @@ export default function EditorScreen() {
     setPan({ x: 0, y: 0 });
   }
 
-  /** The dock rides the keyboard, so the field being typed in stays visible. */
-  const keyboard = useAnimatedKeyboard();
-  const dockLift = useAnimatedStyle(() => ({ transform: [{ translateY: -Math.max(0, keyboard.height.value - insets.bottom) }] }), [insets.bottom]);
+  /**
+   * The dock rides the keyboard, so the field being typed in stays visible.
+   * Read from the keyboard library the whole app now uses: Reanimated's own
+   * keyboard hook and it both claim the window's insets on Android, and the
+   * second one to ask stops hearing about the keyboard. Its height is negative
+   * while the keyboard is up.
+   */
+  const keyboard = useReanimatedKeyboardAnimation();
+  const dockLift = useAnimatedStyle(() => ({ transform: [{ translateY: Math.min(0, keyboard.height.value + insets.bottom) }] }), [insets.bottom]);
 
   /* -------------------------------------------------------------- saving */
 
@@ -703,7 +711,7 @@ export default function EditorScreen() {
           <Text numberOfLines={1} style={styles.title}>{presentation.title}</Text>
           <View style={styles.saveRow}>
             {pending > 0
-              ? <LoaderCircle color={colors.inkSoft} size={11} strokeWidth={icon.stroke} />
+              ? <Spin><LoaderCircle color={colors.inkSoft} size={11} strokeWidth={icon.stroke} /></Spin>
               : <Check color={colors.success} size={11} strokeWidth={icon.strokeBold} />}
             <Text style={styles.saved}>{pending > 0 ? t("saving") : t("saved")}</Text>
           </View>

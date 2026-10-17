@@ -6,7 +6,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { BookOpenText, FileUp, Image as ImageIcon, Send, X } from "lucide-react-native";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { PaymentUnavailable } from "@/components/PaymentUnavailable";
@@ -249,10 +250,10 @@ export default function SellScreen() {
   }
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.screen}>
+    <View style={styles.screen}>
       <ScreenHeader title={t("sellForm.title")} variant="close" onLeave={() => router.back()} />
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <KeyboardAwareScrollView bottomOffset={spacing.xl} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <View style={styles.block}>
           <Text style={styles.label}>{t("sellForm.type")}</Text>
           {gameId ? (
@@ -473,8 +474,8 @@ export default function SellScreen() {
         <Text style={styles.footnote}>
           {t("sellForm.footnote")}
         </Text>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
+    </View>
   );
 }
 

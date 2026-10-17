@@ -1,7 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
 import {
-  ChevronRight, CircleHelp, CreditCard, Crown, Inbox, Languages, LogOut, MessageSquarePlus, Moon, Pencil, Receipt, Store, Sun, SunMoon,
+  ChevronRight, CircleHelp, CreditCard, Crown, Inbox, Languages, LogOut, MessageSquarePlus, MonitorSmartphone, Moon, Pencil, Receipt, ShieldCheck, Store, Sun, SunMoon,
   Trash2, User as UserIcon, Wallet, type LucideIcon,
 } from "lucide-react-native";
 import { useCallback, useMemo, useRef, useState } from "react";
@@ -58,6 +58,10 @@ const SETTINGS = [
   { key: "earnings", glyph: Wallet, href: "/(app)/earnings" },
   { key: "orders", glyph: Receipt, href: "/(app)/orders" },
   { key: "cards", glyph: CreditCard, href: "/(app)/cards" },
+  // The site, signed in with this phone: scan the code it shows.
+  { key: "web", glyph: MonitorSmartphone, href: "/(app)/web-login" },
+  // Where the account is signed in, and taking a device out.
+  { key: "devices", glyph: ShieldCheck, href: "/(app)/devices" },
 ] as const satisfies readonly { key: string; glyph: LucideIcon; href: string }[];
 
 /** Yordam markazi: a question to the support staff, the questions already asked, and the common answers. */

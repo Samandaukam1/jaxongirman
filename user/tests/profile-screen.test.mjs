@@ -53,7 +53,8 @@ test("Profil reaches the tariff once and draws every menu row the same way", () 
   const block = profile.slice(profile.indexOf("const SETTINGS = ["), profile.indexOf("] as const satisfies", profile.indexOf("const SETTINGS = [")));
   // Rows name their words by key in the `profile` table, one key per row.
   const rows = [...block.matchAll(/key:\s*"/g)];
-  assert.equal(rows.length, 5, "Sozlamalar qatorlari soni o‘zgargan");
+  // Tariff, products, earnings, orders, cards — and "Web ulash", "Qurilmalar" (2026-10-17).
+  assert.equal(rows.length, 7, "Sozlamalar qatorlari soni o‘zgargan");
   assert.ok(!/accent:|color:|gradient/i.test(block), "Sozlamalar qatorlariga alohida rang qaytgan");
   assert.ok(!/AccentIcon/.test(profile), "Profil yana har xil rangli ikonkalarga qaytgan");
 

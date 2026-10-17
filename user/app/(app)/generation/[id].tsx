@@ -8,6 +8,7 @@ import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from "rea
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { IconChip } from "@/components/IconChip";
+import { ConfettiBurst } from "@/components/SuccessMoment";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { localizeError } from "@/lib/errors";
 import { asErrorMessage, asFunctionErrorMessage } from "@/lib/format";
@@ -87,12 +88,21 @@ export default function GenerationScreen() {
     router.replace({ pathname: "/(app)/presentation/[id]", params: wantsGame ? { id: presentationId, withGame: "1" } : { id: presentationId } });
   }, [presentationId, router, wantsGame]);
 
+  /**
+   * Whether this person watched the deck being made. Only then does it turning
+   * ready get its moment — a burst round the mark and the success tap — before
+   * the deck opens; one opened already finished just opens.
+   */
+  const [watched, setWatched] = useState(false);
+  useEffect(() => { if (!loading && state === "working") setWatched(true); }, [loading, state]);
+  const celebrate = watched && state === "ready";
+
   // A finished deck is shown, not announced: the moment it is ready, go to it.
   useEffect(() => {
     if (state !== "ready" || handedOff.current) return;
-    const timer = setTimeout(openDeck, 650);
+    const timer = setTimeout(openDeck, celebrate ? 1300 : 650);
     return () => clearTimeout(timer);
-  }, [openDeck, state]);
+  }, [celebrate, openDeck, state]);
 
   async function retry() {
     setRetrying(true);
@@ -142,13 +152,19 @@ export default function GenerationScreen() {
           end={{ x: 1, y: 1 }}
           style={styles.hero}
         >
-          <IconChip
-            icon={state === "working" ? LoaderCircle : state === "ready" ? Check : AlertCircle}
-            variant="glass"
-            size="lg"
-            bold={state === "ready"}
-            style={styles.heroIcon}
-          />
+          <View style={styles.heroIconWrap}>
+            <IconChip
+              icon={state === "working" ? LoaderCircle : state === "ready" ? Check : AlertCircle}
+              variant="glass"
+              size="lg"
+              bold={state === "ready"}
+              spin={state === "working"}
+              style={styles.heroIcon}
+            />
+            {/* Only for somebody who watched it being made: a deck opened
+                already finished needs no fanfare. */}
+            {celebrate ? <ConfettiBurst style={styles.heroBurst} /> : null}
+          </View>
           <Text style={styles.heroEyebrow}>{t(`eyebrow.${state}`)}</Text>
           <Text style={styles.heroTitle}>{t(`title.${state}`)}</Text>
           <Text style={styles.heroCopy}>
@@ -201,7 +217,9 @@ const useStyles = makeStyles((colors) => ({
   headerTitle: { ...typography.heading, color: colors.ink, marginTop: 2 },
   content: { padding: spacing.xl, paddingBottom: 100 },
   hero: { borderRadius: radius.xl, padding: spacing.xl, overflow: "hidden", ...shadowLifted },
-  heroIcon: { marginBottom: spacing.xl },
+  heroIconWrap: { alignSelf: "flex-start", marginBottom: spacing.xl },
+  heroIcon: {},
+  heroBurst: { left: 27, top: 27 },
   heroEyebrow: { ...typography.caption, color: brandInk.muted, letterSpacing: 1.5 },
   heroTitle: { ...typography.title, color: brandInk.strong, marginTop: spacing.sm },
   heroCopy: { ...typography.body, color: brandInk.muted, marginTop: spacing.md },

@@ -3,7 +3,8 @@ import * as Sharing from "expo-sharing";
 import { BookOpen, Check, Download, Pause, Play, Sparkles } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 import { ScreenHeader } from "@/components/ScreenHeader";
 import {
@@ -219,9 +220,9 @@ export default function IlmiyScreen() {
   /* ------------------------------------------------------------ the start */
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.screen}>
+    <View style={styles.screen}>
       <ScreenHeader title={t("academic.title")} />
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <KeyboardAwareScrollView bottomOffset={spacing.xl} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
         <Text style={styles.label}>{t("academic.type")}</Text>
@@ -269,8 +270,8 @@ export default function IlmiyScreen() {
             ))}
           </>
         ) : null}
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
+    </View>
   );
 }
 

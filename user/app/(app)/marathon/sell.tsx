@@ -1,7 +1,8 @@
 import { Crown, Store, Vote } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
@@ -125,7 +126,7 @@ export default function SellVotesScreen() {
     <View style={styles.screen}>
       <ScreenHeader title={t("sell.title")} variant="back" />
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView bottomOffset={spacing.xl} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.options}>
           {(["premium", "free"] as const).map((option) => {
             const held = option === "premium" ? wallet?.premium_available ?? 0 : wallet?.free_available ?? 0;
@@ -237,7 +238,7 @@ export default function SellVotesScreen() {
             ))}
           </View>
         ) : null}
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }

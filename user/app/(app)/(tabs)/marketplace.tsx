@@ -4,6 +4,7 @@ import { Heart, Plus, Search, SlidersHorizontal, Star, Store, X } from "lucide-r
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ActivityIndicator, FlatList, Image, Modal, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Appear } from "@/components/Appear";
@@ -344,6 +345,8 @@ export default function MarketplaceScreen() {
       )}
 
       <Modal visible={filtersOpen} transparent animationType="slide" onRequestClose={() => setFiltersOpen(false)}>
+        {/* Above the keyboard on both platforms: Android draws a Modal edge to edge, where the system no longer resizes it. */}
+        <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
         <Pressable accessibilityLabel={t("common:close")} onPress={() => setFiltersOpen(false)} style={styles.backdrop}>
           <Pressable style={styles.sheet} onPress={() => undefined}>
             <Text style={styles.sheetTitle}>{t("filters")}</Text>
@@ -396,6 +399,7 @@ export default function MarketplaceScreen() {
             </View>
           </Pressable>
         </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );

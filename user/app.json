@@ -96,6 +96,16 @@
               "scheme": "https",
               "host": "jaxongirman.app",
               "pathPrefix": "/marathon"
+            },
+            {
+              "scheme": "https",
+              "host": "jaxongirman.uz",
+              "pathPrefix": "/web-login"
+            },
+            {
+              "scheme": "https",
+              "host": "jaxongirman.app",
+              "pathPrefix": "/web-login"
             }
           ],
           "category": [

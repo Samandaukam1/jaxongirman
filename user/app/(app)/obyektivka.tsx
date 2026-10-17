@@ -3,7 +3,8 @@ import * as Sharing from "expo-sharing";
 import { Check, Download, Plus, Trash2, User as UserIcon } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, Text, TextInput, View } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { asErrorMessage } from "@/lib/format";
@@ -121,9 +122,9 @@ export default function ObyektivkaScreen() {
   }
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.screen}>
+    <View style={styles.screen}>
       <ScreenHeader title={t("objective.title")} />
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <KeyboardAwareScrollView bottomOffset={spacing.xl} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
         {/**
@@ -193,6 +194,10 @@ export default function ObyektivkaScreen() {
                     style={styles.input}
                     maxLength={300}
                   />
+                  {/* The two header lines are the ones a person cannot read off
+                      the label alone: what the date is of, and what goes under it. */}
+                  {entry.id === "issued_on" ? <Text style={styles.help}>{t("objective.issuedOnHelp")}</Text> : null}
+                  {entry.id === "institution" ? <Text style={styles.help}>{t("objective.institutionHelp")}</Text> : null}
                 </View>
               ))}
             </View>
@@ -297,8 +302,8 @@ export default function ObyektivkaScreen() {
             <Text style={styles.savedText}>{t("objective.saved")}</Text>
           </View>
         ) : null}
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
+    </View>
   );
 }
 
@@ -350,6 +355,7 @@ const useStyles = makeStyles((colors) => ({
   sheetHeading: { ...typography.caption, fontWeight: "700", textAlign: "center", color: colors.ink, marginTop: spacing.sm },
   card: { padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, gap: 2, ...shadow },
   label: { ...typography.caption, color: colors.inkMuted, marginTop: spacing.sm, marginBottom: 5 },
+  help: { ...typography.caption, color: colors.inkSoft, lineHeight: 17, marginTop: 6 },
   input: { ...typography.body, color: colors.ink, minHeight: 46, paddingHorizontal: spacing.md, paddingTop: Platform.OS === "ios" ? 12 : 8, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceMuted },
   pair: { flexDirection: "row", gap: spacing.md },
   pairItem: { flex: 1 },

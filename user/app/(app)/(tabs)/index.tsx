@@ -13,6 +13,7 @@ import { BrandSurface } from "@/components/BrandSurface";
 import { BOTTOM_NAV_SPACE } from "@/components/BottomNav";
 import { MarathonSection } from "@/components/MarathonSection";
 import { MarathonVoteButton } from "@/components/MarathonVoteButton";
+import { NewDeviceCard } from "@/components/NewDeviceCard";
 import { PlanUsageCard } from "@/components/PlanUsageCard";
 import { SurveyCard, type SurveySummary } from "@/components/SurveyCard";
 import { WelcomeHero } from "@/components/WelcomeHero";
@@ -170,6 +171,9 @@ export default function HomeScreen() {
         </View>
 
         {accountError ? <ErrorState message={accountError} onRetry={() => void refresh()} /> : null}
+
+        {/* A device nobody has answered for comes before everything else. */}
+        <NewDeviceCard />
 
         {/* ------------------------------------------------- account card */}
         {/* The balance is the card. It used to share its body with a column

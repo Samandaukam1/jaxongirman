@@ -1,4 +1,7 @@
+import * as FileSystem from "expo-file-system/legacy";
+
 import { i18n } from "@/i18n";
+import { env } from "@/lib/env";
 import { supabase } from "@/lib/supabase";
 
 /**
@@ -23,9 +26,19 @@ export type UploadOutcome =
   | { ok: true; path: string; bytes: number }
   | { ok: false; message: string };
 
+/**
+ * A local file as a URL `fetch` accepts. The image picker hands back
+ * `file://…`, but react-native-view-shot's `tmpfile` on iOS hands back a bare
+ * path (`/private/var/mobile/…/tmp/ReactNative/….jpg`), which fetch refuses
+ * as "Invalid URL".
+ */
+export function localFileUrl(uri: string): string {
+  return uri.startsWith("/") ? `file://${uri}` : uri;
+}
+
 /** Read a local file into bytes, with the empty case named rather than thrown. */
 export async function readLocalBytes(uri: string): Promise<Uint8Array> {
-  const response = await fetch(uri);
+  const response = await fetch(localFileUrl(uri));
   return new Uint8Array(await response.arrayBuffer());
 }
 
@@ -54,3 +67,55 @@ export async function uploadLocalFile(options: {
   if (error) return { ok: false, message: error.message };
   return { ok: true, path: options.path, bytes: bytes.byteLength };
 }
+
+/**
+ * A large file sent by the phone itself, straight from disk, with progress.
+ *
+ * `uploadLocalFile` reads the whole file into JavaScript first. For a 40 MB
+ * PowerPoint that is a 40 MB array, turned into base64 on the JS thread before
+ * a byte leaves the phone — the screen froze for as long as that took, and on
+ * an older phone it looked like a button that did nothing. Here the native
+ * uploader streams the file to the same storage endpoint the client library
+ * uses, under the person's own session, and the JS thread only hears how far
+ * it has got.
+ */
+export async function streamLocalFile(options: {
+  bucket: string;
+  path: string;
+  uri: string;
+  contentType: string;
+  onProgress?: (share: number) => void;
+}): Promise<UploadOutcome> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) return { ok: false, message: i18n.t("misc:upload.signIn") };
+
+  const url = `${env.supabaseUrl}/storage/v1/object/${options.bucket}/${options.path}`;
+  const task = FileSystem.createUploadTask(url, localFileUrl(options.uri), {
+    httpMethod: "POST",
+    uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      apikey: env.supabaseAnonKey,
+      "Content-Type": options.contentType,
+      "x-upsert": "false",
+    },
+  }, (progress) => {
+    if (progress.totalBytesExpectedToSend > 0) {
+      options.onProgress?.(Math.min(1, progress.totalBytesSent / progress.totalBytesExpectedToSend));
+    }
+  });
+
+  try {
+    const result = await task.uploadAsync();
+    if (result && result.status >= 200 && result.status < 300) return { ok: true, path: options.path, bytes: 0 };
+    // Storage answers a refusal with JSON; its sentence is English and technical,
+    // so the person reads ours and the log keeps theirs.
+    if (__DEV__) console.warn("stream upload refused", result?.status, result?.body?.slice(0, 200));
+    return { ok: false, message: i18n.t("misc:upload.failed") };
+  } catch (failure) {
+    if (__DEV__) console.warn("stream upload failed", failure);
+    return { ok: false, message: i18n.t("misc:upload.failed") };
+  }
+}
+

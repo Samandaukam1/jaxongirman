@@ -2,7 +2,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import { ArrowRight } from "lucide-react-native";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Pressable, Text, View } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AuthHero } from "@/components/AuthHero";
@@ -75,11 +76,8 @@ export default function SignInScreen() {
       locations={[0, 0.42, 0.78]}
       style={styles.screen}
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={styles.flex}
-      >
-        <ScrollView
+      <View style={styles.flex}>
+        <KeyboardAwareScrollView bottomOffset={spacing.xl}
           contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.xl }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
@@ -146,8 +144,8 @@ export default function SignInScreen() {
           )}
 
           <Text style={styles.legal}>{t("legal")}</Text>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardAwareScrollView>
+      </View>
     </LinearGradient>
   );
 }

@@ -4,15 +4,19 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Check, FileText, Presentation, Sparkles, SquarePen } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { InlineError } from "@/components/StateBlocks";
+import { LANGUAGE_NAMES, type AppLanguage } from "@/i18n";
 import { asErrorMessage } from "@/lib/format";
 import { generateGame } from "@/lib/games";
 import { labelOf } from "@/lib/labels";
+import { hasCyrillic, toLatin } from "@/lib/script";
 import { supabase } from "@/lib/supabase";
+import { useLanguage } from "@/providers/LanguageProvider";
 import { icon, radius, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
@@ -43,6 +47,14 @@ export default function CreateGameScreen() {
   const [types, setTypes] = useState<Set<GameQuestionType>>(new Set(["single_choice", "true_false", "multiple_choice", "fill_blank"]));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * The language the questions are written in — the app's own until the person
+   * picks another, as for a deck. A quiz made from a deck takes the deck's.
+   */
+  const { language: appLanguage, deckLanguages } = useLanguage();
+  const [chosenLanguage, setGameLanguage] = useState<AppLanguage>(appLanguage);
+  const gameLanguage: AppLanguage = deckLanguages.includes(chosenLanguage) ? chosenLanguage : "uz";
+  const needsLatin = mode === "topic" && gameLanguage === "uz" && hasCyrillic(topic);
 
   useEffect(() => {
     if (mode !== "presentation" || decks.length > 0) return;
@@ -57,11 +69,11 @@ export default function CreateGameScreen() {
 
   const canSubmit = useMemo(() => {
     if (busy) return false;
-    if (mode === "topic") return topic.trim().length >= 3;
+    if (mode === "topic") return topic.trim().length >= 3 && !needsLatin;
     if (mode === "text") return text.trim().length >= 80;
     if (mode === "presentation") return Boolean(deckId);
     return true;
-  }, [busy, deckId, mode, text, topic]);
+  }, [busy, deckId, mode, needsLatin, text, topic]);
 
   function toggleType(type: GameQuestionType) {
     setTypes((current) => {
@@ -91,6 +103,7 @@ export default function CreateGameScreen() {
             category_id: params.categoryId ?? null,
             difficulty,
             audience,
+            language: gameLanguage,
           })
           .select("id")
           .single();
@@ -109,6 +122,8 @@ export default function CreateGameScreen() {
         questionCount: count,
         types: [...types],
         categoryId: params.categoryId ?? null,
+        // A quiz about a deck is written in the deck's language; the server reads it.
+        language: mode === "presentation" ? undefined : gameLanguage,
       });
       router.replace(`/oyingoh/${result.gameId}`);
     } catch (failure) {
@@ -120,8 +135,8 @@ export default function CreateGameScreen() {
   return (
     <View style={styles.safe}>
       <ScreenHeader title={t("form.title")} subtitle={t("title")} onLeave={() => router.back()} />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <View style={{ flex: 1 }}>
+        <KeyboardAwareScrollView bottomOffset={spacing.xl} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           <View style={styles.modeGrid}>
             <ModeCard active={mode === "topic"} icon={Sparkles} label={t("form.mode.topic")} hint={t("form.withAi")} onPress={() => setMode("topic")} />
             <ModeCard active={mode === "text"} icon={FileText} label={t("form.mode.text")} hint={t("form.withAi")} onPress={() => setMode("text")} />
@@ -140,6 +155,33 @@ export default function CreateGameScreen() {
                 placeholderTextColor={colors.inkSoft}
                 maxLength={300}
               />
+              {needsLatin ? (
+                <View style={styles.latin}>
+                  <Text style={styles.latinText}>{t("form.latinBody")}</Text>
+                  <Pressable accessibilityRole="button" onPress={() => setTopic(toLatin(topic))} style={styles.latinFix}>
+                    <Text style={styles.latinFixText}>{t("form.latinFix")}</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          {/* Only when there is a choice; a quiz about a deck takes the deck's language. */}
+          {deckLanguages.length > 1 ? (
+            <View style={styles.field}>
+              <Text style={styles.label}>{t("form.language")}</Text>
+              {mode === "presentation" ? (
+                <Text style={styles.hint}>{t("form.deckLanguageHint")}</Text>
+              ) : (
+                <>
+                  <Text style={styles.hint}>{t("form.languageHint")}</Text>
+                  <View style={styles.chipRow} accessibilityRole="radiogroup">
+                    {deckLanguages.map((code) => (
+                      <Chip key={code} active={gameLanguage === code} label={LANGUAGE_NAMES[code]} onPress={() => { setGameLanguage(code); void Haptics.selectionAsync(); }} />
+                    ))}
+                  </View>
+                </>
+              )}
             </View>
           ) : null}
 
@@ -225,8 +267,8 @@ export default function CreateGameScreen() {
             disabled={!canSubmit}
             onPress={() => void submit()}
           />
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardAwareScrollView>
+      </View>
     </View>
   );
 }
@@ -276,6 +318,10 @@ const useStyles = makeStyles((colors) => ({
     paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
   },
   textArea: { minHeight: 140, textAlignVertical: "top" },
+  latin: { gap: spacing.sm, alignItems: "flex-start" },
+  latinText: { ...typography.caption, color: colors.danger },
+  latinFix: { paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: radius.pill, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.primary },
+  latinFixText: { ...typography.caption, fontFamily: "Manrope_700Bold", color: colors.primary },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   chip: {
     paddingHorizontal: spacing.lg, paddingVertical: spacing.sm,

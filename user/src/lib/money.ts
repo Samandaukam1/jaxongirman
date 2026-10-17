@@ -40,5 +40,6 @@ export function formatBytes(bytes: number): string {
 
 /** "12 000 so'm" — marketplace prices, which are som rather than coins. */
 export function formatSom(value: number): string {
-  return `${formatNumber(value)} so‘m`;
+  // The unit is the reader's: "so‘m", "UZS" or "сум" (common:som).
+  return i18n.t("common:som", { amount: formatNumber(value) });
 }

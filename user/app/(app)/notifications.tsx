@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Appear } from "@/components/Appear";
 import { CelebrationOverlay } from "@/components/CelebrationOverlay";
+import { NewDeviceCard } from "@/components/NewDeviceCard";
 import { i18n } from "@/i18n";
 import { formatClock, formatDayMonth, formatWeekdayShort } from "@/lib/datetime";
 import { asErrorMessage } from "@/lib/format";
@@ -59,6 +60,7 @@ const KIND_ICONS: Record<string, LucideIcon> = {
   marketplace_sale: Store,
   marketplace_purchase: Store,
   subscription_expiry: ShieldAlert,
+  new_device: ShieldAlert,
   marathon_vote: Vote,
   marathon_milestone: Trophy,
   system: Sparkles,
@@ -226,6 +228,8 @@ export default function NotificationsScreen() {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={colors.primary} />}
+          // "Bu sizmisiz?" answered here as on the home screen.
+          ListHeaderComponent={<NewDeviceCard style={{ marginBottom: 12 }} />}
           ListEmptyComponent={
             <View style={styles.centered}>
               <Bell color={colors.inkSoft} size={34} strokeWidth={1.6} />

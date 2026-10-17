@@ -183,6 +183,8 @@ export type GenerateGameInput = {
   questionCount?: number;
   types?: GameQuestionType[];
   categoryId?: string | null;
+  /** uz, en or ru. Left out for a quiz about a deck: the server takes the deck's. */
+  language?: string;
 };
 
 export async function generateGame(input: GenerateGameInput): Promise<{ gameId: string; status: string }> {

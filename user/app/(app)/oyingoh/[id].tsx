@@ -5,7 +5,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Play, Plus, ShoppingBag, Sparkles, X } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 import { GameQuestionCard } from "@/components/GameQuestionCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -269,8 +270,8 @@ export default function GameEditorScreen() {
   return (
     <View style={styles.safe}>
       <ScreenHeader title={t("editor.title")} subtitle={t("questions", { count: questions.length })} onLeave={() => router.back()} />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <View style={{ flex: 1 }}>
+        <KeyboardAwareScrollView bottomOffset={spacing.xl} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {questions.length > 0 && game.source_type !== "manual" ? (
             <View style={styles.readyBanner}>
               <Text style={styles.readyBannerText}>{t("editor.ready")}</Text>
@@ -338,8 +339,8 @@ export default function GameEditorScreen() {
             disabled={busy !== null}
             onPress={() => void markReadyAnd("sell")}
           />
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardAwareScrollView>
+      </View>
 
       <Modal visible={typePicker} transparent animationType="slide" onRequestClose={() => setTypePicker(false)}>
         <View style={styles.modalScrim}>

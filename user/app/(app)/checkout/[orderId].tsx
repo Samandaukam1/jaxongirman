@@ -14,11 +14,13 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { CheckCircle2, CreditCard, ShieldCheck } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 import { PaymentUnavailable } from "@/components/PaymentUnavailable";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
+import { CountUp, Rise, SuccessMark } from "@/components/SuccessMoment";
 import { ErrorState, InlineError } from "@/components/StateBlocks";
 import { localizeError } from "@/lib/errors";
 import { formatSom } from "@/lib/money";
@@ -231,7 +233,7 @@ export default function OrderCheckoutScreen() {
       setCode("");
       const result = await verifyRequest;
       if (result.status !== "paid") throw new Error(t("notConfirmed"));
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      // The success tap comes from the emblem, as its tick lands.
       setAttemptId(null);
       setStep("done");
       await Promise.all([load(), refreshWallet()]);
@@ -288,22 +290,25 @@ export default function OrderCheckoutScreen() {
       <View style={styles.screen}>
         <ScreenHeader title={t("title")} variant="close" onLeave={() => router.replace(destination.path)} />
         <View style={styles.successWrap}>
-          <CheckCircle2 color={colors.success} size={64} strokeWidth={2} />
-          <Text style={styles.successTitle}>{t("success")}</Text>
-          <Text style={styles.orderNumber}>{order.order_number}</Text>
-          <Text style={styles.successAmount}>{formatSom(order.total_amount)}</Text>
-          {maskedCard ? <Text style={styles.cardHint}>{maskedCard}</Text> : null}
-          <PrimaryButton label={t(`destination.${destination.label}`)} onPress={() => router.replace(destination.path)} />
-          <Pressable onPress={() => router.replace("/(app)/orders")}>
-            <Text style={styles.linkText}>{t("history")}</Text>
-          </Pressable>
+          <SuccessMark kind={order.purpose === "jcoin" ? "coins" : "done"} />
+          <Rise order={0} style={styles.successLines}>
+            <Text style={styles.successTitle}>{t("success")}</Text>
+            <CountUp value={order.total_amount} format={formatSom} style={styles.successAmount} />
+            <Text style={styles.orderNumber}>{order.order_number}{maskedCard ? ` · ${maskedCard}` : ""}</Text>
+          </Rise>
+          <Rise order={1} style={styles.successActions}>
+            <PrimaryButton label={t(`destination.${destination.label}`)} onPress={() => router.replace(destination.path)} />
+            <Pressable onPress={() => router.replace("/(app)/orders")} style={styles.successLink}>
+              <Text style={styles.linkText}>{t("history")}</Text>
+            </Pressable>
+          </Rise>
         </View>
       </View>
     );
   }
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.screen}>
+    <View style={styles.screen}>
       <ScreenHeader
         title={step === "otp" ? t("confirmTitle") : t("title")}
         variant="close"
@@ -316,7 +321,7 @@ export default function OrderCheckoutScreen() {
         }}
       />
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <KeyboardAwareScrollView bottomOffset={spacing.xl} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {/* The server's figures, shown in full so the total is never a surprise
             at the last tap. Nothing here recomputes them. */}
         <View style={styles.summary}>
@@ -518,8 +523,8 @@ export default function OrderCheckoutScreen() {
             </Pressable>
           </>
         )}
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
+    </View>
   );
 }
 
@@ -591,9 +596,11 @@ const useStyles = makeStyles((colors) => ({
   paymeBrand: { ...typography.caption, color: colors.primaryDeep, fontFamily: "Manrope_700Bold" },
   linkText: { ...typography.body, color: colors.primary, textAlign: "center" },
   linkDisabled: { color: colors.inkSoft },
-  successWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.md, padding: spacing.xl },
+  successWrap: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl },
+  successLines: { alignItems: "center", gap: spacing.xs, marginTop: -spacing.lg },
   successTitle: { ...typography.title, color: colors.ink, textAlign: "center" },
-  orderNumber: { ...typography.caption, color: colors.inkMuted },
-  successAmount: { ...typography.display, color: colors.primaryDeep },
-  cardHint: { ...typography.caption, color: colors.inkSoft },
+  orderNumber: { ...typography.caption, color: colors.inkMuted, textAlign: "center" },
+  successAmount: { fontFamily: "Manrope_800ExtraBold", fontSize: 40, lineHeight: 46, letterSpacing: -1, color: colors.primaryDeep },
+  successActions: { alignSelf: "stretch", gap: spacing.sm, marginTop: spacing.xxl },
+  successLink: { paddingVertical: spacing.sm },
 }));

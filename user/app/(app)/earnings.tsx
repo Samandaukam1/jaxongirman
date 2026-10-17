@@ -3,12 +3,14 @@ import { useFocusEffect } from "expo-router";
 import { CheckCircle2, Clock, CreditCard, Phone, Wallet } from "lucide-react-native";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
+import { RefreshControl, Text, TextInput, View } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { PaymentUnavailable } from "@/components/PaymentUnavailable";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { EmptyState, ErrorState, InlineError, SkeletonCard } from "@/components/StateBlocks";
+import { useSuccessToast } from "@/components/SuccessToast";
 import { formatDate, formatShortDateTime } from "@/lib/datetime";
 import { asErrorMessage } from "@/lib/format";
 import { formatSom } from "@/lib/money";
@@ -56,6 +58,7 @@ export default function EarningsScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
   const { t } = useTranslation(["ledger", "common"]);
+  const notify = useSuccessToast();
   const policy = usePaymentPolicy();
   const { user } = useAuth();
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -99,7 +102,7 @@ export default function EarningsScreen() {
     });
     setSavingContact(false);
     if (saveError) setContactError(asErrorMessage(saveError));
-    else Alert.alert(t("earnings.saved"), t("earnings.savedBody"));
+    else notify(t("earnings.saved"), t("earnings.savedBody"));
   }
 
   if (loading) {
@@ -137,7 +140,7 @@ export default function EarningsScreen() {
     <View style={styles.screen}>
       <ScreenHeader title={t("earnings.title")} subtitle={t("earnings.sales", { count: summary.sales_count })} />
 
-      <ScrollView
+      <KeyboardAwareScrollView bottomOffset={spacing.xl}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={colors.primary} />}
@@ -247,7 +250,7 @@ export default function EarningsScreen() {
             })}
           </View>
         )}
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }

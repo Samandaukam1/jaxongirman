@@ -4,6 +4,7 @@ import { BookmarkCheck, Copy, FilePlus2, Pencil, Trash2 } from "lucide-react-nat
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert, Modal, Pressable, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 
 import { Appear } from "@/components/Appear";
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -191,6 +192,8 @@ export default function SurveyTemplatesScreen() {
       </ScrollView>
 
       <Modal visible={renaming !== null} transparent animationType="fade" onRequestClose={() => setRenaming(null)}>
+        {/* Above the keyboard on both platforms: Android draws a Modal edge to edge, where the system no longer resizes it. */}
+        <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
         <Pressable accessibilityRole="button" accessibilityLabel={t("common:close")} onPress={() => setRenaming(null)} style={styles.backdrop}>
           <Pressable style={styles.sheet} onPress={() => undefined}>
             <Text style={styles.sheetTitle}>{t("template.name")}</Text>
@@ -206,6 +209,7 @@ export default function SurveyTemplatesScreen() {
             <PrimaryButton label={t("common:save")} loading={busy === renaming?.id} disabled={draftName.trim() === ""} onPress={() => void rename()} />
           </Pressable>
         </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );

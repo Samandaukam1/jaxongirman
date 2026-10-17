@@ -77,9 +77,19 @@ async function invoke<T>(body: Record<string, unknown>): Promise<T> {
 export const writeDefense = (presentationId: string) =>
   invoke<{ ok: true }>({ presentationId, action: "write" });
 
-/** Renders what is stored and answers with the object path to download. */
-export const defensePdf = (presentationId: string) =>
-  invoke<{ ok: true; storagePath: string }>({ presentationId, action: "pdf" });
+/**
+ * Renders what is stored and answers with the object path to download.
+ *
+ * Two requests, each well inside what the server gives one: the slides are
+ * drawn first, then the script is set around them. When the slides cannot be
+ * drawn the script is still made, without their pictures — a script PDF that
+ * fails outright is worse than one with slide numbers in place of slides.
+ */
+export async function defensePdf(presentationId: string): Promise<{ ok: true; storagePath: string }> {
+  const slides = await invoke<{ ok: boolean; slidesPath?: string }>({ presentationId, action: "slides" }).catch(() => null);
+  const drawn = slides?.ok && slides.slidesPath ? { slidesPath: slides.slidesPath } : { noSlides: true };
+  return await invoke<{ ok: true; storagePath: string }>({ presentationId, action: "pdf", ...drawn });
+}
 
 /** A URL the phone may fetch, valid for long enough to save the file. */
 export async function defensePdfUrl(storagePath: string): Promise<string> {

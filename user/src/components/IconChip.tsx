@@ -2,6 +2,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import type { LucideIcon } from "lucide-react-native";
 import { View, type ViewStyle } from "react-native";
 
+import { Spin } from "@/components/Spin";
+
 import { brandInk, gradients, icon as iconTokens } from "@/theme/tokens";
 import type { Palette } from "@/theme/palettes";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
@@ -38,6 +40,7 @@ export function IconChip({
   size = "md",
   bold = false,
   gradient,
+  spin = false,
   style,
 }: {
   icon: LucideIcon;
@@ -46,6 +49,8 @@ export function IconChip({
   bold?: boolean;
   /** Overrides the variant with a custom two-stop gradient (white glyph). */
   gradient?: readonly [string, string];
+  /** Turns the glyph continuously — for a loader that has to look like work is happening. */
+  spin?: boolean;
   style?: ViewStyle;
 }) {
   const { colors } = useTheme();
@@ -54,7 +59,8 @@ export function IconChip({
   const frame = { width: box, height: box, borderRadius: corner };
   const stroke = bold ? iconTokens.strokeBold : iconTokens.stroke;
   const fill = gradient ?? (variant === "brand" ? gradients.primary : null);
-  const child = <Icon color={fill ? brandInk.strong : glyphColor(variant, colors)} size={glyph} strokeWidth={stroke} />;
+  const glyphNode = <Icon color={fill ? brandInk.strong : glyphColor(variant, colors)} size={glyph} strokeWidth={stroke} />;
+  const child = spin ? <Spin>{glyphNode}</Spin> : glyphNode;
 
   if (fill) {
     return (

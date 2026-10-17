@@ -4,10 +4,12 @@ import { BookOpenText, CheckCircle2, Flag, Gamepad2, Heart, Star, Store } from "
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert, Image, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { ErrorState, InlineError, SkeletonCard } from "@/components/StateBlocks";
+import { useSuccessToast } from "@/components/SuccessToast";
 import { formatShortDateTime } from "@/lib/datetime";
 import { asErrorMessage } from "@/lib/format";
 import { labelOf } from "@/lib/labels";
@@ -56,6 +58,7 @@ export default function ProductDetailScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
   const { t } = useTranslation(["market", "common"]);
+  const notify = useSuccessToast();
   const router = useRouter();
   const { user } = useAuth();
   const params = useLocalSearchParams<{ id?: string }>();
@@ -185,7 +188,7 @@ export default function ProductDetailScreen() {
       Alert.alert(t("product.reportFailed"), reportError.code === "23505" ? t("product.reportDuplicate") : asErrorMessage(reportError));
     } else {
       setReportDetail("");
-      Alert.alert(t("product.reportSent"), t("product.reportSentBody"));
+      notify(t("product.reportSent"), t("product.reportSentBody"));
     }
   }
 
@@ -443,6 +446,8 @@ export default function ProductDetailScreen() {
       </Modal>
 
       <Modal visible={reportOpen} transparent animationType="fade" onRequestClose={() => setReportOpen(false)}>
+        {/* Above the keyboard on both platforms: Android draws a Modal edge to edge, where the system no longer resizes it. */}
+        <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
         <Pressable accessibilityLabel={t("common:close")} onPress={() => setReportOpen(false)} style={styles.backdrop}>
           <Pressable style={styles.sheet} onPress={() => undefined}>
             <Text style={styles.sheetTitle}>{t("product.report")}</Text>
@@ -468,6 +473,7 @@ export default function ProductDetailScreen() {
             <PrimaryButton label={t("common:send")} loading={busy} onPress={() => void submitReport()} />
           </Pressable>
         </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );

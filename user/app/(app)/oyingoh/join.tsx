@@ -5,9 +5,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Camera, Dices, KeyRound, ScanLine } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  InteractionManager, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View,
-} from "react-native";
+import { InteractionManager, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring, withTiming } from "react-native-reanimated";
 
 import { GameAvatar } from "@/components/GameAvatar";
@@ -191,8 +190,8 @@ export default function JoinGameScreen() {
   return (
     <View style={styles.safe}>
       <ScreenHeader title={t("entry.joinNow")} subtitle={t("title")} onLeave={() => { setStep("scan"); claiming.current = false; }} />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <View style={{ flex: 1 }}>
+        <KeyboardAwareScrollView bottomOffset={spacing.xl} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <GlassPanel radius={radius.xl} padded={false}>
             <View style={styles.chosen}>
               <Animated.View style={[styles.chosenRing, chosenStyle]}>
@@ -258,8 +257,8 @@ export default function JoinGameScreen() {
             disabled={nickname.trim().length < 1 || busy}
             onPress={() => void join()}
           />
-        </ScrollView>
-      </KeyboardAvoidingView>
+        </KeyboardAwareScrollView>
+      </View>
     </View>
   );
 }

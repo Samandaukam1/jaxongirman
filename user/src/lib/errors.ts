@@ -6,6 +6,12 @@ type Match = { key: ErrorKey; values?: Record<string, string | number> };
 
 /** Edge-function codes that always mean the same thing, whatever the sentence beside them. */
 const CODES: Record<string, ErrorKey> = {
+  web_link_failed: "webLinkFailed",
+  web_no_email: "webNoEmail",
+  web_token_expired: "webTokenExpired",
+  web_token_invalid: "webTokenInvalid",
+  web_token_missing: "webTokenMissing",
+  web_token_used: "webTokenUsed",
   account_blocked: "accountBlocked",
   already_listed: "alreadyListed",
   attempt_in_progress: "attemptActive",
@@ -63,6 +69,7 @@ const MESSAGES: Record<string, ErrorKey> = {
   "too many active export jobs": "tooManyExports",
   "survey is not open": "surveyClosed",
   "Mavzuni lotin yozuvida kiriting.": "cyrillicTopic",
+  "Bu tilda o‘yin yaratish hozircha o‘chirilgan.": "gameLanguageDisabled",
   "Bepul taqdimot maksimum 10 sahifali bo‘lishi mumkin.": "freeDeckMax",
   "Bu tilda taqdimot yaratish hozircha o‘chirilgan.": "languageDisabled",
   "Bu paket sotuvda emas.": "packageUnavailable",
@@ -76,6 +83,7 @@ const MESSAGES: Record<string, ErrorKey> = {
   "Bu mahsulot allaqachon sizda bor.": "alreadyOwned",
   "Xaridni tasdiqlash uchun qaytarish shartlariga rozilik bering.": "refundTerms",
   "Do‘kondan foydalanish uchun tarifni faollashtiring.": "storeNeedsPlan",
+  "Do‘konda sotish uchun tarifni faollashtiring.": "storeSellNeedsPlan",
   "Tarifingizda bu amal mavjud emas.": "planFeature",
   "O‘yin topilmadi. QR kodni qayta skaner qiling.": "gameNotFound",
   "Bu o‘yin yakunlangan.": "gameFinished",

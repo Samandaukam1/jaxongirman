@@ -21,7 +21,7 @@ export default translations(
       label: "Hisobni o‘chirish",
       failed: "Hisobni o‘chirib bo‘lmadi",
     },
-    upload: { unreadable: "Fayl o‘qilmadi. Boshqa fayl tanlang.", tooLarge: "Fayl juda katta." },
+    upload: { unreadable: "Fayl o‘qilmadi. Boshqa fayl tanlang.", tooLarge: "Fayl juda katta.", failed: "Fayl yuklanmadi. Internetni tekshirib qayta urinib ko‘ring.", signIn: "Faylni yuklash uchun qaytadan kiring." },
   },
   {
     routeError: {
@@ -42,7 +42,7 @@ export default translations(
       label: "Delete account",
       failed: "Couldn't delete the account",
     },
-    upload: { unreadable: "The file couldn't be read. Choose another one.", tooLarge: "The file is too large." },
+    upload: { unreadable: "The file couldn't be read. Choose another one.", tooLarge: "The file is too large.", failed: "The file didn't upload. Check your connection and try again.", signIn: "Sign in again to upload the file." },
   },
   {
     routeError: {
@@ -63,6 +63,6 @@ export default translations(
       label: "Удалить аккаунт",
       failed: "Не удалось удалить аккаунт",
     },
-    upload: { unreadable: "Не удалось прочитать файл. Выберите другой.", tooLarge: "Файл слишком большой." },
+    upload: { unreadable: "Не удалось прочитать файл. Выберите другой.", tooLarge: "Файл слишком большой.", failed: "Файл не загрузился. Проверьте интернет и попробуйте снова.", signIn: "Войдите снова, чтобы загрузить файл." },
   },
 );

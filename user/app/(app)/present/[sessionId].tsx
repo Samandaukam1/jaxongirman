@@ -1,7 +1,11 @@
 import {
   RESET_PRESENTATION_VIEWPORT,
+  SLIDE_HOLD_MS,
   clampPresentationViewport,
+  settledSlide,
+  slideAfter,
   type Json,
+  type PendingSlide,
   type PresentationViewport,
   type Tables,
 } from "@jaxongirman/types";
@@ -16,6 +20,7 @@ import { ActivityIndicator, Alert, Image, Pressable, ScrollView, Text, View } fr
 import { PresentationPreview, type PresentationPreviewHandle } from "@/components/PresentationPreview";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { ErrorState, InlineError } from "@/components/StateBlocks";
+import { loadDeckElements } from "@/lib/deck";
 import { asErrorMessage } from "@/lib/format";
 import { launchPresentationGame, presentationHasGame } from "@/lib/games";
 import { loadDefense, type Defense } from "@/lib/defense";
@@ -132,9 +137,54 @@ export default function RemoteScreen() {
   const viewportChannel = useRef<RealtimeChannel | null>(null);
   const deckLoadSequence = useRef(0);
   const previewRef = useRef<PresentationPreviewHandle>(null);
+  /** The slide the presenter last moved to, while the database catches up. */
+  const pendingSlide = useRef<PendingSlide | null>(null);
   const connected = sessionConnected && (!session?.realtime_token || viewportConnected);
 
   useEffect(() => { sessionRef.current = session; }, [session]);
+
+  /**
+   * A row from the database — a command's answer or a change it pushed — shown
+   * without undoing a move that is still on its way (see `settledSlide`).
+   */
+  const applySession = useCallback((row: Session) => {
+    const settled = settledSlide(row.current_slide, pendingSlide.current, Date.now());
+    pendingSlide.current = settled.pending;
+    const next = settled.slide === row.current_slide ? row : { ...row, current_slide: settled.slide };
+    sessionRef.current = next;
+    setSession(next);
+    setViewport(settled.slide === row.current_slide ? viewportOf(row) : { ...RESET_PRESENTATION_VIEWPORT });
+  }, []);
+
+  /** Shows `slide` at once; `tell` also moves the projector over the shared channel. */
+  const showSlide = useCallback((slide: number, tell: boolean) => {
+    const current = sessionRef.current;
+    if (!current) return;
+    pendingSlide.current = { slide, at: Date.now() };
+    const next = { ...current, current_slide: slide };
+    sessionRef.current = next;
+    setSession(next);
+    setViewport({ ...RESET_PRESENTATION_VIEWPORT });
+    if (tell) void viewportChannel.current?.send({ type: "broadcast", event: "slide", payload: { slide } });
+  }, []);
+
+  /** What the database actually says, read again; used when a move did not land. */
+  const reread = useCallback(async () => {
+    if (!sessionId) return;
+    const { data } = await supabase.from("presentation_sessions").select("*").eq("id", sessionId).maybeSingle();
+    if (!data) return;
+    pendingSlide.current = null;
+    applySession(data as Session);
+    void viewportChannel.current?.send({ type: "broadcast", event: "slide", payload: { slide: (data as Session).current_slide } });
+  }, [applySession, sessionId]);
+
+  // A move nothing ever confirmed — a missed change, a dropped answer — is
+  // checked against the database once it is too old to still be on its way.
+  useEffect(() => {
+    if (!pendingSlide.current) return;
+    const timer = setTimeout(() => { if (pendingSlide.current) void reread(); }, SLIDE_HOLD_MS + 500);
+    return () => clearTimeout(timer);
+  }, [reread, session?.current_slide]);
 
   const load = useCallback(async () => {
     if (!sessionId || !user) return;
@@ -179,13 +229,13 @@ export default function RemoteScreen() {
     setDeckLoading(true);
     setDeckError(null);
     try {
-      const [slideResult, elementResult] = await Promise.all([
+      const [slideResult, elementRows] = await Promise.all([
         supabase.from("slides").select("*").eq("presentation_id", presentationId).order("position"),
-        supabase.from("slide_elements").select("*").eq("presentation_id", presentationId).order("z_index"),
+        // Every element — a long deck is more than one page of the API.
+        loadDeckElements(presentationId),
       ]);
       if (slideResult.error) throw slideResult.error;
-      if (elementResult.error) throw elementResult.error;
-      const hydrated = await hydrateImages(elementResult.data);
+      const hydrated = await hydrateImages(elementRows);
       if (sequence !== deckLoadSequence.current) return;
       setSlides(slideResult.data);
       setElements(hydrated);
@@ -230,11 +280,7 @@ export default function RemoteScreen() {
     const channel = changesChannel(`remote-session-${sessionId}`)
       .on("postgres_changes",
         { event: "UPDATE", schema: "public", table: "presentation_sessions", filter: `id=eq.${sessionId}` },
-        (payload) => {
-          const next = payload.new as Session;
-          setSession(next);
-          setViewport(viewportOf(next));
-        })
+        (payload) => applySession(payload.new as Session))
       .subscribe((status) => {
         if (subscribed) setSessionConnected(status === "SUBSCRIBED");
       });
@@ -242,7 +288,7 @@ export default function RemoteScreen() {
       subscribed = false;
       void supabase.removeChannel(channel);
     };
-  }, [sessionId]);
+  }, [applySession, sessionId]);
 
   // Gesture frames travel over an unguessable session topic, never through a DB
   // write. The final frame is committed separately below.
@@ -258,6 +304,13 @@ export default function RemoteScreen() {
         if (!message || message.slide !== sessionRef.current?.current_slide) return;
         setViewport({ scale: message.scale, translateX: message.translate_x, translateY: message.translate_y });
       })
+      // The projector's own arrow keys move the phone the same way.
+      .on("broadcast", { event: "slide" }, ({ payload }) => {
+        const slide = Number((payload as { slide?: unknown } | null)?.slide);
+        const current = sessionRef.current;
+        if (!current || !Number.isInteger(slide) || slide < 0 || slide >= current.slide_count) return;
+        if (slide !== current.current_slide) showSlide(slide, false);
+      })
       .subscribe((status) => {
         if (subscribed) setViewportConnected(status === "SUBSCRIBED");
       });
@@ -267,7 +320,7 @@ export default function RemoteScreen() {
       if (viewportChannel.current === channel) viewportChannel.current = null;
       void supabase.removeChannel(channel);
     };
-  }, [session?.realtime_token]);
+  }, [session?.realtime_token, showSlide]);
 
   // Whether the launch button belongs on screen at all. Re-asked when the deck
   // changes, because a different deck has a different answer.
@@ -316,15 +369,29 @@ export default function RemoteScreen() {
   async function send(command: string, value?: number) {
     setCommandError(null);
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const current = sessionRef.current;
+    let moving = false;
+    if (current && (command === "next" || command === "previous" || command === "goto")) {
+      // The slide changes here and on the projector now; the database is told
+      // the exact slide, so taps that overtake each other still end in one place.
+      const target = slideAfter(command, current.current_slide, current.slide_count, value);
+      if (target === current.current_slide) return;
+      showSlide(target, true);
+      command = "goto";
+      value = target;
+      moving = true;
+    }
     const { data, error: commandFailure } = await supabase.rpc("presentation_command", {
       p_session_id: sessionId,
       p_command: command,
       p_value: value,
     });
-    if (commandFailure) { setCommandError(asErrorMessage(commandFailure)); return; }
-    const next = data as unknown as Session;
-    setSession(next);
-    setViewport(viewportOf(next));
+    if (commandFailure) {
+      setCommandError(asErrorMessage(commandFailure));
+      if (moving) void reread();
+      return;
+    }
+    applySession(data as unknown as Session);
     if (command === "end") router.replace("/(app)/(tabs)/projects");
   }
 
@@ -361,9 +428,9 @@ export default function RemoteScreen() {
     });
     if (deckFailure) setCommandError(asErrorMessage(deckFailure));
     else {
-      const next = data as unknown as Session;
-      setSession(next);
-      setViewport(viewportOf(next));
+      // Another deck starts at its own first slide, whatever was in flight.
+      pendingSlide.current = null;
+      applySession(data as unknown as Session);
     }
   }
 
@@ -385,9 +452,9 @@ export default function RemoteScreen() {
       p_slide: slide,
     }).then(({ data, error: viewportError }) => {
       if (viewportError) setCommandError(asErrorMessage(viewportError));
-      else if (data) setSession(data as unknown as Session);
+      else if (data) applySession(data as unknown as Session);
     });
-  }, [sessionId]);
+  }, [applySession, sessionId]);
 
   if (loading) {
     return (

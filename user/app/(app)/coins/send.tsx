@@ -1,15 +1,16 @@
 import * as Crypto from "expo-crypto";
-import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import { ArrowLeft, Check, Search, Send, UserRound } from "lucide-react-native";
+import { ArrowLeft, Search, Send, UserRound } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, Text, TextInput, View } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 import coinIcon from "../../../assets/coin/coin-icon.png";
 import { Avatar } from "@/components/Avatar";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
+import { CountUp, Rise, SuccessMark } from "@/components/SuccessMoment";
 import { EmptyState, InlineError } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
 import { formatCoins, formatNumber } from "@/lib/money";
@@ -114,7 +115,7 @@ export default function SendCoinsScreen() {
       return;
     }
     const result = data as unknown as { applied?: boolean; amount?: number } | null;
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    // The success tap comes from the emblem, as its tick lands.
     setSentAmount(result?.amount ?? amount);
     await refresh();
     setSending(false);
@@ -125,35 +126,35 @@ export default function SendCoinsScreen() {
       <View style={styles.screen}>
         <ScreenHeader title={t("send.sent")} variant="close" onLeave={() => router.back()} />
         <View style={styles.successBody}>
-          <View style={styles.successMark}>
-            <Check color={colors.onPrimary} size={34} strokeWidth={2.6} />
-          </View>
-          <View style={styles.successAmountRow}>
-            <Text style={styles.successAmount}>{formatNumber(sentAmount)}</Text>
-            <Image source={coinIcon} resizeMode="contain" style={styles.successCoin} />
-          </View>
-          <Text style={styles.successCopy}>
-            {t("send.sentTo", { name: recipient.full_name?.trim() || `@${recipient.username}` })}
-          </Text>
-          <Text style={styles.successBalance}>{t("send.newBalance", { balance: formatCoins(balance) })}</Text>
-          <View style={styles.successActions}>
+          <SuccessMark kind="coins" />
+          <Rise order={0} style={styles.successLines}>
+            <View style={styles.successAmountRow}>
+              <CountUp value={sentAmount} format={formatNumber} style={styles.successAmount} />
+              <Image source={coinIcon} resizeMode="contain" style={styles.successCoin} />
+            </View>
+            <Text style={styles.successCopy}>
+              {t("send.sentTo", { name: recipient.full_name?.trim() || `@${recipient.username}` })}
+            </Text>
+            <Text style={styles.successBalance}>{t("send.newBalance", { balance: formatCoins(balance) })}</Text>
+          </Rise>
+          <Rise order={1} style={styles.successActions}>
             <PrimaryButton
               label={t("send.again")}
               tone="secondary"
               onPress={() => { setSentAmount(null); setRecipient(null); setAmountText(""); setNote(""); setQuery(""); }}
             />
             <PrimaryButton label={t("common:close")} onPress={() => router.back()} />
-          </View>
+          </Rise>
         </View>
       </View>
     );
   }
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.screen}>
+    <View style={styles.screen}>
       <ScreenHeader title={t("send.title")} subtitle={t("shop.balance", { balance: formatCoins(balance) })} />
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <KeyboardAwareScrollView bottomOffset={spacing.xl} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {recipient ? (
           <>
             <View style={styles.recipientCard}>
@@ -279,8 +280,8 @@ export default function SendCoinsScreen() {
             </View>
           </>
         )}
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
+    </View>
   );
 }
 
@@ -334,10 +335,10 @@ const useStyles = makeStyles((colors) => ({
   counter: { ...typography.caption, color: colors.inkSoft, alignSelf: "flex-end" },
   disclaimer: { ...typography.caption, color: colors.inkSoft, textAlign: "center", lineHeight: 17 },
 
-  successBody: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.xl, gap: spacing.sm },
-  successMark: { width: 84, height: 84, borderRadius: 42, backgroundColor: colors.success, alignItems: "center", justifyContent: "center", marginBottom: spacing.lg },
+  successBody: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.xl },
+  successLines: { alignItems: "center", gap: spacing.sm, marginTop: -spacing.lg },
   successAmountRow: { flexDirection: "row", alignItems: "center" },
-  successAmount: { fontFamily: "Manrope_700Bold", fontSize: 44, color: colors.ink, letterSpacing: -1.2 },
+  successAmount: { fontFamily: "Manrope_800ExtraBold", fontSize: 46, lineHeight: 52, color: colors.ink, letterSpacing: -1.4 },
   successCoin: { width: 52, height: 52, marginLeft: 4 },
   successCopy: { ...typography.body, color: colors.inkMuted, textAlign: "center" },
   successBalance: { ...typography.caption, color: colors.inkSoft, marginTop: spacing.sm },

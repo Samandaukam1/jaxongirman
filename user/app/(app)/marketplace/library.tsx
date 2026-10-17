@@ -8,6 +8,7 @@ import { useAuth } from "@/providers/AuthProvider";
 import { Appear } from "@/components/Appear";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { EmptyState, ErrorState, SkeletonCard } from "@/components/StateBlocks";
+import { useSuccessToast } from "@/components/SuccessToast";
 import { formatShortDateTime } from "@/lib/datetime";
 import { asErrorMessage, asFunctionErrorMessage } from "@/lib/format";
 import { downloadPurchasedFile, shareFile } from "@/lib/marketplace";
@@ -37,6 +38,7 @@ export default function LibraryScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
   const { t } = useTranslation("market");
+  const notify = useSuccessToast();
   const router = useRouter();
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,7 +68,7 @@ export default function LibraryScreen() {
     try {
       const file = await downloadPurchasedFile(productId, kind);
       const shared = await shareFile(file.uri, file.mimeType);
-      if (!shared) Alert.alert(t("library.saved"), t("library.savedBody"));
+      if (!shared) notify(t("library.saved"), t("library.savedBody"));
     } catch (downloadError) {
       Alert.alert(t("library.failed"), await asFunctionErrorMessage(downloadError));
     } finally {

@@ -10,7 +10,7 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { InlineError } from "@/components/StateBlocks";
 import { asErrorMessage, asFunctionErrorMessage } from "@/lib/format";
-import { uploadLocalFile } from "@/lib/upload";
+import { streamLocalFile } from "@/lib/upload";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
 import { radius, spacing, typography } from "@/theme/tokens";
@@ -112,13 +112,20 @@ export default function ImportScreen() {
       // import starts — which is every import, on every device. Every other
       // screen in the app already imports this module; this one did not.
       const storagePath = `${user.id}/imports/${Crypto.randomUUID()}.pptx`;
-      const uploaded = await uploadLocalFile({
+      // Streamed by the phone from disk (the size was checked when it was
+      // picked): a large deck no longer freezes the screen while it uploads.
+      let shown = -1;
+      const uploaded = await streamLocalFile({
         bucket: "user-uploads",
         path: storagePath,
         uri: file.uri,
         contentType: PPTX_MIME,
-        maxBytes: MAX_BYTES,
-        tooLargeMessage: t("import.tooBig"),
+        onProgress: (share) => {
+          const percent = Math.round(share * 100);
+          if (percent === shown) return;
+          shown = percent;
+          setStep(t("import.uploadingShare", { percent }));
+        },
       });
       if (!uploaded.ok) throw new Error(uploaded.message);
 
@@ -227,9 +234,7 @@ export default function ImportScreen() {
                 <Text style={styles.agreeText}>{t("import.agree", { cost: quote.cost })}</Text>
               </Pressable>
             ) : (
-              <Pressable accessibilityRole="button" onPress={() => router.push("/(app)/coins/buy")} style={styles.topUp}>
-                <Text style={styles.topUpText}>{t("import.topUp")}</Text>
-              </Pressable>
+              <Text style={styles.short}>{t("import.short", { missing: quote.cost - quote.balance })}</Text>
             )}
           </View>
         ) : null}
@@ -242,11 +247,17 @@ export default function ImportScreen() {
             <Text style={styles.busyText}>{step}</Text>
           </View>
         ) : (
-          <PrimaryButton
-            disabled={!file || (quote !== null && quote.cost > 0 && (!agreed || !quote.affordable))}
-            label={t("import.run")}
-            onPress={() => void run()}
-          />
+          // Short of J Tanga, the button says what to do about it instead of
+          // sitting greyed out: a disabled button reads as a broken one.
+          file && quote && quote.cost > 0 && !quote.affordable ? (
+            <PrimaryButton label={t("import.topUp")} onPress={() => router.push("/(app)/coins/buy")} />
+          ) : (
+            <PrimaryButton
+              disabled={!file || (quote !== null && quote.cost > 0 && !agreed)}
+              label={t("import.run")}
+              onPress={() => void run()}
+            />
+          )
         )}
       </ScrollView>
     </View>
@@ -285,8 +296,7 @@ const useStyles = makeStyles((colors) => ({
   checkboxOn: { backgroundColor: colors.primary, borderColor: colors.primary },
   checkboxTick: { color: colors.onPrimary, fontSize: 13, lineHeight: 16 },
   agreeText: { ...typography.caption, color: colors.ink, flex: 1 },
-  topUp: { alignSelf: "flex-start", paddingVertical: spacing.xs },
-  topUpText: { ...typography.caption, color: colors.primary, fontFamily: "Manrope_600SemiBold" },
+  short: { ...typography.caption, color: colors.danger, lineHeight: 18 },
   busy: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, paddingVertical: spacing.md },
   busyText: { ...typography.body, color: colors.inkMuted },
 }));

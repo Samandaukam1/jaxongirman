@@ -35,8 +35,8 @@ export type ObjectiveDoc = {
 
 /** Labels and layout, matching `_shared/objective.ts` exactly. */
 export const FIELDS: { id: FieldId; label: string; layout: "pair" | "full"; hint?: string }[] = [
-  { id: "issued_on", label: "Sana", layout: "pair", hint: "2024-yil 9-sentabr" },
-  { id: "institution", label: "Tashkilot / OTM", layout: "full" },
+  { id: "issued_on", label: "Ish (o‘qish) boshlangan sana", layout: "pair", hint: "2024-yil 9-sentabrdan" },
+  { id: "institution", label: "Tashkilot / OTM", layout: "full", hint: "O‘zbekiston jurnalistika universiteti 3-kurs talabasi" },
   { id: "birth_date", label: "Tug‘ilgan yili", layout: "pair", hint: "24.01.2001" },
   { id: "birth_place", label: "Tug‘ilgan joyi", layout: "pair" },
   { id: "nationality", label: "Millati", layout: "pair" },

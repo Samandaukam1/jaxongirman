@@ -8,12 +8,13 @@ import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import {
-  ArrowLeft, BookMarked, ChevronRight, Clock3, FileText, Gamepad2, ListChecks, Paperclip, Sparkles, WandSparkles, X,
+  ArrowLeft, BookMarked, ChevronRight, Clock3, FileText, Gamepad2, ImagePlus, ListChecks, Paperclip, Sparkles, WandSparkles, X,
   type LucideIcon,
 } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, Alert, BackHandler, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, BackHandler, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AUTOMATIC, DesignChooser, designRequestOf, type DesignChoice } from "@/components/DesignChooser";
@@ -24,6 +25,7 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { LANGUAGE_NAMES, type AppLanguage } from "@/i18n";
 import { asFunctionErrorMessage } from "@/lib/format";
 import { hasCyrillic, toLatin } from "@/lib/script";
+import { MAX_SOURCE_IMAGES, pickSourceImages, removeSourceImages, uploadSourceImages, type SourceImage } from "@/lib/sourceImages";
 import { supabase } from "@/lib/supabase";
 import { fetchQuote, fetchWallet, quoteSummary, type Quote } from "@/lib/wallet";
 import { useAuth } from "@/providers/AuthProvider";
@@ -75,6 +77,7 @@ export default function CreatePresentationScreen() {
   const [authorName, setAuthorName] = useState("");
   const [teacherName, setTeacherName] = useState("");
   const [attachments, setAttachments] = useState<PickedAsset[]>([]);
+  const [images, setImages] = useState<SourceImage[]>([]);
   const [estimate, setEstimate] = useState<number | null>(null);
   const [estimateError, setEstimateError] = useState<string | null>(null);
   const [balance, setBalance] = useState<number | null>(null);
@@ -219,11 +222,17 @@ export default function CreatePresentationScreen() {
 
   async function pickFiles() {
     const result = await DocumentPicker.getDocumentAsync({
-      type: ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain", "image/*"],
+      // Pictures have their own section, where they are put on the slides.
+      type: ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"],
       multiple: true,
       copyToCacheDirectory: true,
     });
     if (!result.canceled) setAttachments((current) => [...current, ...result.assets].slice(0, 8));
+  }
+
+  async function pickImages() {
+    const picked = await pickSourceImages(MAX_SOURCE_IMAGES - images.length);
+    if (picked.length) setImages((current) => [...current, ...picked].slice(0, MAX_SOURCE_IMAGES));
   }
 
   async function uploadFiles(presentationId: string) {
@@ -304,9 +313,11 @@ export default function CreatePresentationScreen() {
 
     const presentationId = Crypto.randomUUID();
     let uploadedPaths: string[] = [];
+    const imagePaths: string[] = [];
     setSubmitting(true);
     try {
       uploadedPaths = await uploadFiles(presentationId);
+      const placedImages = user ? await uploadSourceImages(user.id, presentationId, images, imagePaths) : [];
       const { data, error } = await supabase.functions.invoke("generate-presentation", {
         body: {
           presentationId,
@@ -321,6 +332,7 @@ export default function CreatePresentationScreen() {
           design: designRequestOf(design),
           language: deckLanguage,
           uploadPaths: uploadedPaths,
+          images: placedImages,
           idempotencyKey: presentationId,
           ...(confirmedCoins !== null ? { confirmedCoins } : {}),
         },
@@ -333,6 +345,7 @@ export default function CreatePresentationScreen() {
       });
     } catch (error) {
       if (uploadedPaths.length) await supabase.storage.from("user-uploads").remove(uploadedPaths);
+      await removeSourceImages(imagePaths).catch(() => {});
       Alert.alert(t("alert.startFailed"), await asFunctionErrorMessage(error));
     } finally {
       setSubmitting(false);
@@ -344,7 +357,7 @@ export default function CreatePresentationScreen() {
     : allowance?.period === "day" ? t("estimate.periodDay") : t("estimate.periodWeek");
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.flex}>
+    <View style={styles.flex}>
       {/* Presented as a modal, so the notch inset is 0 — fall back to plain spacing. */}
       <View style={[styles.header, { paddingTop: insets.top || spacing.xl }]}>
         <Pressable accessibilityRole="button" accessibilityLabel={t("common:back")} onPress={() => router.back()} style={styles.back}>
@@ -356,7 +369,7 @@ export default function CreatePresentationScreen() {
         </View>
       </View>
 
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={false}>
+      <KeyboardAwareScrollView bottomOffset={spacing.xl} style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={false}>
         {/**
           * What the deck will look like, said rather than chosen.
           *
@@ -458,6 +471,46 @@ export default function CreatePresentationScreen() {
               <Pressable hitSlop={10} onPress={() => setAttachments((current) => current.filter((_, itemIndex) => itemIndex !== index))}><X color={colors.inkMuted} size={icon.sm} strokeWidth={icon.stroke} /></Pressable>
             </View>
           ))}
+        </View>
+
+        {/* The author's own pictures, each with what it shows written under
+            it. They go on the slides; documents above only inform the text. */}
+        <View style={styles.group}>
+          <View style={styles.labelRow}><Text style={styles.label}>{t("images.label")}</Text><Text style={styles.hint}>{t("images.hint", { max: MAX_SOURCE_IMAGES })}</Text></View>
+          {images.map((image, index) => (
+            <View style={styles.picture} key={image.uri}>
+              <View style={styles.pictureFrame}>
+                <Image source={{ uri: image.uri }} style={styles.pictureImage} resizeMode="cover" />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t("images.remove", { number: index + 1 })}
+                  hitSlop={8}
+                  onPress={() => setImages((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                  style={styles.pictureRemove}
+                >
+                  <X color="#FFFFFF" size={icon.sm} strokeWidth={2.4} />
+                </Pressable>
+              </View>
+              <TextInput
+                accessibilityLabel={t("images.caption", { number: index + 1 })}
+                value={image.caption}
+                onChangeText={(caption) => setImages((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, caption } : item))}
+                placeholder={t("images.captionPlaceholder")}
+                placeholderTextColor={colors.inkSoft}
+                maxLength={300}
+                multiline
+                style={styles.pictureCaption}
+              />
+            </View>
+          ))}
+          {images.length < MAX_SOURCE_IMAGES ? (
+            <Pressable onPress={() => void pickImages()} style={styles.upload}>
+              <IconChip icon={ImagePlus} variant="soft" size="md" />
+              <View style={styles.uploadText}><Text style={styles.uploadTitle}>{t("images.add")}</Text><Text style={styles.uploadHint}>{t("images.addHint")}</Text></View>
+              <ChevronRight color={colors.inkSoft} size={icon.md} strokeWidth={icon.stroke} />
+            </Pressable>
+          ) : null}
+          {images.length ? <Text style={styles.pictureNote}>{t("images.note")}</Text> : null}
         </View>
 
         <View style={styles.group}>
@@ -576,7 +629,7 @@ export default function CreatePresentationScreen() {
             <View><Text style={styles.estimateMetaLabel}>{t("estimate.balance")}</Text><Text style={styles.estimateMetaValue}>{balance ?? "—"} J</Text></View>
           </View>
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       {/* Pinned so the primary action is reachable without scrolling to the end. */}
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
@@ -610,7 +663,7 @@ export default function CreatePresentationScreen() {
         onClose={() => setSheet(null)}
         onSave={setRequirements}
       />
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -673,6 +726,15 @@ const useStyles = makeStyles((colors) => ({
   uploadHint: { ...typography.caption, color: colors.inkMuted, marginTop: 2 },
   file: { flexDirection: "row", alignItems: "center", gap: spacing.sm, padding: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
   fileName: { ...typography.caption, color: colors.ink, flex: 1 },
+  picture: { borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, overflow: "hidden" },
+  pictureFrame: { aspectRatio: 16 / 9, backgroundColor: colors.surfaceMuted },
+  pictureImage: { width: "100%", height: "100%" },
+  pictureRemove: {
+    position: "absolute", top: spacing.sm, right: spacing.sm, width: 30, height: 30, borderRadius: 15,
+    alignItems: "center", justifyContent: "center", backgroundColor: "rgba(15, 12, 30, 0.55)",
+  },
+  pictureCaption: { ...typography.body, color: colors.ink, minHeight: 48, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, textAlignVertical: "top" },
+  pictureNote: { ...typography.caption, color: colors.inkSoft, lineHeight: 17 },
   chips: { gap: spacing.sm },
   chip: { width: 48, height: 44, borderRadius: 13, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   chipSelected: { backgroundColor: colors.primary, borderColor: colors.primary },

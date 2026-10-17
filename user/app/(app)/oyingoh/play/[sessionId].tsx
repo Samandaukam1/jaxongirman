@@ -4,6 +4,7 @@ import { Check, Clock, Trophy, Users, X } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Image, ScrollView, Text, View } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { GameAnswerInput, GameLeaderboardList, GameRevealPanel, GameStatsSummary } from "@/components/GameAnswerInput";
@@ -179,7 +180,7 @@ export default function PlayGameScreen() {
       ) : null}
 
       {state.status === "question" && state.question ? (
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <KeyboardAwareScrollView bottomOffset={spacing.xl} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.questionMeta}>
             <Text style={styles.questionIndex}>{state.current_index + 1} / {state.question_count}</Text>
             <View style={styles.timerPill}>
@@ -211,7 +212,7 @@ export default function PlayGameScreen() {
               onSubmit={(payload) => void answer(payload)}
             />
           )}
-        </ScrollView>
+        </KeyboardAwareScrollView>
       ) : null}
 
       {state.status === "question_result" && state.question && state.reveal ? (

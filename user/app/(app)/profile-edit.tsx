@@ -4,7 +4,8 @@ import { useRouter } from "expo-router";
 import { Camera, User as UserIcon } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, Text, TextInput, View } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { avatarContentType, avatarObjectPath, cacheBusted } from "@/lib/avatar";
@@ -163,9 +164,9 @@ export default function ProfileEditScreen() {
   }
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.screen}>
+    <View style={styles.screen}>
       <ScreenHeader title={t("edit")} />
-      <ScrollView
+      <KeyboardAwareScrollView bottomOffset={spacing.xl}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -247,8 +248,8 @@ export default function ProfileEditScreen() {
             ? <ActivityIndicator color={colors.onPrimary} size="small" />
             : <Text style={styles.saveText}>{t("form.save")}</Text>}
         </Pressable>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
+    </View>
   );
 }
 

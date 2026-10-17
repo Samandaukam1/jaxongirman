@@ -6,7 +6,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Check, CircleCheck, Clock, ImagePlus, Lock, ShieldCheck, X } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Pressable, Text, TextInput, View } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
@@ -298,7 +299,7 @@ export default function SurveyRespondScreen() {
   }
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.screen}>
+    <View style={styles.screen}>
       <ScreenHeader title={form.title} subtitle={form.owner_name} variant="close" onLeave={() => router.back()} />
 
       {/* The countdown sits above the scroll so it never leaves the screen. */}
@@ -314,7 +315,7 @@ export default function SurveyRespondScreen() {
         <View style={[styles.progressFill, { width: `${questions.length ? (answeredCount / questions.length) * 100 : 0}%` }]} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <KeyboardAwareScrollView bottomOffset={spacing.xl} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {form.description ? <Text style={styles.description}>{form.description}</Text> : null}
 
         <View style={styles.privacy}>
@@ -479,8 +480,8 @@ export default function SurveyRespondScreen() {
           />
         ) : null}
         {validation && !closed ? <Text style={styles.validationHint}>{validation}</Text> : null}
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
+    </View>
   );
 }
 

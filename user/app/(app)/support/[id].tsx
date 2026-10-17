@@ -3,7 +3,8 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { ImagePlus, RotateCcw, Send, X } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Linking, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ScreenHeader } from "@/components/ScreenHeader";
@@ -95,7 +96,7 @@ export default function TicketScreen() {
   const resolved = ticket?.status === "resolved";
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.screen}>
+    <KeyboardAvoidingView behavior="padding" style={styles.screen}>
       <ScreenHeader title={ticket?.ticket_number ?? t("thread.fallbackTitle")} subtitle={ticket ? categoryLabel(ticket.category) : undefined} />
       {!detail && !error ? <View style={styles.pad}><SkeletonCard /></View> : null}
       {error && !detail ? <View style={styles.pad}><ErrorState message={error} onRetry={() => void load()} /></View> : null}

@@ -2,16 +2,19 @@ import { useRouter } from "expo-router";
 import { CheckCircle2, Clock3, ShieldCheck, Store, X } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { captureRef } from "react-native-view-shot";
 
 import { FormField } from "@/components/FormField";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { Rise, SuccessMark } from "@/components/SuccessMoment";
 import { MODEL_HEIGHT, MODEL_WIDTH, SlideCanvas } from "@/components/SlideCanvas";
 import type { Deck } from "@/lib/deck";
 import { asFunctionErrorMessage } from "@/lib/format";
 import { formatNumber } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
+import { readLocalBytes } from "@/lib/upload";
 import { useAuth } from "@/providers/AuthProvider";
 import { radius, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
@@ -93,8 +96,10 @@ export function PublishSheet({ visible, deck, onClose }: { visible: boolean; dec
     for (let index = 0; index < slides.length; index += 1) {
       const view = canvases.current[index];
       if (!view) continue;
-      const uri = await captureRef(view, { format: "jpg", quality: 0.86, width: 1280, height: 720, result: "tmpfile" });
-      const bytes = new Uint8Array(await (await fetch(uri)).arrayBuffer());
+      // 0.72: a listing's cover was 1.2 MB at 0.86 and arrived after the page
+      // did, so a shopper first saw empty frames; half the size reads the same.
+      const uri = await captureRef(view, { format: "jpg", quality: 0.72, width: 1280, height: 720, result: "tmpfile" });
+      const bytes = await readLocalBytes(uri);
       const path = `${user.id}/${productId}/${index === 0 ? "cover" : `preview-${index}`}.jpg`;
       const { error: uploadError } = await supabase.storage.from("marketplace-previews")
         .upload(path, bytes, { contentType: "image/jpeg", upsert: true });
@@ -139,7 +144,9 @@ export function PublishSheet({ visible, deck, onClose }: { visible: boolean; dec
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.sheet}>
+      {/* The keyboard library follows the Modal's own window, which Android
+          draws edge to edge too — the system no longer resizes it. */}
+      <KeyboardAvoidingView behavior="padding" style={styles.sheet}>
         <View style={styles.head}>
           <Store color={colors.primary} size={20} strokeWidth={2.1} />
           <Text style={styles.headTitle}>{t("publish.title")}</Text>
@@ -154,12 +161,16 @@ export function PublishSheet({ visible, deck, onClose }: { visible: boolean; dec
 
           {result ? (
             <View style={styles.done}>
-              {result.auto ? <CheckCircle2 color={colors.success} size={40} strokeWidth={2} /> : <Clock3 color={colors.warning} size={40} strokeWidth={2} />}
-              <Text style={styles.doneTitle}>{result.auto ? t("publish.live") : t("publish.review")}</Text>
-              <Text style={styles.doneBody}>
-                {result.auto ? t("publish.liveBody") : t("publish.reviewBody")}
-              </Text>
-              <PrimaryButton label={t("publish.toMine")} onPress={() => { onClose(); router.push("/(app)/marketplace/seller"); }} />
+              <SuccessMark kind={result.auto ? "done" : "pending"} />
+              <Rise order={0} style={styles.doneLines}>
+                <Text style={styles.doneTitle}>{result.auto ? t("publish.live") : t("publish.review")}</Text>
+                <Text style={styles.doneBody}>
+                  {result.auto ? t("publish.liveBody") : t("publish.reviewBody")}
+                </Text>
+              </Rise>
+              <Rise order={1} style={styles.doneAction}>
+                <PrimaryButton label={t("publish.toMine")} onPress={() => { onClose(); router.push("/(app)/marketplace/seller"); }} />
+              </Rise>
             </View>
           ) : null}
 
@@ -267,7 +278,9 @@ const useStyles = makeStyles((colors) => ({
   box: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: colors.borderStrong, alignItems: "center", justifyContent: "center", marginTop: 1 },
   boxOn: { backgroundColor: colors.primary, borderColor: colors.primary },
   rightsText: { ...typography.caption, flex: 1, color: colors.ink, lineHeight: 19, fontSize: 13.5 },
-  done: { alignItems: "center", gap: spacing.md, paddingVertical: spacing.xxl },
-  doneTitle: { ...typography.heading, color: colors.ink },
+  done: { alignItems: "center", paddingVertical: spacing.lg },
+  doneLines: { alignItems: "center", gap: spacing.sm, marginTop: -spacing.lg },
+  doneAction: { alignSelf: "stretch", marginTop: spacing.xl },
+  doneTitle: { ...typography.title, color: colors.ink, textAlign: "center" },
   doneBody: { ...typography.caption, color: colors.inkMuted, textAlign: "center", lineHeight: 19 },
 }));

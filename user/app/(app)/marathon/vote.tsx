@@ -2,7 +2,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Check, Crown, Search, Sparkles } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, Text, TextInput, View } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 import { Avatar } from "@/components/Avatar";
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -162,7 +163,7 @@ export default function MarathonVoteScreen() {
     <View style={styles.screen}>
       <ScreenHeader title={t("voting.title")} variant="back" />
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView bottomOffset={spacing.xl} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.lead}>
           {t("voting.lead")}
         </Text>
@@ -225,7 +226,7 @@ export default function MarathonVoteScreen() {
             message={t("voting.notFoundBody")}
           />
         ) : null}
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       {/* Confirmation, because a vote cannot be taken back. */}
       <Modal visible={Boolean(chosen)} transparent animationType="slide" onRequestClose={() => setChosen(null)}>

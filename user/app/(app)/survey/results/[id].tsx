@@ -5,11 +5,12 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Clock, Download, Link2, Lock, Pencil, Play, Users } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, Alert, Image, Pressable, RefreshControl, ScrollView, Share, Text, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, Share, Text, View } from "react-native";
 
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { CountdownText } from "@/components/SurveyCard";
 import { EmptyState, ErrorState, InlineError, SkeletonCard } from "@/components/StateBlocks";
+import { useSuccessToast } from "@/components/SuccessToast";
 import { formatShortDateTime, useNow } from "@/lib/datetime";
 import { asErrorMessage, asFunctionErrorMessage } from "@/lib/format";
 import { changesChannel, supabase } from "@/lib/supabase";
@@ -63,6 +64,7 @@ export default function SurveyResultsScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
   const { t } = useTranslation("survey");
+  const notify = useSuccessToast();
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string }>();
   const formId = typeof params.id === "string" ? params.id : "";
@@ -149,7 +151,7 @@ export default function SurveyResultsScreen() {
           dialogTitle: t("results.shareDialog"),
         });
       } else {
-        Alert.alert(t("results.saved"), t("results.savedBody"));
+        notify(t("results.saved"), t("results.savedBody"));
       }
     } catch (nextError) {
       setActionError(await asFunctionErrorMessage(nextError));

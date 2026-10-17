@@ -2,6 +2,7 @@ import { Search, Shapes, X } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Image, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 
 import { candidateImage, searchElements, type ElementCandidate } from "@/lib/jelement";
 import { icon, radius, spacing, typography } from "@/theme/tokens";
@@ -82,6 +83,8 @@ export function ElementPicker({
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      {/* Above the keyboard on both platforms: Android draws a Modal edge to edge, where the system no longer resizes it. */}
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
       <View style={styles.sheet}>
         <View style={styles.head}>
           <Text style={styles.title}>{t("addElement")}</Text>
@@ -156,6 +159,7 @@ export function ElementPicker({
           ))}
         </ScrollView>
       </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

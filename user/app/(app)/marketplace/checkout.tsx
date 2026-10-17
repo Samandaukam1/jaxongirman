@@ -13,7 +13,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { CheckCircle2, CreditCard, Info, Plus, ShieldCheck } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
@@ -258,7 +259,7 @@ export default function CheckoutScreen() {
   }
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.screen}>
+    <View style={styles.screen}>
       <ScreenHeader
         title={step === "otp" ? t("checkout:confirmTitle") : t("checkout:title")}
         variant="close"
@@ -271,7 +272,7 @@ export default function CheckoutScreen() {
         }}
       />
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <KeyboardAwareScrollView bottomOffset={spacing.xl} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <View style={styles.summary}>
           <Text style={styles.summaryTitle} numberOfLines={2}>{productTitle}</Text>
           <View style={styles.line}>
@@ -493,8 +494,8 @@ export default function CheckoutScreen() {
             <Text style={styles.paymeBrand}>Powered by Payme</Text>
           </View>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
+    </View>
   );
 }
 

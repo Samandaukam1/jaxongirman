@@ -2,6 +2,7 @@ import { Check, Search, X } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ActivityIndicator, FlatList, Modal, Pressable, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 
 import { Appear } from "@/components/Appear";
 import { Touchable } from "@/components/Touchable";
@@ -147,6 +148,8 @@ export function FontPicker({
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      {/* Above the keyboard on both platforms: Android draws a Modal edge to edge, where the system no longer resizes it. */}
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
       <View style={styles.sheet}>
         <View style={styles.header}>
           <Text style={styles.title}>{t("fonts.title")}</Text>
@@ -203,6 +206,7 @@ export function FontPicker({
           ))}
         />
       </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

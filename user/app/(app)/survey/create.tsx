@@ -3,7 +3,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { BookmarkPlus, Plus, Send } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Modal, Pressable, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
 import {
@@ -12,6 +13,7 @@ import {
 } from "@/components/QuestionEditor";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { ErrorState, InlineError } from "@/components/StateBlocks";
+import { useSuccessToast } from "@/components/SuccessToast";
 import { formatClock, formatDate, useNow } from "@/lib/datetime";
 import { asErrorMessage } from "@/lib/format";
 import { moduleGate, useModuleAccess } from "@/lib/modules";
@@ -55,6 +57,7 @@ export default function SurveyBuilderScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
   const { t } = useTranslation(["survey", "common"]);
+  const notify = useSuccessToast();
   const router = useRouter();
   const params = useLocalSearchParams<{ id?: string; templateId?: string }>();
   const formId = typeof params.id === "string" ? params.id : null;
@@ -239,7 +242,7 @@ export default function SurveyBuilderScreen() {
     setTemplateSaving(false);
     if (templateError) { setError(asErrorMessage(templateError)); return; }
     setTemplateOpen(false);
-    Alert.alert(t("builder.templateSaved"), t("builder.templateSavedBody"));
+    notify(t("builder.templateSaved"), t("builder.templateSavedBody"));
   }
 
   function confirmLeave() {
@@ -269,7 +272,7 @@ export default function SurveyBuilderScreen() {
   }
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.screen}>
+    <View style={styles.screen}>
       <ScreenHeader
         title={formId ? t("builder.edit") : t("newSurvey")}
         subtitle={locked ? t("builder.locked") : undefined}
@@ -277,7 +280,7 @@ export default function SurveyBuilderScreen() {
         onLeave={confirmLeave}
       />
 
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <KeyboardAwareScrollView bottomOffset={spacing.xl} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {!creatorGate.allowed ? <InlineError message={creatorGate.reason ?? ""} /> : null}
 
         <View style={styles.block}>
@@ -432,10 +435,12 @@ export default function SurveyBuilderScreen() {
             </Pressable>
           ) : null}
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       {/* A named prompt rather than Alert.prompt, which exists only on iOS. */}
       <Modal visible={templateOpen} transparent animationType="fade" onRequestClose={() => setTemplateOpen(false)}>
+        {/* Above the keyboard on both platforms: Android draws a Modal edge to edge, where the system no longer resizes it. */}
+        <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
         <Pressable accessibilityRole="button" accessibilityLabel={t("common:close")} onPress={() => setTemplateOpen(false)} style={styles.backdrop}>
           <Pressable style={styles.sheet} onPress={() => undefined}>
             <Text style={styles.sheetTitle}>{t("builder.templateName")}</Text>
@@ -456,8 +461,9 @@ export default function SurveyBuilderScreen() {
             />
           </Pressable>
         </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 

@@ -9,9 +9,11 @@ import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import "@/i18n";
+import { SuccessToastProvider } from "@/components/SuccessToast";
 import { AuthProvider } from "@/providers/AuthProvider";
 import { LanguageProvider } from "@/providers/LanguageProvider";
 import { ThemeProvider, useTheme } from "@/theme/ThemeProvider";
@@ -42,15 +44,22 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      {/* The keyboard measured natively, on both platforms. Android draws edge
+          to edge, where the system no longer shrinks the window for the
+          keyboard — inputs sat behind it until every screen asked this instead. */}
+      <KeyboardProvider>
       <SafeAreaProvider>
         <ThemeProvider>
           <AuthProvider>
             <LanguageProvider>
-              <ThemedShell />
+              <SuccessToastProvider>
+                <ThemedShell />
+              </SuccessToastProvider>
             </LanguageProvider>
           </AuthProvider>
         </ThemeProvider>
       </SafeAreaProvider>
+      </KeyboardProvider>
     </GestureHandlerRootView>
   );
 }

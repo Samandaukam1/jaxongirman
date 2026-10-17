@@ -39,20 +39,51 @@ export async function hydrateImageUrls(rows: Element[]): Promise<Element[]> {
   }));
 }
 
+/** The API's page size: it answers at most this many rows per request, silently. */
+const PAGE_ROWS = 1000;
+
+/**
+ * Every element of a deck, by depth.
+ *
+ * One request returns at most a thousand rows, and a twenty-page deck in some
+ * styles is more than that. The rows cut off were the top layers — the words
+ * — so long decks opened with pages missing their text. The first page says
+ * how many there are; any further pages are read side by side.
+ */
+export async function loadDeckElements(presentationId: string): Promise<Element[]> {
+  const page = (from: number) => supabase.from("slide_elements")
+    .select("*", from === 0 ? { count: "exact" } : undefined)
+    .eq("presentation_id", presentationId)
+    .order("z_index").order("id")
+    .range(from, from + PAGE_ROWS - 1);
+  const first = await page(0);
+  if (first.error) throw first.error;
+  const total = first.count ?? first.data.length;
+  if (first.data.length >= total || first.data.length < PAGE_ROWS) return first.data;
+  const rest = await Promise.all(
+    Array.from({ length: Math.ceil(total / PAGE_ROWS) - 1 }, (_, index) => page((index + 1) * PAGE_ROWS)),
+  );
+  const rows = [...first.data];
+  for (const result of rest) {
+    if (result.error) throw result.error;
+    rows.push(...result.data);
+  }
+  return rows;
+}
+
 /** A whole deck, read in one round of requests, with its pictures signed. */
 export async function loadDeck(presentationId: string): Promise<Deck> {
-  const [presentationResult, slideResult, elementResult] = await Promise.all([
+  const [presentationResult, slideResult, elements] = await Promise.all([
     supabase.from("presentations").select("*").eq("id", presentationId).single(),
     supabase.from("slides").select("*").eq("presentation_id", presentationId).order("position"),
-    supabase.from("slide_elements").select("*").eq("presentation_id", presentationId).order("z_index"),
+    loadDeckElements(presentationId),
   ]);
   if (presentationResult.error) throw presentationResult.error;
   if (slideResult.error) throw slideResult.error;
-  if (elementResult.error) throw elementResult.error;
   return {
     presentation: presentationResult.data,
     slides: slideResult.data,
-    elements: await hydrateImageUrls(elementResult.data),
+    elements: await hydrateImageUrls(elements),
   };
 }
 
