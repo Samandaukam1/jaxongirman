@@ -137,7 +137,16 @@
       ],
       "expo-status-bar",
       "expo-sharing",
-      "expo-splash-screen"
+      "expo-splash-screen",
+      "expo-video",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "enableBackgroundPlayback": false
+        }
+      ]
     ],
     "extra": {
       "router": {},

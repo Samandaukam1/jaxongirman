@@ -1,31 +1,31 @@
-import { LinearGradient } from "expo-linear-gradient";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import {
-  ChevronRight, CircleHelp, CreditCard, Crown, Inbox, Languages, LogOut, MessageSquarePlus, MonitorSmartphone, Moon, Pencil, Receipt, ShieldCheck, Store, Sun, SunMoon,
-  Trash2, User as UserIcon, Wallet, type LucideIcon,
+  ChevronRight, CircleHelp, CreditCard, Crown, Inbox, Languages, LogOut, MessageSquarePlus, MonitorSmartphone, Moon, Receipt, ShieldCheck, Store, Sun, SunMoon,
+  Trash2, Wallet, type LucideIcon,
 } from "lucide-react-native";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, Alert, Image, Platform, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Platform, Pressable, RefreshControl, Share, Text, View } from "react-native";
+import Animated, { useAnimatedScrollHandler, useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BOTTOM_NAV_SPACE } from "@/components/BottomNav";
-import { BrandSurface } from "@/components/BrandSurface";
 import { DeleteAccountSheet } from "@/components/DeleteAccountSheet";
+import { ProfileHeroCard } from "@/components/ProfileHeroCard";
 import { MarathonProfileCard } from "@/components/MarathonProfileCard";
 import { PlanUsageCard } from "@/components/PlanUsageCard";
 import { SegmentedSwitch, type Segment } from "@/components/SegmentedSwitch";
-import { Touchable } from "@/components/Touchable";
+import { useFocusRefresh } from "@/lib/useFocusRefresh";
 import { asErrorMessage } from "@/lib/format";
-import { formatNumber } from "@/lib/money";
 import { myMembership } from "@/lib/subscription";
 import { supabase } from "@/lib/supabase";
 import { supportUnread } from "@/lib/support";
+import { tierOf } from "@/lib/tier";
 import { LANGUAGE_NAMES, type AppLanguage } from "@/i18n";
 import { useAuth } from "@/providers/AuthProvider";
 import { useLanguage } from "@/providers/LanguageProvider";
 import type { ThemeMode } from "@/theme/ThemeProvider";
-import { brandInk, gradients, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { radius, shadow, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type Identity = {
@@ -40,16 +40,6 @@ type Identity = {
 const EMPTY: Identity = {
   firstName: "", lastName: "", username: "", bio: "", organization: "", fieldOfStudy: "",
 };
-
-/**
- * The picture of you, and the rim of page colour round it.
- *
- * The rim is the canvas, not white: it is what cuts the photograph out of the
- * banner it overlaps, so at night it has to be the night's colour too.
- */
-const AVATAR = 106;
-const RING = 5;
-const FRAME = AVATAR + RING * 2;
 
 /** Sozlamalar, in the order somebody reaches for them. The only way to the tariff on this screen. */
 const SETTINGS = [
@@ -83,11 +73,12 @@ const APPEARANCE_ICONS = { system: SunMoon, light: Sun, dark: Moon } as const;
  * The version before this one spent colour everywhere — a violet field bled
  * from the top of the screen, three action tiles each in their own hue, a hue
  * per settings row, a red slab at the bottom — and read as busy rather than
- * finished. Now the brand is one banner (`BrandSurface`, the same material as
- * the balance card on Bosh sahifa), the person sits on its edge, and every
- * control below is drawn one way: one tile, one ink, one grouped list. The
- * only other colour is red, on the one thing that cannot be undone. The tariff
- * is reached from one row; a member's allowance shows above the settings.
+ * finished. The person is now one portrait card at the top
+ * (`ProfileHeroCard`) — their photograph, framed in the metal of their plan —
+ * and every control below is drawn one way: one tile, one ink, one grouped
+ * list. The only other colour is red, on the one thing that cannot be undone.
+ * The tariff is reached from one row; a member's allowance shows above the
+ * settings.
  */
 export default function ProfileScreen() {
   const { colors, mode, setMode } = useTheme();
@@ -112,6 +103,7 @@ export default function ProfileScreen() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [credits, setCredits] = useState(0);
   const [plan, setPlan] = useState<string | null>(null);
+  const [planCode, setPlanCode] = useState<string | null>(null);
   const [member, setMember] = useState(false);
   const [counts, setCounts] = useState({ presentations: 0, games: 0 });
   const [loading, setLoading] = useState(true);
@@ -119,6 +111,9 @@ export default function ProfileScreen() {
   const [error, setError] = useState<string | null>(null);
   const [supportBadge, setSupportBadge] = useState(0);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  // Read by the card: pulling past the top stretches it.
+  const scrollY = useSharedValue(0);
+  const onScroll = useAnimatedScrollHandler((event) => { scrollY.value = event.contentOffset.y; });
 
   /**
    * Only the first visit waits behind a spinner.
@@ -165,6 +160,7 @@ export default function ProfileScreen() {
       }
       if (!walletResult.error) setCredits(walletResult.data.balance);
       setPlan(membership?.member ? membership.planName : null);
+      setPlanCode(membership?.member ? membership.planCode : null);
       setMember(Boolean(membership?.member));
       setCounts({ presentations: decks.count ?? 0, games: games.count ?? 0 });
     } catch (failure) {
@@ -180,7 +176,7 @@ export default function ProfileScreen() {
 
   // Re-read on focus, so a name changed on the edit screen is already right
   // when the person comes back rather than one pull-to-refresh later.
-  useFocusEffect(useCallback(() => {
+  useFocusRefresh(useCallback(() => {
     void load();
     void supportUnread().then(setSupportBadge);
   }, [load]));
@@ -191,92 +187,44 @@ export default function ProfileScreen() {
     .join("")
     .toUpperCase();
 
-  const stats = [
-    { key: "decks", value: counts.presentations, label: t("stats.decks") },
-    { key: "games", value: counts.games, label: t("stats.games") },
-    { key: "coins", value: credits, label: t("stats.coins") },
-  ];
 
   if (loading) return <View style={styles.centered}><ActivityIndicator color={colors.primary} size="large" /></View>;
 
   return (
     <View style={styles.screen}>
-      <ScrollView
+      <Animated.ScrollView
+        onScroll={onScroll}
+        scrollEventThrottle={16}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={colors.primary} />}
       >
-        {/* The top inset is measured, so the banner sits under the island on
+        {/* The top inset is measured, so the card sits under the island on
             every phone rather than at a guessed distance from it. */}
-        <BrandSurface radius={28} style={[styles.banner, { marginTop: Math.max(insets.top, 24) + spacing.sm }]} />
-
-        <View style={styles.identity}>
-          {/* The lift lives outside the frame: a shadow on a view that clips its
-              children is clipped with them. */}
-          <View style={styles.avatarLift}>
-            <View style={styles.avatarFrame}>
-              {avatarUrl ? (
-                <Image
-                  source={{ uri: avatarUrl }}
-                  style={styles.avatar}
-                  // Cover, stated: a portrait squeezed to fit a square is the
-                  // one way a profile picture can be actively wrong.
-                  resizeMode="cover"
-                  accessibilityIgnoresInvertColors
-                />
-              ) : (
-                <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.avatar, styles.avatarEmpty]}>
-                  {initials
-                    ? <Text style={styles.initials}>{initials}</Text>
-                    : <UserIcon color={brandInk.strong} size={44} strokeWidth={1.5} />}
-                </LinearGradient>
-              )}
-            </View>
-          </View>
-
-          <Text style={styles.name} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>{fullName || t("namePlaceholder")}</Text>
-          <View style={styles.meta}>
-            <Text style={styles.handle} numberOfLines={1}>
-              {identity.username ? `@${identity.username}` : user?.email}
-            </Text>
-            {plan ? (
-              <View style={styles.planChip}>
-                <Crown color={colors.primaryDeep} size={12} strokeWidth={2.4} />
-                <Text style={styles.planText} numberOfLines={1}>{plan}</Text>
-              </View>
-            ) : null}
-          </View>
-          {identity.organization || identity.fieldOfStudy ? (
-            <Text style={styles.study} numberOfLines={2}>
-              {[identity.organization, identity.fieldOfStudy].filter(Boolean).join(" · ")}
-            </Text>
-          ) : null}
-          {identity.bio ? <Text style={styles.bio}>{identity.bio}</Text> : null}
-
-          <Touchable
-            accessibilityRole="button"
-            accessibilityLabel={t("edit")}
-            onPress={() => router.push("/(app)/profile-edit")}
-            style={styles.edit}
-          >
-            <Pencil color={colors.ink} size={15} strokeWidth={2.2} />
-            <Text style={styles.editText}>{t("edit")}</Text>
-          </Touchable>
-        </View>
-
-        {/* Three figures on one panel, divided by hairlines rather than boxed. */}
-        <View style={styles.stats}>
-          {stats.map((stat, at) => (
-            <View key={stat.key} style={styles.statCell}>
-              {at > 0 ? <View style={styles.statRule} /> : null}
-              {/* One line, shrunk rather than wrapped: a balance is six digits
-                  more often than not, and a wrapped figure pushes its label off. */}
-              <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
-                {formatNumber(stat.value)}
-              </Text>
-              <Text style={styles.statLabel} numberOfLines={1}>{stat.label}</Text>
-            </View>
-          ))}
+        <View style={{ marginTop: Math.max(insets.top, 24) + spacing.sm }}>
+          <ProfileHeroCard
+            name={fullName || t("namePlaceholder")}
+            handle={identity.username ? `@${identity.username}` : user?.email ?? ""}
+            bio={identity.bio}
+            study={[identity.organization, identity.fieldOfStudy].filter(Boolean).join(" · ")}
+            avatarUrl={avatarUrl}
+            initials={initials}
+            tier={tierOf(planCode, member)}
+            planName={plan}
+            decks={counts.presentations}
+            games={counts.games}
+            coins={credits}
+            onEdit={() => router.push("/(app)/profile-edit")}
+            onSend={() => router.push("/(app)/coins/send")}
+            onTopUp={() => router.push("/(app)/coins/buy")}
+            scrollY={scrollY}
+            onShare={() => {
+              const message = identity.username
+                ? t("actions.shareMessage", { username: identity.username })
+                : t("actions.shareMessagePlain");
+              void Share.share({ message }).catch(() => undefined);
+            }}
+          />
         </View>
 
         {error ? <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View> : null}
@@ -393,7 +341,7 @@ export default function ProfileScreen() {
             </View>
           </View>
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
 
       <DeleteAccountSheet visible={confirmingDelete} onClose={() => setConfirmingDelete(false)} />
     </View>
@@ -417,59 +365,6 @@ const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.canvas },
   content: { paddingBottom: BOTTOM_NAV_SPACE + spacing.xl, gap: spacing.lg },
-  banner: { height: 148, marginHorizontal: spacing.lg },
-  // Half the picture over the banner; the content's own gap is taken back too.
-  identity: { alignItems: "center", marginTop: -(FRAME / 2) - spacing.lg, paddingHorizontal: spacing.xl },
-  avatarLift: {
-    borderRadius: FRAME * 0.345,
-    backgroundColor: colors.canvas,
-    shadowColor: "#1A0736",
-    shadowOpacity: 0.28,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 8,
-  },
-  avatarFrame: {
-    width: FRAME,
-    height: FRAME,
-    padding: RING,
-    borderRadius: FRAME * 0.345,
-    backgroundColor: colors.canvas,
-  },
-  avatar: { width: AVATAR, height: AVATAR, borderRadius: AVATAR * 0.33, backgroundColor: colors.surfaceMuted },
-  avatarEmpty: { alignItems: "center", justifyContent: "center" },
-  initials: { fontFamily: "Manrope_700Bold", fontSize: 38, color: brandInk.strong, letterSpacing: 1 },
-  name: { ...typography.title, color: colors.ink, textAlign: "center", marginTop: spacing.md, maxWidth: "100%" },
-  meta: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, marginTop: 2, maxWidth: "100%" },
-  handle: { ...typography.body, color: colors.inkMuted, flexShrink: 1 },
-  planChip: {
-    flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 9, paddingVertical: 3,
-    borderRadius: radius.pill, backgroundColor: colors.primarySoft, maxWidth: 160,
-  },
-  planText: { ...typography.caption, fontFamily: "Manrope_700Bold", fontSize: 11.5, color: colors.primaryDeep, flexShrink: 1 },
-  study: { ...typography.caption, color: colors.inkSoft, textAlign: "center", marginTop: spacing.sm },
-  bio: { ...typography.body, fontSize: 14.5, color: colors.inkMuted, textAlign: "center", marginTop: spacing.sm },
-  edit: {
-    flexDirection: "row", alignItems: "center", gap: spacing.sm, height: 42, paddingHorizontal: spacing.xl - 4,
-    borderRadius: radius.pill, borderWidth: 1, borderColor: colors.borderStrong, backgroundColor: colors.surface,
-    marginTop: spacing.lg,
-  },
-  editText: { ...typography.bodyMedium, fontSize: 14, color: colors.ink },
-  stats: {
-    flexDirection: "row",
-    alignItems: "stretch",
-    marginHorizontal: spacing.xl,
-    paddingVertical: spacing.lg,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadow,
-  },
-  statCell: { flex: 1, alignItems: "center", gap: 2, paddingHorizontal: spacing.sm },
-  statRule: { position: "absolute", left: 0, top: 6, bottom: 6, width: 1, backgroundColor: colors.border },
-  statValue: { fontFamily: "Manrope_800ExtraBold", fontSize: 22, lineHeight: 28, color: colors.ink, letterSpacing: -0.5 },
-  statLabel: { ...typography.caption, color: colors.inkMuted },
   errorBox: { marginHorizontal: spacing.xl, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.dangerSoft },
   errorText: { ...typography.caption, color: colors.danger },
   section: { marginHorizontal: spacing.xl, gap: spacing.sm },

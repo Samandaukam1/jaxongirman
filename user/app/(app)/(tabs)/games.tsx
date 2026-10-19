@@ -1,6 +1,6 @@
 import type { GameStatus } from "@jaxongirman/types";
 import { LinearGradient } from "expo-linear-gradient";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import {
   Bell, Gamepad2, Gift, Medal, MonitorPlay, Plus, QrCode, ShoppingBag, Sparkles, Trophy,
 } from "lucide-react-native";
@@ -16,6 +16,7 @@ import { Touchable } from "@/components/Touchable";
 import { BOTTOM_NAV_SPACE } from "@/components/BottomNav";
 import { MarathonVoteButton } from "@/components/MarathonVoteButton";
 import { EmptyState, InlineError, SkeletonCard } from "@/components/StateBlocks";
+import { useFocusRefresh } from "@/lib/useFocusRefresh";
 import { formatDate } from "@/lib/datetime";
 import { asErrorMessage } from "@/lib/format";
 import { labelOf } from "@/lib/labels";
@@ -95,7 +96,7 @@ export default function GamesScreen() {
     }
   }, [user]);
 
-  useFocusEffect(useCallback(() => { void load(); }, [load]));
+  useFocusRefresh(load);
 
   const shelfGames = useMemo(() => {
     switch (shelf) {

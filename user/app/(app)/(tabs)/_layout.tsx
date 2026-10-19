@@ -33,6 +33,11 @@ export default function TabsLayout() {
         animation: "fade",
         transitionSpec: { animation: "timing", config: { duration: 160 } },
         sceneStyle: { backgroundColor: colors.canvas },
+        // A tab that is not on screen does not re-render. Without this every
+        // change to the account (a balance, an unread count) re-drew all five
+        // pages, four of them invisible — which is what made switching tabs
+        // stutter once a few had been opened.
+        freezeOnBlur: true,
       }}
     >
       <Tabs.Screen name="index" options={{ title: t("home") }} />

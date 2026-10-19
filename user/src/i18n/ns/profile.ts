@@ -27,6 +27,8 @@ export default translations(
       save: "Saqlash",
     },
     stats: { decks: "Taqdimot", games: "O‘yin", coins: "J Tanga" },
+    tier: { free: "Bepul", bronze: "Bronza", silver: "Kumush", gold: "Oltin" },
+    actions: { edit: "Tahrirlash", send: "Yuborish", topUp: "To‘ldirish", share: "Ulashish", shareMessage: "Meni Jaxongirman’da toping: @{{username}}", shareMessagePlain: "Meni Jaxongirman’da toping" },
     sections: { appearance: "KO‘RINISH", language: "TIL", support: "YORDAM MARKAZI", settings: "SOZLAMALAR", account: "HISOB" },
     appearance: { system: "Tizim", light: "Yorug‘", dark: "Qorong‘i" },
     settings: {
@@ -130,6 +132,8 @@ export default translations(
       save: "Save",
     },
     stats: { decks: "Decks", games: "Games", coins: "J Tanga" },
+    tier: { free: "Free", bronze: "Bronze", silver: "Silver", gold: "Gold" },
+    actions: { edit: "Edit", send: "Send", topUp: "Top up", share: "Share", shareMessage: "Find me on Jaxongirman: @{{username}}", shareMessagePlain: "Find me on Jaxongirman" },
     sections: { appearance: "APPEARANCE", language: "LANGUAGE", support: "HELP CENTER", settings: "SETTINGS", account: "ACCOUNT" },
     appearance: { system: "System", light: "Light", dark: "Dark" },
     settings: {
@@ -233,6 +237,8 @@ export default translations(
       save: "Сохранить",
     },
     stats: { decks: "Презентации", games: "Игры", coins: "J Tanga" },
+    tier: { free: "Бесплатно", bronze: "Бронза", silver: "Серебро", gold: "Золото" },
+    actions: { edit: "Изменить", send: "Отправить", topUp: "Пополнить", share: "Поделиться", shareMessage: "Найдите меня в Jaxongirman: @{{username}}", shareMessagePlain: "Найдите меня в Jaxongirman" },
     sections: { appearance: "ОФОРМЛЕНИЕ", language: "ЯЗЫК", support: "ЦЕНТР ПОМОЩИ", settings: "НАСТРОЙКИ", account: "АККАУНТ" },
     appearance: { system: "Системная", light: "Светлая", dark: "Тёмная" },
     settings: {

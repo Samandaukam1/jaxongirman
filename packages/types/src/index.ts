@@ -3,6 +3,7 @@ import type { Json } from "./database.generated";
 export * from "./avatars";
 export * from "./payment-cards";
 export * from "./presenting";
+export * from "./promo";
 
 /**
  * Account roles, ordered from least to most privileged. `super_admin` is a

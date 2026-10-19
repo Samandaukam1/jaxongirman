@@ -1,12 +1,13 @@
 import type { MarketplaceMaterialType } from "@jaxongirman/types";
 import * as Crypto from "expo-crypto";
 import * as DocumentPicker from "expo-document-picker";
+import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { BookOpenText, FileUp, Image as ImageIcon, Send, X } from "lucide-react-native";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Image, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, Image, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 import { PrimaryButton } from "@/components/PrimaryButton";
@@ -31,6 +32,34 @@ function extensionFor(mimeType: string, name: string): string {
   if (mimeType.includes("wordprocessingml")) return "docx";
   if (mimeType.includes("pdf")) return "pdf";
   return name.split(".").pop()?.toLowerCase() ?? "bin";
+}
+
+/** A shop picture is drawn at most this wide; a 12-megapixel photo is not. */
+const PICTURE_LONG_SIDE = 1280;
+
+/**
+ * A picked photo at shop size, as a JPEG.
+ *
+ * Phone photos went up as they were — several megabytes each — and every
+ * visitor downloaded the full photo to fill a card a few hundred points wide,
+ * which is why covers arrived seconds after the card. Anything that cannot be
+ * re-encoded (the web, an exotic format) is sent unchanged rather than failing.
+ */
+async function shrinkPicture(asset: ImagePicker.ImagePickerAsset): Promise<{ uri: string; sizeBytes: number } | null> {
+  if (Platform.OS === "web") return null;
+  try {
+    const context = ImageManipulator.manipulate(asset.uri);
+    const long = Math.max(asset.width, asset.height);
+    if (long > PICTURE_LONG_SIDE) {
+      context.resize(asset.width >= asset.height ? { width: PICTURE_LONG_SIDE } : { height: PICTURE_LONG_SIDE });
+    }
+    const rendered = await context.renderAsync();
+    const saved = await rendered.saveAsync({ compress: 0.8, format: SaveFormat.JPEG });
+    const sizeBytes = (await (await fetch(saved.uri)).blob()).size;
+    return { uri: saved.uri, sizeBytes };
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -90,14 +119,17 @@ export default function SellScreen() {
     if (result.canceled) return;
     const asset = result.assets[0];
     if (!asset) return;
-    let sizeBytes = asset.fileSize ?? 0;
+    const shrunk = await shrinkPicture(asset);
+    let sizeBytes = shrunk?.sizeBytes ?? asset.fileSize ?? 0;
     if (!sizeBytes) sizeBytes = (await (await fetch(asset.uri)).blob()).size;
-    const picked: PickedFile = {
-      uri: asset.uri,
-      name: asset.fileName ?? "cover.jpg",
-      mimeType: asset.mimeType && /image\/(jpeg|png|webp)/.test(asset.mimeType) ? asset.mimeType : "image/jpeg",
-      sizeBytes,
-    };
+    const picked: PickedFile = shrunk
+      ? { uri: shrunk.uri, name: (asset.fileName ?? "cover").replace(/\.[^.]+$/, "") + ".jpg", mimeType: "image/jpeg", sizeBytes }
+      : {
+        uri: asset.uri,
+        name: asset.fileName ?? "cover.jpg",
+        mimeType: asset.mimeType && /image\/(jpeg|png|webp)/.test(asset.mimeType) ? asset.mimeType : "image/jpeg",
+        sizeBytes,
+      };
     if (kind === "cover") setCover(picked);
     else setPreviews((current) => [...current, picked].slice(0, 6));
   }

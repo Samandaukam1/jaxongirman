@@ -1,10 +1,10 @@
 import type {
-  MarketplaceMaterialType, MarketplaceQuote, MarketplaceSearchResult, MarketplaceSort,
+  MarketplaceListItem, MarketplaceMaterialType, MarketplaceQuote, MarketplaceSearchResult, MarketplaceSort,
 } from "@jaxongirman/types";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { useCallback, useEffect, useState } from "react";
-import { Platform } from "react-native";
+import { Image, Platform } from "react-native";
 
 import { i18n } from "../i18n";
 
@@ -13,8 +13,20 @@ import { localized } from "./content";
 import { asErrorMessage } from "./format";
 import { supabase } from "./supabase";
 
-/** How long a batch of cover URLs stays valid. Long enough to scroll a list. */
-const PREVIEW_URL_SECONDS = 3600;
+/**
+ * How long a signed cover URL stays valid, and how long this client reuses it.
+ *
+ * The reuse is the point. A signed URL carries its token in the query string,
+ * so every fresh signature is a URL the image cache has never seen — and the
+ * covers were signed again on every visit to the shop, which made every visit
+ * download every picture again. Reusing one URL for hours lets the platform's
+ * image cache answer instead; it is refreshed well before it expires.
+ */
+const PREVIEW_URL_SECONDS = 12 * 3600;
+const PREVIEW_REUSE_MS = 6 * 3600 * 1000;
+
+/** Signed URLs by `bucket/path`, kept for the life of the process. */
+const signedUrls = new Map<string, { url: string; signedAt: number }>();
 
 export type SearchFilters = {
   query: string;
@@ -43,10 +55,68 @@ export const PAGE_SIZE = 20;
 export async function signPaths(bucket: string, paths: readonly string[]): Promise<Record<string, string>> {
   const unique = Array.from(new Set(paths.filter(Boolean)));
   if (unique.length === 0) return {};
-  const { data } = await supabase.storage.from(bucket).createSignedUrls(unique, PREVIEW_URL_SECONDS);
-  const usable = (data ?? []).filter((item): item is typeof item & { path: string; signedUrl: string } =>
-    Boolean(item.path) && Boolean(item.signedUrl));
-  return Object.fromEntries(usable.map((item) => [item.path, item.signedUrl]));
+  const now = Date.now();
+  const found: Record<string, string> = {};
+  const missing: string[] = [];
+  for (const path of unique) {
+    const cached = signedUrls.get(`${bucket}/${path}`);
+    if (cached && now - cached.signedAt < PREVIEW_REUSE_MS) found[path] = cached.url;
+    else missing.push(path);
+  }
+  if (missing.length > 0) {
+    const { data } = await supabase.storage.from(bucket).createSignedUrls(missing, PREVIEW_URL_SECONDS);
+    for (const item of data ?? []) {
+      if (!item.path || !item.signedUrl) continue;
+      signedUrls.set(`${bucket}/${item.path}`, { url: item.signedUrl, signedAt: now });
+      found[item.path] = item.signedUrl;
+      // Started now rather than when the card mounts: by the time the grid
+      // draws, the bytes are already on their way or in the cache.
+      if (Platform.OS !== "web") void Image.prefetch(item.signedUrl).catch(() => false);
+    }
+  }
+  return found;
+}
+
+/**
+ * The first page of the shop with nothing filtered, kept between visits.
+ *
+ * Bosh sahifa shows the newest few products and the Do‘kon tab opens on the
+ * same page, so both read this and both refresh it. A screen that has it draws
+ * the shelf at once and updates it in place, instead of a skeleton every time
+ * the tab is reopened.
+ */
+export type Shelf = { items: MarketplaceListItem[]; total: number; covers: Record<string, string>; loadedAt: number };
+let shelf: Shelf | null = null;
+let shelfRequest: Promise<Shelf> | null = null;
+
+export function peekShelf(): Shelf | null {
+  return shelf;
+}
+
+/** Refreshes the unfiltered first page; concurrent callers share one request. */
+export function refreshShelf(): Promise<Shelf> {
+  if (shelfRequest) return shelfRequest;
+  shelfRequest = (async () => {
+    const result = await searchProducts(EMPTY_FILTERS, 0);
+    const covers = await signPaths(
+      "marketplace-previews",
+      result.items.map((item) => item.cover_path).filter((path): path is string => Boolean(path)),
+    );
+    shelf = { items: result.items, total: result.total, covers, loadedAt: Date.now() };
+    return shelf;
+  })().finally(() => { shelfRequest = null; });
+  return shelfRequest;
+}
+
+/** Keeps the cached shelf in step with a favourite toggled on either screen. */
+export function patchShelfItem(id: string, patch: Partial<MarketplaceListItem>): void {
+  if (!shelf) return;
+  shelf = { ...shelf, items: shelf.items.map((item) => (item.id === id ? { ...item, ...patch } : item)) };
+}
+
+export function isDefaultFilters(filters: SearchFilters): boolean {
+  return filters.query.trim() === "" && filters.materialType === null && filters.categoryId === null
+    && filters.sellerId === null && filters.minPrice === null && filters.maxPrice === null && filters.sort === "newest";
 }
 
 /** The catalogue, one page at a time. Filtering and sorting happen server-side. */
@@ -72,13 +142,17 @@ export async function searchProducts(filters: SearchFilters, offset: number): Pr
  * Read rather than hard-coded: adding "Diplom ishi" is an admin insert, and this
  * screen has to pick it up without a release.
  */
+let materialTypesCache: MarketplaceMaterialType[] | null = null;
+
 export function useMaterialTypes() {
-  const [types, setTypes] = useState<MarketplaceMaterialType[]>([]);
-  const [loading, setLoading] = useState(true);
+  // The list changes when an operator edits it, not between two tabs: a cached
+  // copy draws the chips at once and the read below corrects it if it moved.
+  const [types, setTypes] = useState<MarketplaceMaterialType[]>(() => materialTypesCache ?? []);
+  const [loading, setLoading] = useState(materialTypesCache === null);
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
-    setLoading(true);
+    if (materialTypesCache === null) setLoading(true);
     const { data, error: requestError } = await supabase
       .from("marketplace_material_types")
       .select("*")
@@ -87,8 +161,10 @@ export function useMaterialTypes() {
     if (requestError) setError(asErrorMessage(requestError));
     else {
       // Names and descriptions in the app's language, where an operator has written them.
-      setTypes(((data ?? []) as (MarketplaceMaterialType & { label_i18n?: unknown; description_i18n?: unknown })[])
-        .map((type) => ({ ...type, label: localized(type.label, type.label_i18n), description: localized(type.description, type.description_i18n) })));
+      const next = ((data ?? []) as (MarketplaceMaterialType & { label_i18n?: unknown; description_i18n?: unknown })[])
+        .map((type) => ({ ...type, label: localized(type.label, type.label_i18n), description: localized(type.description, type.description_i18n) }));
+      materialTypesCache = next;
+      setTypes(next);
       setError(null);
     }
     setLoading(false);

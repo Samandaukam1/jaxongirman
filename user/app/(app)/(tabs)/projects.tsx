@@ -1,6 +1,6 @@
-import { useFocusEffect, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { Search, Sparkles, X } from "lucide-react-native";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Image, Pressable, RefreshControl, Text, TextInput, View, type LayoutChangeEvent } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -28,6 +28,7 @@ import { EmptyState, ErrorState, SkeletonCard } from "@/components/StateBlocks";
 import { HeroToolCard, ToolCard, type ToolArt } from "@/components/ToolCard";
 import { ObjectiveArt, PortraitArt, PowerPointArt, PresentArt, ScientificArt, SlideCreateArt } from "@/components/toolArt";
 import { Touchable } from "@/components/Touchable";
+import { useFocusRefresh } from "@/lib/useFocusRefresh";
 import { asErrorMessage } from "@/lib/format";
 import { blend, withAlpha } from "@/theme/color";
 import { useReduceMotion } from "@/lib/motion";
@@ -191,9 +192,11 @@ export default function ProjectsScreen() {
     if (next !== previous) runOnJS(setFolded)(next);
   });
 
+  // Only the first read waits behind the skeleton; later ones update the list in place.
+  const loaded = useRef(false);
   const load = useCallback(async (isRefresh = false) => {
     if (!user) return;
-    if (isRefresh) setRefreshing(true); else setLoading(true);
+    if (isRefresh) setRefreshing(true); else if (!loaded.current) setLoading(true);
     setError(null);
     try {
       setItems(await listProjects(user.id));
@@ -202,12 +205,13 @@ export default function ProjectsScreen() {
     } catch (nextError) {
       setError(asErrorMessage(nextError));
     } finally {
+      loaded.current = true;
       setLoading(false);
       setRefreshing(false);
     }
   }, [refreshAccount, user]);
 
-  useFocusEffect(useCallback(() => { void load(); }, [load]));
+  useFocusRefresh(load);
 
   /**
    * The folded row's chips, each carrying a trace of its own card's colour, so

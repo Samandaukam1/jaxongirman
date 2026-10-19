@@ -29,6 +29,10 @@ const AccountContext = createContext<AccountState | null>(null);
  * how many messages are waiting — read once and then kept current by realtime
  * rather than re-queried by every screen that shows a balance.
  */
+function sameJson(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
 export function AccountProvider({ children }: PropsWithChildren) {
   const { user } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -60,11 +64,17 @@ export function AccountProvider({ children }: PropsWithChildren) {
       if (profileResult.error) throw profileResult.error;
       if (walletResult.error) throw walletResult.error;
 
-      setProfile(profileResult.data);
+      // The same answer keeps the same object. Every screen and the tab bar
+      // read this context, so a fresh but identical profile re-rendered all of
+      // them on each refresh — and a refresh runs on most screen focuses.
+      setProfile((current) => (sameJson(current, profileResult.data) ? current : profileResult.data));
       setBalance(walletResult.data.balance);
       setReserved(walletResult.data.reserved);
       setUnreadCount(unreadResult.count ?? 0);
-      setEntitlements(entitlementResult.data ?? []);
+      setEntitlements((current) => {
+        const next = entitlementResult.data ?? [];
+        return sameJson(current, next) ? current : next;
+      });
       setError(null);
     } catch (nextError) {
       setError(asErrorMessage(nextError));

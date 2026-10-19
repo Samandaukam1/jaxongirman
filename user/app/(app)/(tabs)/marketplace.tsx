@@ -16,7 +16,7 @@ import { asErrorMessage } from "@/lib/format";
 import { labelOf } from "@/lib/labels";
 import { useVoteMarketEnabled } from "@/lib/marathon-market";
 import {
-  EMPTY_FILTERS, searchProducts, signPaths, toggleFavorite, useMaterialTypes,
+  EMPTY_FILTERS, isDefaultFilters, patchShelfItem, peekShelf, refreshShelf, searchProducts, signPaths, toggleFavorite, useMaterialTypes,
   type SearchFilters,
 } from "@/lib/marketplace";
 import { formatNumber, formatSom } from "@/lib/money";
@@ -46,10 +46,12 @@ export default function MarketplaceScreen() {
 
   const [filters, setFilters] = useState<SearchFilters>(EMPTY_FILTERS);
   const [draftQuery, setDraftQuery] = useState("");
-  const [items, setItems] = useState<MarketplaceListItem[]>([]);
-  const [covers, setCovers] = useState<Record<string, string>>({});
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
+  // The unfiltered first page is shared with Bosh sahifa and kept between
+  // visits, so the shelf is drawn on the first frame whenever it has been seen.
+  const [items, setItems] = useState<MarketplaceListItem[]>(() => peekShelf()?.items ?? []);
+  const [covers, setCovers] = useState<Record<string, string>>(() => peekShelf()?.covers ?? {});
+  const [total, setTotal] = useState(() => peekShelf()?.total ?? 0);
+  const [loading, setLoading] = useState(() => peekShelf() === null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,17 +63,33 @@ export default function MarketplaceScreen() {
   // Guards the pager: a fast scroll can fire onEndReached several times before
   // the first page has landed.
   const loadingRef = useRef(false);
+  // Which filters the list on screen answers. A refresh of the same view keeps
+  // it on screen and swaps it in place; only a different question shows the
+  // skeleton.
+  const shownFilters = useRef<SearchFilters | null>(peekShelf() ? EMPTY_FILTERS : null);
 
   const load = useCallback(async (nextFilters: SearchFilters, offset: number, mode: "replace" | "append") => {
     if (loadingRef.current) return;
     loadingRef.current = true;
-    if (mode === "replace" && offset === 0) setLoading(true); else setLoadingMore(true);
+    if (mode === "replace" && offset === 0) {
+      if (JSON.stringify(shownFilters.current) !== JSON.stringify(nextFilters)) setLoading(true);
+    } else setLoadingMore(true);
     try {
+      if (mode === "replace" && offset === 0 && isDefaultFilters(nextFilters)) {
+        const fresh = await refreshShelf();
+        setItems(fresh.items);
+        setTotal(fresh.total);
+        setCovers((current) => ({ ...current, ...fresh.covers }));
+        setError(null);
+        shownFilters.current = nextFilters;
+        return;
+      }
       const result = await searchProducts(nextFilters, offset);
       const nextItems = mode === "append" ? [...items, ...result.items] : result.items;
       setItems(nextItems);
       setTotal(result.total);
       setError(null);
+      shownFilters.current = nextFilters;
 
       const paths = result.items.map((item) => item.cover_path).filter((path): path is string => Boolean(path));
       if (paths.length > 0) {
@@ -111,10 +129,12 @@ export default function MarketplaceScreen() {
     if (!user) return;
     const next = !item.is_favorite;
     setItems((current) => current.map((row) => row.id === item.id ? { ...row, is_favorite: next } : row));
+    patchShelfItem(item.id, { is_favorite: next });
     try {
       await toggleFavorite(item.id, user.id, next);
     } catch {
       setItems((current) => current.map((row) => row.id === item.id ? { ...row, is_favorite: !next } : row));
+      patchShelfItem(item.id, { is_favorite: !next });
     }
   }
 
@@ -294,7 +314,7 @@ export default function MarketplaceScreen() {
             >
               <View style={styles.coverFrame}>
                 {item.cover_path && covers[item.cover_path] ? (
-                  <Image source={{ uri: covers[item.cover_path] }} style={styles.cover} resizeMode="cover" />
+                  <Image source={{ uri: covers[item.cover_path] }} style={styles.cover} resizeMode="cover" fadeDuration={120} />
                 ) : (
                   <View style={styles.coverFallback}>
                     <Store color={colors.borderStrong} size={26} strokeWidth={1.7} />

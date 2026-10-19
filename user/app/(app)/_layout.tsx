@@ -107,6 +107,8 @@ export default function AppLayout() {
               options={{ gestureEnabled: false }}
             />
             <Stack.Screen name="pair/[token]" />
+            {/* A recommendation rises out of its banner rather than sliding in like a settings page. */}
+            <Stack.Screen name="promo/[id]" options={{ animation: "fade_from_bottom" }} />
           </Stack>
         </DesktopShell>
       </PaymentPolicyProvider>

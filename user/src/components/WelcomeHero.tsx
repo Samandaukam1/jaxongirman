@@ -74,7 +74,7 @@ export function WelcomeHero({ wallet }: { wallet: Wallet }) {
         </View>
 
         <View style={styles.hero}>
-          <Text style={styles.figure} numberOfLines={1}>{figure}</Text>
+          <Text style={styles.figure} numberOfLines={1} maxFontSizeMultiplier={1}>{figure}</Text>
           <View style={styles.words}>
             <Text style={styles.wordsText}>{words}</Text>
             <Text style={styles.detail}>{detail}</Text>
@@ -145,9 +145,15 @@ const useStyles = makeStyles(() => ({
   pillText: { ...typography.caption, fontFamily: "Manrope_700Bold", fontSize: 12, color: brandInk.strong, fontVariant: ["tabular-nums"] },
 
   hero: { flexDirection: "row", alignItems: "flex-end", gap: spacing.md + 2 },
+  // The line box is taller than the glyph on purpose. At 84 against a 92 pt
+  // face the top of the digit was cut off on phones whose text metrics run a
+  // little taller (and anywhere the system font scale is raised). The extra
+  // height is given back with negative margins, so the card does not grow, and
+  // the side padding keeps the tight tracking from shaving the last digit.
   figure: {
-    fontFamily: "Manrope_800ExtraBold", fontSize: 92, lineHeight: 84, letterSpacing: -5,
+    fontFamily: "Manrope_800ExtraBold", fontSize: 92, lineHeight: 112, letterSpacing: -5,
     color: brandInk.strong, fontVariant: ["tabular-nums"], includeFontPadding: false,
+    marginTop: -14, marginBottom: -14, paddingRight: 6,
   },
   words: { flex: 1, gap: 4, paddingBottom: 6 },
   wordsText: { fontFamily: "Manrope_800ExtraBold", fontSize: 21, lineHeight: 24, letterSpacing: -0.3, color: brandInk.strong },

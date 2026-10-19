@@ -25,6 +25,7 @@ import { ModulesPage } from "@/pages/ModulesPage";
 import { OrdersPage } from "@/pages/OrdersPage";
 import { MarathonPage } from "@/pages/MarathonPage";
 import { PricingPage } from "@/pages/PricingPage";
+import { PromosPage } from "@/pages/PromosPage";
 import { EconomyPage } from "@/pages/EconomyPage";
 import { SupportPage } from "@/pages/SupportPage";
 import { QrVideoPage } from "@/pages/QrVideoPage";
@@ -38,6 +39,7 @@ import { useAuth } from "@/providers/AuthProvider";
 
 const pages: Record<string, ReactNode> = {
   "/": <DashboardPage />,
+  "/tavsiyalar": <PromosPage />,
   "/users": <UsersPage />,
   "/presentations": <PresentationsPage />,
   "/jslayd": <JslaydDesignsPage />,

@@ -1,6 +1,7 @@
 import * as Crypto from "expo-crypto";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { ArrowLeft, Search, Send, UserRound } from "lucide-react-native";
+import { ArrowLeft, ArrowUpRight, ChevronRight, Search, ShieldCheck, UserRound } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Image, Pressable, Text, TextInput, View } from "react-native";
@@ -8,6 +9,7 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 import coinIcon from "../../../assets/coin/coin-icon.png";
 import { Avatar } from "@/components/Avatar";
+import { BrandSurface } from "@/components/BrandSurface";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { CountUp, Rise, SuccessMark } from "@/components/SuccessMoment";
@@ -16,7 +18,7 @@ import { asErrorMessage } from "@/lib/format";
 import { formatCoins, formatNumber } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
 import { useAccount } from "@/providers/AccountProvider";
-import { icon, radius, shadow, spacing, typography } from "@/theme/tokens";
+import { brandInk, gradients, icon, radius, shadow, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type Match = { id: string; full_name: string; username: string; avatar_url: string | null };
@@ -24,6 +26,8 @@ type Match = { id: string; full_name: string; username: string; avatar_url: stri
 /** Long enough that a handle is typed, short enough that the list feels live. */
 const SEARCH_DEBOUNCE_MS = 300;
 const MIN_QUERY_LENGTH = 2;
+/** One-tap amounts under the field; the ones a balance cannot cover are dimmed. */
+const QUICK_AMOUNTS = [100, 500, 1_000, 5_000] as const;
 
 function initialsFor(match: Match): string {
   const source = match.full_name?.trim() || match.username;
@@ -157,11 +161,18 @@ export default function SendCoinsScreen() {
       <KeyboardAwareScrollView bottomOffset={spacing.xl} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {recipient ? (
           <>
+            <Text style={styles.eyebrow}>{t("send.to")}</Text>
             <View style={styles.recipientCard}>
-              <Avatar uri={recipient.avatar_url} initials={initialsFor(recipient)} size={52} />
+              {/* A ring of the brand round the picture: this is the person the
+                  money is about to reach, and it should look chosen. */}
+              <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.recipientRing}>
+                <View style={styles.recipientRingInner}>
+                  <Avatar uri={recipient.avatar_url} initials={initialsFor(recipient)} size={50} />
+                </View>
+              </LinearGradient>
               <View style={styles.recipientCopy}>
                 <Text numberOfLines={1} style={styles.recipientName}>{recipient.full_name?.trim() || t("send.user")}</Text>
-                <Text style={styles.recipientHandle}>@{recipient.username}</Text>
+                <Text numberOfLines={1} style={styles.recipientHandle}>@{recipient.username}</Text>
               </View>
               <Pressable
                 accessibilityRole="button"
@@ -174,8 +185,17 @@ export default function SendCoinsScreen() {
               </Pressable>
             </View>
 
-            <View style={styles.amountCard}>
-              <Text style={styles.fieldLabel}>{t("send.howMuch")}</Text>
+            {/* The figure is the screen. It sits on the brand surface in white,
+                the way the balance does on Bosh sahifa, so the two read as the
+                same money. */}
+            <BrandSurface radius={radius.xl} style={styles.amountCard}>
+              <View style={styles.amountTop}>
+                <Text style={styles.amountEyebrow}>{t("send.howMuch")}</Text>
+                <View style={styles.balancePill}>
+                  <Image source={coinIcon} resizeMode="contain" style={styles.balancePillCoin} />
+                  <Text style={styles.balancePillText} numberOfLines={1}>{formatNumber(balance)}</Text>
+                </View>
+              </View>
               <View style={styles.amountRow}>
                 <Image source={coinIcon} resizeMode="contain" style={styles.amountCoin} />
                 <TextInput
@@ -183,21 +203,40 @@ export default function SendCoinsScreen() {
                   onChangeText={(value) => setAmountText(value.replace(/[^0-9]/g, "").slice(0, 7))}
                   keyboardType="number-pad"
                   placeholder="0"
-                  placeholderTextColor={colors.inkSoft}
+                  placeholderTextColor="rgba(255,255,255,0.38)"
+                  selectionColor="#FFFFFF"
                   style={styles.amountInput}
                   accessibilityLabel={t("send.amountLabel")}
+                  maxFontSizeMultiplier={1}
                 />
-                <Text style={styles.amountUnit}>{t("send.unit")}</Text>
               </View>
-              <View style={styles.balanceHint}>
-                <Text style={styles.balanceHintText}>{t("send.current", { balance: formatCoins(balance) })}</Text>
+              <Text style={styles.amountUnit}>{t("send.unit")}</Text>
+              <View style={styles.quickRow}>
+                {QUICK_AMOUNTS.map((quick) => {
+                  const affordable = quick <= balance;
+                  return (
+                    <Pressable
+                      key={quick}
+                      accessibilityRole="button"
+                      disabled={!affordable}
+                      onPress={() => setAmountText(String(quick))}
+                      style={({ pressed }) => [styles.quick, !affordable && styles.quickOff, pressed && styles.quickPressed]}
+                    >
+                      <Text style={styles.quickText}>{formatNumber(quick)}</Text>
+                    </Pressable>
+                  );
+                })}
                 {balance > 0 ? (
-                  <Pressable accessibilityRole="button" onPress={() => setAmountText(String(balance))}>
-                    <Text style={styles.balanceMax}>{t("send.all")}</Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => setAmountText(String(balance))}
+                    style={({ pressed }) => [styles.quick, styles.quickAll, pressed && styles.quickPressed]}
+                  >
+                    <Text style={[styles.quickText, styles.quickAllText]}>{t("send.all")}</Text>
                   </Pressable>
                 ) : null}
               </View>
-            </View>
+            </BrandSurface>
 
             <View style={styles.noteBlock}>
               <Text style={styles.fieldLabel}>{t("send.note")}</Text>
@@ -215,16 +254,37 @@ export default function SendCoinsScreen() {
             {amountProblem ? <InlineError message={amountProblem} /> : null}
             {error ? <InlineError message={error} /> : null}
 
-            <PrimaryButton
-              label={amount > 0 ? t("send.sendAmount", { amount: formatCoins(amount) }) : t("send.enterAmount")}
-              icon={Send}
-              loading={sending}
-              disabled={amount <= 0 || Boolean(amountProblem)}
+            {/* The one button on the screen, drawn as the thing it does: a
+                plane on a white disc, leaving on the brand. Until there is an
+                amount it says what is missing, and stays quiet. */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ disabled: amount <= 0 || Boolean(amountProblem) || sending, busy: sending }}
+              disabled={amount <= 0 || Boolean(amountProblem) || sending}
               onPress={() => void send()}
-            />
-            <Text style={styles.disclaimer}>
-              {t("send.final")}
-            </Text>
+              style={({ pressed }) => [styles.sendWrap, (amount <= 0 || Boolean(amountProblem)) && styles.sendOff, pressed && styles.sendPressed]}
+            >
+              <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.sendButton}>
+                <View style={styles.sendDisc}>
+                  {sending ? <ActivityIndicator color={colors.primary} size="small" /> : (
+                    <>
+                      <Image source={coinIcon} resizeMode="contain" style={styles.sendCoin} />
+                      <LinearGradient colors={gradients.primary} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.sendArrow}>
+                        <ArrowUpRight color={brandInk.strong} size={12} strokeWidth={3.2} />
+                      </LinearGradient>
+                    </>
+                  )}
+                </View>
+                <Text style={styles.sendLabel} numberOfLines={1}>
+                  {amount > 0 ? t("send.sendAmount", { amount: formatCoins(amount) }) : t("send.enterAmount")}
+                </Text>
+                <View style={styles.sendDiscSpacer} />
+              </LinearGradient>
+            </Pressable>
+            <View style={styles.disclaimer}>
+              <ShieldCheck color={colors.inkSoft} size={16} strokeWidth={2} />
+              <Text style={styles.disclaimerText}>{t("send.final")}</Text>
+            </View>
           </>
         ) : (
           <>
@@ -274,7 +334,7 @@ export default function SendCoinsScreen() {
                     <Text numberOfLines={1} style={styles.matchName}>{match.full_name?.trim() || t("send.user")}</Text>
                     <Text style={styles.matchHandle}>@{match.username}</Text>
                   </View>
-                  <Send color={colors.primary} size={icon.sm} strokeWidth={icon.stroke} />
+                  <ChevronRight color={colors.primary} size={icon.md} strokeWidth={icon.strokeBold} />
                 </Pressable>
               ))}
             </View>
@@ -306,25 +366,53 @@ const useStyles = makeStyles((colors) => ({
   matchName: { ...typography.bodyMedium, color: colors.ink },
   matchHandle: { ...typography.caption, color: colors.inkSoft, marginTop: 1 },
 
+  eyebrow: { ...typography.caption, fontFamily: "Manrope_700Bold", fontSize: 11, letterSpacing: 1.4, color: colors.inkSoft, marginBottom: -spacing.sm },
   recipientCard: {
-    flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.lg,
+    flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md,
     borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderStrong, ...shadow,
   },
+  recipientRing: { width: 60, height: 60, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  recipientRingInner: { width: 54, height: 54, borderRadius: 19, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface, overflow: "hidden" },
   recipientCopy: { flex: 1 },
   recipientName: { ...typography.bodyMedium, color: colors.ink },
   recipientHandle: { ...typography.caption, color: colors.inkSoft, marginTop: 1 },
   changeButton: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: spacing.md, paddingVertical: 7, borderRadius: radius.pill, backgroundColor: colors.primarySoft },
   changeText: { ...typography.caption, color: colors.primary },
 
-  amountCard: { padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border, gap: spacing.sm },
+  amountCard: { padding: spacing.xl - 4, gap: 2 },
+  amountTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md },
+  amountEyebrow: { ...typography.caption, fontFamily: "Manrope_700Bold", fontSize: 11, letterSpacing: 1.4, color: brandInk.muted, flexShrink: 1 },
+  balancePill: {
+    flexDirection: "row", alignItems: "center", gap: 5, paddingLeft: 6, paddingRight: 10, paddingVertical: 4, maxWidth: "60%",
+    borderRadius: radius.pill, backgroundColor: "rgba(16,6,48,0.26)", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)",
+  },
+  balancePillCoin: { width: 18, height: 18 },
+  balancePillText: { ...typography.caption, fontFamily: "Manrope_700Bold", color: brandInk.strong, fontVariant: ["tabular-nums"] },
+  amountRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginTop: spacing.md },
+  amountCoin: { width: 46, height: 46 },
+  // The field has a height of its own and a line height taller than its glyph.
+  // It used to be sized by its content alone, and on iOS the empty field drew
+  // only the lower half of its "0" placeholder — a stray arc, and the same clip
+  // cut the top off typed digits.
+  amountInput: {
+    // `minWidth: 0` lets the field shrink to the row: a browser gives an input a
+    // width of its own, and at this size it pushed the whole screen sideways.
+    flex: 1, minWidth: 0, height: 76, paddingVertical: 0, paddingHorizontal: 0,
+    fontFamily: "Manrope_800ExtraBold", fontSize: 48, lineHeight: 62, letterSpacing: -1.5,
+    color: brandInk.strong, includeFontPadding: false, textAlignVertical: "center", fontVariant: ["tabular-nums"],
+  },
+  amountUnit: { fontFamily: "Manrope_600SemiBold", fontSize: 13, color: brandInk.muted, marginLeft: 46 + spacing.md, marginTop: -6 },
+  quickRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.lg },
+  quick: {
+    paddingHorizontal: 14, height: 36, borderRadius: radius.pill, alignItems: "center", justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.14)", borderWidth: 1, borderColor: "rgba(255,255,255,0.22)",
+  },
+  quickOff: { opacity: 0.35 },
+  quickPressed: { opacity: 0.8, transform: [{ scale: 0.97 }] },
+  quickText: { fontFamily: "Manrope_700Bold", fontSize: 13, color: brandInk.strong, fontVariant: ["tabular-nums"] },
+  quickAll: { backgroundColor: brandInk.plate, borderColor: brandInk.plate },
+  quickAllText: { color: brandInk.onPlate },
   fieldLabel: { ...typography.bodyMedium, color: colors.ink },
-  amountRow: { flexDirection: "row", alignItems: "center", gap: spacing.md },
-  amountCoin: { width: 40, height: 40 },
-  amountInput: { flex: 1, fontFamily: "Manrope_700Bold", fontSize: 38, color: colors.ink, paddingVertical: spacing.sm },
-  amountUnit: { fontFamily: "Manrope_600SemiBold", fontSize: 15, color: colors.inkSoft, marginBottom: 6 },
-  balanceHint: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  balanceHintText: { ...typography.caption, color: colors.inkMuted },
-  balanceMax: { ...typography.caption, color: colors.primary, fontFamily: "Manrope_600SemiBold" },
 
   noteBlock: { gap: spacing.sm },
   noteInput: {
@@ -333,7 +421,23 @@ const useStyles = makeStyles((colors) => ({
     borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
   },
   counter: { ...typography.caption, color: colors.inkSoft, alignSelf: "flex-end" },
-  disclaimer: { ...typography.caption, color: colors.inkSoft, textAlign: "center", lineHeight: 17 },
+  sendWrap: { borderRadius: radius.pill, shadowColor: "#4B1FA8", shadowOpacity: 0.35, shadowRadius: 16, shadowOffset: { width: 0, height: 10 }, elevation: 8 },
+  sendOff: { opacity: 0.5, shadowOpacity: 0 },
+  sendPressed: { transform: [{ scale: 0.985 }] },
+  sendButton: { height: 62, borderRadius: radius.pill, flexDirection: "row", alignItems: "center", paddingHorizontal: 7, gap: spacing.md },
+  sendDisc: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", backgroundColor: brandInk.plate },
+  sendCoin: { width: 34, height: 34 },
+  sendArrow: {
+    position: "absolute", right: -2, bottom: -2, width: 21, height: 21, borderRadius: 11,
+    alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: brandInk.plate,
+  },
+  sendDiscSpacer: { width: 48 },
+  sendLabel: { flex: 1, textAlign: "center", fontFamily: "Manrope_800ExtraBold", fontSize: 16, color: brandInk.strong },
+  disclaimer: {
+    flexDirection: "row", alignItems: "flex-start", gap: spacing.sm, padding: spacing.md,
+    borderRadius: radius.md, backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border,
+  },
+  disclaimerText: { ...typography.caption, color: colors.inkMuted, lineHeight: 17, flex: 1 },
 
   successBody: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.xl },
   successLines: { alignItems: "center", gap: spacing.sm, marginTop: -spacing.lg },

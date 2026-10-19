@@ -1,7 +1,7 @@
-import { DATA_COLLECTION_MODULE } from "@jaxongirman/types";
-import { useFocusEffect, useRouter } from "expo-router";
-import { ArrowRight, Bell, CirclePlus, ClipboardList, HandCoins, Plus, Store } from "lucide-react-native";
-import { useCallback, useEffect, useState } from "react";
+import { DATA_COLLECTION_MODULE, type MarketplaceListItem } from "@jaxongirman/types";
+import { useRouter } from "expo-router";
+import { ArrowRight, Bell, CirclePlus, ClipboardList, HandCoins, Star, Store } from "lucide-react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState, Image, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -15,30 +15,33 @@ import { MarathonSection } from "@/components/MarathonSection";
 import { MarathonVoteButton } from "@/components/MarathonVoteButton";
 import { NewDeviceCard } from "@/components/NewDeviceCard";
 import { PlanUsageCard } from "@/components/PlanUsageCard";
-import { SurveyCard, type SurveySummary } from "@/components/SurveyCard";
+import { PromoCarousel, type PromoCarouselHandle } from "@/components/promo/PromoCarousel";
 import { WelcomeHero } from "@/components/WelcomeHero";
-import { EmptyState, ErrorState, Skeleton, SkeletonCard } from "@/components/StateBlocks";
+import { EmptyState, ErrorState, Skeleton } from "@/components/StateBlocks";
 import { formatClock, formatLongDate, formatRemainingWindow } from "@/lib/datetime";
-import { asErrorMessage } from "@/lib/format";
+import { peekShelf, refreshShelf } from "@/lib/marketplace";
 import { useModuleAccess } from "@/lib/modules";
-import { formatNumber } from "@/lib/money";
+import { formatNumber, formatSom } from "@/lib/money";
 import { myMembership, type Membership } from "@/lib/subscription";
-import { supabase } from "@/lib/supabase";
+import { useFocusRefresh } from "@/lib/useFocusRefresh";
 import { fetchWallet, type Wallet } from "@/lib/wallet";
 import { displayFirstName, profileInitials, useAccount } from "@/providers/AccountProvider";
+import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
 import { brandInk, icon, radius, shadow, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
-/** How many survey cards the home screen shows before deferring to the module. */
-const ACTIVITY_LIMIT = 2;
+/** How many products the home screen shows before deferring to the Do‘kon tab. */
+const SHELF_LIMIT = 6;
 
 /**
  * The control centre.
  *
  * Three things have to be answerable at a glance, in this order: how many tanga
  * you hold, that Ma'lumotlarni yig'ish is here, and whether anything is waiting
- * in the inbox. Everything below that is context, and every section states
- * plainly when it has nothing to show rather than filling itself with examples.
+ * in the inbox. Below that, what Jaxongirman recommends and the newest
+ * products in the shop. Every section states plainly when it has nothing to
+ * show rather than filling itself with examples — and the recommendations,
+ * with nothing published, are not drawn at all.
  */
 export default function HomeScreen() {
   const { colors } = useTheme();
@@ -50,12 +53,13 @@ export default function HomeScreen() {
   const { state: moduleState } = useModuleAccess(DATA_COLLECTION_MODULE);
 
   const [now, setNow] = useState(() => new Date());
-  const [activity, setActivity] = useState<SurveySummary[]>([]);
-  const [activityLoading, setActivityLoading] = useState(true);
-  const [activityError, setActivityError] = useState<string | null>(null);
+  const [shelf, setShelf] = useState<MarketplaceListItem[] | null>(() => peekShelf()?.items.slice(0, SHELF_LIMIT) ?? null);
+  const [covers, setCovers] = useState<Record<string, string>>(() => peekShelf()?.covers ?? {});
   const [refreshing, setRefreshing] = useState(false);
   const [membership, setMembership] = useState<Membership | null>(null);
   const [wallet, setWallet] = useState<Wallet | null>(null);
+  const promos = useRef<PromoCarouselHandle>(null);
+  const policy = usePaymentPolicy();
 
   // The clock only ever renders to the minute, so it is only worth a re-render
   // when the minute actually turns.
@@ -69,26 +73,15 @@ export default function HomeScreen() {
     return () => { clearInterval(timer); subscription.remove(); };
   }, []);
 
-  const loadActivity = useCallback(async () => {
-    setActivityLoading(true);
-    const { data, error: requestError } = await supabase.rpc("my_surveys");
-    if (requestError) {
-      setActivityError(asErrorMessage(requestError));
-    } else {
-      const payload = data as unknown as { created?: SurveySummary[]; participating?: SurveySummary[] } | null;
-      const merged = [...(payload?.created ?? []), ...(payload?.participating ?? [])];
-      // Live surveys first, then the most recently created — the home screen is
-      // about what still needs attention, not a complete archive.
-      merged.sort((left, right) => {
-        const leftLive = left.status === "open" ? 0 : 1;
-        const rightLive = right.status === "open" ? 0 : 1;
-        if (leftLive !== rightLive) return leftLive - rightLive;
-        return new Date(right.created_at).getTime() - new Date(left.created_at).getTime();
-      });
-      setActivity(merged.slice(0, ACTIVITY_LIMIT));
-      setActivityError(null);
+  // The newest products, from the same cached first page the Do‘kon tab opens on.
+  const loadShelf = useCallback(async () => {
+    try {
+      const fresh = await refreshShelf();
+      setShelf(fresh.items.slice(0, SHELF_LIMIT));
+      setCovers(fresh.covers);
+    } catch {
+      setShelf((current) => current ?? []);
     }
-    setActivityLoading(false);
   }, []);
 
   const loadMembership = useCallback(async () => {
@@ -100,16 +93,16 @@ export default function HomeScreen() {
     setWallet(await fetchWallet().catch(() => null));
   }, []);
 
-  useFocusEffect(useCallback(() => {
+  useFocusRefresh(useCallback(() => {
     void refresh();
-    void loadActivity();
+    void loadShelf();
     void loadMembership();
     void loadWallet();
-  }, [loadActivity, loadMembership, loadWallet, refresh]));
+  }, [loadMembership, loadShelf, loadWallet, refresh]));
 
   async function pullToRefresh() {
     setRefreshing(true);
-    await Promise.all([refresh(), loadActivity(), loadMembership(), loadWallet()]);
+    await Promise.all([refresh(), loadShelf(), loadMembership(), loadWallet(), promos.current?.refresh()]);
     setRefreshing(false);
   }
 
@@ -275,58 +268,79 @@ export default function HomeScreen() {
           </View>
         </Pressable>
 
-        {/* ------------------------------------------- survey activity */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{t("surveyActivity")}</Text>
-          {activity.length > 0 ? (
-            <Pressable accessibilityRole="button" onPress={() => router.push("/(app)/survey")}>
-              <Text style={styles.sectionLink}>{t("common:seeAll")}</Text>
-            </Pressable>
-          ) : null}
-        </View>
-
-        {activityLoading ? <SkeletonCard /> : null}
-        {activityError && !activityLoading ? <ErrorState message={activityError} onRetry={() => void loadActivity()} /> : null}
-        {!activityLoading && !activityError && activity.length === 0 ? (
-          <View style={styles.quietState}>
-            <Text style={styles.quietTitle}>{t("noSurveys")}</Text>
-            <Text style={styles.quietCopy}>{t("noSurveysBody")}</Text>
-            <Pressable accessibilityRole="button" onPress={() => router.push("/(app)/survey/create")} style={styles.quietAction}>
-              <Plus color={colors.primary} size={icon.sm} strokeWidth={icon.strokeBold} />
-              <Text style={styles.quietActionText}>{t("newSurvey")}</Text>
-            </Pressable>
-          </View>
-        ) : null}
-        <View style={styles.list}>
-          {activity.map((item, index) => (
-            <Appear key={item.id} index={index}>
-              <SurveyCard
-                item={item}
-                onPress={() => router.push(
-                  item.is_owner
-                    ? { pathname: "/(app)/survey/results/[id]", params: { id: item.id } }
-                    : { pathname: "/(app)/survey/[id]", params: { id: item.id } },
-                )}
-              />
-            </Appear>
-          ))}
-        </View>
+        {/* ------------------------------------- Jaxongirman tavsiya qiladi */}
+        <PromoCarousel ref={promos} />
 
         {/* ------------------------------------------------ marketplace */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{t("store")}</Text>
-          <Pressable accessibilityRole="button" onPress={() => router.push("/(app)/(tabs)/marketplace")}>
-            <Text style={styles.sectionLink}>{t("common:seeAll")}</Text>
-          </Pressable>
-        </View>
-        {/* Marketplace has no catalogue in the database yet. An empty state is
-            the honest thing to render; sample products would be indistinguishable
-            from real ones the day the first seller arrives. */}
-        <EmptyState
-          icon={Store}
-          title={t("storeSoon")}
-          message={t("storeSoonBody")}
-        />
+        {/* The newest products on the shelf the Do‘kon tab opens on. A phone
+            whose platform may not sell digital goods here has no shop, so it
+            has no shop section either. */}
+        {policy.paymentsEnabled ? (
+          <>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>{t("store")}</Text>
+              <Pressable accessibilityRole="button" onPress={() => router.push("/(app)/(tabs)/marketplace")} hitSlop={8}>
+                <Text style={styles.sectionLink}>{t("common:seeAll")}</Text>
+              </Pressable>
+            </View>
+            {shelf === null ? (
+              <View style={styles.shelfRow}>
+                <Skeleton height={196} width={168} radius={radius.lg} />
+                <Skeleton height={196} width={168} radius={radius.lg} />
+              </View>
+            ) : shelf.length === 0 ? (
+              <EmptyState icon={Store} title={t("storeEmpty")} message={t("storeEmptyBody")} />
+            ) : (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.shelfScroll}
+                contentContainerStyle={styles.shelfRow}
+              >
+                {shelf.map((item, index) => (
+                  <Appear key={item.id} index={index}>
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => router.push({ pathname: "/(app)/marketplace/[id]", params: { id: item.id } })}
+                      style={({ pressed }) => [styles.product, pressed && styles.pressedSoft]}
+                    >
+                      <View style={styles.productCover}>
+                        {item.cover_path && covers[item.cover_path] ? (
+                          <Image source={{ uri: covers[item.cover_path] }} style={styles.productImage} resizeMode="cover" fadeDuration={120} />
+                        ) : (
+                          <View style={styles.productFallback}><Store color={colors.borderStrong} size={24} strokeWidth={1.7} /></View>
+                        )}
+                        {item.material_label ? (
+                          <View style={styles.productBadge}><Text style={styles.productBadgeText} numberOfLines={1}>{item.material_label}</Text></View>
+                        ) : null}
+                      </View>
+                      <Text numberOfLines={2} style={styles.productTitle}>{item.title}</Text>
+                      <View style={styles.productMeta}>
+                        {item.rating !== null ? (
+                          <>
+                            <Star color={colors.warning} fill={colors.warning} size={11} strokeWidth={2} />
+                            <Text style={styles.productRating}>{item.rating.toFixed(1)}</Text>
+                          </>
+                        ) : (
+                          <Text style={styles.productSeller} numberOfLines={1}>{item.seller_name}</Text>
+                        )}
+                      </View>
+                      <Text style={styles.productPrice}>{formatSom(item.base_price)}</Text>
+                    </Pressable>
+                  </Appear>
+                ))}
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.push("/(app)/(tabs)/marketplace")}
+                  style={({ pressed }) => [styles.productMore, pressed && styles.pressedSoft]}
+                >
+                  <View style={styles.productMoreDisc}><ArrowRight color={colors.primary} size={20} strokeWidth={2.4} /></View>
+                  <Text style={styles.productMoreText}>{t("common:seeAll")}</Text>
+                </Pressable>
+              </ScrollView>
+            )}
+          </>
+        ) : null}
       </ScrollView>
     </View>
   );
@@ -396,11 +410,28 @@ const useStyles = makeStyles((colors) => ({
   sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: spacing.md },
   sectionTitle: { ...typography.heading, color: colors.ink },
   sectionLink: { ...typography.caption, color: colors.primary, fontFamily: "Manrope_600SemiBold" },
-  list: { gap: spacing.md },
 
-  quietState: { padding: spacing.xl, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceMuted, gap: spacing.sm, alignItems: "flex-start" },
-  quietTitle: { ...typography.bodyMedium, color: colors.ink },
-  quietCopy: { ...typography.caption, color: colors.inkMuted, lineHeight: 18 },
-  quietAction: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderStrong },
-  quietActionText: { ...typography.caption, color: colors.primary, fontFamily: "Manrope_600SemiBold" },
+  // The row runs to the screen's edges, so a card can be scrolled out from under them.
+  shelfScroll: { marginHorizontal: -spacing.xl },
+  shelfRow: { flexDirection: "row", gap: spacing.md, paddingHorizontal: spacing.xl, paddingVertical: 2 },
+  product: {
+    width: 168, padding: spacing.sm, gap: 4, borderRadius: radius.lg,
+    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, ...shadow,
+  },
+  productCover: { width: "100%", aspectRatio: 4 / 3, borderRadius: radius.md, overflow: "hidden", backgroundColor: colors.surfaceMuted },
+  productImage: { width: "100%", height: "100%" },
+  productFallback: { flex: 1, alignItems: "center", justifyContent: "center" },
+  productBadge: { position: "absolute", left: 6, bottom: 6, maxWidth: "80%", paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: radius.pill, backgroundColor: "rgba(21,14,36,.72)" },
+  productBadgeText: { ...typography.caption, fontSize: 9, color: "#FFFFFF" },
+  productTitle: { ...typography.bodyMedium, color: colors.ink, fontSize: 13, lineHeight: 17, minHeight: 34, marginTop: 2 },
+  productMeta: { flexDirection: "row", alignItems: "center", gap: 3, minHeight: 15 },
+  productRating: { ...typography.caption, fontSize: 11, color: colors.ink, fontFamily: "Manrope_600SemiBold" },
+  productSeller: { ...typography.caption, fontSize: 11, color: colors.inkSoft, flexShrink: 1 },
+  productPrice: { ...typography.bodyMedium, color: colors.primaryDeep, fontSize: 14 },
+  productMore: {
+    width: 112, borderRadius: radius.lg, alignItems: "center", justifyContent: "center", gap: spacing.sm,
+    borderWidth: 1, borderStyle: "dashed", borderColor: colors.borderStrong, backgroundColor: colors.surfaceMuted,
+  },
+  productMoreDisc: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: colors.primarySoft },
+  productMoreText: { ...typography.caption, color: colors.primary, fontFamily: "Manrope_700Bold" },
 }));

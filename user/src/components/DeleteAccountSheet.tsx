@@ -1,8 +1,9 @@
 import { useRouter } from "expo-router";
 import { ShieldAlert } from "lucide-react-native";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, Modal, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Touchable } from "@/components/Touchable";
@@ -25,10 +26,28 @@ import { makeStyles, useTheme } from "@/theme/ThemeProvider";
  * dismisses to the safe side.
  */
 
+/** A browser moves nothing for its keyboard; the phone's has to be avoided. */
+const Avoider = Platform.OS === "web" ? View : KeyboardAvoidingView;
+
 type Props = {
   visible: boolean;
   onClose: () => void;
 };
+
+/**
+ * Compared the way a person types it, not byte for byte: Uzbek has five
+ * apostrophe look-alikes (' ’ ‘ ʻ ʼ) and a keyboard offers whichever it likes,
+ * so the phrase is matched on letters. Case is ignored too — the field shows
+ * capitals, but a phone that starts a sentence lower-case must not lock the
+ * button.
+ */
+function normalisePhrase(value: string): string {
+  return value
+    .replace(/[\u2018\u2019\u02BB\u02BC\u0060\u00B4]/g, "'")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLocaleUpperCase("en-US");
+}
 
 export function DeleteAccountSheet({ visible, onClose }: Props) {
   const { colors } = useTheme();
@@ -38,8 +57,19 @@ export function DeleteAccountSheet({ visible, onClose }: Props) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [typed, setTyped] = useState("");
+
+  const phrase = t("deleteAccount.phrase");
+  const confirmed = normalisePhrase(typed) === normalisePhrase(phrase);
+
+  // A sheet that is opened again starts empty: a phrase typed last time must not
+  // carry the next deletion through.
+  useEffect(() => {
+    if (!visible) { setTyped(""); setError(null); }
+  }, [visible]);
 
   const remove = async () => {
+    if (!confirmed) return;
     setBusy(true);
     setError(null);
     try {
@@ -70,15 +100,18 @@ export function DeleteAccountSheet({ visible, onClose }: Props) {
       // A deletion in flight is not something a back gesture should interrupt.
       onRequestClose={() => { if (!busy) onClose(); }}
     >
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={t("common:close")}
-        style={styles.backdrop}
-        onPress={() => { if (!busy) onClose(); }}
-      >
-        {/* Swallows presses so a tap inside the sheet is not a tap on the
-            backdrop underneath it. */}
-        <Pressable style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.lg) + spacing.md }]}>
+      {/* Above the keyboard: the phrase is typed here, and the button it unlocks
+          sits under the field. The backdrop is a layer behind the sheet rather
+          than its parent — a field and two buttons inside a button is not a
+          thing a browser will draw. */}
+      <Avoider behavior="padding" style={styles.frame}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t("common:close")}
+          style={[StyleSheet.absoluteFill, styles.backdrop]}
+          onPress={() => { if (!busy) onClose(); }}
+        />
+        <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.lg) + spacing.md }]}>
           <View style={styles.grabber} />
 
           <View style={styles.mark}>
@@ -89,6 +122,25 @@ export function DeleteAccountSheet({ visible, onClose }: Props) {
           <Text style={styles.body}>
             {t("deleteAccount.body")}
           </Text>
+
+          <View style={styles.phraseBlock}>
+            <Text style={styles.phraseLead}>{t("deleteAccount.typeLead")}</Text>
+            <Text selectable={false} style={styles.phrase}>{phrase}</Text>
+            <TextInput
+              value={typed}
+              onChangeText={setTyped}
+              editable={!busy}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              autoComplete="off"
+              spellCheck={false}
+              returnKeyType="done"
+              placeholder={phrase}
+              placeholderTextColor={colors.inkSoft}
+              accessibilityLabel={t("deleteAccount.typeLabel", { phrase })}
+              style={[styles.phraseInput, confirmed && styles.phraseInputOk]}
+            />
+          </View>
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -105,23 +157,24 @@ export function DeleteAccountSheet({ visible, onClose }: Props) {
             <Touchable
               accessibilityRole="button"
               accessibilityLabel={t("deleteAccount.label")}
-              disabled={busy}
+              disabled={busy || !confirmed}
               onPress={() => void remove()}
-              style={[styles.button, styles.destructive]}
+              style={[styles.button, styles.destructive, !confirmed && styles.dimmed]}
             >
               {busy
                 ? <ActivityIndicator color={colors.onPrimary} size="small" />
                 : <Text style={styles.destructiveText}>{t("deleteAccount.confirm")}</Text>}
             </Touchable>
           </View>
-        </Pressable>
-      </Pressable>
+        </View>
+      </Avoider>
     </Modal>
   );
 }
 
 const useStyles = makeStyles((colors) => ({
-  backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(12,6,24,0.52)" },
+  frame: { flex: 1, justifyContent: "flex-end" },
+  backdrop: { backgroundColor: "rgba(12,6,24,0.52)" },
   sheet: {
     paddingTop: spacing.md,
     paddingHorizontal: spacing.xl,
@@ -140,6 +193,15 @@ const useStyles = makeStyles((colors) => ({
   },
   title: { ...typography.heading, color: colors.ink, textAlign: "center" },
   body: { ...typography.body, color: colors.inkMuted, textAlign: "center" },
+  phraseBlock: { gap: spacing.sm },
+  phraseLead: { ...typography.caption, color: colors.inkMuted, textAlign: "center" },
+  phrase: { fontFamily: "Manrope_800ExtraBold", fontSize: 17, letterSpacing: 0.8, color: colors.danger, textAlign: "center" },
+  phraseInput: {
+    ...typography.bodyMedium, height: 52, textAlign: "center", color: colors.ink, letterSpacing: 0.6,
+    borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.borderStrong, backgroundColor: colors.surfaceMuted,
+    paddingHorizontal: spacing.md,
+  },
+  phraseInputOk: { borderColor: colors.danger, backgroundColor: colors.dangerSoft },
   error: {
     ...typography.caption,
     color: colors.danger,

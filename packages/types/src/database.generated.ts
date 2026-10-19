@@ -4264,6 +4264,87 @@ export type Database = {
         }
         Relationships: []
       }
+      promos: {
+        Row: {
+          action: string
+          badge: string | null
+          banner_kind: string
+          banner_style: string
+          banner_url: string | null
+          body: Json
+          click_count: number
+          created_at: string
+          created_by: string | null
+          ends_at: string | null
+          hero_kind: string
+          hero_url: string | null
+          id: string
+          kind: string
+          link_url: string | null
+          position: number
+          sponsor: string
+          starts_at: string | null
+          status: string
+          subtitle: string
+          theme: Json
+          title: string
+          updated_at: string
+          view_count: number
+        }
+        Insert: {
+          action?: string
+          badge?: string | null
+          banner_kind?: string
+          banner_style?: string
+          banner_url?: string | null
+          body?: Json
+          click_count?: number
+          created_at?: string
+          created_by?: string | null
+          ends_at?: string | null
+          hero_kind?: string
+          hero_url?: string | null
+          id?: string
+          kind?: string
+          link_url?: string | null
+          position?: number
+          sponsor?: string
+          starts_at?: string | null
+          status?: string
+          subtitle?: string
+          theme?: Json
+          title: string
+          updated_at?: string
+          view_count?: number
+        }
+        Update: {
+          action?: string
+          badge?: string | null
+          banner_kind?: string
+          banner_style?: string
+          banner_url?: string | null
+          body?: Json
+          click_count?: number
+          created_at?: string
+          created_by?: string | null
+          ends_at?: string | null
+          hero_kind?: string
+          hero_url?: string | null
+          id?: string
+          kind?: string
+          link_url?: string | null
+          position?: number
+          sponsor?: string
+          starts_at?: string | null
+          status?: string
+          subtitle?: string
+          theme?: Json
+          title?: string
+          updated_at?: string
+          view_count?: number
+        }
+        Relationships: []
+      }
       purchase_entitlements: {
         Row: {
           granted_at: string
@@ -8358,6 +8439,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      promo_track: {
+        Args: { p_event: string; p_promo_id: string }
+        Returns: undefined
       }
       purge_account_data: { Args: { p_user: string }; Returns: Json }
       purge_expired_game_sessions: { Args: never; Returns: number }

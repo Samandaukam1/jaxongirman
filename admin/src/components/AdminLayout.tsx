@@ -1,7 +1,7 @@
 import {
   Sparkles,
   BadgeCheck,
-  AppWindow, Landmark, Languages, LifeBuoy, Monitor, Moon, MonitorPlay, Blocks, ClipboardList, FileStack, Coins, Cpu, Gamepad2, Gift, Image as ImageIcon, LayoutDashboard, LogOut, Menu, Palette, Presentation, Receipt, ScrollText, Shapes, Smartphone, Store, Sun, TrendingUp, Trophy, Type, Users, Wallet, X } from "lucide-react";
+  AppWindow, Landmark, Languages, LifeBuoy, Megaphone, Monitor, Moon, MonitorPlay, Blocks, ClipboardList, FileStack, Coins, Cpu, Gamepad2, Gift, Image as ImageIcon, LayoutDashboard, LogOut, Menu, Palette, Presentation, Receipt, ScrollText, Shapes, Smartphone, Store, Sun, TrendingUp, Trophy, Type, Users, Wallet, X } from "lucide-react";
 import { ROLE_LABELS } from "@jaxongirman/types";
 import { useEffect, useState, type ReactNode } from "react";
 
@@ -12,6 +12,7 @@ import { useTheme } from "@/providers/ThemeProvider";
 
 const navigation = [
   { to: "/", label: "Boshqaruv", icon: LayoutDashboard, end: true },
+  { to: "/tavsiyalar", label: "Tavsiya va reklama", icon: Megaphone },
   { to: "/users", label: "Foydalanuvchilar", icon: Users },
   { to: "/presentations", label: "Prezentatsiyalar", icon: Presentation },
   { to: "/dizayn-engine", label: "Liquid Glass dizayn", icon: Sparkles },
