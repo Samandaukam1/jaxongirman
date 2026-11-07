@@ -1,8 +1,11 @@
 import Link from "next/link";
 
+import { AppleLogo, GooglePlayLogo } from "./_brand/StoreLogos";
 import { AppPromo } from "./_home/AppPromo";
 import { HomeMotion } from "./_home/HomeMotion";
-import { SlideCorporate, SlideEditorial, SlideGlass, SlideSoft } from "./_home/Slides";
+import {
+  SlideAuto, SlideCorporate, SlideEditorial, SlideGlass, SlideMozaika, SlideNaqsh, SlideSoft, SlideSpektr,
+} from "./_home/Slides";
 import { STORE_ANDROID, STORE_IOS } from "@/lib/stores";
 
 import "./home.css";
@@ -38,6 +41,10 @@ const STYLES = [
   { name: "Jurnal uslubi", note: "Bosma nashr qat’iyligi, katta tipografika", slide: <SlideEditorial /> },
   { name: "Soft 3D", note: "Bir materialdan yasalgan futuristik qurilma", slide: <SlideSoft /> },
   { name: "Korporativ", note: "Brend shakllari va real soyalar", slide: <SlideCorporate /> },
+  { name: "Milliy naqsh", note: "Bodom va girih, zamonaviy talqinda", slide: <SlideNaqsh /> },
+  { name: "Spektr", note: "Yorqin gradiyent va infografika", slide: <SlideSpektr /> },
+  { name: "Mozaika", note: "Geometrik shakllar, Bauhaus ruhida", slide: <SlideMozaika /> },
+  { name: "Avtomatik dizayn", note: "Mavzuga mos uslub va ranglarni AI o‘zi tanlaydi", slide: <SlideAuto /> },
 ];
 
 export default function HomePage() {
@@ -58,7 +65,7 @@ export default function HomePage() {
         <div className="lp-shell lp-hero-copy">
           <p className="lp-badge">
             <span className="lp-badge-dot" />
-            Yangi: to‘rt xil premium dizayn uslubi
+            Yangi: sakkiz xil premium dizayn uslubi
           </p>
           <h1 className="lp-title">
             {HEADLINE.map((part, index) => (
@@ -227,7 +234,7 @@ export default function HomePage() {
         <div className="lp-shell">
           <header className="lp-head" data-reveal>
             <p className="lp-kicker">Dizaynlar</p>
-            <h2>To‘rt uslub. <span className="lp-accent">Cheksiz</span> ko‘rinish.</h2>
+            <h2>Sakkiz uslub. <span className="lp-accent">Cheksiz</span> ko‘rinish.</h2>
             <p>Har bir taqdimotning dizayni mavzusiga qarab yangidan yaratiladi — tayyor shablon yo‘q. Uslubni o‘zingiz tanlashingiz yoki AI’ga qo‘yib berishingiz mumkin.</p>
           </header>
           <div className="lp-styles">
@@ -278,7 +285,7 @@ export default function HomePage() {
       {/* ---------------------------------------------------------------- stats */}
       <section className="lp-stats-wrap">
         <div className="lp-shell lp-stats" data-reveal>
-          <div><strong data-count="4">4</strong><span>dizayn uslubi</span></div>
+          <div><strong data-count="8">8</strong><span>dizayn uslubi</span></div>
           <div><strong data-count="8">8</strong><span>rang oilasi</span></div>
           <div><strong data-count="30">30</strong><span>slaydgacha</span></div>
           <div><strong data-count="3">3</strong><span>bepul taqdimot</span></div>
@@ -295,11 +302,11 @@ export default function HomePage() {
             <p>Ilovani yuklab oling, hisob oching va birinchi uchta taqdimotni bepul yarating.</p>
             <div className="lp-cta-actions">
               <a className="lp-store" href={STORE_IOS}>
-                <svg viewBox="0 0 24 24" aria-hidden><path fill="currentColor" d="M16.37 12.6c-.02-2.2 1.8-3.26 1.88-3.31-1.03-1.5-2.62-1.7-3.18-1.73-1.35-.14-2.64.8-3.33.8-.69 0-1.74-.78-2.86-.76-1.47.02-2.83.86-3.59 2.17-1.53 2.66-.39 6.6 1.1 8.76.73 1.06 1.6 2.24 2.73 2.2 1.1-.04 1.51-.71 2.84-.71 1.32 0 1.7.71 2.86.69 1.18-.02 1.93-1.07 2.65-2.13.84-1.22 1.18-2.41 1.2-2.47-.03-.01-2.29-.88-2.3-3.5zM14.2 6.12c.6-.74 1.01-1.75.9-2.77-.87.04-1.93.58-2.55 1.31-.56.65-1.05 1.69-.92 2.69.97.07 1.96-.49 2.57-1.23z"/></svg>
+                <AppleLogo />
                 <span><small>Yuklab oling</small>App Store</span>
               </a>
               <a className="lp-store" href={STORE_ANDROID}>
-                <svg viewBox="0 0 24 24" aria-hidden><path fill="currentColor" d="M3.6 2.2c-.23.25-.36.63-.36 1.12v17.36c0 .49.13.87.37 1.12l.06.05 9.73-9.73v-.23L3.66 2.15l-.06.05zm12.98 13.17-3.24-3.25v-.23l3.24-3.25.07.04 3.84 2.18c1.1.62 1.1 1.64 0 2.27l-3.84 2.18-.07.06zm.07-.05L13.34 12 3.6 21.8c.36.38.95.43 1.62.05l11.43-6.53zm0-6.64L5.22 2.17c-.67-.38-1.26-.33-1.62.05L13.34 12l3.31-3.32z"/></svg>
+                <GooglePlayLogo />
                 <span><small>Yuklab oling</small>Google Play</span>
               </a>
               <Link className="lp-btn lp-btn-light" href="/taqdimot">

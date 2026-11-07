@@ -1,8 +1,8 @@
 "use client";
 
 import {
-  ArrowRight, BatteryFull, Bell, ClipboardList, Gamepad2, House, Layers, LifeBuoy, MonitorPlay, Plus, QrCode,
-  Search, Signal, Smartphone, Sparkles, Store, User, Wifi, X, type LucideIcon,
+  ArrowRight, BatteryFull, Bell, Check, ClipboardList, Gamepad2, House, Layers, LifeBuoy, MonitorPlay, Plus, QrCode,
+  Search, Share2, Signal, Smartphone, Sparkles, Store, User, Wifi, X, type LucideIcon,
 } from "lucide-react";
 import {
   useCallback, useEffect, useRef, useState,
@@ -11,7 +11,8 @@ import {
 import { createPortal } from "react-dom";
 
 import { useBrand } from "@/app/_brand/BrandContext";
-import { STORE_ANDROID, STORE_IOS } from "@/lib/stores";
+import { AppleLogo, GooglePlayLogo } from "@/app/_brand/StoreLogos";
+import { APP_LINK, STORE_ANDROID, STORE_IOS } from "@/lib/stores";
 import { SlideCorporate, SlideEditorial, SlideGlass, SlideSoft } from "./Slides";
 
 import "./app-promo.css";
@@ -22,6 +23,10 @@ import "./app-promo.css";
  * Only the home page mounts this. `/taqdimot`, `/oyingoh` and the pages a QR
  * lands on are reached by someone in the middle of something, often in front of
  * a room, and an advert there would stand between them and the projector.
+ *
+ * It is for somebody at a computer, so a phone never sees it: a phone opens the
+ * site straight away. A computer cannot install the app, which is what "Ulashish"
+ * is for: it hands over `/ilova`, the link that sends each phone to its own store.
  *
  * A visit is a tab's session: the mark lives in sessionStorage, so moving around
  * the site does not bring the prompt back, and closing the browser does.
@@ -49,6 +54,11 @@ const PHONE_HEIGHT = 856;
 const NAV_WIDTH = 358;
 const NAV_INSET = 6;
 
+/** A phone, not a tablet: Android phones say "Mobile" and its tablets do not. */
+function isPhone(): boolean {
+  return /iPhone|iPod|Android.+Mobile/.test(navigator.userAgent);
+}
+
 function alreadySeen(): boolean {
   try {
     return window.sessionStorage.getItem(SEEN_KEY) === "1";
@@ -69,7 +79,7 @@ export function AppPromo() {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (alreadySeen()) return;
+    if (isPhone() || alreadySeen()) return;
     // Marked when it opens, not before the timer: in development an effect runs
     // twice, and a mark set here would cancel the second run's prompt.
     const timer = setTimeout(() => { markSeen(); setOpen(true); }, OPEN_DELAY);
@@ -134,6 +144,7 @@ function Prompt({ onClosed }: { onClosed: () => void }) {
   const [slide, setSlide] = useState(0);
   const [pressed, setPressed] = useState(false);
   const [tap, setTap] = useState<(Point & { id: number }) | null>(null);
+  const [shared, setShared] = useState<"no" | "copied" | "shown">("no");
 
   const stage = useRef<HTMLDivElement>(null);
   const dialog = useRef<HTMLElement>(null);
@@ -230,6 +241,19 @@ function Prompt({ onClosed }: { onClosed: () => void }) {
     return () => timers.forEach(clearTimeout);
   }, [calm, step]);
 
+  // A touch screen has a share sheet worth opening. On a computer that sheet is a
+  // detour on the way to pasting the link somewhere, so it is copied at once.
+  async function share() {
+    if (typeof navigator.share === "function" && window.matchMedia("(pointer: coarse)").matches) {
+      await navigator.share({ title: "Jaxongirman", text: "Jaxongirman ilovasini yuklab oling", url: APP_LINK }).catch(() => {});
+      return;
+    }
+    // A refused clipboard still shows the link, to be copied by hand, without the
+    // tick that would claim it was.
+    const copied = await navigator.clipboard?.writeText(APP_LINK).then(() => true, () => false);
+    setShared(copied ? "copied" : "shown");
+  }
+
   function onKeyDown(event: ReactKeyboardEvent) {
     if (event.key === "Escape") {
       close();
@@ -299,17 +323,23 @@ function Prompt({ onClosed }: { onClosed: () => void }) {
             </ul>
             <div className="ap-stores" style={{ "--i": 5 } as CSSProperties}>
               <a className="ap-store" href={STORE_IOS} target="_blank" rel="noopener noreferrer">
-                <svg viewBox="0 0 24 24" aria-hidden><path fill="currentColor" d="M16.37 12.6c-.02-2.2 1.8-3.26 1.88-3.31-1.03-1.5-2.62-1.7-3.18-1.73-1.35-.14-2.64.8-3.33.8-.69 0-1.74-.78-2.86-.76-1.47.02-2.83.86-3.59 2.17-1.53 2.66-.39 6.6 1.1 8.76.73 1.06 1.6 2.24 2.73 2.2 1.1-.04 1.51-.71 2.84-.71 1.32 0 1.7.71 2.86.69 1.18-.02 1.93-1.07 2.65-2.13.84-1.22 1.18-2.41 1.2-2.47-.03-.01-2.29-.88-2.3-3.5zM14.2 6.12c.6-.74 1.01-1.75.9-2.77-.87.04-1.93.58-2.55 1.31-.56.65-1.05 1.69-.92 2.69.97.07 1.96-.49 2.57-1.23z" /></svg>
+                <AppleLogo />
                 <span><small>Yuklab oling</small>App Store</span>
               </a>
               <a className="ap-store" href={STORE_ANDROID} target="_blank" rel="noopener noreferrer">
-                <svg viewBox="0 0 24 24" aria-hidden><path fill="currentColor" d="M3.6 2.2c-.23.25-.36.63-.36 1.12v17.36c0 .49.13.87.37 1.12l.06.05 9.73-9.73v-.23L3.66 2.15l-.06.05zm12.98 13.17-3.24-3.25v-.23l3.24-3.25.07.04 3.84 2.18c1.1.62 1.1 1.64 0 2.27l-3.84 2.18-.07.06zm.07-.05L13.34 12 3.6 21.8c.36.38.95.43 1.62.05l11.43-6.53zm0-6.64L5.22 2.17c-.67-.38-1.26-.33-1.62.05L13.34 12l3.31-3.32z" /></svg>
+                <GooglePlayLogo />
                 <span><small>Yuklab oling</small>Google Play</span>
               </a>
             </div>
-            <button type="button" className="ap-skip" style={{ "--i": 6 } as CSSProperties} onClick={close}>
-              Saytda davom etish <ArrowRight size={16} aria-hidden />
-            </button>
+            <div className="ap-actions" style={{ "--i": 6 } as CSSProperties}>
+              <button type="button" className="ap-share" onClick={() => void share()}>
+                {shared === "copied" ? <Check size={16} aria-hidden /> : <Share2 size={16} aria-hidden />}
+                <span aria-live="polite">{shared === "no" ? "Ulashish" : APP_LINK.replace("https://", "")}</span>
+              </button>
+              <button type="button" className="ap-skip" onClick={close}>
+                Saytda davom etish <ArrowRight size={16} aria-hidden />
+              </button>
+            </div>
           </div>
 
           <div ref={scene} className="ap-scene" aria-hidden>

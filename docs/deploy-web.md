@@ -69,11 +69,11 @@ URLs**, or sign-in redirects are rejected.
 
 ## Universal links
 
-Two placeholders in
-[web/public/.well-known/](../web/public/.well-known/README.md) must be filled
-before a scanned join QR opens the app instead of this site: the Apple Team ID
-and the Android release SHA-256. Neither is derivable from this repository — the
-Xcode project is unsigned and the keystore lives in EAS.
+One placeholder in
+[web/public/.well-known/](../web/public/.well-known/README.md) must still be
+filled before a scanned join QR opens the Android app instead of this site: the
+release SHA-256. It is not derivable from this repository, because the keystore
+lives in EAS and Google Play re-signs the app. The Apple side is filled in.
 
 Until they are filled the flow still works end to end: the landing page prints
 the six-digit join code, and entering it in the app is a first-class path rather

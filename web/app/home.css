@@ -259,6 +259,46 @@
   background-image: radial-gradient(circle, rgba(220, 38, 38, .55) .7cqw, transparent .8cqw); background-size: 3.4cqw 3.4cqw;
 }
 
+/* The band is one of the real bodom prints a naqsh deck is set with. */
+.lp-slide-naqsh { background: #FFFDF9; color: #2A2230; }
+.lp-naqsh-band { position: absolute; right: 0; top: 0; width: 30cqw; height: 100%; background: url("/brand/promo/naqsh-band.jpg") center / cover; }
+.lp-naqsh-star { position: absolute; left: 7cqw; top: 9cqw; width: 8cqw; height: 8cqw; }
+.lp-naqsh-star i { position: absolute; inset: 0; background: linear-gradient(135deg, #7C4DDB, #4C1DB3); }
+.lp-naqsh-star i:last-child { rotate: 45deg; }
+.lp-slide-naqsh b { position: absolute; left: 7cqw; top: 22cqw; width: 54cqw; font-family: var(--font-display), sans-serif; font-weight: 800; font-size: 6.4cqw; line-height: 1.02; letter-spacing: -.03em; }
+.lp-naqsh-line { position: absolute; left: 7cqw; bottom: 13cqw; width: 46cqw; height: .7cqw; border-radius: 99px; background: rgba(42, 34, 48, .3); }
+.lp-naqsh-line.short { bottom: 9cqw; width: 30cqw; }
+
+.lp-slide-spektr { color: #fff; background: linear-gradient(105deg, #4C1DB3, #8A2BE2 55%, #E0378A); }
+.lp-spektr-icon { position: absolute; right: -9cqw; top: -2cqw; width: 58cqw; height: 58cqw; color: rgba(255, 255, 255, .9); }
+.lp-spektr-chip { position: absolute; left: 7cqw; top: 9cqw; padding: .9cqw 2cqw; border-radius: 99px; font-size: 1.7cqw; font-weight: 800; letter-spacing: .14em; color: #4C1DB3; background: #fff; }
+.lp-slide-spektr b { position: absolute; left: 7cqw; top: 17cqw; width: 50cqw; font-family: var(--font-display), sans-serif; font-weight: 800; font-size: 6.6cqw; line-height: 1.02; letter-spacing: -.03em; }
+.lp-slide-spektr em { position: absolute; left: 7cqw; bottom: 11cqw; font-size: 2.4cqw; opacity: .85; }
+.lp-spektr-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 1.6cqw; background: linear-gradient(90deg, #2563EB, #7C3AED, #DB2777, #F97316); }
+
+.lp-slide-mozaika { color: #fff; background: #3A1A8F; }
+.lp-moz-words { position: absolute; left: 6cqw; top: 15cqw; width: 34cqw; }
+.lp-moz-words b { display: block; font-family: var(--font-display), sans-serif; font-weight: 800; font-size: 6cqw; line-height: 1.02; letter-spacing: -.03em; }
+.lp-moz-words em { display: block; margin-top: 2cqw; font-size: 2.3cqw; opacity: .78; }
+.lp-moz-grid { position: absolute; right: 0; top: 0; width: 56.25%; height: 100%; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 1fr); }
+.lp-moz-grid i { position: relative; display: block; }
+.lp-moz-grid .a { background: #F2447C; border-top-left-radius: 100%; }
+.lp-moz-grid .b { display: grid; place-items: center; background: #FF7A1F; }
+.lp-moz-grid .b span { width: 62%; aspect-ratio: 1; border-radius: 50%; background: #13B5A6; }
+.lp-moz-grid .c { background: #FFC21F; border-radius: 50% 50% 0 0; }
+.lp-moz-grid .d { background: #13B5A6; border-radius: 100% 0; }
+.lp-moz-grid .e { background: #fff; border-radius: 50%; }
+.lp-moz-grid .f { background: #F2447C; border-bottom-left-radius: 100%; }
+
+.lp-slide-auto { background: radial-gradient(circle at 50% 42%, #fff, #EFE8FC 70%); }
+.lp-auto-card { position: absolute; width: 30cqw; aspect-ratio: 16 / 9; border-radius: 2.4cqw; box-shadow: 0 2cqw 4cqw -1.4cqw rgba(42, 15, 85, .45); }
+.lp-auto-card.one { left: 9cqw; top: 8cqw; rotate: -9deg; background: linear-gradient(135deg, #1C1240, #3A1E86); }
+.lp-auto-card.two { right: 9cqw; top: 7cqw; rotate: 8deg; background: linear-gradient(105deg, #4C1DB3, #E0378A); }
+.lp-auto-card.three { left: 12cqw; bottom: 7cqw; rotate: 6deg; background: linear-gradient(160deg, #F97316, #EA580C); }
+.lp-auto-card.four { right: 11cqw; bottom: 8cqw; rotate: -7deg; background: linear-gradient(135deg, #F2F4F7, #DDE2E8); }
+.lp-auto-pill { position: absolute; left: 50%; top: 50%; translate: -50% -50%; padding: 2cqw 3.6cqw; border-radius: 99px; white-space: nowrap; font-family: var(--font-display), sans-serif; font-weight: 700; font-size: 3.6cqw; color: #fff; background: linear-gradient(135deg, #8B54E8, #4C23B0); box-shadow: 0 2cqw 5cqw -1cqw rgba(76, 35, 176, .7); }
+.lp-auto-pill i { color: #F5D0FE; }
+
 /* =============================================================== marquee */
 .lp-marquee {
   position: relative; margin-top: 90px; padding: 26px 0; overflow: hidden;

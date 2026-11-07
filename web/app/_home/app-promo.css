@@ -40,7 +40,7 @@
 .ap-close:hover { background: #fff; }
 .ap-ring { position: absolute; inset: -1px; width: calc(100% + 2px); height: calc(100% + 2px); rotate: -90deg; pointer-events: none; }
 .ap-ring circle { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-dasharray: 141.4; stroke-dashoffset: 0; animation: ap-drain 15s linear forwards; }
-.ap:has(.ap-stores a:hover, .ap-stores a:focus-visible, .ap-close:hover, .ap-close:focus-visible, .ap-skip:focus-visible) .ap-ring circle { animation-play-state: paused; }
+.ap:has(.ap-stores a:hover, .ap-stores a:focus-visible, .ap-share:hover, .ap-share:focus-visible, .ap-close:hover, .ap-close:focus-visible, .ap-skip:focus-visible) .ap-ring circle { animation-play-state: paused; }
 
 .ap-body {
   position: relative; height: 100%; max-width: 1640px; margin-inline: auto; display: grid; grid-template-columns: minmax(0, 41fr) minmax(0, 59fr); align-items: center; gap: calc(var(--u) * 1);
@@ -80,6 +80,12 @@
 .ap-store svg { width: 28px; height: 28px; flex: none; }
 .ap-store span { display: flex; flex-direction: column; text-align: left; font-size: max(16px, calc(var(--u) * 1.6)); font-weight: 800; line-height: 1.12; letter-spacing: -.01em; white-space: nowrap; }
 .ap-store small { font-size: 11.5px; font-weight: 600; letter-spacing: 0; color: rgba(255,255,255,.68); }
+.ap-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px calc(var(--u) * 1.8); }
+.ap-share {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px 0 13px; border: 1px solid var(--line); border-radius: 13px; cursor: pointer;
+  font: inherit; font-size: max(14px, calc(var(--u) * 1.24)); font-weight: 700; color: var(--primary-deep); background: rgba(255,255,255,.72); transition: background-color .2s ease;
+}
+.ap-share:hover { background: #fff; }
 .ap-skip {
   display: inline-flex; align-items: center; gap: 7px; min-height: 44px; padding: 0; border: 0; background: none; cursor: pointer;
   font: inherit; font-size: max(14px, calc(var(--u) * 1.24)); font-weight: 700; color: var(--ink-muted); transition: color .2s ease;
@@ -87,7 +93,7 @@
 .ap-skip svg { transition: transform .25s var(--ap-ease); }
 .ap-skip:hover { color: var(--ink); }
 .ap-skip:hover svg { transform: translateX(3px); }
-.ap-close:focus-visible, .ap-store:focus-visible, .ap-skip:focus-visible { outline: 3px solid var(--primary-bright); outline-offset: 2px; }
+.ap-close:focus-visible, .ap-store:focus-visible, .ap-share:focus-visible, .ap-skip:focus-visible { outline: 3px solid var(--primary-bright); outline-offset: 2px; }
 
 /* ------------------------------------------------------------ the devices */
 .ap-scene { position: relative; align-self: stretch; min-width: 0; perspective: 1900px; perspective-origin: 50% 44%; animation: ap-fade .7s ease .1s both; }
@@ -368,7 +374,7 @@
   .ap-store { justify-content: center; padding: 0 10px; height: 56px; gap: 9px; }
   .ap-store svg { width: 25px; height: 25px; }
   .ap-store span { font-size: 15.5px; }
-  .ap-skip { order: 8; }
+  .ap-actions { order: 8; justify-content: center; }
   .ap-chip { display: none; }
   .ap-fc { left: 118px; top: 470px; }
   .ap-rig { animation-name: ap-turn-narrow; }

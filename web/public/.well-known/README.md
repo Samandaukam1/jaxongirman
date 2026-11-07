@@ -11,12 +11,12 @@ domain over HTTPS with no redirect:
   `application/octet-stream`, add a rewrite header for that exact path.
 - `https://<domain>/.well-known/assetlinks.json`
 
-## Two placeholders must be filled before links work
+## One placeholder must be filled before Android links work
 
-1. **`TEAMID`** in `apple-app-site-association` — the Apple Developer Team ID
-   that signs the app. Find it in the Apple Developer portal (Membership) or in
-   `eas.json` credentials. The value becomes `ABCDE12345.uz.jaxongirman.app`.
-2. **`REPLACE_WITH_RELEASE_SHA256_FINGERPRINT`** in `assetlinks.json` — the
+The Apple side is done: `JLXP29ZS4D` in `apple-app-site-association` is the
+`DEVELOPMENT_TEAM` of the Xcode project.
+
+1. **`REPLACE_WITH_RELEASE_SHA256_FINGERPRINT`** in `assetlinks.json` — the
    SHA-256 fingerprint of the signing certificate for the **release** build. With
    EAS: `eas credentials` → Android → the keystore's SHA-256. A debug build has a
    different fingerprint; add it as a second array entry if links should work in

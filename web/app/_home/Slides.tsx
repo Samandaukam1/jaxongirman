@@ -1,5 +1,7 @@
+import { Globe } from "lucide-react";
+
 /**
- * The four slide styles, drawn small.
+ * The slide styles, drawn small.
  *
  * They live apart from the page because two things show them: the landing page
  * itself, and the download prompt that opens over it (`AppPromo`). Their styles
@@ -57,6 +59,59 @@ export function SlideCorporate() {
         <b>Bozor <span>tahlili</span></b>
       </div>
       <span className="lp-corp-dots" />
+    </div>
+  );
+}
+
+export function SlideNaqsh() {
+  return (
+    <div className="lp-slide lp-slide-naqsh">
+      <span className="lp-naqsh-band" />
+      <span className="lp-naqsh-star"><i /><i /></span>
+      <b>Buyuk ipak yo‘li</b>
+      <span className="lp-naqsh-line" />
+      <span className="lp-naqsh-line short" />
+    </div>
+  );
+}
+
+export function SlideSpektr() {
+  return (
+    <div className="lp-slide lp-slide-spektr">
+      <Globe className="lp-spektr-icon" strokeWidth={0.6} aria-hidden />
+      <i className="lp-spektr-chip">INFOGRAFIKA</i>
+      <b>Raqamli iqtisodiyot</b>
+      <em>2026 yil natijalari</em>
+      <span className="lp-spektr-bar" />
+    </div>
+  );
+}
+
+export function SlideMozaika() {
+  return (
+    <div className="lp-slide lp-slide-mozaika">
+      <div className="lp-moz-words"><b>Shakl va rang</b><em>Ijodiy loyiha</em></div>
+      <div className="lp-moz-grid">
+        <i className="a" />
+        <i className="b"><span /></i>
+        <i className="c" />
+        <i className="d" />
+        <i className="e" />
+        <i className="f" />
+      </div>
+    </div>
+  );
+}
+
+/** Not a look of its own: the choice that leaves the look to the generator, so it shows the others. */
+export function SlideAuto() {
+  return (
+    <div className="lp-slide lp-slide-auto">
+      <span className="lp-auto-card one" />
+      <span className="lp-auto-card two" />
+      <span className="lp-auto-card three" />
+      <span className="lp-auto-card four" />
+      <b className="lp-auto-pill"><i>✦</i> Jaxongir AI tanlaydi</b>
     </div>
   );
 }
