@@ -1,6 +1,8 @@
 import Link from "next/link";
 
+import { AppPromo } from "./_home/AppPromo";
 import { HomeMotion } from "./_home/HomeMotion";
+import { SlideCorporate, SlideEditorial, SlideGlass, SlideSoft } from "./_home/Slides";
 import { STORE_ANDROID, STORE_IOS } from "@/lib/stores";
 
 import "./home.css";
@@ -31,61 +33,6 @@ const MARQUEE = [
   "So‘rovnoma", "Obyektivka", "PPTX import", "Do‘kon", "Portret",
 ];
 
-function SlideGlass() {
-  return (
-    <div className="lp-slide lp-slide-glass">
-      <span className="lp-orb a" />
-      <span className="lp-orb b" />
-      <div className="lp-glass-card">
-        <i className="lp-chip">TA’LIM · 2026</i>
-        <b>Sun’iy intellekt ta’limda</b>
-        <em>Imkoniyatlar, xavflar va kelajak</em>
-      </div>
-      <div className="lp-glass-stats">
-        <span><strong>86%</strong>talabalar</span>
-        <span><strong>3×</strong>tezroq</span>
-      </div>
-    </div>
-  );
-}
-
-function SlideEditorial() {
-  return (
-    <div className="lp-slide lp-slide-paper">
-      <span className="lp-paper-block" />
-      <i className="lp-paper-kicker">03 — TARIX</i>
-      <b>Rivojlanish bosqichlari</b>
-      <div className="lp-paper-rules"><span /><span /><span /></div>
-    </div>
-  );
-}
-
-function SlideSoft() {
-  return (
-    <div className="lp-slide lp-slide-soft">
-      <div className="lp-soft-card">
-        <b>Energiya samaradorligi</b>
-        <span className="lp-soft-line" />
-        <span className="lp-soft-line short" />
-      </div>
-      <span className="lp-soft-dial"><i /></span>
-    </div>
-  );
-}
-
-function SlideCorporate() {
-  return (
-    <div className="lp-slide lp-slide-corp">
-      <span className="lp-corp-band" />
-      <div className="lp-corp-card">
-        <i />
-        <b>Bozor <span>tahlili</span></b>
-      </div>
-      <span className="lp-corp-dots" />
-    </div>
-  );
-}
-
 const STYLES = [
   { name: "Liquid Glass", note: "Shaffof shisha, yumshoq yorug‘lik", slide: <SlideGlass /> },
   { name: "Jurnal uslubi", note: "Bosma nashr qat’iyligi, katta tipografika", slide: <SlideEditorial /> },
@@ -97,6 +44,7 @@ export default function HomePage() {
   return (
     <main className="lp">
       <HomeMotion />
+      <AppPromo />
 
       {/* ---------------------------------------------------------------- hero */}
       <section className="lp-hero">
