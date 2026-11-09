@@ -33,6 +33,8 @@ import { WebSlideCanvas } from "./SlideRenderer";
 const ROTATE_MS = 30_000;
 /** How long the "finished" notice stays up before the next code appears. */
 const RECYCLE_MS = 4_000;
+/** `presentation_screen_snapshot`'s answer for a session that is not live: still pairing, ended or expired. */
+const NOT_ACTIVE = "22023";
 
 type Session = {
   id: string;
@@ -308,7 +310,10 @@ export function PairingScreen({ experienceRow }: { experienceRow: unknown | null
               p_screen_token: screenToken,
             }).then(({ data, error: snapshotError }) => {
               if (snapshotError || !data) {
-                if (snapshotError) console.error("presentation_screen_snapshot failed", snapshotError);
+                // Until a phone pairs, "not active" is the expected answer: the
+                // code is still on screen and there is nothing to catch up on.
+                const waiting = snapshotError?.code === NOT_ACTIVE && sessionRef.current?.status !== "active";
+                if (snapshotError && !waiting) console.error("presentation_screen_snapshot failed", snapshotError);
                 return;
               }
               applyRow(data as unknown as Session);
