@@ -90,7 +90,9 @@ a { color: inherit; text-decoration: none; }
 .header-cta span { transition: transform .25s cubic-bezier(.2,.7,.3,1); }
 .header-cta:hover { transform: translateY(-1px); box-shadow: 0 14px 28px -12px rgba(21, 14, 36, 0.7); }
 .header-cta:hover span { transform: translateX(3px); }
-@media (max-width: 820px) {
+/* The whole bar, menu included, needs about 936px; below that the menu goes, or
+   the button is pushed past the bar's edge. */
+@media (max-width: 960px) {
   .nav { display: none; }
   .header-cta { margin-left: auto; height: 42px; padding: 0 16px; font-size: 13.5px; }
 }
@@ -250,11 +252,23 @@ a { color: inherit; text-decoration: none; }
 }
 .header-account:hover { background: var(--primary-soft); border-color: var(--primary-bright); }
 .header-account.is-pending { width: 128px; padding: 0; visibility: hidden; }
-@media (max-width: 820px) {
+@media (max-width: 960px) {
   .header-account { height: 42px; padding: 0 14px; font-size: 13.5px; }
   .header-cta { margin-left: 8px; }
 }
 @media (max-width: 420px) { .header-cta { display: none; } }
+/* Both pills hold one line: a button broken in two is taller than the bar. */
+.header-account, .header-cta { flex: none; white-space: nowrap; }
+/* A big phone has room for the call to action but not beside the name as well,
+   which pushed the button past the bar's edge, and the smallest phones have no
+   room for the name beside the account link. There the name gives way to the
+   logo, and stays in the link for screen readers. */
+@media (max-width: 355px), (min-width: 421px) and (max-width: 560px) {
+  .site-header-bar { gap: 12px; }
+  .site-header .brand-name {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
+}
 
 .signin-page { position: relative; min-height: calc(100vh - 160px); }
 .signin-progress {
