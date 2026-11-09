@@ -12,6 +12,7 @@ import { createPortal } from "react-dom";
 
 import { useBrand } from "@/app/_brand/BrandContext";
 import { AppleLogo, GooglePlayLogo } from "@/app/_brand/StoreLogos";
+import { isPhone } from "@/lib/device";
 import { APP_LINK, STORE_ANDROID, STORE_IOS } from "@/lib/stores";
 import { SlideCorporate, SlideEditorial, SlideGlass, SlideSoft } from "./Slides";
 
@@ -54,11 +55,6 @@ const PHONE_HEIGHT = 856;
 const NAV_WIDTH = 358;
 const NAV_INSET = 6;
 
-/** A phone, not a tablet: Android phones say "Mobile" and its tablets do not. */
-function isPhone(): boolean {
-  return /iPhone|iPod|Android.+Mobile/.test(navigator.userAgent);
-}
-
 function alreadySeen(): boolean {
   try {
     return window.sessionStorage.getItem(SEEN_KEY) === "1";
@@ -79,7 +75,7 @@ export function AppPromo() {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (isPhone() || alreadySeen()) return;
+    if (isPhone(navigator.userAgent) || alreadySeen()) return;
     // Marked when it opens, not before the timer: in development an effect runs
     // twice, and a mark set here would cancel the second run's prompt.
     const timer = setTimeout(() => { markSeen(); setOpen(true); }, OPEN_DELAY);

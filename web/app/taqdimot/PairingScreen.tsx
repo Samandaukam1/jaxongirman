@@ -16,8 +16,9 @@ import {
 } from "@jaxongirman/types";
 import { ChevronLeft, ChevronRight, Maximize, Minimize, RotateCw } from "lucide-react";
 import QRCode from "qrcode";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
+import { isPhoneScreen } from "@/lib/device";
 import { experienceFromRow, type QrExperience } from "@/lib/qr-experience";
 import { pairUrl } from "@/lib/public-url";
 import { supabase } from "@/lib/supabase";
@@ -26,6 +27,7 @@ import { QrVideoExperience } from "@/app/_qr/QrVideoExperience";
 
 import { ArenaScreen } from "@/app/oyingoh/ArenaScreen";
 
+import { PhoneNotice } from "./PhoneNotice";
 import { WebSlideCanvas } from "./SlideRenderer";
 
 const ROTATE_MS = 30_000;
@@ -135,6 +137,12 @@ export function PairingScreen({ experienceRow }: { experienceRow: unknown | null
    * signing in on it.
    */
   const [handoff, setHandoff] = useState<{ sessionId: string; screenToken: string } | null>(null);
+  /**
+   * Set on a phone that asked for desktop sites, which the server took for a
+   * computer. Decided before the first paint after hydration; until then
+   * `phone-notice.css` keeps the code off its screen by the same test.
+   */
+  const [phoneScreen, setPhoneScreen] = useState<{ android: boolean } | null>(null);
   const rotating = useRef(false);
   const currentToken = useRef<string | null>(null);
   const sessionRef = useRef<Session | null>(null);
@@ -240,7 +248,14 @@ export function PairingScreen({ experienceRow }: { experienceRow: unknown | null
     await drawToken(payload.token);
   }, [drawToken]);
 
+  useLayoutEffect(() => {
+    // In desktop mode Android says "Linux" and an iPhone says "Macintosh".
+    if (isPhoneScreen()) setPhoneScreen({ android: /Android|Linux/i.test(navigator.userAgent) });
+  }, []);
+
   useEffect(() => {
+    // A phone is shown the notice instead, and a code nobody can scan is never opened.
+    if (isPhoneScreen()) return;
     void openSession();
     return () => { mounted.current = false; };
   }, [openSession]);
@@ -470,6 +485,10 @@ export function PairingScreen({ experienceRow }: { experienceRow: unknown | null
       console.error("fullscreen request failed", fullscreenError);
       setError("To‘liq ekran ochilmadi. Brauzer ruxsatini tekshirib qayta urinib ko‘ring.");
     }
+  }
+
+  if (phoneScreen) {
+    return <PhoneNotice android={phoneScreen.android} />;
   }
 
   // The talk is over and the room is playing: the same projector, a different
