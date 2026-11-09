@@ -17,6 +17,7 @@ import { BOTTOM_NAV_SPACE } from "@/components/BottomNav";
 import { MarathonVoteButton } from "@/components/MarathonVoteButton";
 import { EmptyState, InlineError, SkeletonCard } from "@/components/StateBlocks";
 import { useFocusRefresh } from "@/lib/useFocusRefresh";
+import { isWeb } from "@/lib/web";
 import { formatDate } from "@/lib/datetime";
 import { asErrorMessage } from "@/lib/format";
 import { labelOf } from "@/lib/labels";
@@ -172,7 +173,7 @@ export default function GamesScreen() {
             <LinearGradient colors={gradients.host} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.halfCta}>
               <MonitorPlay color={brandInk.strong} size={icon.xl} strokeWidth={icon.stroke} />
               <Text style={styles.halfTitle}>{t("host.title")}</Text>
-              <Text style={styles.halfSubtitle}>{t("host.subtitle")}</Text>
+              <Text style={styles.halfSubtitle}>{t(isWeb ? "host.subtitleWeb" : "host.subtitle")}</Text>
             </LinearGradient>
           </Touchable>
         </View>

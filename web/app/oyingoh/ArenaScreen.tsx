@@ -96,13 +96,19 @@ function useCountdown(deadline: string | null): number {
  *
  * Nothing on this screen can drive the match. The host's phone does that; this
  * follows the session row over realtime and re-reads its own snapshot.
+ *
+ * A third way in is the host's own computer (`hostSessionId`): a match started
+ * from the web app has no projector and no screen token, and the browser is
+ * signed in as its host, so it reads the same view by being the host.
  */
-export function ArenaScreen({ handoff, experienceRow }: {
+export function ArenaScreen({ handoff, hostSessionId, experienceRow }: {
   handoff?: { sessionId: string; screenToken: string };
+  /** A match this browser's account is hosting: read as its host, never paired. */
+  hostSessionId?: string;
   /** Absent when the arena is reached by hand-off: that match is already paired. */
   experienceRow?: unknown | null;
 }) {
-  const [sessionId, setSessionId] = useState<string | null>(handoff?.sessionId ?? null);
+  const [sessionId, setSessionId] = useState<string | null>(handoff?.sessionId ?? hostSessionId ?? null);
   const [screenToken, setScreenToken] = useState<string | null>(handoff?.screenToken ?? null);
   const [pairQr, setPairQr] = useState<string | null>(null);
   const [pairToken, setPairToken] = useState<string | null>(null);
@@ -113,10 +119,12 @@ export function ArenaScreen({ handoff, experienceRow }: {
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
-  const [paired, setPaired] = useState(Boolean(handoff));
+  const [paired, setPaired] = useState(Boolean(handoff || hostSessionId));
   const rotating = useRef(false);
   const currentToken = useRef<string | null>(null);
   const mounted = useRef(true);
+  /** Once the host's screen has been read, a failed read is a network blip, not a refusal. */
+  const hostRead = useRef(false);
 
   const drawPairToken = useCallback(async (token: string) => {
     currentToken.current = token;
@@ -153,21 +161,35 @@ export function ArenaScreen({ handoff, experienceRow }: {
   }, [drawPairToken]);
 
   useEffect(() => {
-    if (handoff) return;
+    if (handoff || hostSessionId) return;
     void openSession();
     return () => { mounted.current = false; };
-  }, [handoff, openSession]);
+  }, [handoff, hostSessionId, openSession]);
 
   const readSnapshot = useCallback(async () => {
-    if (!sessionId || !screenToken) return;
-    const { data, error: readError } = await supabase.rpc("game_screen_snapshot", {
-      p_session_id: sessionId,
-      p_screen_token: screenToken,
-    });
+    if (!sessionId) return;
+    let result;
+    if (hostSessionId) {
+      result = await supabase.rpc("game_host_screen", { p_session_id: sessionId });
+    } else {
+      if (!screenToken) return;
+      result = await supabase.rpc("game_screen_snapshot", {
+        p_session_id: sessionId,
+        p_screen_token: screenToken,
+      });
+    }
+    const { data, error: readError } = result;
     if (readError) {
-      console.error("game_screen_snapshot failed", readError);
+      console.error(hostSessionId ? "game_host_screen failed" : "game_screen_snapshot failed", readError);
+      // The first read is the door: signed out, or signed in as somebody who
+      // is not this match's host. Later failures are the network, and the
+      // next timed read recovers them.
+      if (hostSessionId && !hostRead.current) {
+        setError("Bu ekran o‘yinni boshlagan hisobda ochiladi. Shu hisob bilan kirib, qayta urinib ko‘ring.");
+      }
       return;
     }
+    hostRead.current = true;
     const next = data as unknown as Snapshot;
     setSnapshot(next);
     // `paired` is the gate, not the token: the join token exists from the moment
@@ -177,7 +199,7 @@ export function ArenaScreen({ handoff, experienceRow }: {
       setPaired(true);
       setJoinQr(await QRCode.toDataURL(joinUrl(next.join_token), { errorCorrectionLevel: "M", margin: 1, width: 560 }));
     }
-  }, [screenToken, sessionId]);
+  }, [hostSessionId, screenToken, sessionId]);
 
   useEffect(() => { void readSnapshot(); }, [readSnapshot]);
 
@@ -270,9 +292,14 @@ export function ArenaScreen({ handoff, experienceRow }: {
     return (
       <main className="notice-page">
         <div className="shell"><div className="notice-card">
-          <h1>Sessiya ochilmadi</h1>
+          <h1>{hostSessionId ? "Ekran ochilmadi" : "Sessiya ochilmadi"}</h1>
           <p>{error}</p>
-          <div className="store-row"><a className="store-button ghost" href="/">Bosh sahifa</a></div>
+          <div className="store-row">
+            {hostSessionId ? (
+              <a className="store-button" href={`/kirish?next=${encodeURIComponent(`/oyingoh/ekran/${hostSessionId}`)}`}>Kirish</a>
+            ) : null}
+            <a className="store-button ghost" href="/">Bosh sahifa</a>
+          </div>
         </div></div>
       </main>
     );
@@ -502,7 +529,11 @@ export function ArenaScreen({ handoff, experienceRow }: {
       {snapshot?.status === "cancelled" || snapshot?.status === "expired" ? (
         <div className="arena-center">
           <h1 className="arena-title">{words.stopped}</h1>
-          <button className="store-button" type="button" onClick={() => void openSession()}>{words.newGame}</button>
+          {/* The host's own screen starts nothing: a new match begins from the
+              app beside it, which is where the games are. */}
+          {hostSessionId ? null : (
+            <button className="store-button" type="button" onClick={() => void openSession()}>{words.newGame}</button>
+          )}
         </div>
       ) : null}
     </main>

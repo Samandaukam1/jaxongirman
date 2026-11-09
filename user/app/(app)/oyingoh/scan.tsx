@@ -4,14 +4,14 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Camera, MonitorPlay, ScanLine } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
+import { HostablePicker } from "@/components/HostablePicker";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { InlineError } from "@/components/StateBlocks";
-import { lockedOnWeb } from "@/components/WebLocked";
 import { asErrorMessage } from "@/lib/format";
-import { claimPairing } from "@/lib/games";
+import { claimPairing, createSession } from "@/lib/games";
 import { icon, radius, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
@@ -121,6 +121,44 @@ function HostScanScreen() {
   );
 }
 
+/**
+ * Becoming the host, in a browser.
+ *
+ * There is no projector to scan here: the computer the app is open on is the
+ * big screen. So the first question is the game, and choosing one opens the
+ * match straight away — the host remote then shows the arena beside its
+ * controls, with the join QR the room scans.
+ */
+function WebHostStartScreen() {
+  const styles = useStyles();
+  const { t } = useTranslation("games");
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function start(gameId: string) {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const session = await createSession(gameId);
+      router.replace({ pathname: "/(app)/oyingoh/host/[sessionId]", params: { sessionId: session.session_id } });
+    } catch (failure) {
+      setError(asErrorMessage(failure));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <View style={styles.safe}>
+      <ScreenHeader title={t("entry.hostTitle")} subtitle={t("title")} onLeave={() => router.back()} />
+      <ScrollView contentContainerStyle={styles.content}>
+        <HostablePicker busy={busy} error={error} onPick={(gameId) => void start(gameId)} />
+      </ScrollView>
+    </View>
+  );
+}
+
 const useStyles = makeStyles((colors) => ({
   safe: { flex: 1, backgroundColor: colors.canvas },
   content: { padding: spacing.xl, gap: spacing.lg, paddingBottom: spacing.xxxl },
@@ -137,5 +175,5 @@ const useStyles = makeStyles((colors) => ({
   linkText: { ...typography.body, color: colors.primary, textAlign: "center" },
 }));
 
-// Not in a browser yet: see WebLocked.
-export default lockedOnWeb(HostScanScreen);
+// A browser has no camera to aim at a projector; it is the screen itself.
+export default Platform.OS === "web" ? WebHostStartScreen : HostScanScreen;

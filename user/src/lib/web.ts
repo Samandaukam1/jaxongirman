@@ -29,3 +29,13 @@ export function siteSignInUrl(): string | null {
   if (!isWeb || !WEB_BASE) return null;
   return `/kirish?next=${encodeURIComponent(WEB_BASE)}`;
 }
+
+/**
+ * The big screen of a match this browser is hosting: the site's arena, read as
+ * the host (`web/app/oyingoh/ekran`). Same rule as above — only where the site
+ * is beside the app; a phone and a local web build have no arena to show.
+ */
+export function siteGameScreenUrl(sessionId: string): string | null {
+  if (!isWeb || !WEB_BASE) return null;
+  return `/oyingoh/ekran/${encodeURIComponent(sessionId)}`;
+}

@@ -77,7 +77,7 @@ XMLHttpRequest, Google and Apple sign in through the provider page.
 
 What has not been made or checked in a browser yet says so instead of half
 working (`lockedOnWeb`): the camera scanners, the phone as a remote, the
-O‘yingoh join/host/play screens, phone pairing links, payment checkout and
+O‘yingoh join and play screens, phone pairing links, payment checkout and
 saved cards, and publishing a deck to the shop. Unlock one by removing its
 `lockedOnWeb` once it works in a browser.
 
@@ -131,6 +131,19 @@ A deck that finishes becomes a match: `presentation_launch_game()` mints a game
 session, and the host's phone hands the raw screen token to the projector over
 the presentation's private broadcast channel — the same projector, a different
 show, with nobody signing in on it.
+
+A computer can host without a projector. In the web app, "Mezbon bo‘lish" (or
+"O‘yinni boshlash" on a game) opens the match with `game_session_create`, and
+the host remote fills the window with the site's arena for it beside its
+controls — `/oyingoh/ekran/<id>`, same origin, so it reads the match as the
+signed-in host (`game_host_screen`) and needs no pairing or screen token. It
+opens in a window of its own for a projector. Without the site beside the app
+(a phone, a local web build) the lobby's code card carries the join QR instead.
+
+The host's own account may join its own match — one account on the laptop and
+the phone is the common case. It plays and scores like anyone else and is never
+`reward_eligible`: being paid from your own hold would turn plan coins, which
+cannot be sent, into ordinary ones.
 
 The public domain is configuration, not a literal: `NEXT_PUBLIC_APP_URL`
 (see `web/lib/public-url.ts`) decides what the join QR points at, so moving to

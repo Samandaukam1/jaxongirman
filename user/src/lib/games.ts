@@ -3,8 +3,10 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 
 import { i18n } from "../i18n";
 
+import { DEFAULT_HOST } from "./marathon-link-core";
 import { withNetworkRetry } from "./retry";
 import { changesChannel, supabase } from "./supabase";
+import { isWeb, WEB_BASE } from "./web";
 
 /**
  * The O‘yingoh client surface: every server conversation a screen needs, typed
@@ -105,6 +107,20 @@ async function rpc<T>(name: string, args: Record<string, unknown>): Promise<T> {
     if (error) throw error;
     return data as T;
   });
+}
+
+/**
+ * The universal join link a match's QR carries: `https://<site>/join/<token>`.
+ *
+ * The same link the projector draws (`web/lib/public-url.ts`), so a phone's own
+ * camera opens the app on "pick a face, type a name", and the in-app scanner
+ * reads it too. The configured site first; in a browser served by the site,
+ * that site; otherwise the production domain.
+ */
+export function gameJoinUrl(joinToken: string): string {
+  const configured = (process.env.EXPO_PUBLIC_APP_URL ?? "").trim().replace(/\/+$/, "");
+  const origin = configured || (isWeb && WEB_BASE ? window.location.origin : DEFAULT_HOST);
+  return `${origin}/join/${joinToken}`;
 }
 
 // ---------------------------------------------------------------- sessions --

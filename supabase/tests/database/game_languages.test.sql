@@ -21,7 +21,9 @@ select is(public.game_normalize_text('ёж'), public.game_normalize_text('еж')
 select is(public.game_normalize_text('O‘zbekiston'), public.game_normalize_text('O''zbekiston'), 'Uzbek apostrophes still fold');
 select is(public.game_normalize_text('  New   York '), 'new york', 'English answers fold case and spaces');
 
-select ok(pg_get_functiondef('public.game_screen_snapshot(uuid, text)'::regprocedure) like '%''game_language''%',
+-- The projector's snapshot and the host's own screen are one view since
+-- 202611080001: `game_screen_state`, which both doors return.
+select ok(pg_get_functiondef('public.game_screen_state(uuid)'::regprocedure) like '%''game_language''%',
   'the projector snapshot carries the game''s language');
 
 select * from finish();

@@ -72,8 +72,10 @@ Replay locally with `npx supabase db reset --local`. Validate with `npx supabase
 
 `game_questions.config` is the answer key, so no player-facing path selects that
 table: RLS grants SELECT to the owner alone. Players receive questions through
-`game_player_state()` and projectors through `game_screen_snapshot()`, both of
-which call `game_sanitized_question()` — it strips the key and shuffles the
+`game_player_state()`, projectors through `game_screen_snapshot()` (by screen
+token) and the host's own computer through `game_host_screen()` (by being the
+host) — the last two read one view, `game_screen_state()` — and all of them call
+`game_sanitized_question()` — it strips the key and shuffles the
 orderable and matchable options with a per-session seed, so every device agrees
 on the same scramble without being told the answer.
 

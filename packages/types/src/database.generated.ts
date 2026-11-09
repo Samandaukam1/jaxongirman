@@ -7505,6 +7505,7 @@ export type Database = {
         Args: { p_answer_id: string; p_is_correct: boolean }
         Returns: Json
       }
+      game_host_screen: { Args: { p_session_id: string }; Returns: Json }
       game_host_state: { Args: { p_session_id: string }; Returns: Json }
       game_hostable_list: {
         Args: never
@@ -7587,6 +7588,7 @@ export type Database = {
         Args: { p_screen_token: string; p_session_id: string }
         Returns: Json
       }
+      game_screen_state: { Args: { p_session_id: string }; Returns: Json }
       game_session_advance: {
         Args: { p_action?: string; p_session_id: string }
         Returns: Json

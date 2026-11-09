@@ -2,7 +2,7 @@ import type { GameRewardPlan } from "@jaxongirman/types";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
-  Check, ChevronRight, Gift, Minus, Play, Plus, Square, SquareCheck, Users, Volume2, VolumeX, X,
+  Check, ChevronRight, ExternalLink, Gift, Minus, Play, Plus, Square, SquareCheck, Users, Volume2, VolumeX, X,
 } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -10,28 +10,26 @@ import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from "rea
 
 import { GameLeaderboardList } from "@/components/GameAnswerInput";
 import { GameAvatar } from "@/components/GameAvatar";
+import { HostablePicker } from "@/components/HostablePicker";
 import { PrimaryButton } from "@/components/PrimaryButton";
+import { QrCode } from "@/components/QrCode";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { ErrorState, InlineError } from "@/components/StateBlocks";
-import { lockedOnWeb } from "@/components/WebLocked";
 import { asErrorMessage } from "@/lib/format";
 import {
-  advanceSession, configureSession, hostState, listHostable, reviewAnswer, subscribeToSession,
+  advanceSession, configureSession, gameJoinUrl, hostState, reviewAnswer, subscribeToSession,
   type HostState, type LeaderboardPayload,
 } from "@/lib/games";
 import { formatNumber } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
+import { useRoom } from "@/lib/useDesktop";
+import { siteGameScreenUrl } from "@/lib/web";
 import { useAccount } from "@/providers/AccountProvider";
 import { icon, radius, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type Player = { id: string; nickname: string; avatar_id: number; team: string | null; total_score: number; correct_count: number; rank: number | null };
 type OpenAnswer = { id: string; text: string; nickname: string; is_correct: boolean | null };
-type Hostable = { id: string; title: string; question_count: number; category_label: string | null; difficulty: string; source: string };
-
-/** Where a hostable game came from; named in the `play` table under `host.source`. */
-const SOURCES = ["mine", "presentation", "purchased", "free"] as const;
-const isSource = (value: string): value is (typeof SOURCES)[number] => (SOURCES as readonly string[]).includes(value);
 
 /** The reward plan's steps, in order; named in the `play` table under `host.reward`. */
 const REWARD_STEPS: (keyof GameRewardPlan & ("first" | "second" | "third" | "participant"))[] = ["first", "second", "third", "participant"];
@@ -44,6 +42,12 @@ const REWARD_STEPS: (keyof GameRewardPlan & ("first" | "second" | "third" | "par
  * The reward plan is set here, and the coins are held when the match starts.
  * A plan the wallet cannot cover refuses to start rather than failing at the
  * podium.
+ *
+ * In a browser on a computer the remote is also the big screen: the site's
+ * arena for this match (`/oyingoh/ekran/<id>`, read as the host) fills the
+ * window beside the controls, and opens in a window of its own for a
+ * projector. Without a projector, the lobby's code card carries the join QR
+ * itself — on a phone, the room scans the host's phone.
  */
 /**
  * How long a finished question and a leaderboard stay on screen.
@@ -68,14 +72,17 @@ function HostGameScreen() {
   const [openAnswers, setOpenAnswers] = useState<OpenAnswer[]>([]);
   const [plan, setPlan] = useState<GameRewardPlan>({});
   const [rewardsOpen, setRewardsOpen] = useState(false);
-  /** Loaded only when the screen was claimed without a game already chosen. */
-  const [hostable, setHostable] = useState<Hostable[] | null>(null);
   const [busy, setBusy] = useState(false);
   // A host who wants to talk over a question turns the clock off. The game is
   // theirs; running itself is the default, not the rule.
   const [autoPaused, setAutoPaused] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fatal, setFatal] = useState<string | null>(null);
+  // The arena beside the controls needs the site beside the app and a window
+  // wide enough for both; anywhere else it is a window of its own, if any.
+  const room = useRoom();
+  const screenUrl = sessionId ? siteGameScreenUrl(sessionId) : null;
+  const beside = room === "desktop" && screenUrl !== null;
 
   const refresh = useCallback(async () => {
     if (!sessionId) return;
@@ -107,14 +114,6 @@ function HostGameScreen() {
   }, [sessionId]);
 
   useEffect(() => { void refresh(); }, [refresh]);
-
-  // A host who scanned a projector has not chosen a game yet: that choice is
-  // the first thing this screen asks for, and nothing else can happen until it
-  // is made.
-  useEffect(() => {
-    if (!state || state.game_id || hostable) return;
-    void listHostable().then(setHostable).catch((failure) => setError(asErrorMessage(failure)));
-  }, [hostable, state]);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -299,6 +298,208 @@ function HostGameScreen() {
     }
   })();
 
+  const controls = (
+    <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      {state.status === "lobby" && !state.game_id ? (
+        // A host who scanned a projector has not chosen a game yet: that
+        // choice is the first thing this screen asks for, and nothing else
+        // can happen until it is made.
+        <HostablePicker busy={busy} error={error} onPick={(gameId) => void chooseGame(gameId)} />
+      ) : null}
+
+      {state.status === "lobby" && state.game_id ? (
+        <>
+          <View style={styles.codeCard}>
+            {/* Beside the arena the QR is already on the big screen; anywhere
+                else this card is where the room finds it. */}
+            {beside ? null : (
+              <View style={styles.qrFrame}>
+                <QrCode value={gameJoinUrl(state.join_token)} size={room === "phone" ? 200 : 240} />
+              </View>
+            )}
+            <Text style={styles.codeLabel}>{t("host.code")}</Text>
+            <Text style={styles.codeValue}>{state.join_code.replace(/(\d{3})(\d{3})/, "$1 $2")}</Text>
+            <Text style={styles.codeHint}>{beside ? t("host.codeHint") : t("host.scanHint")}</Text>
+          </View>
+
+          <View style={styles.countRow}>
+            <Users color={colors.primary} size={icon.lg} strokeWidth={icon.stroke} />
+            <Text style={styles.countText}>{t("host.players", { count: state.player_count })}</Text>
+          </View>
+
+          <Pressable style={styles.settingRow} onPress={() => void toggleTeamMode()}>
+            {state.team_mode
+              ? <SquareCheck color={colors.primary} size={icon.lg} strokeWidth={icon.strokeBold} />
+              : <Square color={colors.borderStrong} size={icon.lg} strokeWidth={icon.stroke} />}
+            <Text style={styles.settingText}>{t("host.teamMode")}</Text>
+          </Pressable>
+
+          <Pressable style={styles.settingRow} onPress={() => void toggleSetting("showOnPhones", !state.show_on_phones)}>
+            {state.show_on_phones
+              ? <SquareCheck color={colors.primary} size={icon.lg} strokeWidth={icon.strokeBold} />
+              : <Square color={colors.borderStrong} size={icon.lg} strokeWidth={icon.stroke} />}
+            <Text style={styles.settingText}>{t("host.onPhones")}</Text>
+          </Pressable>
+
+          <Pressable style={styles.settingRow} onPress={() => void toggleSetting("soundEnabled", !state.sound_enabled)}>
+            {state.sound_enabled
+              ? <Volume2 color={colors.primary} size={icon.lg} strokeWidth={icon.stroke} />
+              : <VolumeX color={colors.inkSoft} size={icon.lg} strokeWidth={icon.stroke} />}
+            <Text style={styles.settingText}>{t("host.sound")}</Text>
+          </Pressable>
+
+          <Pressable style={styles.settingRow} onPress={() => setRewardsOpen((value) => !value)}>
+            <Gift color={colors.primary} size={icon.lg} strokeWidth={icon.stroke} />
+            <Text style={styles.settingText}>{t("host.rewards")}</Text>
+            <Text style={styles.settingValue}>{liability > 0 ? `${formatNumber(liability)} J` : t("host.none")}</Text>
+            <ChevronRight color={colors.inkSoft} size={icon.md} strokeWidth={icon.stroke} />
+          </Pressable>
+
+          {rewardsOpen ? (
+            <View style={styles.rewardCard}>
+              {REWARD_STEPS.map((key) => (
+                <View key={key} style={styles.rewardRow}>
+                  <Text style={styles.rewardLabel}>{t(`host.reward.${key}`)}</Text>
+                  <Pressable
+                    style={styles.stepButton}
+                    onPress={() => void saveRewards({ ...plan, [key]: Math.max((plan[key] ?? 0) - 1, 0) })}
+                  >
+                    <Minus color={colors.ink} size={icon.sm} strokeWidth={icon.stroke} />
+                  </Pressable>
+                  <Text style={styles.rewardValue}>{plan[key] ?? 0} J</Text>
+                  <Pressable
+                    style={styles.stepButton}
+                    onPress={() => void saveRewards({ ...plan, [key]: Math.min((plan[key] ?? 0) + 1, 1000) })}
+                  >
+                    <Plus color={colors.ink} size={icon.sm} strokeWidth={icon.stroke} />
+                  </Pressable>
+                </View>
+              ))}
+              <Text style={[styles.rewardTotal, !affordable && styles.rewardShort]}>
+                {liability > 0
+                  ? t("host.reserve", { amount: formatNumber(liability), balance: formatNumber(balance) })
+                  : t("host.noReward")}
+              </Text>
+              {!affordable ? (
+                <Text style={styles.rewardShort}>{t("host.short")}</Text>
+              ) : null}
+            </View>
+          ) : null}
+
+          <Text style={styles.sectionTitle}>{t("host.participants")}</Text>
+          {players.length === 0 ? (
+            <Text style={styles.hint}>{t("host.nobody")}</Text>
+          ) : (
+            <View style={styles.playerWrap}>
+              {players.map((player) => (
+                <View key={player.id} style={styles.playerChip}>
+                  <GameAvatar id={player.avatar_id} size={34} />
+                  <Text style={styles.playerName} numberOfLines={1}>{player.nickname}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </>
+      ) : null}
+
+      {state.status !== "lobby" && state.status !== "finished" && state.status !== "cancelled" ? (
+        <View style={styles.liveCard}>
+          <Text style={styles.liveStatus}>
+            {state.status === "countdown" ? t("host.live.countdown")
+              : state.status === "question" ? t("host.live.question")
+              : state.status === "question_result" ? t("host.live.question_result")
+              : t("host.live.leaderboard")}
+          </Text>
+          <Text style={styles.hint}>{t("host.players", { count: state.player_count })}</Text>
+          {state.reward_reserved > 0 ? (
+            <Text style={styles.hint}>{t("host.reserved", { amount: formatNumber(state.reward_reserved) })}</Text>
+          ) : null}
+        </View>
+      ) : null}
+
+      {openAnswers.length > 0 ? (
+        <>
+          <Text style={styles.sectionTitle}>{t("host.review")}</Text>
+          {openAnswers.map((answer) => (
+            <View key={answer.id} style={styles.reviewRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.reviewName}>{answer.nickname}</Text>
+                <Text style={styles.reviewText}>{answer.text}</Text>
+              </View>
+              <Pressable
+                style={[styles.reviewButton, answer.is_correct === true && styles.reviewGood]}
+                onPress={() => void (async () => {
+                  await reviewAnswer(answer.id, true);
+                  setOpenAnswers((current) => current.map((row) => row.id === answer.id ? { ...row, is_correct: true } : row));
+                })()}
+                accessibilityLabel={t("correct")}
+              >
+                <Check color={answer.is_correct === true ? colors.onPrimary : colors.success} size={icon.md} strokeWidth={icon.strokeBold} />
+              </Pressable>
+              <Pressable
+                style={[styles.reviewButton, answer.is_correct === false && styles.reviewBad]}
+                onPress={() => void (async () => {
+                  await reviewAnswer(answer.id, false);
+                  setOpenAnswers((current) => current.map((row) => row.id === answer.id ? { ...row, is_correct: false } : row));
+                })()}
+                accessibilityLabel={t("wrong")}
+              >
+                <X color={answer.is_correct === false ? colors.onPrimary : colors.danger} size={icon.md} strokeWidth={icon.strokeBold} />
+              </Pressable>
+            </View>
+          ))}
+        </>
+      ) : null}
+
+      {state.status === "finished" && leaderboard ? (
+        <>
+          <Text style={styles.sectionTitle}>{t("host.final")}</Text>
+          <GameLeaderboardList players={leaderboard.players} />
+          <PrimaryButton label={t("host.resultsPage")} onPress={() => router.replace(`/oyingoh/results/${sessionId}`)} />
+          <PrimaryButton label={t("back")} tone="secondary" onPress={() => router.replace("/(app)/(tabs)/games")} />
+        </>
+      ) : null}
+
+      {error ? <InlineError message={error} /> : null}
+
+      {state.status !== "finished" && state.status !== "cancelled" && state.status !== "expired"
+        && !(state.status === "lobby" && !state.game_id) ? (
+        <>
+          <PrimaryButton
+            label={advanceLabel}
+            icon={state.status === "lobby" ? Play : undefined}
+            loading={busy}
+            disabled={busy || (state.status === "lobby" && (state.player_count < 1 || !affordable))}
+            onPress={() => void advance("next")}
+          />
+          {state.status !== "lobby" ? (
+            <>
+              {/* The game paces itself; this is how a host takes it back to
+                  talk over a question without the clock moving on. */}
+              <PrimaryButton
+                label={autoPaused ? t("host.autoOn") : t("host.autoOff")}
+                tone="ghost"
+                disabled={busy}
+                onPress={() => setAutoPaused((value) => !value)}
+              />
+              <PrimaryButton label={t("host.finish")} tone="secondary" disabled={busy} onPress={() => void advance("finish")} />
+            </>
+          ) : null}
+          <PrimaryButton label={t("common:cancel")} tone="ghost" disabled={busy} onPress={confirmCancel} />
+        </>
+      ) : null}
+
+      {screenUrl ? (
+        <PrimaryButton
+          label={t("host.openScreen")}
+          icon={ExternalLink}
+          tone="ghost"
+          onPress={() => { window.open(screenUrl, "_blank", "noopener"); }}
+        />
+      ) : null}
+    </ScrollView>
+  );
+
   return (
     <View style={styles.safe}>
       <ScreenHeader
@@ -306,227 +507,19 @@ function HostGameScreen() {
         subtitle={state.status === "lobby" ? t("host.lobby") : t("host.question", { number: state.current_index + 1 })}
         onLeave={() => router.back()}
       />
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {state.status === "lobby" && !state.game_id ? (
-          <>
-            <Text style={styles.pickerTitle}>{t("host.pick")}</Text>
-            <Text style={styles.hint}>{t("host.pickHint")}</Text>
-            {error ? <InlineError message={error} /> : null}
-            {hostable === null ? (
-              <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.xl }} />
-            ) : hostable.length === 0 ? (
-              <View style={styles.emptyPicker}>
-                <Text style={styles.settingText}>{t("host.noGames")}</Text>
-                <Text style={styles.hint}>{t("host.noGamesBody")}</Text>
-                <PrimaryButton label={t("host.createGame")} onPress={() => router.replace("/(app)/oyingoh/create")} />
-              </View>
-            ) : (
-              Object.entries(
-                hostable.reduce<Record<string, Hostable[]>>((groups, game) => {
-                  (groups[game.source] ??= []).push(game);
-                  return groups;
-                }, {}),
-              ).map(([source, games]) => (
-                <View key={source} style={{ gap: spacing.sm }}>
-                  <Text style={styles.groupLabel}>{isSource(source) ? t(`host.source.${source}`) : source}</Text>
-                  {games.map((game) => (
-                    <Pressable
-                      key={game.id}
-                      style={({ pressed }) => [styles.pickRow, pressed && styles.pickRowPressed]}
-                      disabled={busy}
-                      onPress={() => void chooseGame(game.id)}
-                    >
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.settingText} numberOfLines={1}>{game.title || t("games:untitled")}</Text>
-                        <Text style={styles.hint}>
-                          {t("games:questions", { count: game.question_count })}
-                          {game.category_label ? ` · ${game.category_label}` : ""}
-                        </Text>
-                      </View>
-                      <ChevronRight color={colors.inkSoft} size={icon.md} strokeWidth={icon.stroke} />
-                    </Pressable>
-                  ))}
-                </View>
-              ))
-            )}
-          </>
-        ) : null}
-
-        {state.status === "lobby" && state.game_id ? (
-          <>
-            <View style={styles.codeCard}>
-              <Text style={styles.codeLabel}>{t("host.code")}</Text>
-              <Text style={styles.codeValue}>{state.join_code.replace(/(\d{3})(\d{3})/, "$1 $2")}</Text>
-              <Text style={styles.codeHint}>{t("host.codeHint")}</Text>
-            </View>
-
-            <View style={styles.countRow}>
-              <Users color={colors.primary} size={icon.lg} strokeWidth={icon.stroke} />
-              <Text style={styles.countText}>{t("host.players", { count: state.player_count })}</Text>
-            </View>
-
-            <Pressable style={styles.settingRow} onPress={() => void toggleTeamMode()}>
-              {state.team_mode
-                ? <SquareCheck color={colors.primary} size={icon.lg} strokeWidth={icon.strokeBold} />
-                : <Square color={colors.borderStrong} size={icon.lg} strokeWidth={icon.stroke} />}
-              <Text style={styles.settingText}>{t("host.teamMode")}</Text>
-            </Pressable>
-
-            <Pressable style={styles.settingRow} onPress={() => void toggleSetting("showOnPhones", !state.show_on_phones)}>
-              {state.show_on_phones
-                ? <SquareCheck color={colors.primary} size={icon.lg} strokeWidth={icon.strokeBold} />
-                : <Square color={colors.borderStrong} size={icon.lg} strokeWidth={icon.stroke} />}
-              <Text style={styles.settingText}>{t("host.onPhones")}</Text>
-            </Pressable>
-
-            <Pressable style={styles.settingRow} onPress={() => void toggleSetting("soundEnabled", !state.sound_enabled)}>
-              {state.sound_enabled
-                ? <Volume2 color={colors.primary} size={icon.lg} strokeWidth={icon.stroke} />
-                : <VolumeX color={colors.inkSoft} size={icon.lg} strokeWidth={icon.stroke} />}
-              <Text style={styles.settingText}>{t("host.sound")}</Text>
-            </Pressable>
-
-            <Pressable style={styles.settingRow} onPress={() => setRewardsOpen((value) => !value)}>
-              <Gift color={colors.primary} size={icon.lg} strokeWidth={icon.stroke} />
-              <Text style={styles.settingText}>{t("host.rewards")}</Text>
-              <Text style={styles.settingValue}>{liability > 0 ? `${formatNumber(liability)} J` : t("host.none")}</Text>
-              <ChevronRight color={colors.inkSoft} size={icon.md} strokeWidth={icon.stroke} />
-            </Pressable>
-
-            {rewardsOpen ? (
-              <View style={styles.rewardCard}>
-                {REWARD_STEPS.map((key) => (
-                  <View key={key} style={styles.rewardRow}>
-                    <Text style={styles.rewardLabel}>{t(`host.reward.${key}`)}</Text>
-                    <Pressable
-                      style={styles.stepButton}
-                      onPress={() => void saveRewards({ ...plan, [key]: Math.max((plan[key] ?? 0) - 1, 0) })}
-                    >
-                      <Minus color={colors.ink} size={icon.sm} strokeWidth={icon.stroke} />
-                    </Pressable>
-                    <Text style={styles.rewardValue}>{plan[key] ?? 0} J</Text>
-                    <Pressable
-                      style={styles.stepButton}
-                      onPress={() => void saveRewards({ ...plan, [key]: Math.min((plan[key] ?? 0) + 1, 1000) })}
-                    >
-                      <Plus color={colors.ink} size={icon.sm} strokeWidth={icon.stroke} />
-                    </Pressable>
-                  </View>
-                ))}
-                <Text style={[styles.rewardTotal, !affordable && styles.rewardShort]}>
-                  {liability > 0
-                    ? t("host.reserve", { amount: formatNumber(liability), balance: formatNumber(balance) })
-                    : t("host.noReward")}
-                </Text>
-                {!affordable ? (
-                  <Text style={styles.rewardShort}>{t("host.short")}</Text>
-                ) : null}
-              </View>
-            ) : null}
-
-            <Text style={styles.sectionTitle}>{t("host.participants")}</Text>
-            {players.length === 0 ? (
-              <Text style={styles.hint}>{t("host.nobody")}</Text>
-            ) : (
-              <View style={styles.playerWrap}>
-                {players.map((player) => (
-                  <View key={player.id} style={styles.playerChip}>
-                    <GameAvatar id={player.avatar_id} size={34} />
-                    <Text style={styles.playerName} numberOfLines={1}>{player.nickname}</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-          </>
-        ) : null}
-
-        {state.status !== "lobby" && state.status !== "finished" && state.status !== "cancelled" ? (
-          <View style={styles.liveCard}>
-            <Text style={styles.liveStatus}>
-              {state.status === "countdown" ? t("host.live.countdown")
-                : state.status === "question" ? t("host.live.question")
-                : state.status === "question_result" ? t("host.live.question_result")
-                : t("host.live.leaderboard")}
-            </Text>
-            <Text style={styles.hint}>{t("host.players", { count: state.player_count })}</Text>
-            {state.reward_reserved > 0 ? (
-              <Text style={styles.hint}>{t("host.reserved", { amount: formatNumber(state.reward_reserved) })}</Text>
-            ) : null}
-          </View>
-        ) : null}
-
-        {openAnswers.length > 0 ? (
-          <>
-            <Text style={styles.sectionTitle}>{t("host.review")}</Text>
-            {openAnswers.map((answer) => (
-              <View key={answer.id} style={styles.reviewRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.reviewName}>{answer.nickname}</Text>
-                  <Text style={styles.reviewText}>{answer.text}</Text>
-                </View>
-                <Pressable
-                  style={[styles.reviewButton, answer.is_correct === true && styles.reviewGood]}
-                  onPress={() => void (async () => {
-                    await reviewAnswer(answer.id, true);
-                    setOpenAnswers((current) => current.map((row) => row.id === answer.id ? { ...row, is_correct: true } : row));
-                  })()}
-                  accessibilityLabel={t("correct")}
-                >
-                  <Check color={answer.is_correct === true ? colors.onPrimary : colors.success} size={icon.md} strokeWidth={icon.strokeBold} />
-                </Pressable>
-                <Pressable
-                  style={[styles.reviewButton, answer.is_correct === false && styles.reviewBad]}
-                  onPress={() => void (async () => {
-                    await reviewAnswer(answer.id, false);
-                    setOpenAnswers((current) => current.map((row) => row.id === answer.id ? { ...row, is_correct: false } : row));
-                  })()}
-                  accessibilityLabel={t("wrong")}
-                >
-                  <X color={answer.is_correct === false ? colors.onPrimary : colors.danger} size={icon.md} strokeWidth={icon.strokeBold} />
-                </Pressable>
-              </View>
-            ))}
-          </>
-        ) : null}
-
-        {state.status === "finished" && leaderboard ? (
-          <>
-            <Text style={styles.sectionTitle}>{t("host.final")}</Text>
-            <GameLeaderboardList players={leaderboard.players} />
-            <PrimaryButton label={t("host.resultsPage")} onPress={() => router.replace(`/oyingoh/results/${sessionId}`)} />
-            <PrimaryButton label={t("back")} tone="secondary" onPress={() => router.replace("/(app)/(tabs)/games")} />
-          </>
-        ) : null}
-
-        {error ? <InlineError message={error} /> : null}
-
-        {state.status !== "finished" && state.status !== "cancelled" && state.status !== "expired"
-          && !(state.status === "lobby" && !state.game_id) ? (
-          <>
-            <PrimaryButton
-              label={advanceLabel}
-              icon={state.status === "lobby" ? Play : undefined}
-              loading={busy}
-              disabled={busy || (state.status === "lobby" && (state.player_count < 1 || !affordable))}
-              onPress={() => void advance("next")}
+      {beside && screenUrl ? (
+        <View style={styles.split}>
+          <View style={styles.stage}>
+            <iframe
+              src={screenUrl}
+              title={t("host.screenTitle")}
+              allow="fullscreen"
+              style={{ border: 0, width: "100%", height: "100%", display: "block" }}
             />
-            {state.status !== "lobby" ? (
-              <>
-                {/* The game paces itself; this is how a host takes it back to
-                    talk over a question without the clock moving on. */}
-                <PrimaryButton
-                  label={autoPaused ? t("host.autoOn") : t("host.autoOff")}
-                  tone="ghost"
-                  disabled={busy}
-                  onPress={() => setAutoPaused((value) => !value)}
-                />
-                <PrimaryButton label={t("host.finish")} tone="secondary" disabled={busy} onPress={() => void advance("finish")} />
-              </>
-            ) : null}
-            <PrimaryButton label={t("common:cancel")} tone="ghost" disabled={busy} onPress={confirmCancel} />
-          </>
-        ) : null}
-      </ScrollView>
+          </View>
+          <View style={styles.side}>{controls}</View>
+        </View>
+      ) : controls}
     </View>
   );
 }
@@ -559,16 +552,13 @@ const useStyles = makeStyles((colors) => ({
   rewardTotal: { ...typography.caption, color: colors.inkMuted },
   rewardShort: { ...typography.caption, color: colors.danger },
   sectionTitle: { ...typography.heading, color: colors.ink, marginTop: spacing.sm },
-  pickerTitle: { ...typography.title, color: colors.ink, fontSize: 22 },
-  groupLabel: { ...typography.caption, color: colors.accent, letterSpacing: 1.2, marginTop: spacing.sm },
-  pickRow: {
-    flexDirection: "row", alignItems: "center", gap: spacing.md,
-    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
-    borderRadius: radius.lg, padding: spacing.lg,
-  },
-  pickRowPressed: { transform: [{ scale: 0.98 }], backgroundColor: colors.primarySoft },
-  emptyPicker: { gap: spacing.md, paddingVertical: spacing.xl },
   hint: { ...typography.caption, color: colors.inkMuted },
+  qrFrame: { padding: spacing.sm, backgroundColor: "#FFFFFF", borderRadius: radius.lg, marginBottom: spacing.sm },
+  // The arena's own colours behind it, so the frame never flashes white
+  // while the screen loads.
+  split: { flex: 1, flexDirection: "row" },
+  stage: { flex: 1, backgroundColor: "#150E24", overflow: "hidden" },
+  side: { width: 400, borderLeftWidth: 1, borderLeftColor: colors.border, backgroundColor: colors.canvas },
   playerWrap: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   playerChip: {
     flexDirection: "row", alignItems: "center", gap: 6,
@@ -593,5 +583,4 @@ const useStyles = makeStyles((colors) => ({
   reviewBad: { backgroundColor: colors.danger },
 }));
 
-// Not in a browser yet: see WebLocked.
-export default lockedOnWeb(HostGameScreen);
+export default HostGameScreen;
