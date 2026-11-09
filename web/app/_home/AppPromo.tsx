@@ -12,7 +12,6 @@ import { createPortal } from "react-dom";
 
 import { useBrand } from "@/app/_brand/BrandContext";
 import { AppleLogo, GooglePlayLogo } from "@/app/_brand/StoreLogos";
-import { isPhone } from "@/lib/device";
 import { APP_LINK, STORE_ANDROID, STORE_IOS } from "@/lib/stores";
 import { SlideCorporate, SlideEditorial, SlideGlass, SlideSoft } from "./Slides";
 
@@ -25,9 +24,9 @@ import "./app-promo.css";
  * lands on are reached by someone in the middle of something, often in front of
  * a room, and an advert there would stand between them and the projector.
  *
- * It is for somebody at a computer, so a phone never sees it: a phone opens the
- * site straight away. A computer cannot install the app, which is what "Ulashish"
- * is for: it hands over `/ilova`, the link that sends each phone to its own store.
+ * A phone sees it too, in the narrow layout, and installs straight from the store
+ * buttons. A computer cannot install the app, which is what "Ulashish" is for: it
+ * hands over `/ilova`, the link that sends each phone to its own store.
  *
  * A visit is a tab's session: the mark lives in sessionStorage, so moving around
  * the site does not bring the prompt back, and closing the browser does.
@@ -75,7 +74,7 @@ export function AppPromo() {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (isPhone(navigator.userAgent) || alreadySeen()) return;
+    if (alreadySeen()) return;
     // Marked when it opens, not before the timer: in development an effect runs
     // twice, and a mark set here would cancel the second run's prompt.
     const timer = setTimeout(() => { markSeen(); setOpen(true); }, OPEN_DELAY);
