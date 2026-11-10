@@ -39,8 +39,16 @@ type Words = {
   closed: string;
   finished: string;
   winners: string;
+  /** The finish screen's heading, in two parts: plain, then the coloured word. */
+  winnersTitle: readonly [string, string];
+  questions: (count: number) => string;
+  /** The unit after a score, "1 240 ball". */
+  points: string;
+  stats: { players: string; questions: string; average: string; top: string };
   types: Record<GameQuestionType, string>;
 };
+
+export type ArenaWords = Words;
 
 export const ARENA_WORDS: Record<ArenaLanguage, Words> = {
   uz: {
@@ -64,6 +72,10 @@ export const ARENA_WORDS: Record<ArenaLanguage, Words> = {
     closed: "Javoblar yopildi",
     finished: "O‘yin yakunlandi",
     winners: "G‘oliblar",
+    winnersTitle: ["O‘yin", "g‘oliblari"],
+    questions: (count) => `${count} ta savol`,
+    points: "ball",
+    stats: { players: "O‘yinchilar", questions: "Savollar", average: "O‘rtacha ball", top: "Eng yuqori" },
     types: GAME_TYPE_LABELS,
   },
   en: {
@@ -87,6 +99,10 @@ export const ARENA_WORDS: Record<ArenaLanguage, Words> = {
     closed: "Answers are closed",
     finished: "Game over",
     winners: "Winners",
+    winnersTitle: ["The", "winners"],
+    questions: (count) => `${count} ${count === 1 ? "question" : "questions"}`,
+    points: "pts",
+    stats: { players: "Players", questions: "Questions", average: "Average score", top: "Top score" },
     types: {
       single_choice: "Brain teaser", true_false: "True or false?", multiple_choice: "Choose several",
       ordering: "Put in order", matching: "Find the pair", fill_blank: "Fill in the blank",
@@ -116,6 +132,10 @@ export const ARENA_WORDS: Record<ArenaLanguage, Words> = {
     closed: "Ответы закрыты",
     finished: "Игра окончена",
     winners: "Победители",
+    winnersTitle: ["Победители", "игры"],
+    questions: (count) => `Вопросов: ${count}`,
+    points: "очк.",
+    stats: { players: "Игроков", questions: "Вопросов", average: "Средний балл", top: "Лучший результат" },
     types: {
       single_choice: "Головоломка", true_false: "Правда или ложь?", multiple_choice: "Выберите несколько",
       ordering: "Расставьте по порядку", matching: "Найдите пару", fill_blank: "Заполните пропуск",

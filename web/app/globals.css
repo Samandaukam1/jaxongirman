@@ -601,32 +601,137 @@ body:has(.arena) .arena { min-height: 100vh; }
 .arena-board-score { font-size: clamp(18px, 1.9vw, 28px); font-weight: 800; font-variant-numeric: tabular-nums; }
 .arena-board-row svg { border-radius: 50%; flex: 0 0 auto; }
 
-/* -------------------------------------------------------------- podium -- */
-.arena-finish { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 28px; position: relative; }
-.arena-podium { display: flex; align-items: flex-end; gap: clamp(12px, 2vw, 40px); }
-.arena-podium-column { display: flex; flex-direction: column; align-items: center; gap: 6px; width: clamp(120px, 16vw, 220px); }
-.arena-podium-column svg { border-radius: 50%; }
-.arena-podium-name { font-size: clamp(16px, 1.8vw, 26px); font-weight: 700; }
-.arena-podium-score { font-size: clamp(14px, 1.4vw, 20px); color: rgba(255,255,255,.6); font-variant-numeric: tabular-nums; }
-.arena-podium-block {
-  width: 100%;
-  border-radius: 18px 18px 0 0;
-  background: linear-gradient(180deg, rgba(139,84,232,.9), rgba(60,20,120,.7));
-  display: grid; place-items: start center;
-  padding-top: 14px;
-  animation: arena-rise 620ms cubic-bezier(.2,.9,.3,1) both;
+/* -------------------------------------------------------------- podium -- *
+ * The finish: a 1920×1080 stage (Podium.tsx scales it to the room), the arena's
+ * own type and violet, the podium in glass and the places in metal.
+ */
+.arena-finish { flex: 1; position: relative; z-index: 1; min-height: 0; }
+.podium-stage {
+  --night: #150E24; --violet: #8B54E8; --lilac: #C4A6FF; --cyan: #22D3EE;
+  --glass-edge: rgba(255,255,255,.22); --muted: rgba(255,255,255,.62); --soft: rgba(255,255,255,.42);
+  position: absolute; left: 50%; top: 50%; width: 1920px; height: 1080px;
+  transform: translate(-50%, -50%) scale(var(--fit, 1));
+  display: flex; flex-direction: column; align-items: center; padding: 50px 80px 40px; box-sizing: border-box;
 }
-.arena-podium-block span { font-size: clamp(30px, 3.4vw, 54px); }
-@keyframes arena-rise { from { transform: scaleY(.2); transform-origin: bottom; } to { transform: scaleY(1); } }
-.arena-confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
-.arena-confetti span {
-  position: absolute; top: -12px; width: 9px; height: 16px; border-radius: 2px;
-  animation: arena-fall 3.4s linear infinite;
-}
-@keyframes arena-fall {
-  from { transform: translateY(-20px) rotate(0deg); opacity: 1; }
-  to { transform: translateY(105vh) rotate(680deg); opacity: .2; }
-}
+.podium-stage .gold { --m1: #FFF3C4; --m2: #F2C14E; --m3: #B27C14; --glow: rgba(242,193,78,.55); }
+.podium-stage .silver { --m1: #FFFFFF; --m2: #C9D1DD; --m3: #7D8796; --glow: rgba(201,209,221,.4); }
+.podium-stage .bronze { --m1: #FFD9B8; --m2: #D2894F; --m3: #7A4320; --glow: rgba(210,137,79,.45); }
+
+/* light and glass behind the whole arena */
+.podium-backdrop { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
+  background: radial-gradient(1200px 700px at 50% -10%, rgba(139,84,232,.38), transparent 60%); }
+.podium-orb { position: absolute; border-radius: 50%; filter: blur(70px); animation: podium-drift 18s ease-in-out infinite alternate; }
+.podium-orb.a { width: 38vw; height: 38vw; background: #8B54E8; left: 31vw; top: 14vh; opacity: .3; }
+.podium-orb.b { width: 32vw; height: 32vw; background: #22D3EE; right: -9vw; bottom: -22vh; opacity: .18; animation-duration: 22s; }
+.podium-orb.c { width: 34vw; height: 34vw; background: #6C34C9; left: -10vw; bottom: -16vh; opacity: .42; animation-duration: 26s; }
+@keyframes podium-drift { to { transform: translate(40px, -30px) scale(1.08); } }
+.podium-grid { position: absolute; inset: 0;
+  background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px);
+  background-size: 72px 72px; mask-image: radial-gradient(ellipse at 50% 40%, #000 30%, transparent 75%); }
+.podium-star { position: absolute; width: 3px; height: 3px; border-radius: 50%; background: #fff; opacity: .2; animation: podium-twinkle 3.6s ease-in-out infinite; }
+@keyframes podium-twinkle { 50% { opacity: .85; transform: scale(1.6); } }
+.podium-confetti { position: absolute; inset: 0; z-index: 3; overflow: hidden; pointer-events: none; }
+.podium-confetti i { position: absolute; top: -20px; width: 11px; height: 18px; border-radius: 3px; opacity: 0; animation: podium-fall linear both; }
+@keyframes podium-fall { 0% { opacity: 1; transform: translateY(0) rotate(var(--turn)); } 100% { opacity: .9; transform: translateY(110vh) rotate(calc(var(--turn) + 540deg)); } }
+
+/* heading */
+.podium-pill { display: inline-flex; align-items: center; gap: 10px; padding: 10px 20px; border-radius: 999px;
+  font-size: 18px; font-weight: 800; letter-spacing: .2em; text-transform: uppercase;
+  background: linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,.05)); border: 1px solid var(--glass-edge);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 10px 30px rgba(10,4,24,.4); backdrop-filter: blur(14px) saturate(160%); }
+.podium-pill svg { width: 22px; height: 22px; color: #F2C14E; }
+.podium-title { margin: 18px 0 0; font-size: 86px; line-height: 1; font-weight: 800; letter-spacing: -3px; text-align: center; }
+.podium-title em { font-style: normal; background: linear-gradient(100deg, var(--lilac), var(--violet) 55%, var(--cyan));
+  -webkit-background-clip: text; background-clip: text; color: transparent; }
+.podium-sub { margin: 12px 0 0; font-size: 23px; font-weight: 600; color: var(--muted); text-align: center; max-width: 1500px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.podium-sub b { color: #fff; font-weight: 700; }
+.podium-rise { animation: podium-rise .8s cubic-bezier(.2,.9,.25,1) both; }
+.podium-title.podium-rise { animation-delay: .12s; } .podium-sub.podium-rise { animation-delay: .24s; }
+@keyframes podium-rise { from { opacity: 0; transform: translateY(24px); filter: blur(8px); } to { opacity: 1; transform: none; filter: none; } }
+
+/* the podium */
+.podium-row { margin-top: auto; padding-top: 70px; display: grid; grid-template-columns: repeat(3, 360px); gap: 22px; align-items: end; }
+.podium-col { display: flex; flex-direction: column; align-items: center; min-width: 0; --delay: .5s; }
+.podium-col.silver { --delay: .9s; } .podium-col.champion { --delay: 1.35s; }
+.podium-who { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; padding-bottom: 18px; max-width: 100%;
+  animation: podium-pop .9s cubic-bezier(.2,1.4,.35,1) both; animation-delay: calc(var(--delay) + .35s); }
+@keyframes podium-pop { from { opacity: 0; transform: translateY(40px) scale(.7); } to { opacity: 1; transform: none; } }
+.podium-ring { width: var(--size); height: var(--size); position: relative; display: grid; place-items: center; filter: drop-shadow(0 0 22px var(--glow)); }
+@property --podium-spin { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+.podium-ring-metal { position: absolute; inset: 0; border-radius: 50%; padding: 5px;
+  background: conic-gradient(from var(--podium-spin), var(--m1), var(--m2), var(--m3), var(--m2), var(--m1));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
+  animation: podium-spin 6s linear infinite; }
+@keyframes podium-spin { to { --podium-spin: 360deg; } }
+.podium-face { width: calc(var(--size) - 22px); height: calc(var(--size) - 22px); border-radius: 50%; overflow: hidden;
+  background: radial-gradient(circle at 50% 30%, #3A1573, #1A0B33); box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); }
+.podium-face svg { display: block; }
+.podium-badge { position: absolute; bottom: -14px; left: 50%; margin-left: -24px; width: 48px; height: 48px; border-radius: 50%;
+  display: grid; place-items: center; font-family: var(--font-display), sans-serif; font-size: 24px; font-weight: 800; color: #2A1606;
+  background: radial-gradient(circle at 35% 30%, var(--m1), var(--m2) 55%, var(--m3)); box-shadow: 0 0 0 4px var(--night), 0 6px 16px rgba(0,0,0,.4);
+  animation: podium-badge .6s cubic-bezier(.2,1.6,.4,1) both; animation-delay: calc(var(--delay) + .75s); }
+.podium-col.silver .podium-badge { color: #1F2630; }
+@keyframes podium-badge { from { transform: scale(0) rotate(-90deg); } to { transform: none; } }
+.podium-name { margin-top: 14px; max-width: 100%; font-size: 30px; line-height: 1.1; font-weight: 800; letter-spacing: -.5px; text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.podium-col.champion .podium-name { font-size: 36px; }
+.podium-score { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px; font-size: 22px; font-weight: 700;
+  background: linear-gradient(180deg, rgba(255,255,255,.13), rgba(255,255,255,.04)); border: 1px solid var(--glass-edge);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.2); backdrop-filter: blur(12px); }
+.podium-score svg { width: 20px; height: 20px; color: var(--m2); fill: currentColor; }
+.podium-score b { font-variant-numeric: tabular-nums; }
+.podium-score i { font-style: normal; color: var(--soft); font-weight: 600; font-size: 18px; }
+
+.podium-crown { position: absolute; top: -64px; width: 80px; height: 60px; z-index: 3; filter: drop-shadow(0 6px 18px rgba(242,193,78,.6));
+  animation: podium-crown-drop .9s cubic-bezier(.3,1.5,.5,1) both, podium-crown-bob 2.8s ease-in-out infinite; animation-delay: 2.1s, 3s; }
+@keyframes podium-crown-drop { from { opacity: 0; transform: translateY(-80px) rotate(-20deg) scale(.6); } to { opacity: 1; transform: none; } }
+@keyframes podium-crown-bob { 50% { transform: translateY(-8px) rotate(4deg); } }
+.podium-rays { position: absolute; top: -90px; width: 460px; height: 460px; left: 50%; margin-left: -230px; z-index: -1; border-radius: 50%;
+  background: repeating-conic-gradient(from 0deg, rgba(242,193,78,.16) 0deg 7deg, transparent 7deg 22deg);
+  mask-image: radial-gradient(circle, #000 18%, transparent 62%);
+  animation: podium-rays-in 1.2s ease both, podium-rays-spin 30s linear infinite; animation-delay: 1.9s, 1.9s; }
+@keyframes podium-rays-in { from { opacity: 0; transform: scale(.4); } to { opacity: 1; transform: none; } }
+@keyframes podium-rays-spin { to { rotate: 360deg; } }
+
+/* liquid-glass blocks */
+.podium-block { width: 100%; position: relative; overflow: hidden; border-radius: 30px 30px 0 0; display: grid; place-items: start center; padding-top: 18px;
+  background: linear-gradient(180deg, rgba(255,255,255,.16) 0%, rgba(255,255,255,.06) 38%, rgba(255,255,255,.02) 100%);
+  border: 1px solid var(--glass-edge); border-bottom: 0;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.35), inset 0 -40px 60px rgba(10,4,24,.35), 0 -10px 40px var(--glow);
+  backdrop-filter: blur(22px) saturate(170%); transform-origin: bottom;
+  animation: podium-grow .9s cubic-bezier(.2,.9,.25,1) both; animation-delay: var(--delay); }
+.podium-col.bronze .podium-block { height: 118px; } .podium-col.silver .podium-block { height: 160px; } .podium-col.champion .podium-block { height: 210px; }
+@keyframes podium-grow { from { transform: scaleY(0); opacity: 0; } to { transform: none; opacity: 1; } }
+.podium-block::before { content: ""; position: absolute; inset: 0; background: radial-gradient(120% 70% at 50% 0%, var(--glow), transparent 60%); opacity: .5; }
+.podium-place { position: relative; font-family: var(--font-display), sans-serif; font-size: 124px; line-height: 1; font-weight: 800; letter-spacing: -5px;
+  background: linear-gradient(180deg, var(--m1), var(--m2) 55%, var(--m3)); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 6px 20px var(--glow)); }
+.podium-sweep { position: absolute; top: -20%; bottom: -20%; width: 120px; left: -160px; transform: rotate(18deg);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.28), transparent);
+  animation: podium-sweep 4.2s ease-in-out infinite; animation-delay: calc(var(--delay) + 1.2s); }
+.podium-col.silver .podium-sweep, .podium-col.bronze .podium-sweep { animation-duration: 6.5s; opacity: .7; }
+@keyframes podium-sweep { 0%, 55% { left: -160px; } 85%, 100% { left: 420px; } }
+
+/* the glass base the blocks stand on */
+.podium-stats { width: 1204px; display: grid; grid-template-columns: repeat(4, 1fr); border-radius: 0 0 30px 30px;
+  background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.05)); border: 1px solid var(--glass-edge);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 30px 60px rgba(8,3,20,.5); backdrop-filter: blur(24px) saturate(160%);
+  animation: podium-rise .8s cubic-bezier(.2,.9,.25,1) both; animation-delay: .3s; }
+.podium-stat { padding: 16px 0 18px; text-align: center; display: grid; gap: 6px; }
+.podium-stat + .podium-stat { border-left: 1px solid rgba(255,255,255,.14); }
+.podium-stat span { font-size: 19px; font-weight: 600; color: var(--muted); }
+.podium-stat strong { font-family: var(--font-display), sans-serif; font-size: 40px; line-height: 1; font-weight: 800; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
+.podium-stat strong b { font-weight: inherit; }
+
+.podium-rest { margin-top: 18px; display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; max-width: 1700px; }
+.podium-chip { display: inline-flex; align-items: center; gap: 10px; padding: 5px 16px 5px 5px; border-radius: 999px; font-size: 19px; font-weight: 700;
+  background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.04)); border: 1px solid rgba(255,255,255,.16);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.18); backdrop-filter: blur(12px);
+  animation: podium-rise .6s cubic-bezier(.2,.9,.25,1) both; }
+.podium-chip svg { border-radius: 50%; }
+.podium-chip b { color: var(--soft); font-variant-numeric: tabular-nums; }
+.podium-chip em { font-style: normal; color: var(--muted); font-weight: 600; font-variant-numeric: tabular-nums; }
 
 @media (max-width: 900px) {
   .arena-lobby { grid-template-columns: 1fr; }
@@ -635,8 +740,9 @@ body:has(.arena) .arena { min-height: 100vh; }
 
 /* Reduce Motion is a setting, not a suggestion. */
 @media (prefers-reduced-motion: reduce) {
-  .arena-player, .arena-board-row, .arena-podium-block, .arena-countdown { animation: none; }
-  .arena-confetti { display: none; }
+  .arena-player, .arena-board-row, .arena-countdown { animation: none; }
+  .podium-stage *, .podium-backdrop * { animation: none !important; }
+  .podium-confetti { display: none; }
   .arena-timer.urgent { animation: none; }
 }
 
@@ -1212,42 +1318,6 @@ body:has(.qrx-page) > .site-footer { display: none; }
   background: linear-gradient(90deg, #7C3AED, #22D3EE);
   transition: width 420ms cubic-bezier(.2,.9,.3,1);
 }
-
-.arena-finish-eyebrow {
-  margin: 0; font-size: clamp(12px, 1.2vw, 16px); letter-spacing: .2em;
-  font-weight: 800; color: rgba(255,255,255,.5);
-}
-.arena-finish-title {
-  margin: 0; font-size: clamp(34px, 5.5vw, 84px); font-weight: 800; line-height: 1.05;
-  display: flex; align-items: center; gap: .35em; text-wrap: balance;
-}
-.arena-crown { font-size: .8em; animation: arena-crown 2.6s ease-in-out infinite; }
-@keyframes arena-crown { 0%,100% { transform: translateY(0) rotate(-6deg); } 50% { transform: translateY(-8px) rotate(6deg); } }
-
-.arena-podium-column.is-champion .arena-podium-name { font-size: clamp(19px, 2.1vw, 32px); }
-.arena-podium-medal { font-size: clamp(26px, 2.6vw, 44px); line-height: 1; }
-.arena-podium-place {
-  font-size: clamp(28px, 3.2vw, 52px); font-weight: 800; color: rgba(255,255,255,.55);
-  font-variant-numeric: tabular-nums;
-}
-.arena-podium-column.is-champion .arena-podium-block {
-  background: linear-gradient(180deg, rgba(250,204,21,.92), rgba(180,110,10,.6));
-}
-
-.arena-finish-rest {
-  display: flex; flex-wrap: wrap; justify-content: center; gap: 10px;
-  max-width: min(1100px, 92vw);
-}
-.arena-finish-chip {
-  display: inline-flex; align-items: center; gap: 10px;
-  padding: 8px 14px; border-radius: 999px; font-size: clamp(13px, 1.2vw, 18px);
-  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12);
-}
-.arena-finish-chip b { color: rgba(255,255,255,.45); font-variant-numeric: tabular-nums; }
-.arena-finish-chip i { font-style: normal; color: rgba(255,255,255,.6); font-variant-numeric: tabular-nums; }
-
-@media (prefers-reduced-motion: reduce) { .arena-crown { animation: none; } }
-
 /* ───────────────────────────────────────── marathon: candidate invite ── */
 
 /* Shares the join landing's shell — the same glassy panel over the same drift

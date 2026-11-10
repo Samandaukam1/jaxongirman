@@ -14,6 +14,7 @@ import { QrVideoExperience } from "@/app/_qr/QrVideoExperience";
 
 import { ARENA_WORDS, arenaLanguage } from "./arena-words";
 import { GameAvatar } from "./GameAvatar";
+import { Podium } from "./Podium";
 
 const ROTATE_MS = 30_000;
 
@@ -523,7 +524,13 @@ export function ArenaScreen({ handoff, hostSessionId, experienceRow }: {
       ) : null}
 
       {snapshot?.status === "finished" && snapshot.leaderboard ? (
-        <Finish players={snapshot.leaderboard.players} words={words} />
+        <Podium
+          players={snapshot.leaderboard.players}
+          words={words}
+          gameTitle={snapshot.game_title || words.fallbackTitle}
+          playerCount={snapshot.player_count}
+          questionCount={snapshot.question_count}
+        />
       ) : null}
 
       {snapshot?.status === "cancelled" || snapshot?.status === "expired" ? (
@@ -587,67 +594,4 @@ function RevealText({ question, config, closed }: {
     );
   }
   return <p className="arena-await">{closed}</p>;
-}
-
-function Finish({ players, words }: {
-  players: { id: string; nickname: string; avatar_id: number; total_score: number; rank: number }[];
-  words: (typeof ARENA_WORDS)[keyof typeof ARENA_WORDS];
-}) {
-  const order = [players.find((p) => p.rank === 2), players.find((p) => p.rank === 1), players.find((p) => p.rank === 3)];
-  const medals = ["🥈", "🥇", "🥉"];
-  const heights = [180, 250, 140];
-  const champion = players.find((player) => player.rank === 1);
-  const rest = players.filter((player) => player.rank > 3).slice(0, 7);
-
-  return (
-    <div className="arena-finish">
-      <div className="arena-confetti" aria-hidden>
-        {Array.from({ length: 60 }, (_, index) => (
-          <span key={index} style={{
-            left: `${(index * 37) % 100}%`,
-            animationDelay: `${(index % 12) * 0.18}s`,
-            background: OPTION_STYLES[index % OPTION_STYLES.length]!.color,
-          }} />
-        ))}
-      </div>
-
-      {/* Named, because "G'oliblar" is a heading and a person's name is the
-          thing the room is looking for. */}
-      <p className="arena-finish-eyebrow">{words.finished}</p>
-      <h1 className="arena-finish-title">
-        {champion ? <><span className="arena-crown" aria-hidden>👑</span>{champion.nickname}</> : words.winners}
-      </h1>
-
-      <div className="arena-podium">
-        {order.map((player, index) => player ? (
-          <div className={`arena-podium-column${index === 1 ? " is-champion" : ""}`} key={player.id}>
-            <span className="arena-podium-medal" aria-hidden>{medals[index]}</span>
-            <GameAvatar id={player.avatar_id} size={index === 1 ? 116 : 82} />
-            <span className="arena-podium-name">{player.nickname}</span>
-            <span className="arena-podium-score">{player.total_score.toLocaleString(words.locale)}</span>
-            <div
-              className="arena-podium-block"
-              style={{ height: heights[index], animationDelay: `${[240, 0, 420][index]}ms` }}
-            >
-              <span className="arena-podium-place">{[2, 1, 3][index]}</span>
-            </div>
-          </div>
-        ) : <div className="arena-podium-column" key={`empty-${index}`} />)}
-      </div>
-
-      {/* Everyone else, because a room of twenty has seventeen people who are
-          not on the podium and would otherwise watch three names. */}
-      {rest.length > 0 ? (
-        <div className="arena-finish-rest">
-          {rest.map((player) => (
-            <span className="arena-finish-chip" key={player.id}>
-              <b>{player.rank}</b>
-              {player.nickname}
-              <i>{player.total_score.toLocaleString(words.locale)}</i>
-            </span>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
 }
