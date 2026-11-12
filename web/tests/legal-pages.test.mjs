@@ -68,3 +68,12 @@ test("the operator is named on every legal page, and its two documents ship with
     }
   }
 });
+
+test("the site does not build without its legal pages and the company's papers", async () => {
+  const pkg = JSON.parse(readFileSync(path.join(webRoot, "package.json"), "utf8"));
+  assert.match(pkg.scripts.build, /^node scripts\/check-legal-pages\.mjs && /, "the guard runs before next build");
+  const { missingLegalPieces } = await import(pathToFileURL(path.join(webRoot, "scripts", "check-legal-pages.mjs")).href);
+  assert.deepEqual(missingLegalPieces(), [], "everything the stores link to is in this checkout");
+  assert.ok(missingLegalPieces(dir).length >= 10, "an empty checkout is refused");
+});
+
