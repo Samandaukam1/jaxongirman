@@ -12,7 +12,7 @@
  *
  * Exits 1 with the list of what is missing; prints nothing when all is there.
  */
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -42,7 +42,9 @@ export function missingLegalPieces(root = web) {
   return missing;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+// Run as a script (not imported by the test). Compared as real paths, so a
+// checkout reached through a symlink still runs the check rather than skip it.
+if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
   const missing = missingLegalPieces();
   if (missing.length) {
     console.error([
