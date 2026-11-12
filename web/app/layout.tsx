@@ -89,6 +89,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <a href="/dokon">Do&lsquo;kon</a>
               </div>
               <div className="footer-links">
+                <span>Huquqiy</span>
+                <a href="/privacy">Maxfiylik siyosati</a>
+                <a href="/terms">Foydalanish shartlari</a>
+                <a href="/refund">Qaytarish siyosati</a>
+                <a href="/support">Yordam</a>
+                <a href="/delete-account">Akkauntni o&lsquo;chirish</a>
+              </div>
+              <div className="footer-links">
                 <span>Ilova</span>
                 <a href={STORE_IOS}>App Store</a>
                 <a href={STORE_ANDROID}>Google Play</a>
@@ -98,6 +106,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <span>© {new Date().getFullYear()} Jaxongirman</span>
               <span>jaxongirman.app</span>
             </div>
+            {/* The company that runs the project, as on liderlar.uz; its papers are on /terms#rekvizitlar. */}
+            <a className="shell footer-operator" href="/terms#rekvizitlar">
+              <strong>MUKAMMAL MEDIA GROUP MChJ</strong>
+              <span>Tasarrufidagi loyiha</span>
+            </a>
           </footer>
         </BrandProvider>
       </body>
