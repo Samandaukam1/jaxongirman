@@ -48,6 +48,24 @@ Cards, list rows and bullet rows carry an icon, and content pages may carry thei
 
 `npm run glass:preview` composes a sample deck under several directions and photographs it with headless Chrome, for reviewing the design without generating anything.
 
+## A source on every page
+
+"Har bir sahifada manba" on the create screen sends `sourcesOnPages: true`;
+`generate-presentation` keeps it on the job's context (`sources_on_pages`, carried to a
+retry), so it needs no column. The research call already grounds on Google Search;
+`markedText` (writer.ts) puts `[n]` after every sentence the search grounded, `n` being
+that page's place in `citations` — Gemini's `groundingSupports` say which sentence came
+from which page. With the setting on, the copy writer reads those marked notes and a
+numbered list (the pages searched, then the sources the author typed) and returns each
+slide's `sources` numbers; it is told not to guess, and `cleanLine` strips any `[n]`
+that reaches a slide's words. Each content page then shows "Manba: <address>; <source>"
+(at most two) in its footer, where the deck's name otherwise stands — small, not in
+capitals, one or two lines — in every style (corporate keeps its name at the top and puts
+the source at the foot; hero pages use their white footer). Covers, the agenda and the
+closing pages carry none. `glass-engine.test.mjs` runs the hostile decks with notes in
+all seven styles; `node supabase/scripts/glass-preview.mjs <dir> --style=<s> --sources`
+photographs them.
+
 ## Cost
 
 A ten-slide deck is three model calls (research, outline, copy) on the writing model configured by `GEMINI_WRITING_MODEL`; photographs come from free stock providers through `image-resolution-service`. Each call is priced from `ai.provider_pricing` into `ai_usage`, and the deck's total into `presentations.generation_cost_usd`; the admin's *Liquid Glass dizayn* page shows the average against the premium plan's price.
