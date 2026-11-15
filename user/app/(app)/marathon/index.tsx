@@ -205,7 +205,7 @@ const useStyles = makeStyles((colors) => ({
     alignSelf: "flex-start", paddingHorizontal: spacing.md, height: 34,
     borderRadius: radius.pill, backgroundColor: colors.primarySoft,
   },
-  clockText: { ...typography.caption, fontFamily: "Manrope_700Bold", color: colors.primaryDeep },
+  clockText: { ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", color: colors.primaryDeep },
   card: {
     gap: spacing.sm, padding: spacing.lg, borderRadius: radius.lg, marginTop: spacing.sm,
     backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
@@ -218,11 +218,11 @@ const useStyles = makeStyles((colors) => ({
   tallyValue: { ...typography.title, color: colors.ink },
   tallyLabel: { ...typography.caption, color: colors.inkMuted },
   sectionTitle: {
-    ...typography.caption, fontFamily: "Manrope_700Bold", color: colors.inkMuted,
+    ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", color: colors.inkMuted,
     letterSpacing: 0.8, marginTop: spacing.md,
   },
   claimed: {
-    ...typography.caption, fontFamily: "Manrope_700Bold", color: colors.success,
+    ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", color: colors.success,
     paddingVertical: spacing.xs,
   },
   market: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm },

@@ -15,6 +15,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import "@/i18n";
 import "@/lib/webShims";
 import { SuccessToastProvider } from "@/components/SuccessToast";
+import { UpdateNotice } from "@/components/UpdateNotice";
 import { WebAlertHost } from "@/components/WebAlertHost";
 import { AuthProvider } from "@/providers/AuthProvider";
 import { LanguageProvider } from "@/providers/LanguageProvider";
@@ -23,13 +24,21 @@ import { ThemeProvider, useTheme } from "@/theme/ThemeProvider";
 void SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  // Manrope carries the app chrome. The rest are here because published designs
+  // Jaxongirman Sans carries the app chrome: Bricolage Grotesque, the website's
+  // face, with Manrope's Cyrillic added so Russian is drawn in it too
+  // (user/scripts/build-ui-font.py). Manrope stays for slides: decks are set in
+  // it, and the phone must draw a page in the face its PDF and PowerPoint embed. The rest are here because published designs
   // ask for them by name and ship no files of their own — a design that names
   // "Inter" and uploads nothing is relying on the app to have it. Checked
   // against the catalogue, not assumed: these six are every family the current
   // designs reference. Dropping one does not fail loudly; it renders that
   // design's type in whatever the platform substitutes.
   const [loaded] = useFonts({
+    JaxongirmanSans_400Regular: require("../assets/fonts/JaxongirmanSans-400Regular.ttf"),
+    JaxongirmanSans_500Medium: require("../assets/fonts/JaxongirmanSans-500Medium.ttf"),
+    JaxongirmanSans_600SemiBold: require("../assets/fonts/JaxongirmanSans-600SemiBold.ttf"),
+    JaxongirmanSans_700Bold: require("../assets/fonts/JaxongirmanSans-700Bold.ttf"),
+    JaxongirmanSans_800ExtraBold: require("../assets/fonts/JaxongirmanSans-800ExtraBold.ttf"),
     Manrope_400Regular, Manrope_500Medium, Manrope_600SemiBold, Manrope_700Bold, Manrope_800ExtraBold,
     LeagueSpartan_700Bold, LeagueSpartan_800ExtraBold,
     PinyonScript_400Regular,
@@ -57,6 +66,7 @@ export default function RootLayout() {
               <SuccessToastProvider>
                 <ThemedShell />
                 <WebAlertHost />
+                <UpdateNotice />
               </SuccessToastProvider>
             </LanguageProvider>
           </AuthProvider>

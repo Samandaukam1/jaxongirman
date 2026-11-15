@@ -1,5 +1,7 @@
 import { Redirect, Stack } from "expo-router";
 
+import { usePush } from "@/lib/push";
+import { usePresence } from "@/lib/usePresence";
 import { useResumeMarathonInvite } from "@/lib/useResumeMarathonInvite";
 import { DesktopShell } from "@/components/DesktopShell";
 import { RouteError } from "@/components/RouteError";
@@ -17,6 +19,10 @@ export default function AppLayout() {
   // A marathon QR scanned before there was an account resumes here, on the
   // first screen behind the gate.
   useResumeMarathonInvite(Boolean(session));
+  // This phone receives the account's pushes while it is signed in, and a tapped push opens its screen.
+  usePush(session?.user.id ?? null);
+  // "Online" in chat: this phone says it is here while it is open.
+  usePresence(Boolean(session));
   if (!loading && !session) return <Redirect href="/(auth)/sign-in" />;
   return (
     // Mounted inside the authenticated area so the wallet, profile and inbox
@@ -58,6 +64,7 @@ export default function AppLayout() {
               left edge must move the element, not leave the editor. */}
             <Stack.Screen name="presentation/[id]/edit" options={{ gestureEnabled: false }} />
             <Stack.Screen name="coins/send" />
+            <Stack.Screen name="chat/profile/[userId]" options={{ animation: "fade_from_bottom", animationDuration: 220 }} />
             <Stack.Screen name="coins/buy" />
             <Stack.Screen name="tarif/index" />
             <Stack.Screen name="support/index" />

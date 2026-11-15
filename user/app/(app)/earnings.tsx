@@ -261,7 +261,7 @@ const useStyles = makeStyles((colors) => ({
 
   headline: { padding: spacing.xl, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, gap: 4, ...shadow },
   headlineLabel: { ...typography.caption, color: colors.inkMuted },
-  headlineValue: { fontFamily: "Manrope_700Bold", fontSize: 34, lineHeight: 40, color: colors.ink, letterSpacing: -0.8 },
+  headlineValue: { fontFamily: "JaxongirmanSans_700Bold", fontSize: 34, lineHeight: 40, color: colors.ink, letterSpacing: -0.8 },
   headlineRow: { flexDirection: "row", alignItems: "center", marginTop: spacing.md, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.border },
   headlineStat: { flex: 1, gap: 2 },
   headlineDivider: { width: 1, height: 32, backgroundColor: colors.border },
@@ -292,7 +292,7 @@ const useStyles = makeStyles((colors) => ({
   badgeTextPending: { color: colors.warning },
   settlementPeriod: { ...typography.caption, color: colors.inkMuted },
   destinationRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  destination: { ...typography.caption, color: colors.ink, fontFamily: "Manrope_600SemiBold" },
+  destination: { ...typography.caption, color: colors.ink, fontFamily: "JaxongirmanSans_600SemiBold" },
   settlementDate: { ...typography.caption, color: colors.inkSoft },
   reference: { ...typography.caption, fontSize: 11, color: colors.inkSoft },
   breakdown: { flexDirection: "row", gap: spacing.lg, marginTop: 4, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },

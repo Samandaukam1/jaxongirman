@@ -382,11 +382,11 @@ const useStyles = makeStyles((colors) => ({
 
   headline: { padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, gap: spacing.sm, ...shadow },
   headlineTop: { flexDirection: "row", alignItems: "baseline", gap: spacing.sm },
-  headlineValue: { fontFamily: "Manrope_700Bold", fontSize: 40, lineHeight: 46, color: colors.ink, letterSpacing: -1 },
+  headlineValue: { fontFamily: "JaxongirmanSans_700Bold", fontSize: 40, lineHeight: 46, color: colors.ink, letterSpacing: -1 },
   headlineUnit: { ...typography.body, color: colors.inkMuted },
   headlineRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   headlineMeta: { ...typography.caption, color: colors.inkMuted },
-  headlineCountdown: { ...typography.caption, color: colors.primary, fontFamily: "Manrope_600SemiBold" },
+  headlineCountdown: { ...typography.caption, color: colors.primary, fontFamily: "JaxongirmanSans_600SemiBold" },
   spacer: { flex: 1 },
   progressTrack: { height: 8, borderRadius: 4, backgroundColor: colors.surfaceMuted, overflow: "hidden" },
   progressFill: { height: 8, borderRadius: 4, backgroundColor: colors.primary },
@@ -410,7 +410,7 @@ const useStyles = makeStyles((colors) => ({
   bar: { gap: 4 },
   barHead: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   barLabel: { ...typography.caption, color: colors.inkMuted, flex: 1 },
-  barValue: { ...typography.caption, color: colors.ink, fontFamily: "Manrope_600SemiBold" },
+  barValue: { ...typography.caption, color: colors.ink, fontFamily: "JaxongirmanSans_600SemiBold" },
   barTrack: { height: 6, borderRadius: 3, backgroundColor: colors.surfaceMuted, overflow: "hidden" },
   barFill: { height: 6, borderRadius: 3, backgroundColor: colors.primary },
 

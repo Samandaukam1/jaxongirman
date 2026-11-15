@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 /**
- * Three languages, one table each, and the same holes in every sentence.
+ * Four languages, one table each, and the same holes in every sentence.
  *
  * The `translations()` type already refuses a key one language has and another
  * lacks. What it cannot see is inside the strings: an English sentence that
@@ -46,7 +46,7 @@ const holes = (text) => [...text.matchAll(/\{\{\s*(\w+)\s*\}\}/g)].map((match) =
 const tags = (text) => [...text.matchAll(/<\/?(\w+)>/g)].map((match) => match[0]).sort();
 
 const uz = flatten(resources.uz);
-const others = { en: flatten(resources.en), ru: flatten(resources.ru) };
+const others = { en: flatten(resources.en), ru: flatten(resources.ru), tr: flatten(resources.tr) };
 
 test("every language has every string", () => {
   for (const [language, table] of Object.entries(others)) {
@@ -71,6 +71,11 @@ test("no translated string is left empty or in Uzbek by mistake", () => {
   for (const [language, table] of Object.entries(others)) {
     for (const [path, text] of table) {
       if (!text.trim()) problems.push(`${language} ${path}: bo‘sh`);
+      // A Turkish string still word for word the Uzbek one was never translated —
+      // unless English says it the same way too (a formula, a sample name).
+      if (language === "tr" && text.length > 24 && text === uz.get(path) && text !== others.en.get(path)) {
+        problems.push(`${language} ${path}: tarjima qilinmagan`);
+      }
       // Uzbek-only letters in a Russian string mean a line was pasted untranslated.
       if (language === "ru" && /[a-z]{2,}[‘’][a-z]/i.test(text) && !/O‘yingoh|o‘g‘li|ishga|Taqdimot qilish|O‘yingohni/.test(text)) {
         problems.push(`${language} ${path}: “${text}”`);

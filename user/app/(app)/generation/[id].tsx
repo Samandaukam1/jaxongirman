@@ -11,6 +11,7 @@ import { IconChip } from "@/components/IconChip";
 import { ConfettiBurst } from "@/components/SuccessMoment";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { localizeError } from "@/lib/errors";
+import { toNewAlphabet } from "@/lib/alphabet";
 import { asErrorMessage, asFunctionErrorMessage } from "@/lib/format";
 import { changesChannel, supabase } from "@/lib/supabase";
 import { brandInk, gradients, icon, radius, shadow, shadowLifted, spacing, typography } from "@/theme/tokens";
@@ -129,7 +130,7 @@ export default function GenerationScreen() {
   function stepNote(step: Tables<"generation_steps">): string | null {
     if (!step.message) return null;
     if (step.status === "failed") return localizeError(step.message, step.error_code ?? undefined);
-    return i18n.language === "uz" ? step.message : null;
+    return i18n.language === "uz" ? toNewAlphabet(step.message) : null;
   }
 
   const failureMessage = job?.error_message ?? presentation?.error_message ?? null;

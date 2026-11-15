@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm, paddingHorizontal: spacing.xl, overflow: "hidden",
   },
   outline: { borderWidth: 2, backgroundColor: "transparent" },
-  label: { fontFamily: "Manrope_800ExtraBold", fontSize: 16, letterSpacing: 0.2, flexShrink: 1 },
+  label: { fontFamily: "JaxongirmanSans_800ExtraBold", fontSize: 16, letterSpacing: 0.2, flexShrink: 1 },
   bandClip: { borderRadius: radius.pill, overflow: "hidden" },
   band: { position: "absolute", top: 0, bottom: 0, left: "-40%", width: "40%" },
 });

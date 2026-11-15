@@ -89,4 +89,33 @@ export default translations(
     },
     upload: { unreadable: "Не удалось прочитать файл. Выберите другой.", tooLarge: "Файл слишком большой.", failed: "Файл не загрузился. Проверьте интернет и попробуйте снова.", signIn: "Войдите снова, чтобы загрузить файл." },
   },
+  {
+    webLocked: {
+      title: "Bu bölüm sitede henüz kullanılamıyor",
+      body: "Şimdilik yalnızca telefonunuzdaki Jaxongirman uygulamasında çalışıyor. Yakında siteye de geliyor.",
+      back: "Geri dön",
+    },
+    routeError: {
+      title: "Bir şeyler ters gitti",
+      body: "Bu sayfa açılırken beklenmeyen bir hata oluştu. Verileriniz güvende — lütfen tekrar deneyin.",
+    },
+    loadFailed: "Veriler yüklenemedi",
+    emailConfirming: "E-postanız onaylanıyor…",
+    surveyOwner: "Sizin oluşturduğunuz",
+    answered: "Yanıtlandı",
+    celebrate: { title: "Tebrikler!", amount: "+{{amount}} jeton", ok: "Harika" },
+    headerBack: "Geri",
+    deleteAccount: {
+      title: "Hesabınız kalıcı olarak silinsin mi?",
+      body: "Bu işlem hesabınızı ve ona bağlı, silinmesi gereken kişisel verilerinizi siler. Geri alınamaz.",
+      cancel: "İPTAL",
+      confirm: "SİL",
+      label: "Hesabı sil",
+      phrase: "HESABIMI KALDIR",
+      typeLead: "Onaylamak için bu cümleyi aynen yazın:",
+      typeLabel: "Onaylamak için {{phrase}} yazın",
+      failed: "Hesap silinemedi",
+    },
+    upload: { unreadable: "Dosya okunamadı. Başka bir dosya seçin.", tooLarge: "Dosya çok büyük.", failed: "Dosya yüklenemedi. İnternet bağlantınızı kontrol edip tekrar deneyin.", signIn: "Dosyayı yüklemek için tekrar giriş yapın." },
+  },
 );

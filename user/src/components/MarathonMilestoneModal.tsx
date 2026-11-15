@@ -177,7 +177,7 @@ const useStyles = makeStyles((colors) => ({
   burstLayer: { position: "absolute", top: "34%", left: "50%", width: 0, height: 0, alignItems: "center", justifyContent: "center" },
   title: { ...typography.title, color: colors.ink, textAlign: "center" },
   body: { ...typography.body, color: colors.inkMuted, textAlign: "center" },
-  amount: { fontFamily: "Manrope_700Bold", fontSize: 28, lineHeight: 34, color: colors.primary, letterSpacing: -0.5 },
+  amount: { fontFamily: "JaxongirmanSans_700Bold", fontSize: 28, lineHeight: 34, color: colors.primary, letterSpacing: -0.5 },
   tally: { ...typography.caption, color: colors.inkSoft, marginBottom: spacing.sm },
   error: { ...typography.caption, color: colors.danger, textAlign: "center" },
   ghost: {

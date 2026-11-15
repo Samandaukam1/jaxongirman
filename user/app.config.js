@@ -20,6 +20,10 @@
  * that does not exist yet — so docs/social-auth-setup.md carries it as a step.
  */
 
+/* global __dirname -- Expo evaluates this file in Node, as CommonJS. */
+const fs = require("fs");
+const path = require("path");
+
 /** `123-abc.apps.googleusercontent.com` → `com.googleusercontent.apps.123-abc`. */
 function reversedClientId(clientId) {
   const suffix = ".apps.googleusercontent.com";
@@ -31,7 +35,23 @@ module.exports = ({ config }) => {
   const iosClientId = (process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? "").trim();
   const iosUrlScheme = iosClientId ? reversedClientId(iosClientId) : null;
 
-  const plugins = [...(config.plugins ?? []), "expo-apple-authentication"];
+  const plugins = [
+    ...(config.plugins ?? []),
+    "expo-apple-authentication",
+    // Push notifications. Android's small icon must be a white silhouette, or the system draws a white square.
+    ["expo-notifications", { icon: "./assets/notification-icon.png", color: "#6C34C9", defaultChannel: "default" }],
+  ];
+
+  // Android delivers pushes through Firebase, so a build needs the project's
+  // google-services.json. It is not committed (the repository is public): on
+  // EAS it is a file environment variable, GOOGLE_SERVICES_JSON; locally a
+  // file beside this one. A build without it installs and works, and simply
+  // never registers for push — see src/lib/push.ts.
+  const googleServices = (process.env.GOOGLE_SERVICES_JSON ?? "").trim()
+    || (fs.existsSync(path.join(__dirname, "google-services.json")) ? "./google-services.json" : "");
+  if (!googleServices && process.env.EAS_BUILD_PLATFORM === "android") {
+    console.warn("[app.config] GOOGLE_SERVICES_JSON is not set — this Android build will not receive push notifications.");
+  }
 
   // Added only when there is a real client ID to derive the scheme from. A
   // build with a placeholder scheme would install and then fail at the moment
@@ -52,6 +72,10 @@ module.exports = ({ config }) => {
   return {
     ...config,
     ...(webBase ? { experiments: { ...config.experiments, baseUrl: webBase } } : {}),
+    android: {
+      ...config.android,
+      ...(googleServices ? { googleServicesFile: googleServices } : {}),
+    },
     ios: {
       ...config.ios,
       // Apple requires this entitlement for the button to work at all, and

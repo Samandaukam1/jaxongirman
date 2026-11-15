@@ -163,7 +163,7 @@ const useStyles = makeStyles((colors) => ({
   language: { paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: radius.pill },
   languageSelected: { backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border },
   languageText: { ...typography.caption, color: colors.inkSoft },
-  languageTextSelected: { color: colors.ink, fontFamily: "Manrope_700Bold" },
+  languageTextSelected: { color: colors.ink, fontFamily: "JaxongirmanSans_700Bold" },
 
   copy: { alignItems: "center", gap: spacing.sm, marginBottom: spacing.xs },
   title: { ...typography.display, color: colors.ink, textAlign: "center", fontSize: 32, lineHeight: 38 },

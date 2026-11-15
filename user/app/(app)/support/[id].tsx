@@ -226,7 +226,7 @@ const useStyles = makeStyles((colors) => ({
   bubble: { maxWidth: "86%", padding: spacing.md, borderRadius: radius.lg, gap: 6 },
   bubbleMine: { backgroundColor: colors.primary, borderBottomRightRadius: 6 },
   bubbleTheirs: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderBottomLeftRadius: 6 },
-  author: { ...typography.caption, fontFamily: "Manrope_700Bold", color: colors.primaryDeep, fontSize: 12 },
+  author: { ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", color: colors.primaryDeep, fontSize: 12 },
   body: { ...typography.body, color: colors.ink, fontSize: 14.5, lineHeight: 21 },
   bodyMine: { color: colors.onPrimary },
   time: { ...typography.caption, fontSize: 11, color: colors.inkSoft },

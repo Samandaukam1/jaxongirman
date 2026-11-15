@@ -59,9 +59,10 @@
     "test:payme": "node --test supabase/tests/payme-config.test.mjs",
     "test:rpc": "node --test supabase/tests/rpc-arguments.test.mjs",
     "test:account": "node --test supabase/tests/account-deletion.test.mjs",
-    "test:engine": "node --test supabase/tests/design-engine.test.mjs supabase/tests/glass-engine.test.mjs supabase/tests/source-images.test.mjs user/tests/deck-fonts.test.mjs",
+    "test:engine": "node --test supabase/tests/design-engine.test.mjs supabase/tests/glass-engine.test.mjs supabase/tests/source-images.test.mjs supabase/tests/uzbek-alphabet.test.mjs supabase/tests/turkish-decks.test.mjs user/tests/deck-fonts.test.mjs user/tests/alphabet.test.mjs",
     "glass:preview": "node supabase/scripts/glass-preview.mjs",
-    "test:presenting": "node --test packages/types/tests/presenting.test.mjs",
+    "test:tests": "node --test supabase/tests/omr.test.mjs supabase/tests/test-questions.test.mjs",
+    "test:presenting": "node --test packages/types/tests/presenting.test.mjs supabase/tests/presentation-ads.test.mjs supabase/tests/crossword.test.mjs",
     "test:cards": "node --test packages/types/tests/payment-cards.test.mjs web/tests/partial-card-checkout.test.mjs",
     "test:tariff": "node --test packages/tariff-card/tests/tariff-card.test.mjs",
     "test:fonts": "node --test supabase/tests/font-import.test.mjs supabase/tests/pptx-face.test.mjs user/tests/font-library.test.mjs",
@@ -72,6 +73,7 @@
     "test:design": "node --test supabase/tests/pptx-safety.test.mjs supabase/tests/pptx-design.test.mjs supabase/tests/pptx-classify.test.mjs supabase/tests/design-select.test.mjs supabase/tests/font-source.test.mjs supabase/tests/pptx-endtoend.test.mjs supabase/tests/pptx-text.test.mjs supabase/tests/pptx-clone.test.mjs supabase/tests/pptx-slots.test.mjs supabase/tests/portrait-sheet.test.mjs",
     "test:game": "node --test supabase/tests/game-batches.test.mjs",
     "test:docs": "node --test supabase/tests/objective.test.mjs supabase/tests/academic.test.mjs",
+    "test:push": "node --test supabase/tests/push.test.mjs",
     "test:scene": "node --test supabase/tests/scene-geometry.test.mjs supabase/tests/scene-dna.test.mjs supabase/tests/scene-quality.test.mjs supabase/tests/scene-writer.test.mjs supabase/tests/scene-cycle.test.mjs supabase/tests/scene-render.test.mjs supabase/tests/scene-pipeline.test.mjs"
   },
   "engines": {

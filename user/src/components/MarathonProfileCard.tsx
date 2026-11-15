@@ -127,7 +127,7 @@ export function MarathonProfileCard() {
 const useStyles = makeStyles((colors) => ({
   section: { marginHorizontal: spacing.xl, gap: spacing.sm },
   sectionTitle: {
-    ...typography.caption, fontFamily: "Manrope_700Bold", fontSize: 11,
+    ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", fontSize: 11,
     letterSpacing: 1.1, color: colors.inkSoft, marginLeft: spacing.xs,
   },
   card: {
@@ -137,20 +137,20 @@ const useStyles = makeStyles((colors) => ({
   tallies: { flexDirection: "row", alignItems: "center" },
   tally: { flex: 1, gap: 2 },
   tallyRule: { width: 1, height: 34, backgroundColor: colors.border },
-  tallyValue: { fontFamily: "Manrope_700Bold", fontSize: 24, lineHeight: 30, color: colors.ink, letterSpacing: -0.4 },
+  tallyValue: { fontFamily: "JaxongirmanSans_700Bold", fontSize: 24, lineHeight: 30, color: colors.ink, letterSpacing: -0.4 },
   tallyLabel: { ...typography.caption, color: colors.inkMuted },
   next: { gap: spacing.xs, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.primarySoft },
   nextHead: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  nextTitle: { ...typography.caption, fontFamily: "Manrope_700Bold", letterSpacing: 0.6, color: colors.primaryDeep },
+  nextTitle: { ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", letterSpacing: 0.6, color: colors.primaryDeep },
   progressLine: { ...typography.caption, color: colors.inkMuted, marginTop: spacing.xs },
   track: { height: 6, borderRadius: 3, backgroundColor: colors.surface, overflow: "hidden" },
   fill: { height: "100%", borderRadius: 3, backgroundColor: colors.primary },
-  left: { ...typography.caption, fontFamily: "Manrope_600SemiBold", color: colors.primaryDeep, marginTop: spacing.sm },
+  left: { ...typography.caption, fontFamily: "JaxongirmanSans_600SemiBold", color: colors.primaryDeep, marginTop: spacing.sm },
   hint: { ...typography.body, color: colors.inkMuted },
   clock: {
     flexDirection: "row", alignItems: "center", gap: spacing.sm,
     alignSelf: "flex-start", paddingHorizontal: spacing.md, height: 34,
     borderRadius: radius.pill, backgroundColor: colors.surfaceMuted,
   },
-  clockText: { ...typography.caption, fontFamily: "Manrope_700Bold", color: colors.primaryDeep },
+  clockText: { ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", color: colors.primaryDeep },
 }));

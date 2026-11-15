@@ -19,7 +19,7 @@ const palette: Record<Presentation["style"], readonly [string, string]> = {
 
 const styleLabel: Record<Presentation["style"], string> = {
   simple: "Oddiy",
-  good: "Yaxshi",
+  good: "Yaxşi",
   great: "Ajoyib",
   super_professional: "Super professional",
 };
@@ -69,7 +69,7 @@ const useStyles = makeStyles((colors) => ({
   preview: { width: 116, aspectRatio: 16 / 10, borderRadius: radius.md, padding: spacing.md, justifyContent: "center", overflow: "hidden" },
   previewLine: { position: "absolute", width: 90, height: 1, backgroundColor: "rgba(21,14,36,.16)", transform: [{ rotate: "-35deg" }], right: -18, top: 16 },
   previewLineDark: { backgroundColor: "rgba(255,255,255,.28)" },
-  previewTitle: { fontFamily: "Manrope_700Bold", fontSize: 11, lineHeight: 14, color: colors.ink, maxWidth: 83 },
+  previewTitle: { fontFamily: "JaxongirmanSans_700Bold", fontSize: 11, lineHeight: 14, color: colors.ink, maxWidth: 83 },
   // The thumbnail is a swatch of the deck's own palette, not app chrome:
   // a dark swatch takes light text in either theme.
   previewTitleDark: { color: brandInk.strong },
@@ -86,7 +86,7 @@ const useStyles = makeStyles((colors) => ({
   status: { marginLeft: "auto", paddingVertical: 4, paddingHorizontal: 9, backgroundColor: colors.surfaceMuted, borderRadius: radius.pill },
   statusReady: { backgroundColor: colors.successSoft },
   statusFailed: { backgroundColor: colors.dangerSoft },
-  statusText: { fontFamily: "Manrope_600SemiBold", fontSize: 10, color: colors.inkMuted },
+  statusText: { fontFamily: "JaxongirmanSans_600SemiBold", fontSize: 10, color: colors.inkMuted },
   statusTextReady: { color: colors.success },
   statusTextFailed: { color: colors.danger },
 }));

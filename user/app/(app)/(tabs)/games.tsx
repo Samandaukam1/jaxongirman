@@ -2,7 +2,8 @@ import type { GameStatus } from "@jaxongirman/types";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import {
-  Bell, Gamepad2, Gift, Medal, MonitorPlay, Plus, QrCode, ShoppingBag, Sparkles, Trophy,
+  Bell, ChevronRight, ClipboardCheck, Gamepad2, Gift, Grid3x3, Medal, MonitorPlay, Play, Plus, QrCode, ShoppingBag, Sparkles, Trophy,
+  VenetianMask,
 } from "lucide-react-native";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -13,16 +14,17 @@ import coinIcon from "../../../assets/coin/coin-icon.png";
 import { DeleteWorkButton } from "@/components/DeleteWorkButton";
 import { Appear } from "@/components/Appear";
 import { Touchable } from "@/components/Touchable";
-import { BOTTOM_NAV_SPACE } from "@/components/BottomNav";
+import { BOTTOM_NAV_SPACE, useBottomNavSpace } from "@/components/BottomNav";
 import { MarathonVoteButton } from "@/components/MarathonVoteButton";
 import { EmptyState, InlineError, SkeletonCard } from "@/components/StateBlocks";
+import { readerSpelling } from "@/i18n";
 import { useFocusRefresh } from "@/lib/useFocusRefresh";
 import { isWeb } from "@/lib/web";
 import { formatDate } from "@/lib/datetime";
 import { asErrorMessage } from "@/lib/format";
 import { labelOf } from "@/lib/labels";
 import {
-  listCategories, listFreeGames, listMyGames, listMyMatches, myGameStats,
+  listCategories, listFreeGames, listMyGames, listMyMatches, liveMatch, myGameStats,
   type Game, type GameCategory,
 } from "@/lib/games";
 import { formatNumber } from "@/lib/money";
@@ -46,9 +48,11 @@ type Stats = { played: number; wins: number; top3: number; average_score: number
  * "bought" are separated by ownership, not by copies.
  */
 export default function GamesScreen() {
+  const bottomSpace = useBottomNavSpace();
   const { colors } = useTheme();
   const styles = useStyles();
   const { t } = useTranslation("games");
+  const { t: tTests } = useTranslation("tests");
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { balance, unreadCount } = useAccount();
@@ -60,6 +64,8 @@ export default function GamesScreen() {
   const [categories, setCategories] = useState<GameCategory[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
+  // A match this account is still in: a phone closed mid-game comes back to it.
+  const [live, setLive] = useState<Awaited<ReturnType<typeof liveMatch>>>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,6 +74,7 @@ export default function GamesScreen() {
     if (!user) return;
     try {
       setError(null);
+      void liveMatch(user.id).then(setLive).catch(() => setLive(null));
       const [mine, free, cats, played, myStats, entitled] = await Promise.all([
         listMyGames(user.id),
         listFreeGames(),
@@ -111,7 +118,7 @@ export default function GamesScreen() {
   return (
     <View style={[styles.safe, { paddingTop: Math.max(insets.top, 20) + spacing.xs }]}>
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: bottomSpace + spacing.xl }]}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); void load(); }} tintColor={colors.primary} />}
       >
@@ -132,6 +139,29 @@ export default function GamesScreen() {
             </Pressable>
           </View>
         </View>
+
+        {live ? (
+          <Touchable
+            style={styles.liveRow}
+            onPress={() => router.push(live.host
+              ? { pathname: "/(app)/oyingoh/host/[sessionId]", params: { sessionId: live.sessionId } }
+              : { pathname: "/(app)/oyingoh/play/[sessionId]", params: { sessionId: live.sessionId } })}
+            accessibilityRole="button"
+          >
+            <View style={styles.liveIcon}>
+              {live.kind === "mafia"
+                ? <VenetianMask color={colors.onPrimary} size={icon.md} strokeWidth={icon.stroke} />
+                : <Play color={colors.onPrimary} size={icon.md} strokeWidth={icon.stroke} />}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.gameTitle} numberOfLines={1}>{t("mafia.resume")}</Text>
+              <Text style={styles.gameMeta} numberOfLines={1}>
+                {live.kind === "mafia" ? t("mafia.title") : live.title || t("untitled")} · {t("mafia.resumeHint")}
+              </Text>
+            </View>
+            <ChevronRight color={colors.primary} size={icon.md} strokeWidth={icon.stroke} />
+          </Touchable>
+        ) : null}
 
         <Touchable
           style={styles.ctaShadow}
@@ -177,6 +207,46 @@ export default function GamesScreen() {
             </LinearGradient>
           </Touchable>
         </View>
+
+        {/* The crossword: made like a game, solved, printed or played as one. */}
+        <Touchable
+          style={styles.crosswordRow}
+          onPress={() => router.push({ pathname: "/oyingoh/create", params: { kind: "crossword" } })}
+          accessibilityRole="button"
+        >
+          <View style={styles.gameIcon}>
+            <Grid3x3 color={colors.primary} size={icon.md} strokeWidth={icon.stroke} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.gameTitle}>{t("crossword.createTitle")}</Text>
+            <Text style={styles.gameMeta}>{t("crossword.tile")}</Text>
+          </View>
+          <ChevronRight color={colors.inkSoft} size={icon.md} strokeWidth={icon.stroke} />
+        </Touchable>
+
+        {/* Tests to print and check: the classroom's other paper. */}
+        <Touchable style={styles.crosswordRow} onPress={() => router.push("/test")} accessibilityRole="button">
+          <View style={styles.gameIcon}>
+            <ClipboardCheck color={colors.primary} size={icon.md} strokeWidth={icon.stroke} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.gameTitle}>{tTests("title")}</Text>
+            <Text style={styles.gameMeta}>{tTests("tile")}</Text>
+          </View>
+          <ChevronRight color={colors.inkSoft} size={icon.md} strokeWidth={icon.stroke} />
+        </Touchable>
+
+        {/* Mafia: the cards on the phones, the narration in the room. */}
+        <Touchable style={styles.crosswordRow} onPress={() => router.push("/oyingoh/mafia")} accessibilityRole="button">
+          <View style={styles.gameIcon}>
+            <VenetianMask color={colors.primary} size={icon.md} strokeWidth={icon.stroke} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.gameTitle}>{t("mafia.title")}</Text>
+            <Text style={styles.gameMeta}>{t("mafia.tile")}</Text>
+          </View>
+          <ChevronRight color={colors.inkSoft} size={icon.md} strokeWidth={icon.stroke} />
+        </Touchable>
 
         {error ? <InlineError message={error} /> : null}
 
@@ -273,9 +343,9 @@ export default function GamesScreen() {
                 <Touchable
                   key={category.id}
                   style={styles.categoryChip}
-                  onPress={() => router.push({ pathname: "/oyingoh/create", params: { categoryId: category.id, categoryLabel: category.label } })}
+                  onPress={() => router.push({ pathname: "/oyingoh/create", params: { categoryId: category.id, categoryLabel: readerSpelling(category.label) } })}
                 >
-                  <Text style={styles.categoryText}>{category.label}</Text>
+                  <Text style={styles.categoryText}>{readerSpelling(category.label)}</Text>
                 </Touchable>
               ))}
             </View>
@@ -311,12 +381,16 @@ function GameRow({ game, onPress, onDeleted }: { game: Game; onPress: () => void
   return (
     <Touchable style={styles.gameRow} onPress={onPress} accessibilityRole="button">
       <View style={styles.gameIcon}>
-        <Gamepad2 color={colors.primary} size={icon.md} strokeWidth={icon.stroke} />
+        {game.kind === "crossword"
+          ? <Grid3x3 color={colors.primary} size={icon.md} strokeWidth={icon.stroke} />
+          : <Gamepad2 color={colors.primary} size={icon.md} strokeWidth={icon.stroke} />}
       </View>
       <View style={{ flex: 1 }}>
         <Text style={styles.gameTitle} numberOfLines={1}>{game.title || t("untitled")}</Text>
         <Text style={styles.gameMeta}>
-          {t("questions", { count: game.question_count })} · {labelOf("gameStatus", game.status)}
+          {game.kind === "crossword" ? t("crossword.badge")
+            : game.kind === "grid" ? `${t("grid.badge")} · ${t("questions", { count: game.question_count })}`
+            : t("questions", { count: game.question_count })} · {labelOf("gameStatus", game.status)}
         </Text>
       </View>
       <View style={[styles.statusDot, status === "ready" ? styles.statusReady : status === "generating" ? styles.statusBusy : styles.statusDraft]} />
@@ -361,6 +435,17 @@ const useStyles = makeStyles((colors) => ({
   createSubtitle: { ...typography.caption, color: brandInk.muted },
   scanRow: { flexDirection: "row", gap: spacing.md },
   halfShadow: { flex: 1, borderRadius: radius.lg, ...shadow },
+  liveRow: {
+    flexDirection: "row", alignItems: "center", gap: spacing.md,
+    padding: spacing.md, borderRadius: radius.lg,
+    backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.primary,
+  },
+  liveIcon: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: colors.primary },
+  crosswordRow: {
+    flexDirection: "row", alignItems: "center", gap: spacing.md,
+    padding: spacing.md, borderRadius: radius.lg,
+    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
+  },
   halfCta: {
     minHeight: 128, borderRadius: radius.lg, padding: spacing.lg,
     justifyContent: "space-between", gap: spacing.sm,
@@ -384,7 +469,7 @@ const useStyles = makeStyles((colors) => ({
   },
   shelfTabActive: { backgroundColor: colors.primary, borderColor: colors.primaryDeep, ...shadow },
   shelfTabText: { ...typography.body, color: colors.inkMuted },
-  shelfTabTextActive: { color: colors.onPrimary, fontFamily: "Manrope_600SemiBold" },
+  shelfTabTextActive: { color: colors.onPrimary, fontFamily: "JaxongirmanSans_600SemiBold" },
   gameRow: {
     flexDirection: "row", alignItems: "center", gap: spacing.md,
     backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,

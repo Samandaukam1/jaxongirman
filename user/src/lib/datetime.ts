@@ -24,8 +24,8 @@ const CALENDARS: Record<AppLanguage, Calendar> = {
     months: ["yanvar", "fevral", "mart", "aprel", "may", "iyun", "iyul", "avgust", "sentabr", "oktabr", "noyabr", "dekabr"],
     monthsOf: ["yanvar", "fevral", "mart", "aprel", "may", "iyun", "iyul", "avgust", "sentabr", "oktabr", "noyabr", "dekabr"],
     monthsShort: ["yan", "fev", "mar", "apr", "may", "iyn", "iyl", "avg", "sen", "okt", "noy", "dek"],
-    weekdays: ["yakshanba", "dushanba", "seshanba", "chorshanba", "payshanba", "juma", "shanba"],
-    weekdaysShort: ["Yak", "Du", "Se", "Cho", "Pay", "Ju", "Sha"],
+    weekdays: ["yakşanba", "duşanba", "seşanba", "çorşanba", "payşanba", "juma", "şanba"],
+    weekdaysShort: ["Yak", "Du", "Se", "Ço", "Pay", "Ju", "Şa"],
   },
   en: {
     months: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
@@ -40,6 +40,13 @@ const CALENDARS: Record<AppLanguage, Calendar> = {
     monthsShort: ["янв.", "февр.", "мар.", "апр.", "мая", "июн.", "июл.", "авг.", "сент.", "окт.", "нояб.", "дек."],
     weekdays: ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"],
     weekdaysShort: ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"],
+  },
+  tr: {
+    months: ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"],
+    monthsOf: ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"],
+    monthsShort: ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"],
+    weekdays: ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"],
+    weekdaysShort: ["Paz", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt"],
   },
 };
 
@@ -80,7 +87,8 @@ export function formatLongDate(date: Date): string {
   const calendar = CALENDARS[language];
   const day = date.getDate();
   if (language === "en") return `${calendar.weekdays[date.getDay()]}, ${calendar.months[date.getMonth()]} ${day}`;
-  if (language === "ru") return `${day} ${calendar.monthsOf[date.getMonth()]}, ${calendar.weekdays[date.getDay()]}`;
+  // Turkish puts the day first, as Russian does: "15 Kasım, Pazar".
+  if (language === "ru" || language === "tr") return `${day} ${calendar.monthsOf[date.getMonth()]}, ${calendar.weekdays[date.getDay()]}`;
   return `${day}-${calendar.months[date.getMonth()]}, ${calendar.weekdays[date.getDay()]}`;
 }
 
@@ -92,7 +100,7 @@ export function formatShortDateTime(value: string | Date): string {
   const month = CALENDARS[language].monthsShort[date.getMonth()];
   const clock = clockOf(date);
   if (language === "en") return `${month} ${date.getDate()}, ${clock}`;
-  if (language === "ru") return `${date.getDate()} ${month}, ${clock}`;
+  if (language === "ru" || language === "tr") return `${date.getDate()} ${month}, ${clock}`;
   return `${date.getDate()}-${month}, ${clock}`;
 }
 
@@ -103,7 +111,7 @@ export function formatDate(value: string | Date): string {
   const language = current();
   const calendar = CALENDARS[language];
   if (language === "en") return `${calendar.months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
-  if (language === "ru") return `${date.getDate()} ${calendar.monthsOf[date.getMonth()]} ${date.getFullYear()}`;
+  if (language === "ru" || language === "tr") return `${date.getDate()} ${calendar.monthsOf[date.getMonth()]} ${date.getFullYear()}`;
   return `${date.getDate()}-${calendar.months[date.getMonth()]} ${date.getFullYear()}`;
 }
 

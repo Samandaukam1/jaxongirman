@@ -126,7 +126,7 @@ const useStyles = makeStyles((colors) => ({
   permissionTitle: { ...typography.heading, color: colors.ink, marginTop: spacing.xs },
   permissionCopy: { ...typography.body, color: colors.inkMuted, textAlign: "center", lineHeight: 22, marginBottom: spacing.sm },
   section: { gap: spacing.sm },
-  sectionTitle: { ...typography.caption, fontFamily: "Manrope_700Bold", letterSpacing: 0.6, color: colors.inkSoft },
+  sectionTitle: { ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", letterSpacing: 0.6, color: colors.inkSoft },
   group: { borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
   row: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, minHeight: 58 },
   rule: { position: "absolute", top: 0, left: spacing.lg + 40, right: 0, height: StyleSheet.hairlineWidth, backgroundColor: colors.border },

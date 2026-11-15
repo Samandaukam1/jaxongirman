@@ -95,9 +95,9 @@ const useStyles = makeStyles((colors) => ({
   actions: { flexDirection: "row", gap: spacing.sm },
   button: { flex: 1, height: 42, borderRadius: radius.pill, alignItems: "center", justifyContent: "center" },
   yes: { backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border },
-  yesText: { ...typography.caption, fontFamily: "Manrope_700Bold", color: colors.ink },
+  yesText: { ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", color: colors.ink },
   no: { backgroundColor: colors.dangerSoft, borderWidth: 1, borderColor: colors.dangerBorder },
-  noText: { ...typography.caption, fontFamily: "Manrope_700Bold", color: colors.danger },
+  noText: { ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", color: colors.danger },
   pressed: { opacity: 0.85 },
   wait: { ...typography.caption, color: colors.inkSoft, lineHeight: 17 },
 }));

@@ -10,6 +10,7 @@ import { i18n } from "../i18n";
 
 import { saveInBrowser } from "./browserFile";
 import { localized } from "./content";
+import { formatSom } from "./money";
 import { asErrorMessage } from "./format";
 import { supabase } from "./supabase";
 
@@ -282,8 +283,19 @@ export async function refundPolicy(): Promise<RefundPolicy | null> {
   };
   return {
     enabled: true,
-    title: pick("title", "Qaytarish siyosati"),
+    title: pick("title", "Qaytariş siyosati"),
     body: pick("body", ""),
     checkboxLabel: pick("checkbox_label", "Shartlarga roziman."),
   };
+}
+
+/** A listing's price as the store says it: "Tekin" for 0, so'm otherwise. */
+export function listingPrice(price: number): string {
+  return price === 0 ? i18n.t("market:product.free") : formatSom(price);
+}
+
+/** Takes a free listing: an entitlement, nothing paid. */
+export async function claimFreeProduct(productId: string): Promise<void> {
+  const { error } = await supabase.rpc("marketplace_claim_free", { p_product_id: productId });
+  if (error) throw error;
 }

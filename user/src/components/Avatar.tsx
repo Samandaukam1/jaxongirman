@@ -65,5 +65,5 @@ const useStyles = makeStyles((colors) => ({
   clip: { overflow: "hidden" },
   image: { backgroundColor: colors.surfaceMuted },
   ring: { borderWidth: 2, borderColor: colors.primarySoft },
-  initials: { fontFamily: "Manrope_700Bold", color: brandInk.strong, letterSpacing: 0.4 },
+  initials: { fontFamily: "JaxongirmanSans_700Bold", color: brandInk.strong, letterSpacing: 0.4 },
 }));

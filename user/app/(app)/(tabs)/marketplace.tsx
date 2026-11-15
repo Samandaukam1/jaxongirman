@@ -8,7 +8,7 @@ import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Appear } from "@/components/Appear";
-import { BOTTOM_NAV_SPACE } from "@/components/BottomNav";
+import { BOTTOM_NAV_SPACE, useBottomNavSpace } from "@/components/BottomNav";
 import { MarathonVoteButton } from "@/components/MarathonVoteButton";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { EmptyState, ErrorState, SkeletonCard } from "@/components/StateBlocks";
@@ -17,9 +17,8 @@ import { labelOf } from "@/lib/labels";
 import { useVoteMarketEnabled } from "@/lib/marathon-market";
 import {
   EMPTY_FILTERS, isDefaultFilters, patchShelfItem, peekShelf, refreshShelf, searchProducts, signPaths, toggleFavorite, useMaterialTypes,
-  type SearchFilters,
-} from "@/lib/marketplace";
-import { formatNumber, formatSom } from "@/lib/money";
+  type SearchFilters, listingPrice } from "@/lib/marketplace";
+import { formatNumber } from "@/lib/money";
 import { useAuth } from "@/providers/AuthProvider";
 import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
 import { icon, radius, shadow, spacing, typography } from "@/theme/tokens";
@@ -36,6 +35,7 @@ const SORTS: MarketplaceSort[] = ["newest", "popular", "rating", "price_asc", "p
  * screen the same speed at ten products and at ten thousand.
  */
 export default function MarketplaceScreen() {
+  const bottomSpace = useBottomNavSpace();
   const { colors } = useTheme();
   const styles = useStyles();
   const { t } = useTranslation(["market", "common"]);
@@ -275,7 +275,7 @@ export default function MarketplaceScreen() {
           keyExtractor={(item) => item.id}
           numColumns={2}
           columnWrapperStyle={styles.column}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, { paddingBottom: bottomSpace + spacing.xl }]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -357,7 +357,7 @@ export default function MarketplaceScreen() {
                 ) : null}
               </View>
 
-              <Text style={styles.price}>{formatSom(item.base_price)}</Text>
+              <Text style={styles.price}>{listingPrice(item.base_price)}</Text>
             </Pressable>
             </Appear>
           )}
@@ -476,7 +476,7 @@ const useStyles = makeStyles((colors) => ({
   cardSeller: { ...typography.caption, fontSize: 11, color: colors.inkSoft },
   cardMeta: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   rating: { flexDirection: "row", alignItems: "center", gap: 3 },
-  ratingText: { ...typography.caption, fontSize: 11, color: colors.ink, fontFamily: "Manrope_600SemiBold" },
+  ratingText: { ...typography.caption, fontSize: 11, color: colors.ink, fontFamily: "JaxongirmanSans_600SemiBold" },
   ratingCount: { ...typography.caption, fontSize: 10, color: colors.inkSoft },
   units: { ...typography.caption, fontSize: 10, color: colors.inkSoft },
   price: { ...typography.bodyMedium, color: colors.primaryDeep, fontSize: 14, marginTop: 2 },

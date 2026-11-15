@@ -214,6 +214,6 @@ const useStyles = makeStyles((colors) => ({
   pillFill: { borderRadius: radius.pill },
   segment: { flex: 1, height: ROW_HEIGHT, alignItems: "center", justifyContent: "center" },
   segmentInner: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
-  label: { ...typography.caption, fontFamily: "Manrope_600SemiBold", flexShrink: 1 },
+  label: { ...typography.caption, fontFamily: "JaxongirmanSans_600SemiBold", flexShrink: 1 },
   labelOn: { color: brandInk.strong },
 }));

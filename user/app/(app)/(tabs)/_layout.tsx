@@ -42,9 +42,11 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="index" options={{ title: t("home") }} />
       <Tabs.Screen name="projects" options={{ title: t("projects") }} />
-      <Tabs.Screen name="marketplace" options={{ title: t("store") }} />
+      {/* Chat took the store's place in the bar; the store is still a tab, reached from Bosh sahifa. */}
+      <Tabs.Screen name="chat" options={{ title: t("chat") }} />
       <Tabs.Screen name="games" options={{ title: t("games") }} />
       <Tabs.Screen name="profile" options={{ title: t("profile") }} />
+      <Tabs.Screen name="marketplace" options={{ title: t("store") }} />
     </Tabs>
   );
 }

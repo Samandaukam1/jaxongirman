@@ -78,20 +78,52 @@ export const writeDefense = (presentationId: string) =>
   invoke<{ ok: true }>({ presentationId, action: "write" });
 
 /**
- * Renders what is stored and answers with the object path to download.
+ * The script PDF made last time, when it still describes this deck.
  *
- * Two requests, each well inside what the server gives one: the slides are
- * drawn first, then the script is set around them. When the slides cannot be
- * drawn the script is still made, without their pictures — a script PDF that
- * fails outright is worse than one with slide numbers in place of slides.
+ * Current while it was rendered after the deck last changed (rewriting the
+ * script clears it on the server) and the file is still in storage. Anything
+ * missing — the columns on an older database included — means "render it".
+ */
+async function keptPdf(presentationId: string): Promise<string | null> {
+  const [kept, deck] = await Promise.all([
+    supabase.from("presentation_defenses").select("status, pdf_path, pdf_rendered_at").eq("presentation_id", presentationId).maybeSingle(),
+    supabase.from("presentations").select("updated_at").eq("id", presentationId).maybeSingle(),
+  ]);
+  const row = kept.data;
+  if (kept.error || deck.error || !row || row.status !== "ready" || !row.pdf_path || !row.pdf_rendered_at || !deck.data) return null;
+  if (new Date(row.pdf_rendered_at).getTime() < new Date(deck.data.updated_at).getTime()) return null;
+  const probe = await supabase.storage.from("exports").createSignedUrl(row.pdf_path, 60);
+  return probe.error || !probe.data ? null : row.pdf_path;
+}
+
+/**
+ * The script as a PDF, answered with the object path to download.
+ *
+ * Downloading again is a read: the file made last time is handed back while
+ * the deck and the script are unchanged. Otherwise it is rendered in two
+ * requests, each well inside what the server gives one: the slides are drawn
+ * first, then the script is set around them. When the slides cannot be drawn
+ * the script is still made, without their pictures — a script PDF that fails
+ * outright is worse than one with slide numbers in place of slides.
  */
 export async function defensePdf(presentationId: string): Promise<{ ok: true; storagePath: string }> {
+  const kept = await keptPdf(presentationId).catch(() => null);
+  if (kept) return { ok: true, storagePath: kept };
   const slides = await invoke<{ ok: boolean; slidesPath?: string }>({ presentationId, action: "slides" }).catch(() => null);
   const drawn = slides?.ok && slides.slidesPath ? { slidesPath: slides.slidesPath } : { noSlides: true };
   return await invoke<{ ok: true; storagePath: string }>({ presentationId, action: "pdf", ...drawn });
 }
 
 /** A URL the phone may fetch, valid for long enough to save the file. */
+/** The owner's own words for one part of the script; the kept PDF is drawn again after. */
+export async function editDefense(presentationId: string, part: "introduction" | "conclusion" | "section", index: number | null, text: string): Promise<void> {
+  const { error } = await supabase.rpc("defense_edit", {
+    // The index matters only for a slide's part; the opening and the close ignore it.
+    p_presentation_id: presentationId, p_part: part, p_index: index ?? 0, p_text: text,
+  });
+  if (error) throw error;
+}
+
 export async function defensePdfUrl(storagePath: string): Promise<string> {
   const { data, error } = await supabase.storage.from("exports").createSignedUrl(storagePath, 300);
   if (error || !data) throw error ?? new Error(i18n.t("tools:academic.noLink"));

@@ -310,7 +310,7 @@ export function DesignChooser({ value, onChange }: { value: DesignChoice; onChan
 
 const useStyles = makeStyles((colors) => ({
   card: { gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  title: { ...typography.bodyMedium, fontFamily: "Manrope_700Bold", color: colors.ink },
+  title: { ...typography.bodyMedium, fontFamily: "JaxongirmanSans_700Bold", color: colors.ink },
   autoRow: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   autoIcon: { width: 40, height: 40, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceMuted },
   autoIconLit: { shadowColor: colors.primary, shadowOpacity: 0.45, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
@@ -326,7 +326,7 @@ const useStyles = makeStyles((colors) => ({
   styleCardActive: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
   pressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
   styleText: { paddingHorizontal: 8, paddingVertical: 7, gap: 1 },
-  styleName: { ...typography.caption, fontFamily: "Manrope_700Bold", color: colors.ink },
+  styleName: { ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", color: colors.ink },
   styleNameActive: { color: colors.primaryDeep },
   styleNote: { ...typography.caption, fontSize: 10, lineHeight: 13, color: colors.inkSoft },
   check: { position: "absolute", top: 6, right: 6, width: 20, height: 20, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: colors.primary },
@@ -382,11 +382,11 @@ const useStyles = makeStyles((colors) => ({
   // Colour families.
   paletteBlock: { gap: spacing.sm },
   paletteHead: { flexDirection: "row", alignItems: "center", gap: 6 },
-  paletteTitle: { ...typography.caption, fontFamily: "Manrope_700Bold", color: colors.inkMuted, flex: 1 },
+  paletteTitle: { ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", color: colors.inkMuted, flex: 1 },
   paletteValue: { ...typography.caption, color: colors.inkSoft },
   swatches: { gap: spacing.sm, paddingVertical: 2, paddingRight: spacing.sm },
   swatchRing: { padding: 3, borderRadius: 22, borderWidth: 2, borderColor: "transparent" },
   swatchRingActive: { borderColor: colors.primary },
   swatch: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
-  autoSwatchText: { fontFamily: "Manrope_700Bold", fontSize: 13, color: "#FFFFFF" },
+  autoSwatchText: { fontFamily: "JaxongirmanSans_700Bold", fontSize: 13, color: "#FFFFFF" },
 }));

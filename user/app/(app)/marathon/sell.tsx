@@ -277,7 +277,7 @@ const useStyles = makeStyles((colors) => ({
   },
   quoteLine: { flexDirection: "row", justifyContent: "space-between" },
   quoteLabel: { ...typography.caption, color: colors.inkMuted },
-  quoteValue: { ...typography.caption, fontFamily: "Manrope_600SemiBold", color: colors.ink },
+  quoteValue: { ...typography.caption, fontFamily: "JaxongirmanSans_600SemiBold", color: colors.ink },
   quoteTotal: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",
     paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border,
@@ -287,7 +287,7 @@ const useStyles = makeStyles((colors) => ({
   note: { ...typography.caption, color: colors.inkSoft, textAlign: "center" },
   section: { gap: spacing.sm, marginTop: spacing.md },
   sectionTitle: {
-    ...typography.caption, fontFamily: "Manrope_700Bold", letterSpacing: 0.8, color: colors.inkMuted,
+    ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", letterSpacing: 0.8, color: colors.inkMuted,
   },
   row: {
     flexDirection: "row", alignItems: "center", gap: spacing.md,
@@ -302,5 +302,5 @@ const useStyles = makeStyles((colors) => ({
     borderRadius: radius.pill, backgroundColor: colors.surfaceMuted,
   },
   withdrawPressed: { opacity: 0.7 },
-  withdrawLabel: { ...typography.caption, fontFamily: "Manrope_600SemiBold", color: colors.ink },
+  withdrawLabel: { ...typography.caption, fontFamily: "JaxongirmanSans_600SemiBold", color: colors.ink },
 }));

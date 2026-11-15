@@ -14,7 +14,7 @@ import { formatShortDateTime } from "@/lib/datetime";
 import { asErrorMessage } from "@/lib/format";
 import { labelOf } from "@/lib/labels";
 import { createSession } from "@/lib/games";
-import { signPaths, toggleFavorite } from "@/lib/marketplace";
+import { claimFreeProduct, signPaths, toggleFavorite } from "@/lib/marketplace";
 import { formatSom } from "@/lib/money";
 import { createMarketplaceOrder } from "@/lib/orders";
 import { refundPolicy, type RefundPolicy } from "@/lib/marketplace";
@@ -154,6 +154,20 @@ export default function ProductDetailScreen() {
       return;
     }
     await buy(false);
+  }
+
+  /** A free listing is taken, not bought: no order, no payment, straight to the library. */
+  async function take() {
+    setBusy(true);
+    setActionError(null);
+    try {
+      await claimFreeProduct(productId);
+      await load();
+    } catch (takeError) {
+      setActionError(asErrorMessage(takeError));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function buy(acknowledged: boolean) {
@@ -316,7 +330,7 @@ export default function ProductDetailScreen() {
 
         {product.description ? <Text style={styles.description}>{product.description}</Text> : null}
 
-        {!policy.paymentsEnabled && !detail.owned && !product.is_own ? (
+        {!policy.paymentsEnabled && !detail.owned && !product.is_own && product.base_price > 0 ? (
           <View style={styles.guideCard}>
             <Text style={styles.guideText}>{policy.unavailableMessage("marketplace")}</Text>
           </View>
@@ -324,7 +338,14 @@ export default function ProductDetailScreen() {
 
         {/* The breakdown is the server's, shown in full so the total is never a
             surprise at the payment step. */}
-        {policy.showPrices ? (
+        {product.base_price === 0 ? (
+          <View style={styles.priceCard}>
+            <View style={styles.priceLine}>
+              <Text style={styles.priceTotalLabel}>{t("product.price")}</Text>
+              <Text style={styles.priceTotal}>{t("product.free")}</Text>
+            </View>
+          </View>
+        ) : policy.showPrices ? (
         <View style={styles.priceCard}>
           <View style={styles.priceLine}>
             <Text style={styles.priceLabel}>{t("product.price")}</Text>
@@ -365,6 +386,9 @@ export default function ProductDetailScreen() {
           <View style={styles.ownedCard}>
             <Text style={styles.ownedText}>{t("product.own")}</Text>
           </View>
+        ) : product.base_price === 0 ? (
+          // Nothing is paid, so this works where payments are switched off too.
+          <PrimaryButton label={t("product.take")} loading={busy} onPress={() => void take()} />
         ) : policy.paymentsEnabled ? (
           <PrimaryButton label={t("product.buy", { amount: formatSom(quote.buyer_total) })} loading={busy} onPress={() => void startBuy()} />
         ) : null}
@@ -533,7 +557,7 @@ const useStyles = makeStyles((colors) => ({
 
   ownedCard: { flexDirection: "row", alignItems: "center", gap: spacing.sm, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.successSoft, borderWidth: 1, borderColor: colors.successBorder },
   ownedText: { ...typography.caption, color: colors.ink, flex: 1 },
-  ownedLink: { ...typography.caption, color: colors.primary, fontFamily: "Manrope_600SemiBold" },
+  ownedLink: { ...typography.caption, color: colors.primary, fontFamily: "JaxongirmanSans_600SemiBold" },
 
   sectionTitle: { ...typography.heading, color: colors.ink, marginTop: spacing.md },
   reviewList: { gap: spacing.sm },

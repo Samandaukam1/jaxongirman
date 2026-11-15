@@ -120,6 +120,6 @@ const useStyles = makeStyles((colors) => ({
 
   eyebrow: {
     ...typography.caption,
-    color: colors.primary, letterSpacing: 3, fontFamily: "Manrope_700Bold",
+    color: colors.primary, letterSpacing: 3, fontFamily: "JaxongirmanSans_700Bold",
   },
 }));

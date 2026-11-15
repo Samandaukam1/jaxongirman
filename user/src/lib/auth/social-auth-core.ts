@@ -111,20 +111,20 @@ export type AuthUiError = {
  * wired.
  */
 const MESSAGES: Record<AuthErrorCode, string> = {
-  cancelled: "Kirish bekor qilindi.",
+  cancelled: "Kiriş bekor qilindi.",
   no_identity_token:
-    "Provayder tasdiqni qaytarmadi. Iltimos, qaytadan urinib ko‘ring.",
-  provider_not_configured: "Google orqali kirish hozircha sozlanmagan.",
+    "Provayder tasdiqni qaytarmadi. Iltimos, qaytadan urinib köring.",
+  provider_not_configured: "Google orqali kiriş hozirça sozlanmagan.",
   provider_disabled:
-    "Bu kirish usuli hozircha yoqilmagan. Iltimos, email orqali kiring.",
+    "Bu kiriş usuli hozirça yoqilmagan. Iltimos, email orqali kiring.",
   duplicate_account:
-    "Bu email boshqa kirish usuli bilan allaqachon ishlatilgan.",
+    "Bu email boşqa kiriş usuli bilan allaqaçon işlatilgan.",
   play_services_unavailable:
-    "Qurilmangizda Google Play Services mavjud emas yoki yangilanishi kerak.",
-  apple_unavailable: "Apple orqali kirish bu qurilmada mavjud emas.",
-  in_progress: "Avvalgi urinish hali tugamadi.",
-  network: "Internet aloqasi yo‘q. Ulanishni tekshirib, qaytadan urinib ko‘ring.",
-  unknown: "Kirish amalga oshmadi. Iltimos, qaytadan urinib ko‘ring.",
+    "Qurilmangizda Google Play Services mavjud emas yoki yangilanişi kerak.",
+  apple_unavailable: "Apple orqali kiriş bu qurilmada mavjud emas.",
+  in_progress: "Avvalgi uriniş hali tugamadi.",
+  network: "Internet aloqasi yöq. Ulanişni tekşirib, qaytadan urinib köring.",
+  unknown: "Kiriş amalga oşmadi. Iltimos, qaytadan urinib köring.",
 };
 
 export function authError(code: AuthErrorCode): AuthUiError {

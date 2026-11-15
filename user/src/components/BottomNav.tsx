@@ -1,6 +1,6 @@
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
-import { Gamepad2, House, Layers, Store, User, type LucideIcon } from "lucide-react-native";
+import { Gamepad2, House, Layers, MessageCircle, User, type LucideIcon } from "lucide-react-native";
 import { useEffect, useState } from "react";
 import { Platform, Pressable, StyleSheet, UIManager, View } from "react-native";
 import Animated, {
@@ -15,6 +15,8 @@ import { useTranslation } from "react-i18next";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "@/components/Avatar";
+import { useChatUnread } from "@/lib/useChatUnread";
+import { PLAN_NUDGE_SPACE, PlanNudge } from "@/components/PlanNudge";
 import { withAlpha } from "@/theme/color";
 import { profileInitials, useAccount } from "@/providers/AccountProvider";
 import { spacing } from "@/theme/tokens";
@@ -35,10 +37,11 @@ type TabBarProps = {
 };
 
 /** Each tab's icon and the key of its name in the `nav` table. */
-const LABELS: Record<string, { label: "home" | "projects" | "store" | "games" | "profile"; icon: LucideIcon }> = {
+const LABELS: Record<string, { label: "home" | "projects" | "chat" | "games" | "profile"; icon: LucideIcon }> = {
   index: { label: "home", icon: House },
   projects: { label: "projects", icon: Layers },
-  marketplace: { label: "store", icon: Store },
+  // The store left the bar for chat (2.0); it is reached from Bosh sahifa.
+  chat: { label: "chat", icon: MessageCircle },
   games: { label: "games", icon: Gamepad2 },
   profile: { label: "profile", icon: User },
 };
@@ -59,6 +62,15 @@ const INDICATOR_INSET = 6;
 
 /** Room the floating bar needs at the bottom of a scrolling screen. */
 export const BOTTOM_NAV_SPACE = 104;
+
+/**
+ * Room at the bottom of a tab screen: the bar, and "Tarif oling" above it when
+ * it is showing, so the last row of a list is never hidden behind either.
+ */
+export function useBottomNavSpace(): number {
+  const { needsPlan } = useAccount();
+  return BOTTOM_NAV_SPACE + (needsPlan ? PLAN_NUDGE_SPACE : 0);
+}
 
 /**
  * Whether the blur view is actually in this binary.
@@ -107,6 +119,8 @@ type ItemProps = {
   isProfile: boolean;
   avatarUrl: string | null | undefined;
   initials: string;
+  /** Unread messages, on the chat tab. */
+  badge?: number;
   onPress: () => void;
 };
 
@@ -123,7 +137,7 @@ type ItemProps = {
  * a size change, and nothing is held back from the four items that are not
  * selected.
  */
-function NavItem({ label, icon: Icon, active, isProfile, avatarUrl, initials, onPress }: ItemProps) {
+function NavItem({ label, icon: Icon, active, isProfile, avatarUrl, initials, badge, onPress }: ItemProps) {
   const { colors } = useTheme();
   const styles = useStyles();
   const progress = useSharedValue(active ? 1 : 0);
@@ -155,6 +169,11 @@ function NavItem({ label, icon: Icon, active, isProfile, avatarUrl, initials, on
         ) : (
           <Icon color={active ? colors.primary : colors.inkMuted} size={ICON_SIZE} strokeWidth={active ? 2.3 : 1.9} />
         )}
+        {badge ? (
+          <Animated.View style={styles.badge}>
+            <Animated.Text style={styles.badgeText}>{badge > 99 ? "99+" : badge}</Animated.Text>
+          </Animated.View>
+        ) : null}
       </Animated.View>
       {/* Absolutely placed, so its arrival never resizes the row. */}
       <Animated.Text numberOfLines={1} style={[styles.label, labelStyle]}>{label}</Animated.Text>
@@ -170,7 +189,8 @@ export function BottomNav({ state, navigation }: TabBarProps) {
   const { colors, scheme } = useTheme();
   const { t } = useTranslation("nav");
   const styles = useStyles();
-  const { profile } = useAccount();
+  const { profile, needsPlan, refreshWallet } = useAccount();
+  const unread = useChatUnread();
   const insets = useSafeAreaInsets();
   const [barWidth, setBarWidth] = useState(0);
 
@@ -178,6 +198,9 @@ export function BottomNav({ state, navigation }: TabBarProps) {
   const activeKey = state.routes[state.index]?.key;
   const activeIndex = Math.max(items.findIndex((route) => route.key === activeKey), 0);
   const itemWidth = items.length > 0 ? barWidth / items.length : 0;
+
+  // A deck made, a plan bought: switching tabs is when somebody looks again.
+  useEffect(() => { refreshWallet(); }, [activeKey, refreshWallet]);
 
   const indicator = useSharedValue(0);
   useEffect(() => {
@@ -197,6 +220,12 @@ export function BottomNav({ state, navigation }: TabBarProps) {
       // home indicator's gesture area.
       style={[styles.wrap, { bottom: Math.max(insets.bottom - 20, 10) }]}
     >
+      {needsPlan ? (
+        <View pointerEvents="box-none" style={styles.nudge}>
+          <PlanNudge />
+        </View>
+      ) : null}
+
       {/* The shadow lives on an outer view so it is not clipped by the capsule's
           own overflow:hidden, which is what makes a floating bar look pasted on. */}
       <View style={styles.shadow}>
@@ -242,6 +271,7 @@ export function BottomNav({ state, navigation }: TabBarProps) {
                   isProfile={route.name === "profile"}
                   avatarUrl={profile?.avatar_url}
                   initials={profileInitials(profile)}
+                  badge={route.name === "chat" ? unread : 0}
                   onPress={() => {
                     const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
                     if (!active && !event.defaultPrevented) navigation.navigate(route.name);
@@ -260,6 +290,7 @@ const useStyles = makeStyles((colors) => ({
   // Absolute, so the navigator's tab-bar slot collapses to nothing and the bar
   // floats over the page instead of pushing it up. Equal inset on both sides.
   wrap: { position: "absolute", left: BAR_INSET, right: BAR_INSET },
+  nudge: { position: "absolute", left: 0, right: 0, bottom: BAR_HEIGHT + 12, alignItems: "center" },
   shadow: {
     borderRadius: BAR_RADIUS,
     backgroundColor: "transparent",
@@ -296,10 +327,15 @@ const useStyles = makeStyles((colors) => ({
     borderColor: withAlpha(colors.primary, 0.22),
   },
   item: { flex: 1, height: ITEM_HEIGHT, alignItems: "center", justifyContent: "center" },
+  badge: {
+    position: "absolute", top: -4, right: -10, minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 4,
+    alignItems: "center", justifyContent: "center", backgroundColor: colors.danger, borderWidth: 2, borderColor: colors.surface,
+  },
+  badgeText: { fontFamily: "JaxongirmanSans_700Bold", fontSize: 10, lineHeight: 12, color: "#fff" },
   label: {
     position: "absolute",
     bottom: 7,
-    fontFamily: "Manrope_600SemiBold",
+    fontFamily: "JaxongirmanSans_600SemiBold",
     fontSize: 9,
     lineHeight: 11,
     letterSpacing: 0.1,

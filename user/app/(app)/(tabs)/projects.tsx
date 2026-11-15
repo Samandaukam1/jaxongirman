@@ -1,12 +1,12 @@
 import { useRouter } from "expo-router";
 import { Search, Sparkles, X } from "lucide-react-native";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Image, Pressable, RefreshControl, Text, TextInput, View, type LayoutChangeEvent } from "react-native";
+import { Image, Keyboard, Pressable, RefreshControl, Text, TextInput, View, type LayoutChangeEvent } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
-  Extrapolation, interpolate, runOnJS, useAnimatedReaction, useAnimatedScrollHandler,
-  useAnimatedStyle, useDerivedValue, useSharedValue,
+  Easing, Extrapolation, interpolate, runOnJS, useAnimatedReaction, useAnimatedScrollHandler,
+  useAnimatedStyle, useDerivedValue, useSharedValue, withTiming,
 } from "react-native-reanimated";
 
 import coinIcon from "../../../assets/coin/coin-icon.png";
@@ -20,7 +20,7 @@ import coinIcon from "../../../assets/coin/coin-icon.png";
  * later has something to check it against.
  */
 import { Appear } from "@/components/Appear";
-import { BOTTOM_NAV_SPACE } from "@/components/BottomNav";
+import { BOTTOM_NAV_SPACE, useBottomNavSpace } from "@/components/BottomNav";
 import { MarathonVoteButton } from "@/components/MarathonVoteButton";
 
 import { ProjectRow } from "@/components/ProjectRow";
@@ -115,6 +115,7 @@ const CHIP_ROW = 48;
 const ESTIMATED_CARDS = 332;
 
 export default function ProjectsScreen() {
+  const bottomSpace = useBottomNavSpace();
   const { colors, scheme } = useTheme();
   const styles = useStyles();
   const { t } = useTranslation("projects");
@@ -128,6 +129,8 @@ export default function ProjectsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState("");
+  // The keyboard is up for the search box: the moment to give its results room.
+  const [typing, setTyping] = useState(false);
   const [folded, setFolded] = useState(false);
   const [cards, setCards] = useState(ESTIMATED_CARDS);
 
@@ -135,7 +138,9 @@ export default function ProjectsScreen() {
   const safeTop = Math.max(insets.top, 20) + spacing.xs;
   const chrome = safeTop + TITLE_ROW + spacing.md + spacing.md + (searching ? SEARCH_ROW + spacing.md : 0);
   const open = chrome + cards;
-  const shut = safeTop + TITLE_ROW + spacing.md + CHIP_ROW + spacing.md;
+  // Folded, the header still holds the search box when it is open: the chips
+  // sit under it rather than on top of it.
+  const shut = safeTop + TITLE_ROW + spacing.md + (searching ? SEARCH_ROW + spacing.md : 0) + CHIP_ROW + spacing.md;
   const range = Math.max(1, open - shut);
 
   // Measured once. The cards do not resize afterwards, and re-reading a layout
@@ -149,6 +154,33 @@ export default function ProjectsScreen() {
   const onScroll = useAnimatedScrollHandler((event) => { scrollY.value = event.contentOffset.y; });
 
   /**
+   * Typing in the search folds the header too.
+   *
+   * While the keyboard is up for the search box, the six big tools shrink to
+   * their row of chips — just as a scroll would fold them — and the results
+   * rise to meet the search box: the keyboard takes half the screen, and the
+   * cards were taking the rest. It runs on its own clock (a third of a
+   * second), and the header folds by whichever is further along, the scroll
+   * or the search. Hiding the keyboard or closing the search unfolds it.
+   */
+  const reduced = useReduceMotion();
+  const searchFold = useSharedValue(0);
+  const folding = searching && typing;
+  useEffect(() => {
+    searchFold.value = withTiming(folding ? 1 : 0, { duration: reduced ? 0 : 320, easing: Easing.out(Easing.cubic) });
+  }, [folding, reduced, searchFold]);
+  // A keyboard put away with the system's own control leaves the box focused
+  // on some phones; its hiding is what counts.
+  useEffect(() => {
+    const hidden = Keyboard.addListener("keyboardDidHide", () => setTyping(false));
+    return () => hidden.remove();
+  }, []);
+  const fold = useDerivedValue(() => Math.max(scrollY.value, searchFold.value * range));
+  // What the list gives up while the search holds the header folded, so the
+  // first result sits right under the chips instead of under a gap.
+  const spacer = useAnimatedStyle(() => ({ height: range * (1 - searchFold.value) }));
+
+  /**
    * The header gives back exactly what the scroll takes, one point for one
    * point, until it has nothing left. Anything else — a fold that runs faster
    * or slower than the finger — opens a gap between the header and the first
@@ -159,14 +191,14 @@ export default function ProjectsScreen() {
     // Clamped at both ends: an iOS bounce past the top would otherwise stretch
     // the header past its half and leave the extra space empty, since the
     // tiles inside it are a fixed height.
-    height: Math.min(open, Math.max(shut, open - scrollY.value)),
+    height: Math.min(open, Math.max(shut, open - fold.value)),
   }));
   const wide = useAnimatedStyle(() => ({
     // Gone before the row arrives, so the two never overlap mid-fade.
-    opacity: interpolate(scrollY.value, [0, range * 0.45], [1, 0], Extrapolation.CLAMP),
+    opacity: interpolate(fold.value, [0, range * 0.45], [1, 0], Extrapolation.CLAMP),
   }));
   const narrow = useAnimatedStyle(() => ({
-    opacity: interpolate(scrollY.value, [range * 0.55, range], [0, 1], Extrapolation.CLAMP),
+    opacity: interpolate(fold.value, [range * 0.55, range], [0, 1], Extrapolation.CLAMP),
   }));
 
   /**
@@ -181,14 +213,13 @@ export default function ProjectsScreen() {
    * drawings have settled at their small size by the time the cards behind them
    * start fading out, rather than still moving as they go.
    */
-  const reduced = useReduceMotion();
   const artFold = useDerivedValue(() => (
-    reduced ? 0 : interpolate(scrollY.value, [0, range * 0.6], [0, 1], Extrapolation.CLAMP)
+    reduced ? 0 : interpolate(fold.value, [0, range * 0.6], [0, 1], Extrapolation.CLAMP)
   ));
 
   // A style cannot carry `pointerEvents`, and an invisible layer that still
   // takes taps is worse than no animation at all.
-  useAnimatedReaction(() => scrollY.value > range * 0.5, (next, previous) => {
+  useAnimatedReaction(() => fold.value > range * 0.5, (next, previous) => {
     if (next !== previous) runOnJS(setFolded)(next);
   });
 
@@ -233,7 +264,7 @@ export default function ProjectsScreen() {
         style={styles.scroll}
         onScroll={onScroll}
         scrollEventThrottle={16}
-        contentContainerStyle={[styles.content, { paddingTop: open + spacing.md }]}
+        contentContainerStyle={[styles.content, { paddingTop: shut + spacing.md, paddingBottom: bottomSpace + spacing.xl }]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -244,6 +275,10 @@ export default function ProjectsScreen() {
           />
         }
       >
+        {/* Stands in for the unfolded header; gives way while searching. Its
+            negative margin cancels the content's gap, so the spacer adds
+            exactly its own height. */}
+        <Animated.View style={[styles.foldSpacer, spacer]} />
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>{query ? t("found") : t("recent")}</Text>
           {shown.length > 0 ? <Text style={styles.sectionCount}>{shown.length}</Text> : null}
@@ -286,7 +321,7 @@ export default function ProjectsScreen() {
             <Touchable
               accessibilityRole="button"
               accessibilityLabel={searching ? t("closeSearch") : t("search")}
-              onPress={() => { setSearching((it) => !it); if (searching) setQuery(""); }}
+              onPress={() => { setSearching((it) => !it); if (searching) { setQuery(""); setTyping(false); } }}
               style={[styles.iconButton, searching && styles.iconButtonOn]}
             >
               {searching
@@ -307,6 +342,8 @@ export default function ProjectsScreen() {
               autoFocus
               value={query}
               onChangeText={setQuery}
+              onFocus={() => setTyping(true)}
+              onBlur={() => setTyping(false)}
               placeholder={t("searchPlaceholder")}
               placeholderTextColor={colors.inkSoft}
               style={styles.searchInput}
@@ -465,6 +502,7 @@ const useStyles = makeStyles((colors) => ({
   },
 
   content: { paddingHorizontal: spacing.xl, paddingBottom: BOTTOM_NAV_SPACE + spacing.xl, gap: spacing.md },
+  foldSpacer: { marginBottom: -spacing.md },
   sectionHeader: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   sectionTitle: { ...typography.heading, color: colors.ink },
   sectionCount: { ...typography.caption, color: colors.primary, backgroundColor: colors.primarySoft, paddingHorizontal: 9, paddingVertical: 3, borderRadius: radius.pill },

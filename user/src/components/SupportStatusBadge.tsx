@@ -20,6 +20,6 @@ const useStyles = makeStyles((colors) => ({
   open: { backgroundColor: colors.primarySoft },
   action: { backgroundColor: colors.warningSoft },
   done: { backgroundColor: colors.surfaceMuted },
-  text: { ...typography.caption, fontSize: 11, fontFamily: "Manrope_700Bold", color: colors.primaryDeep },
+  text: { ...typography.caption, fontSize: 11, fontFamily: "JaxongirmanSans_700Bold", color: colors.primaryDeep },
   textAction: { color: colors.warning },
 }));

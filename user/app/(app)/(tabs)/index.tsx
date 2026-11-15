@@ -10,7 +10,7 @@ import coinIcon from "../../../assets/coin/coin-icon.png";
 import { Appear } from "@/components/Appear";
 import { Avatar } from "@/components/Avatar";
 import { BrandSurface } from "@/components/BrandSurface";
-import { BOTTOM_NAV_SPACE } from "@/components/BottomNav";
+import { BOTTOM_NAV_SPACE, useBottomNavSpace } from "@/components/BottomNav";
 import { MarathonSection } from "@/components/MarathonSection";
 import { MarathonVoteButton } from "@/components/MarathonVoteButton";
 import { NewDeviceCard } from "@/components/NewDeviceCard";
@@ -19,9 +19,9 @@ import { PromoCarousel, type PromoCarouselHandle } from "@/components/promo/Prom
 import { WelcomeHero } from "@/components/WelcomeHero";
 import { EmptyState, ErrorState, Skeleton } from "@/components/StateBlocks";
 import { formatClock, formatLongDate, formatRemainingWindow } from "@/lib/datetime";
-import { peekShelf, refreshShelf } from "@/lib/marketplace";
+import { peekShelf, refreshShelf, listingPrice } from "@/lib/marketplace";
 import { useModuleAccess } from "@/lib/modules";
-import { formatNumber, formatSom } from "@/lib/money";
+import { formatNumber } from "@/lib/money";
 import { myMembership, type Membership } from "@/lib/subscription";
 import { useFocusRefresh } from "@/lib/useFocusRefresh";
 import { fetchWallet, type Wallet } from "@/lib/wallet";
@@ -44,6 +44,7 @@ const SHELF_LIMIT = 6;
  * with nothing published, are not drawn at all.
  */
 export default function HomeScreen() {
+  const bottomSpace = useBottomNavSpace();
   const { colors } = useTheme();
   const { t } = useTranslation(["home", "common"]);
   const styles = useStyles();
@@ -118,7 +119,7 @@ export default function HomeScreen() {
   return (
     <View style={[styles.safe, { paddingTop: Math.max(insets.top, 20) + spacing.xs }]}>
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: bottomSpace + spacing.xl }]}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void pullToRefresh()} tintColor={colors.primary} />}
       >
@@ -325,7 +326,7 @@ export default function HomeScreen() {
                           <Text style={styles.productSeller} numberOfLines={1}>{item.seller_name}</Text>
                         )}
                       </View>
-                      <Text style={styles.productPrice}>{formatSom(item.base_price)}</Text>
+                      <Text style={styles.productPrice}>{listingPrice(item.base_price)}</Text>
                     </Pressable>
                   </Appear>
                 ))}
@@ -362,24 +363,24 @@ const useStyles = makeStyles((colors) => ({
     borderRadius: 10, backgroundColor: colors.danger, alignItems: "center", justifyContent: "center",
     borderWidth: 2, borderColor: colors.canvas,
   },
-  badgeText: { fontFamily: "Manrope_700Bold", fontSize: 10, color: colors.onPrimary },
+  badgeText: { fontFamily: "JaxongirmanSans_700Bold", fontSize: 10, color: colors.onPrimary },
 
   account: { padding: spacing.xl, paddingBottom: spacing.lg + 4, marginTop: spacing.sm },
   accountHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md },
-  accountEyebrow: { ...typography.caption, fontFamily: "Manrope_600SemiBold", fontSize: 11, color: brandInk.muted, letterSpacing: 1.6 },
+  accountEyebrow: { ...typography.caption, fontFamily: "JaxongirmanSans_600SemiBold", fontSize: 11, color: brandInk.muted, letterSpacing: 1.6 },
   // Darker than the card rather than lighter: the chip sits in the lit corner,
   // and a pale plate there would take the white label's contrast with it.
   planChip: {
     paddingHorizontal: spacing.md, paddingVertical: 5, borderRadius: radius.pill, maxWidth: "50%",
     backgroundColor: "rgba(16,6,48,0.24)", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)",
   },
-  planChipText: { ...typography.caption, fontFamily: "Manrope_600SemiBold", color: brandInk.strong },
+  planChipText: { ...typography.caption, fontFamily: "JaxongirmanSans_600SemiBold", color: brandInk.strong },
   balanceBlock: { marginTop: spacing.xl, minHeight: 58, justifyContent: "center", gap: 4 },
   balanceRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   // Sized against the digits rather than the line box: Manrope's line is taller
   // than its figures, so the coin is nudged to their optical centre.
   balanceCoin: { width: 44, height: 44, marginTop: 2 },
-  balanceValue: { fontFamily: "Manrope_800ExtraBold", fontSize: 50, lineHeight: 58, flexShrink: 1, color: brandInk.strong, letterSpacing: -2 },
+  balanceValue: { fontFamily: "JaxongirmanSans_800ExtraBold", fontSize: 50, lineHeight: 58, flexShrink: 1, color: brandInk.strong, letterSpacing: -2 },
   balanceSkeleton: { backgroundColor: "rgba(255,255,255,.18)" },
   planDetail: { ...typography.caption, fontSize: 12.5, color: brandInk.muted },
   accountActions: { flexDirection: "row", gap: spacing.md - 2, marginTop: spacing.xl },
@@ -391,9 +392,9 @@ const useStyles = makeStyles((colors) => ({
     backgroundColor: brandInk.plate,
     shadowColor: "#14063C", shadowOpacity: 0.25, shadowRadius: 10, shadowOffset: { width: 0, height: 6 }, elevation: 4,
   },
-  accountActionPrimaryText: { fontFamily: "Manrope_700Bold", fontSize: 14, color: brandInk.onPlate, flexShrink: 1 },
+  accountActionPrimaryText: { fontFamily: "JaxongirmanSans_700Bold", fontSize: 14, color: brandInk.onPlate, flexShrink: 1 },
   accountActionGhost: { backgroundColor: "rgba(255,255,255,.12)", borderWidth: 1, borderColor: "rgba(255,255,255,.24)" },
-  accountActionGhostText: { fontFamily: "Manrope_700Bold", fontSize: 14, color: brandInk.strong, flexShrink: 1 },
+  accountActionGhostText: { fontFamily: "JaxongirmanSans_700Bold", fontSize: 14, color: brandInk.strong, flexShrink: 1 },
   pressedSoft: { opacity: 0.9, transform: [{ scale: 0.99 }] },
 
   feature: {
@@ -405,11 +406,11 @@ const useStyles = makeStyles((colors) => ({
   featureTitle: { ...typography.heading, color: colors.ink },
   featureSubtitle: { ...typography.caption, color: colors.inkMuted, lineHeight: 17 },
   featureCta: { alignItems: "center", gap: 2 },
-  featureCtaText: { ...typography.caption, color: colors.primary, fontFamily: "Manrope_600SemiBold" },
+  featureCtaText: { ...typography.caption, color: colors.primary, fontFamily: "JaxongirmanSans_600SemiBold" },
 
   sectionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: spacing.md },
   sectionTitle: { ...typography.heading, color: colors.ink },
-  sectionLink: { ...typography.caption, color: colors.primary, fontFamily: "Manrope_600SemiBold" },
+  sectionLink: { ...typography.caption, color: colors.primary, fontFamily: "JaxongirmanSans_600SemiBold" },
 
   // The row runs to the screen's edges, so a card can be scrolled out from under them.
   shelfScroll: { marginHorizontal: -spacing.xl },
@@ -425,7 +426,7 @@ const useStyles = makeStyles((colors) => ({
   productBadgeText: { ...typography.caption, fontSize: 9, color: "#FFFFFF" },
   productTitle: { ...typography.bodyMedium, color: colors.ink, fontSize: 13, lineHeight: 17, minHeight: 34, marginTop: 2 },
   productMeta: { flexDirection: "row", alignItems: "center", gap: 3, minHeight: 15 },
-  productRating: { ...typography.caption, fontSize: 11, color: colors.ink, fontFamily: "Manrope_600SemiBold" },
+  productRating: { ...typography.caption, fontSize: 11, color: colors.ink, fontFamily: "JaxongirmanSans_600SemiBold" },
   productSeller: { ...typography.caption, fontSize: 11, color: colors.inkSoft, flexShrink: 1 },
   productPrice: { ...typography.bodyMedium, color: colors.primaryDeep, fontSize: 14 },
   productMore: {
@@ -433,5 +434,5 @@ const useStyles = makeStyles((colors) => ({
     borderWidth: 1, borderStyle: "dashed", borderColor: colors.borderStrong, backgroundColor: colors.surfaceMuted,
   },
   productMoreDisc: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: colors.primarySoft },
-  productMoreText: { ...typography.caption, color: colors.primary, fontFamily: "Manrope_700Bold" },
+  productMoreText: { ...typography.caption, color: colors.primary, fontFamily: "JaxongirmanSans_700Bold" },
 }));

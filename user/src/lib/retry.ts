@@ -40,7 +40,7 @@ export function isTransport(error: unknown): boolean {
 
 /** What to say instead of the platform's own sentence. */
 export const TRANSPORT_MESSAGE =
-  "Internet aloqasi uzildi. Aloqa tiklanganda qayta urinib ko‘ring.";
+  "Internet aloqasi uzildi. Aloqa tiklanganda qayta urinib köring.";
 
 export async function withNetworkRetry<T>(
   run: () => Promise<T>,

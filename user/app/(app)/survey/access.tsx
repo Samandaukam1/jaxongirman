@@ -180,7 +180,7 @@ const useStyles = makeStyles((colors) => ({
   panelTitle: { ...typography.bodyMedium, color: colors.ink },
   row: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   rowLabel: { ...typography.caption, color: colors.inkMuted, flex: 1 },
-  rowValue: { ...typography.caption, color: colors.ink, fontFamily: "Manrope_600SemiBold" },
+  rowValue: { ...typography.caption, color: colors.ink, fontFamily: "JaxongirmanSans_600SemiBold" },
 
   notice: { padding: spacing.lg, borderRadius: radius.lg, borderWidth: 1, gap: 4 },
   noticeReady: { backgroundColor: colors.successSoft, borderColor: colors.successBorder },

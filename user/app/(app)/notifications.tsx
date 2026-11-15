@@ -6,14 +6,15 @@ import {
 } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Linking, Platform, Pressable, RefreshControl, ScrollView, Switch, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Appear } from "@/components/Appear";
 import { CelebrationOverlay } from "@/components/CelebrationOverlay";
 import { NewDeviceCard } from "@/components/NewDeviceCard";
-import { i18n } from "@/i18n";
+import { i18n, readerSpelling } from "@/i18n";
 import { formatClock, formatDayMonth, formatWeekdayShort } from "@/lib/datetime";
+import { pushState, setPushWanted, type PushState } from "@/lib/push";
 import { asErrorMessage } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
 import { useAccount } from "@/providers/AccountProvider";
@@ -68,6 +69,42 @@ const KIND_ICONS: Record<string, LucideIcon> = {
 
 /** Coin arrivals are the only kind that celebrates; everything else just opens. */
 const CELEBRATED: readonly string[] = ["credit_gift", "credit_received"];
+
+/**
+ * The person's own switch for pushes to this phone. Off keeps everything in
+ * this list and sends nothing to the lock screen; a refusal in the phone's
+ * settings is said plainly, with the way to undo it.
+ */
+function PushRow() {
+  const { colors } = useTheme();
+  const styles = useStyles();
+  const { t } = useTranslation("inbox");
+  const [state, setState] = useState<PushState | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { void pushState().then(setState); }, []);
+  if (Platform.OS === "web" || state === null || state === "unsupported") return null;
+  return (
+    <Pressable
+      disabled={state !== "denied"}
+      onPress={() => void Linking.openSettings()}
+      style={styles.pushRow}
+    >
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={styles.pushTitle}>{t("push.title")}</Text>
+        <Text style={[styles.pushNote, state === "denied" && { color: colors.danger }]}>{t(`push.${state}`)}</Text>
+      </View>
+      <Switch
+        value={state === "on"}
+        disabled={busy}
+        onValueChange={(on) => {
+          setBusy(true);
+          void setPushWanted(on).then(setState).finally(() => setBusy(false));
+        }}
+        trackColor={{ true: colors.primary, false: colors.borderStrong }}
+      />
+    </Pressable>
+  );
+}
 
 export default function NotificationsScreen() {
   const { colors } = useTheme();
@@ -147,7 +184,7 @@ export default function NotificationsScreen() {
 
     if (CELEBRATED.includes(item.kind)) {
       const payload = item.payload && typeof item.payload === "object" && !Array.isArray(item.payload) ? item.payload : {};
-      setCelebration({ amount: Number((payload as { amount?: number }).amount ?? 0), message: item.body });
+      setCelebration({ amount: Number((payload as { amount?: number }).amount ?? 0), message: item.body ? readerSpelling(item.body) : item.body });
       return;
     }
 
@@ -188,6 +225,8 @@ export default function NotificationsScreen() {
           <X color={colors.ink} size={icon.md} strokeWidth={icon.strokeBold} />
         </Pressable>
       </View>
+
+      <PushRow />
 
       <View style={styles.calendarBlock}>
         <View style={styles.calendarLabel}>
@@ -246,9 +285,9 @@ export default function NotificationsScreen() {
                 <View style={styles.rowCopy}>
                   <View style={styles.rowTop}>
                     {!item.read_at ? <View style={styles.unreadDot} /> : null}
-                    <Text numberOfLines={2} style={[styles.rowTitle, !item.read_at && styles.rowTitleUnread]}>{item.title}</Text>
+                    <Text numberOfLines={2} style={[styles.rowTitle, !item.read_at && styles.rowTitleUnread]}>{readerSpelling(item.title)}</Text>
                   </View>
-                  {item.body ? <Text numberOfLines={3} style={styles.rowBody}>{item.body}</Text> : null}
+                  {item.body ? <Text numberOfLines={3} style={styles.rowBody}>{readerSpelling(item.body)}</Text> : null}
                   <Text style={styles.rowMeta}>{longDate(new Date(item.created_at))} · {clockTime(item.created_at)}</Text>
                 </View>
                 <View style={[styles.rowIcon, gift && styles.rowIconGift]}>
@@ -275,6 +314,12 @@ const useStyles = makeStyles((colors) => ({
   title: { ...typography.title, color: colors.ink },
   subtitle: { ...typography.caption, color: colors.inkMuted, marginTop: 2 },
   headerButton: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  pushRow: {
+    flexDirection: "row", alignItems: "center", gap: spacing.md, marginHorizontal: spacing.xl, marginBottom: spacing.sm,
+    padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
+  },
+  pushTitle: { ...typography.bodyMedium, color: colors.ink },
+  pushNote: { ...typography.caption, color: colors.inkMuted },
   calendarBlock: { paddingBottom: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
   calendarLabel: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: spacing.xl, paddingBottom: spacing.sm },
   calendarLabelText: { ...typography.caption, color: colors.inkMuted, flex: 1 },
@@ -283,8 +328,8 @@ const useStyles = makeStyles((colors) => ({
   calendarStrip: { paddingHorizontal: spacing.xl, gap: spacing.sm, flexDirection: "row-reverse" },
   dayChip: { width: 52, paddingVertical: spacing.sm, borderRadius: radius.md, alignItems: "center", gap: 2, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
   dayChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  dayName: { fontFamily: "Manrope_500Medium", fontSize: 10, color: colors.inkSoft },
-  dayNumber: { fontFamily: "Manrope_700Bold", fontSize: 16, color: colors.ink },
+  dayName: { fontFamily: "JaxongirmanSans_500Medium", fontSize: 10, color: colors.inkSoft },
+  dayNumber: { fontFamily: "JaxongirmanSans_700Bold", fontSize: 16, color: colors.ink },
   dayTextActive: { color: colors.onPrimary },
   dayDot: { width: 5, height: 5, borderRadius: 3, marginTop: 2, backgroundColor: "transparent" },
   dayDotFilled: { backgroundColor: colors.primary },

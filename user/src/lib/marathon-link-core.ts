@@ -37,7 +37,7 @@ export function candidateLink(campaignId: string, candidateId: string, host: str
 /** What is written above the link when it is shared. */
 export function shareMessage(campaignTitle: string, username: string | null): string {
   const who = username ? `@${username}` : "men";
-  return `${campaignTitle} — ${who} uchun ovoz bering.`;
+  return `${campaignTitle} — ${who} uçun ovoz bering.`;
 }
 
 /**

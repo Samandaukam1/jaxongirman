@@ -124,6 +124,6 @@ const useStyles = makeStyles((colors) => ({
   pressed: { transform: [{ scale: 0.97 }] },
   disabled: { opacity: 0.45 },
   action: { minHeight: 62, alignItems: "center", justifyContent: "center", gap: 4, paddingVertical: spacing.sm, paddingHorizontal: spacing.xs },
-  actionLabel: { ...typography.caption, fontFamily: "Manrope_700Bold", color: colors.ink },
+  actionLabel: { ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", color: colors.ink },
   actionLabelBrand: { color: colors.onPrimary },
 }));

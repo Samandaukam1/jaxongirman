@@ -13,6 +13,7 @@ export default translations(
       ordering: "Tartibga soling", matching: "Juftini toping", fill_blank: "Bo‘sh joyni to‘ldiring",
       word_cloud: "So‘zlar buluti", poll: "Ovoz berish", open_answer: "Erkin javob", image_quiz: "Rasmni toping",
       hotspot: "Rasmdan joyni toping",
+      crossword: "Krossvord",
     },
     surveyQuestion: {
       short_text: "Qisqa matn", long_text: "Uzun matn", phone: "Telefon raqam", image: "Rasm yuklash",
@@ -37,6 +38,7 @@ export default translations(
       ordering: "Put in order", matching: "Find the pair", fill_blank: "Fill in the blank",
       word_cloud: "Word cloud", poll: "Poll", open_answer: "Open answer", image_quiz: "Guess the picture",
       hotspot: "Find the spot",
+      crossword: "Crossword",
     },
     surveyQuestion: {
       short_text: "Short text", long_text: "Long text", phone: "Phone number", image: "Image upload",
@@ -61,6 +63,7 @@ export default translations(
       ordering: "Расставьте по порядку", matching: "Найдите пару", fill_blank: "Заполните пропуск",
       word_cloud: "Облако слов", poll: "Голосование", open_answer: "Свободный ответ", image_quiz: "Угадайте картинку",
       hotspot: "Найдите место на картинке",
+      crossword: "Кроссворд",
     },
     surveyQuestion: {
       short_text: "Короткий текст", long_text: "Длинный текст", phone: "Номер телефона", image: "Загрузка изображения",
@@ -76,5 +79,30 @@ export default translations(
       universitet_bakalavr: "Бакалавриат", universitet_magistr: "Магистратура", universitet: "Университет", umumiy: "Общая",
     },
     sort: { newest: "Новые", popular: "Популярные", rating: "С высоким рейтингом", price_asc: "Дешевле", price_desc: "Дороже" },
+  },
+  {
+    gameStatus: { generating: "Oluşturuluyor", draft: "Taslak", ready: "Hazır", archived: "Arşivde", failed: "Hata" },
+    gameDifficulty: { oson: "Kolay", ortacha: "Orta", qiyin: "Zor", aralash: "Karışık" },
+    gameType: {
+      single_choice: "Zekâ sorusu", true_false: "Doğru mu, yanlış mı?", multiple_choice: "Birkaçını seçin",
+      ordering: "Sıraya koyun", matching: "Eşini bulun", fill_blank: "Boşluğu doldurun",
+      word_cloud: "Kelime bulutu", poll: "Oylama", open_answer: "Serbest cevap", image_quiz: "Resmi tahmin edin",
+      hotspot: "Resimde yeri bulun",
+      crossword: "Bulmaca",
+    },
+    surveyQuestion: {
+      short_text: "Kısa metin", long_text: "Uzun metin", phone: "Telefon numarası", image: "Görsel yükleme",
+      single_choice: "Tek seçim", multi_choice: "Çoklu seçim", date: "Tarih", number: "Sayı",
+    },
+    surveyStatus: { draft: "Taslak", open: "Aktif", closed: "Sona erdi" },
+    productStatus: {
+      draft: "Taslak", pending_review: "İncelemede", approved: "Satışta", rejected: "Geri gönderildi",
+      hidden: "Gizli", archived: "Arşivlendi",
+    },
+    audience: {
+      maktab_1_4: "1–4. sınıflar", maktab_5_9: "5–9. sınıflar", maktab_10_11: "10–11. sınıflar", maktab: "Okul",
+      universitet_bakalavr: "Lisans", universitet_magistr: "Yüksek lisans", universitet: "Üniversite", umumiy: "Genel",
+    },
+    sort: { newest: "En yeni", popular: "Popüler", rating: "En yüksek puan", price_asc: "En ucuz", price_desc: "En pahalı" },
   },
 );

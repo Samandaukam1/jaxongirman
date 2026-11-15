@@ -1,7 +1,7 @@
 import * as FileSystem from "expo-file-system/legacy";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import * as Sharing from "expo-sharing";
-import { ArrowLeft, ChevronRight, Download, FileDown, Gamepad2, MonitorPlay, PenLine, RefreshCw, Sparkles, Store } from "lucide-react-native";
+import { ArrowLeft, ChevronRight, Download, FileDown, Gamepad2, MessageCircle, MonitorPlay, PenLine, RefreshCw, Sparkles, Store } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Platform, Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
@@ -32,6 +32,7 @@ import { makeStyles, useTheme } from "@/theme/ThemeProvider";
  */
 export default function DeckScreen() {
   const { t } = useTranslation(["deck", "common"]);
+  const { t: tChat } = useTranslation("chat");
   const { colors } = useTheme();
   const styles = useStyles();
   const router = useRouter();
@@ -208,6 +209,17 @@ export default function DeckScreen() {
           <GlassAction icon={MonitorPlay} label={t("present")} tone="brand" onPress={() => router.push({ pathname: "/(app)/present/scan", params: { presentationId: presentation.id } })} />
         </View>
 
+        {/* To someone in chat: the deck goes with its defence script. */}
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push({ pathname: "/(app)/chat/share", params: { kind: "presentation", id: presentation.id, title: presentation.title } })}
+          style={styles.gameRow}
+        >
+          <MessageCircle color={colors.primary} size={icon.md} strokeWidth={icon.stroke} />
+          <Text style={styles.gameText} numberOfLines={2}>{tChat("sendToChat")}</Text>
+          <ChevronRight color={colors.inkSoft} size={18} strokeWidth={2} />
+        </Pressable>
+
         {/* Selling the deck: the server says up front whether it goes live at once. */}
         <Pressable accessibilityRole="button" onPress={() => setPublishOpen(true)} style={styles.gameRow}>
           <Store color={colors.primary} size={icon.md} strokeWidth={icon.stroke} />
@@ -317,7 +329,7 @@ function Script({ defense, busy, onWrite }: { defense: Defense | null | undefine
 
       {defense.introduction ? (
         <View style={styles.part}>
-          <Text style={styles.partLabel}>KIRISH</Text>
+          <Text style={styles.partLabel}>KIRIŞ</Text>
           <Text style={styles.paragraph}>{defense.introduction}</Text>
         </View>
       ) : null}
@@ -355,7 +367,7 @@ const useStyles = makeStyles((colors) => ({
   headerRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: 0 },
   round: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   headerCopy: { flex: 1, gap: 2 },
-  eyebrow: { ...typography.caption, fontFamily: "Manrope_700Bold", color: colors.success, letterSpacing: 1.2 },
+  eyebrow: { ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", color: colors.success, letterSpacing: 1.2 },
   meta: { ...typography.caption, color: colors.inkSoft },
   title: { ...typography.title, fontSize: 24, lineHeight: 31, color: colors.ink },
   empty: { ...typography.body, color: colors.inkMuted, textAlign: "center" },
@@ -364,7 +376,7 @@ const useStyles = makeStyles((colors) => ({
     flexDirection: "row", alignItems: "center", gap: spacing.md,
     padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.primarySoft,
   },
-  gameText: { ...typography.caption, fontFamily: "Manrope_600SemiBold", color: colors.primaryDeep, flex: 1 },
+  gameText: { ...typography.caption, fontFamily: "JaxongirmanSans_600SemiBold", color: colors.primaryDeep, flex: 1 },
   scriptHead: { flexDirection: "row", alignItems: "flex-end", gap: spacing.md, marginTop: spacing.sm },
   scriptHeadCopy: { flex: 1, gap: 2 },
   sectionTitle: { ...typography.heading, color: colors.ink },
@@ -373,12 +385,12 @@ const useStyles = makeStyles((colors) => ({
     flexDirection: "row", alignItems: "center", gap: 6, height: 36, paddingHorizontal: spacing.md,
     borderRadius: radius.pill, backgroundColor: colors.primarySoft,
   },
-  pdfText: { ...typography.caption, fontFamily: "Manrope_700Bold", color: colors.primary },
+  pdfText: { ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", color: colors.primary },
   error: { ...typography.caption, color: colors.danger },
   retry: { paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: radius.pill, backgroundColor: colors.primarySoft },
-  retryText: { ...typography.caption, fontFamily: "Manrope_700Bold", color: colors.primary },
+  retryText: { ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", color: colors.primary },
   writing: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  writingText: { ...typography.caption, fontFamily: "Manrope_600SemiBold", color: colors.inkMuted },
+  writingText: { ...typography.caption, fontFamily: "JaxongirmanSans_600SemiBold", color: colors.inkMuted },
   skeletons: { gap: spacing.sm, marginTop: spacing.md },
   writeButton: {
     marginTop: spacing.md, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm,
@@ -394,15 +406,15 @@ const useStyles = makeStyles((colors) => ({
     flexDirection: "row", alignItems: "center", gap: spacing.sm, marginHorizontal: spacing.lg, marginTop: spacing.sm,
     padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.primarySoft,
   },
-  staleText: { ...typography.caption, fontFamily: "Manrope_700Bold", color: colors.primaryDeep, flex: 1 },
+  staleText: { ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", color: colors.primaryDeep, flex: 1 },
   part: { paddingHorizontal: spacing.lg, paddingVertical: spacing.md, gap: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border },
   partHead: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  partLabel: { ...typography.caption, fontFamily: "Manrope_700Bold", color: colors.primary, letterSpacing: 1.1 },
+  partLabel: { ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", color: colors.primary, letterSpacing: 1.1 },
   partTitle: { ...typography.bodyMedium, color: colors.ink, flex: 1 },
   badge: { minWidth: 26, height: 26, borderRadius: 13, paddingHorizontal: 6, alignItems: "center", justifyContent: "center", backgroundColor: colors.primarySoft },
-  badgeText: { ...typography.caption, fontFamily: "Manrope_700Bold", color: colors.primary },
+  badgeText: { ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", color: colors.primary },
   // Set for reading aloud at arm's length.
-  paragraph: { fontFamily: "Manrope_400Regular", fontSize: 16, lineHeight: 26, color: colors.ink },
+  paragraph: { fontFamily: "JaxongirmanSans_400Regular", fontSize: 16, lineHeight: 26, color: colors.ink },
   keyPoint: { borderLeftWidth: 3, borderLeftColor: colors.primary, paddingLeft: spacing.md, paddingVertical: 2 },
-  keyPointText: { ...typography.caption, fontFamily: "Manrope_600SemiBold", color: colors.inkMuted },
+  keyPointText: { ...typography.caption, fontFamily: "JaxongirmanSans_600SemiBold", color: colors.inkMuted },
 }));

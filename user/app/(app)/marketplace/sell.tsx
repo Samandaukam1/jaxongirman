@@ -91,6 +91,8 @@ export default function SellScreen() {
   const [title, setTitle] = useState(typeof params.gameTitle === "string" ? params.gameTitle : "");
   const [description, setDescription] = useState("");
   const [priceText, setPriceText] = useState("");
+  // A listing may also go up free: anyone takes it, nothing is paid.
+  const [free, setFree] = useState(false);
   const [units, setUnits] = useState("");
   const [cover, setCover] = useState<PickedFile | null>(null);
   const [previews, setPreviews] = useState<PickedFile[]>([]);
@@ -100,9 +102,10 @@ export default function SellScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const price = useMemo(() => {
+    if (free) return 0;
     const parsed = Number.parseInt(priceText.replace(/[^0-9]/g, ""), 10);
     return Number.isFinite(parsed) ? parsed : 0;
-  }, [priceText]);
+  }, [free, priceText]);
   const quote = useQuote(price);
 
   const selectedType: MarketplaceMaterialType | undefined = types.find((type) => type.code === materialType);
@@ -110,7 +113,7 @@ export default function SellScreen() {
   const problem =
     !materialType ? t("sellForm.needType")
     : title.trim().length < 3 ? t("sellForm.needName")
-    : price <= 0 ? t("sellForm.needPrice")
+    : !free && price <= 0 ? t("sellForm.needPrice")
     : !gameId && !mainFile ? t("sellForm.needFile")
     : null;
 
@@ -348,14 +351,30 @@ export default function SellScreen() {
         {/* ------------------------------------------------ price calculator */}
         <View style={styles.block}>
           <Text style={styles.label}>{t("sellForm.price")}</Text>
-          <TextInput
+          <View style={styles.pricingRow} accessibilityRole="radiogroup">
+            {([false, true] as const).map((option) => (
+              <Pressable
+                key={String(option)}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: free === option }}
+                onPress={() => setFree(option)}
+                style={[styles.pricingChip, free === option && styles.pricingChipOn]}
+              >
+                <Text style={[styles.pricingText, free === option && styles.pricingTextOn]}>
+                  {option ? t("sellForm.pricing.free") : t("sellForm.pricing.paid")}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          {free ? <Text style={styles.calcNote}>{t("sellForm.freeHint")}</Text> : null}
+          {free ? null : <TextInput
             value={priceText}
             onChangeText={(value) => setPriceText(value.replace(/[^0-9]/g, "").slice(0, 9))}
             placeholder="10000"
             placeholderTextColor={colors.inkSoft}
             keyboardType="number-pad"
             style={[styles.input, styles.priceInput]}
-          />
+          />}
 
           {quote && price > 0 ? (
             <View style={styles.calculator}>
@@ -516,6 +535,11 @@ const useStyles = makeStyles((colors) => ({
   content: { paddingHorizontal: spacing.xl, paddingBottom: 60, gap: spacing.lg },
 
   block: { gap: spacing.sm },
+  pricingRow: { flexDirection: "row", gap: spacing.sm },
+  pricingChip: { flex: 1, height: 44, borderRadius: radius.md, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  pricingChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  pricingText: { ...typography.bodyMedium, color: colors.ink },
+  pricingTextOn: { color: colors.onPrimary },
   label: { ...typography.bodyMedium, color: colors.ink },
   hint: { ...typography.caption, color: colors.inkSoft, lineHeight: 17 },
   input: {
@@ -524,7 +548,7 @@ const useStyles = makeStyles((colors) => ({
     borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
   },
   multiline: { minHeight: 100, textAlignVertical: "top" },
-  priceInput: { fontFamily: "Manrope_700Bold", fontSize: 22 },
+  priceInput: { fontFamily: "JaxongirmanSans_700Bold", fontSize: 22 },
 
   typeRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   typeChip: { paddingHorizontal: spacing.md, paddingVertical: 9, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
@@ -534,7 +558,7 @@ const useStyles = makeStyles((colors) => ({
 
   calculator: { padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.primarySoft, gap: 6, marginTop: spacing.sm },
   calcNote: { ...typography.caption, color: colors.primaryDeep, lineHeight: 18, marginBottom: spacing.sm },
-  calcSection: { ...typography.caption, color: colors.primaryDeep, fontFamily: "Manrope_600SemiBold", letterSpacing: 0.4, textTransform: "uppercase" },
+  calcSection: { ...typography.caption, color: colors.primaryDeep, fontFamily: "JaxongirmanSans_600SemiBold", letterSpacing: 0.4, textTransform: "uppercase" },
   calcSectionSpaced: { marginTop: spacing.md },
   calcLine: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   calcLabel: { ...typography.caption, color: colors.inkMuted },
@@ -549,7 +573,7 @@ const useStyles = makeStyles((colors) => ({
   pickerText: { ...typography.bodyMedium, color: colors.primary, fontSize: 14 },
   filePicked: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border },
   fileCopy: { flex: 1 },
-  fileName: { ...typography.caption, color: colors.ink, fontFamily: "Manrope_600SemiBold", flex: 1 },
+  fileName: { ...typography.caption, color: colors.ink, fontFamily: "JaxongirmanSans_600SemiBold", flex: 1 },
   fileSize: { ...typography.caption, fontSize: 11, color: colors.inkSoft },
   fileRemove: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: colors.dangerSoft },
   coverThumb: { width: 44, height: 44, borderRadius: radius.sm, backgroundColor: colors.border },

@@ -7,6 +7,7 @@ import { i18n } from "@/i18n";
 import { completeAuthRedirect } from "@/lib/authLinking";
 import { registerDevice } from "@/lib/devices";
 import { asErrorMessage } from "@/lib/format";
+import { unregisterPush } from "@/lib/push";
 import { supabase } from "@/lib/supabase";
 
 type AuthContextValue = {
@@ -82,6 +83,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
         // This device only. The default is every session the account has, which
         // would take the phone out when somebody leaves the website (and the
         // other way round); taking other devices out is Qurilmalar's job.
+        // This phone stops receiving the account's pushes first, while it can still say so.
+        await unregisterPush();
         const { error } = await supabase.auth.signOut({ scope: "local" });
         if (error) throw error;
       },

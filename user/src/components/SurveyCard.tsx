@@ -125,7 +125,7 @@ const useStyles = makeStyles((colors) => ({
   metricText: { ...typography.caption, color: colors.inkMuted },
   metricDone: { color: colors.success },
   footer: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: spacing.sm, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.border },
-  countdown: { ...typography.caption, color: colors.primary, fontFamily: "Manrope_600SemiBold" },
+  countdown: { ...typography.caption, color: colors.primary, fontFamily: "JaxongirmanSans_600SemiBold" },
   footerMuted: { ...typography.caption, color: colors.inkSoft },
   spacer: { flex: 1 },
   questions: { ...typography.caption, color: colors.inkSoft },

@@ -2,6 +2,11 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
   <dict>
+    <!-- Push notifications (expo-notifications). Kept here for the same reason as
+         the keys below: EAS Build does not sync app.json into a checked-in ios/. -->
+    <key>aps-environment</key>
+    <string>development</string>
+
     <!--
       Associated Domains: what makes a scanned https://<domain>/join/<token> QR
       open this app instead of Safari.

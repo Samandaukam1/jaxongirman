@@ -432,10 +432,10 @@ const useStyles = makeStyles((colors) => ({
   sizeValue: { ...typography.caption, color: colors.ink, minWidth: 34, textAlign: "center" },
   stepper: { flexDirection: "row", alignItems: "center", gap: 2, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 3 },
 
-  colorGlyph: { fontFamily: "Manrope_700Bold", fontSize: 17, color: colors.ink, lineHeight: 20 },
+  colorGlyph: { fontFamily: "JaxongirmanSans_700Bold", fontSize: 17, color: colors.ink, lineHeight: 20 },
   colorBar: { width: 22, height: 4, borderRadius: 2, marginTop: 2 },
   colorDot: { width: 18, height: 18, borderRadius: 9, borderWidth: 1, borderColor: colors.border },
-  caseGlyph: { fontFamily: "Manrope_700Bold", fontSize: 15, color: colors.ink },
+  caseGlyph: { fontFamily: "JaxongirmanSans_700Bold", fontSize: 15, color: colors.ink },
 
   panel: { borderBottomWidth: 1, borderBottomColor: colors.border, paddingHorizontal: spacing.md, paddingVertical: spacing.md },
   panelRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingRight: spacing.md },
@@ -448,7 +448,7 @@ const useStyles = makeStyles((colors) => ({
   fontCard: { minWidth: 86, alignItems: "center", gap: 2, paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
   fontCardActive: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
   fontSample: { fontSize: 22, color: colors.ink },
-  effectSample: { fontFamily: "Manrope_700Bold", fontSize: 22, color: colors.primary },
+  effectSample: { fontFamily: "JaxongirmanSans_700Bold", fontSize: 22, color: colors.primary },
   fontName: { ...typography.caption, color: colors.inkMuted, maxWidth: 96 },
 
   swatchGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },

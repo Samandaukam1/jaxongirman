@@ -64,7 +64,7 @@ const useStyles = makeStyles((colors) => ({
   mark: { marginTop: -spacing.lg, marginBottom: -spacing.xl },
   lines: { alignItems: "center", gap: 2 },
   title: { ...typography.title, color: colors.ink },
-  amount: { fontFamily: "Manrope_800ExtraBold", fontSize: 38, lineHeight: 44, color: colors.primary, letterSpacing: -0.8 },
+  amount: { fontFamily: "JaxongirmanSans_800ExtraBold", fontSize: 38, lineHeight: 44, color: colors.primary, letterSpacing: -0.8 },
   message: { ...typography.body, color: colors.inkMuted, textAlign: "center", marginTop: spacing.sm },
   actions: { alignSelf: "stretch" },
   button: { height: 50, marginTop: spacing.xl, borderRadius: radius.md, alignItems: "center", justifyContent: "center", backgroundColor: colors.primary },

@@ -58,9 +58,9 @@ test("a missing host falls back to production rather than to nothing", () => {
 
 test("the share text names who the vote is for", () => {
   assert.equal(link.shareMessage("Talabalar marafoni", "jahongir"),
-    "Talabalar marafoni — @jahongir uchun ovoz bering.");
+    "Talabalar marafoni — @jahongir uçun ovoz bering.");
   // An account with no username still shares: the link is what carries identity.
-  assert.match(link.shareMessage("Talabalar marafoni", null), /men uchun ovoz bering\.$/);
+  assert.match(link.shareMessage("Talabalar marafoni", null), /men uçun ovoz bering\.$/);
 });
 
 /* ------------------------------------------------------------- the parse -- */

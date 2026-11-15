@@ -170,6 +170,6 @@ const useStyles = makeStyles((colors) => ({
   dotActive: { width: 18, backgroundColor: colors.primary },
   progressTrack: { flex: 1, height: 4, borderRadius: 2, backgroundColor: colors.border, overflow: "hidden" },
   progressFill: { height: "100%", borderRadius: 2, backgroundColor: colors.primary },
-  count: { ...typography.caption, fontFamily: "Manrope_700Bold", color: colors.inkMuted },
+  count: { ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", color: colors.inkMuted },
 }));
 

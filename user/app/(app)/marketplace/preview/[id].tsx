@@ -151,7 +151,7 @@ const useStyles = makeStyles((colors) => ({
   page: { width: SCREEN_WIDTH, flex: 1, alignItems: "center", justifyContent: "center" },
   image: { width: SCREEN_WIDTH - spacing.lg * 2, height: "82%", borderRadius: radius.md },
   watermarkLayer: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, justifyContent: "space-evenly", transform: [{ rotate: "-24deg" }] },
-  watermark: { color: "rgba(255,255,255,0.16)", fontSize: 13, fontFamily: "Manrope_600SemiBold" },
+  watermark: { color: "rgba(255,255,255,0.16)", fontSize: 13, fontFamily: "JaxongirmanSans_600SemiBold" },
 
   footer: { flexDirection: "row", alignItems: "center", gap: spacing.sm, padding: spacing.lg, paddingBottom: 34 },
   footerText: { ...typography.caption, color: "rgba(255,255,255,0.6)", flex: 1, lineHeight: 17 },

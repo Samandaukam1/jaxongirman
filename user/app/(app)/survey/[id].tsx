@@ -492,8 +492,8 @@ const useStyles = makeStyles((colors) => ({
 
   timer: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: spacing.xl, paddingBottom: spacing.sm },
   timerClosed: {},
-  timerText: { ...typography.caption, color: colors.primary, fontFamily: "Manrope_600SemiBold" },
-  timerClosedText: { ...typography.caption, color: colors.danger, fontFamily: "Manrope_600SemiBold" },
+  timerText: { ...typography.caption, color: colors.primary, fontFamily: "JaxongirmanSans_600SemiBold" },
+  timerClosedText: { ...typography.caption, color: colors.danger, fontFamily: "JaxongirmanSans_600SemiBold" },
   spacer: { flex: 1 },
   progressText: { ...typography.caption, color: colors.inkMuted },
   progressTrack: { height: 4, marginHorizontal: spacing.xl, borderRadius: 2, backgroundColor: colors.surfaceMuted, overflow: "hidden" },
@@ -502,7 +502,7 @@ const useStyles = makeStyles((colors) => ({
   description: { ...typography.body, color: colors.inkMuted },
   privacy: { flexDirection: "row", gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.primarySoft },
   privacyCopy: { flex: 1, gap: 3 },
-  privacyTitle: { ...typography.caption, color: colors.primaryDeep, fontFamily: "Manrope_600SemiBold" },
+  privacyTitle: { ...typography.caption, color: colors.primaryDeep, fontFamily: "JaxongirmanSans_600SemiBold" },
   privacyBody: { ...typography.caption, color: colors.inkMuted, lineHeight: 18 },
 
   closedCard: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.dangerSoft, borderWidth: 1, borderColor: colors.dangerBorder },
@@ -540,7 +540,7 @@ const useStyles = makeStyles((colors) => ({
   preview: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.sm, borderRadius: radius.md, backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border },
   previewImage: { width: 56, height: 56, borderRadius: radius.sm, backgroundColor: colors.border },
   previewCopy: { flex: 1 },
-  previewName: { ...typography.caption, color: colors.ink, fontFamily: "Manrope_600SemiBold" },
+  previewName: { ...typography.caption, color: colors.ink, fontFamily: "JaxongirmanSans_600SemiBold" },
   previewSize: { ...typography.caption, color: colors.inkSoft },
   previewRemove: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: colors.dangerSoft },
   imageHint: { ...typography.caption, fontSize: 11, color: colors.inkSoft, lineHeight: 16 },

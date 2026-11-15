@@ -1,4 +1,5 @@
 import auth from "./ns/auth";
+import chat from "./ns/chat";
 import checkout from "./ns/checkout";
 import common from "./ns/common";
 import create from "./ns/create";
@@ -21,6 +22,7 @@ import profile from "./ns/profile";
 import projects from "./ns/projects";
 import support from "./ns/support";
 import survey from "./ns/survey";
+import tests from "./ns/tests";
 import time from "./ns/time";
 import tools from "./ns/tools";
 import wallet from "./ns/wallet";
@@ -31,6 +33,7 @@ import wallet from "./ns/wallet";
  */
 const tables = {
   auth,
+  chat,
   checkout,
   common,
   create,
@@ -53,17 +56,18 @@ const tables = {
   projects,
   support,
   survey,
+  tests,
   time,
   tools,
   wallet,
 };
 
 type Tables = typeof tables;
-type For<L extends "uz" | "en" | "ru"> = { [K in keyof Tables]: Tables[K][L] };
+type For<L extends "uz" | "en" | "ru" | "tr"> = { [K in keyof Tables]: Tables[K][L] };
 
-function pick<L extends "uz" | "en" | "ru">(language: L): For<L> {
+function pick<L extends "uz" | "en" | "ru" | "tr">(language: L): For<L> {
   return Object.fromEntries(Object.entries(tables).map(([name, table]) => [name, table[language]])) as For<L>;
 }
 
-export const resources = { uz: pick("uz"), en: pick("en"), ru: pick("ru") };
+export const resources = { uz: pick("uz"), en: pick("en"), ru: pick("ru"), tr: pick("tr") };
 export const NAMESPACES = Object.keys(tables) as (keyof Tables)[];

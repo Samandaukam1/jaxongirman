@@ -127,12 +127,12 @@ export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32, xxxl: 48
 export const icon = { stroke: 1.85, strokeBold: 2.4, xs: 14, sm: 16, md: 20, lg: 24, xl: 28 } as const;
 
 export const typography = {
-  display: { fontFamily: "Manrope_700Bold", fontSize: 34, lineHeight: 40, letterSpacing: -0.6 },
-  title: { fontFamily: "Manrope_700Bold", fontSize: 24, lineHeight: 31, letterSpacing: -0.3 },
-  heading: { fontFamily: "Manrope_700Bold", fontSize: 18, lineHeight: 24, letterSpacing: -0.2 },
-  body: { fontFamily: "Manrope_400Regular", fontSize: 15, lineHeight: 22 },
-  bodyMedium: { fontFamily: "Manrope_600SemiBold", fontSize: 15, lineHeight: 22 },
-  caption: { fontFamily: "Manrope_500Medium", fontSize: 12, lineHeight: 17 },
+  display: { fontFamily: "JaxongirmanSans_700Bold", fontSize: 34, lineHeight: 40, letterSpacing: -0.6 },
+  title: { fontFamily: "JaxongirmanSans_700Bold", fontSize: 24, lineHeight: 31, letterSpacing: -0.3 },
+  heading: { fontFamily: "JaxongirmanSans_700Bold", fontSize: 18, lineHeight: 24, letterSpacing: -0.2 },
+  body: { fontFamily: "JaxongirmanSans_400Regular", fontSize: 15, lineHeight: 22 },
+  bodyMedium: { fontFamily: "JaxongirmanSans_600SemiBold", fontSize: 15, lineHeight: 22 },
+  caption: { fontFamily: "JaxongirmanSans_500Medium", fontSize: 12, lineHeight: 17 },
 } as const;
 
 /**

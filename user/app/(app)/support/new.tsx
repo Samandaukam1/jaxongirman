@@ -188,7 +188,7 @@ const useStyles = makeStyles((colors) => ({
   chip: { paddingHorizontal: spacing.md, paddingVertical: 9, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
   chipSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
   chipText: { ...typography.caption, fontSize: 13, color: colors.ink },
-  chipTextSelected: { color: colors.primaryDeep, fontFamily: "Manrope_700Bold" },
+  chipTextSelected: { color: colors.primaryDeep, fontFamily: "JaxongirmanSans_700Bold" },
   shots: { flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" },
   shot: { width: 84, height: 84, borderRadius: radius.md, overflow: "hidden", backgroundColor: colors.surfaceMuted },
   shotImage: { width: "100%", height: "100%" },

@@ -1,29 +1,32 @@
 import {
-  cardLines, detailSections, priceLine, resetLabel, usageLines,
+  cardLines, coinRate, detailSections, planWorth, priceLine, resetLabel, usageLines,
   type QuotaStatus,
 } from "@jaxongirman/tariff-card";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import type { TFunction } from "i18next";
-import { Check, Crown, Info, RotateCcw, Sparkles, X } from "lucide-react-native";
+import { Crown, Info, RotateCcw, Sparkles, X } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, Alert, Modal, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
+import { Alert, Modal, Platform, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 
-import { Appear } from "@/components/Appear";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { ErrorState, SkeletonCard } from "@/components/StateBlocks";
+import { TariffRail, TariffTag } from "@/components/TariffTag";
 import { formatDate } from "@/lib/datetime";
 import { asErrorMessage } from "@/lib/format";
-import { formatNumber, formatSom } from "@/lib/money";
+import { formatNumber } from "@/lib/money";
 import { createSubscriptionOrder } from "@/lib/orders";
 import {
   myMembership, myUsage, restartPreview, subscriptionPlans, type RestartPreview,
   type Membership, type TariffPlan,
 } from "@/lib/subscription";
+import { supabase } from "@/lib/supabase";
+import { useAccount } from "@/providers/AccountProvider";
 import { useLanguage } from "@/providers/LanguageProvider";
 import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
-import { brandInk, gradients, icon, radius, shadow, shadowLifted, spacing, typography } from "@/theme/tokens";
+import { metalsOf } from "@/theme/metals";
+import { brandInk, gradients, icon, radius, shadowLifted, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 /**
@@ -56,14 +59,22 @@ export default function TariffScreen() {
   const [opening, setOpening] = useState<string | null>(null);
   const [detailFor, setDetailFor] = useState<TariffPlan | null>(null);
   const [restart, setRestart] = useState<RestartPreview | null>(null);
+  /** So'm per J Tanga at the cheapest package on sale: what a plan is compared with. */
+  const [rate, setRate] = useState<number | null>(null);
+  const [room, setRoom] = useState(0);
+  const { refreshWallet } = useAccount();
 
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true); else setLoading(true);
     try {
-      const [planRows, member, usageRows, preview] = await Promise.all([
+      const [planRows, member, usageRows, preview, packages] = await Promise.all([
         subscriptionPlans(), myMembership(), myUsage(),
         restartPreview().catch(() => null),
+        supabase.from("coin_packages").select("coins,bonus_coins,price_amount,currency").eq("is_active", true),
       ]);
+      setRate(coinRate((packages.data ?? []).map((row) => ({
+        coins: row.coins, bonusCoins: row.bonus_coins ?? 0, priceAmount: Number(row.price_amount), currency: row.currency,
+      }))));
       setPlans(planRows);
       setMembership(member);
       setUsage(usageRows);
@@ -87,10 +98,13 @@ export default function TariffScreen() {
    * different figure.
    */
   async function buy(planCode: string, restart = false) {
+    // In a browser the site's own checkout takes the payment (same session).
+    if (Platform.OS === "web") { window.location.assign("/tarif"); return; }
     setOpening(planCode);
     setError(null);
     try {
       const order = await createSubscriptionOrder(planCode, restart);
+      refreshWallet(true);
       router.push({ pathname: "/(app)/checkout/[orderId]", params: { orderId: order.order_id } });
     } catch (failure) {
       setError(asErrorMessage(failure));
@@ -122,6 +136,10 @@ export default function TariffScreen() {
   }
 
   const lines = usageLines(usage, language);
+  const metalOf = metalsOf(plans);
+  // Side by side on a desktop, one under another on a phone.
+  const wide = room >= 900 && plans.length > 1;
+  const best = plans.reduce((top, plan) => Math.max(top, planWorth(plan, rate)?.percent ?? 0), 0);
   const nextReset = resetLabel(usage.find((row) => row.resets_at)?.resets_at, language);
 
   return (
@@ -132,6 +150,7 @@ export default function TariffScreen() {
       />
 
       <ScrollView
+        onLayout={(event) => setRoom(event.nativeEvent.layout.width)}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -221,68 +240,57 @@ export default function TariffScreen() {
           </View>
         ) : null}
 
-        {plans.map((plan, index) => {
-          const price = priceLine(plan, language);
-          const owned = membership?.planCode === plan.code;
-          return (
-            <Appear key={plan.code} index={index}>
-            <View style={[styles.card, plan.isFeatured && styles.cardFeatured]}>
-              {plan.badge ? (
-                <View style={styles.cardBadge}>
-                  <Sparkles color={colors.primary} size={icon.xs} strokeWidth={icon.strokeBold} />
-                  <Text style={styles.cardBadgeText}>{plan.badge}</Text>
-                </View>
-              ) : null}
-
-              <Text style={styles.cardName}>{plan.name}</Text>
-              {plan.subtitle ? <Text style={styles.cardSubtitle}>{plan.subtitle}</Text> : null}
-
-              <View style={styles.priceRow}>
-                <Text style={styles.price}>{price.amount}</Text>
-                <Text style={styles.priceUnit}>{price.unit}</Text>
-              </View>
-              {plan.compareAtAmount > plan.priceAmount ? (
-                <Text style={styles.compareAt}>{formatSom(plan.compareAtAmount)}</Text>
-              ) : null}
-
-              <View style={styles.features}>
-                {[...coinLines(plan, t), ...cardLines(plan, language)].map((line) => (
-                  <View key={line.key} style={styles.featureRow}>
-                    <View style={styles.tick}>
-                      <Check color={colors.primary} size={12} strokeWidth={3} />
-                    </View>
-                    <Text style={styles.featureText}>{line.label}</Text>
-                  </View>
-                ))}
-              </View>
-
-              {/* Payment surfaces are drawn only where a payment can actually be
-                  made: a price with no way to pay it advertises a purchase this
-                  build cannot complete. */}
-              {policy.paymentsEnabled ? (
-                <Pressable
-                  accessibilityRole="button"
-                  disabled={opening !== null}
-                  onPress={() => void buy(plan.code)}
-                  style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed, opening !== null && styles.ctaDisabled]}
-                >
-                  {opening === plan.code ? (
-                    <ActivityIndicator color={colors.onPrimary} size="small" />
-                  ) : (
-                    <Text style={styles.ctaText}>
-                      {owned ? t("tariff.renew") : plan.ctaLabel || t("tariff.choose")}
-                    </Text>
-                  )}
-                </Pressable>
-              ) : null}
-
-              <Pressable accessibilityRole="button" onPress={() => setDetailFor(plan)} style={styles.detailLink}>
-                <Text style={styles.detailLinkText}>{t("tariff.allFeatures")}</Text>
-              </Pressable>
+        {/* The case for a plan, in one line and one number — the largest saving
+            any plan makes on its own J Tanga, so it is true of at least one. */}
+        {!loading && !membership?.member && best > 0 ? (
+          <LinearGradient colors={gradients.hero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.pitch}>
+            <View style={styles.pitchIcon}><Sparkles color={brandInk.strong} size={18} strokeWidth={2.2} /></View>
+            <View style={styles.pitchCopy}>
+              <Text style={styles.pitchTitle}>{t("tariff.pitchTitle")}</Text>
+              <Text style={styles.pitchBody}>{t("tariff.pitchBody", { percent: best })}</Text>
             </View>
-            </Appear>
-          );
-        })}
+          </LinearGradient>
+        ) : null}
+
+        {plans.length > 0 ? (
+          <View>
+            <TariffRail />
+            <View style={wide ? styles.row : styles.column}>
+              {plans.map((plan, index) => {
+                const price = priceLine(plan, language);
+                const owned = membership?.planCode === plan.code;
+                return (
+                  <TariffTag
+                    key={plan.code}
+                    index={index}
+                    style={wide ? styles.rowItem : null}
+                    metal={metalOf.get(plan.code)!}
+                    name={plan.name}
+                    subtitle={plan.subtitle}
+                    badge={plan.badge}
+                    priceAmount={plan.priceAmount}
+                    amount={price.amount}
+                    unit={price.unit}
+                    worth={planWorth(plan, rate)}
+                    usual={plan.compareAtAmount > plan.priceAmount ? plan.compareAtAmount : null}
+                    lines={[...coinLines(plan, t), ...cardLines(plan, language)]}
+                    owned={owned}
+                    // Payment surfaces are drawn only where a payment can actually
+                    // be made: a price with no way to pay it advertises a purchase
+                    // this build cannot complete.
+                    cta={policy.paymentsEnabled ? (owned ? t("tariff.renew") : t("tariff.take", { plan: plan.name })) : null}
+                    busy={opening === plan.code}
+                    disabled={opening !== null}
+                    onBuy={() => void buy(plan.code)}
+                    onDetails={() => setDetailFor(plan)}
+                    detailsLabel={t("tariff.allFeatures")}
+                  />
+                );
+              })}
+            </View>
+            {best > 0 ? <Text style={styles.worthNote}>{t("tariff.worthNote")}</Text> : null}
+          </View>
+        ) : null}
 
         {!loading && plans.length === 0 && !error ? (
           <Text style={styles.emptyNote}>{t("tariff.none")}</Text>
@@ -294,7 +302,12 @@ export default function TariffScreen() {
       <Modal visible={detailFor !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setDetailFor(null)}>
         <View style={styles.sheet}>
           <View style={styles.sheetHead}>
-            <Text style={styles.sheetTitle}>{detailFor?.name ?? ""}</Text>
+            <View style={styles.sheetName}>
+              {detailFor && metalOf.get(detailFor.code) ? (
+                <LinearGradient colors={metalOf.get(detailFor.code)!.face} start={{ x: 0.15, y: 0 }} end={{ x: 0.85, y: 1 }} style={styles.sheetMedal} />
+              ) : null}
+              <Text style={styles.sheetTitle}>{detailFor?.name ?? ""}</Text>
+            </View>
             <Pressable accessibilityRole="button" accessibilityLabel={t("common:close")} onPress={() => setDetailFor(null)} style={styles.sheetClose}>
               <X color={colors.ink} size={icon.md} strokeWidth={2} />
             </Pressable>
@@ -354,35 +367,24 @@ const useStyles = makeStyles((colors) => ({
   notice: { flexDirection: "row", alignItems: "flex-start", gap: spacing.sm, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.warningSoft },
   noticeText: { ...typography.caption, color: colors.ink, flex: 1 },
 
-  card: { backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: spacing.lg, gap: spacing.sm, ...shadow },
-  cardFeatured: { borderColor: colors.primary, borderWidth: 1.5 },
-  cardBadge: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: spacing.xs, backgroundColor: colors.primarySoft, paddingVertical: 4, paddingHorizontal: spacing.sm, borderRadius: radius.pill },
-  cardBadgeText: { ...typography.caption, color: colors.primary, fontFamily: "Manrope_700Bold" },
-  cardName: { ...typography.title, color: colors.ink },
-  cardSubtitle: { ...typography.body, color: colors.inkMuted },
+  pitch: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg, ...shadowLifted },
+  pitchIcon: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.18)" },
+  pitchCopy: { flex: 1, gap: 2 },
+  pitchTitle: { ...typography.heading, color: brandInk.strong },
+  pitchBody: { ...typography.body, fontSize: 14, color: brandInk.muted },
 
-  priceRow: { flexDirection: "row", alignItems: "baseline", gap: spacing.xs, marginTop: spacing.xs },
-  price: { ...typography.display, color: colors.ink },
-  priceUnit: { ...typography.bodyMedium, color: colors.inkMuted },
-  compareAt: { ...typography.caption, color: colors.inkSoft, textDecorationLine: "line-through" },
-
-  features: { gap: spacing.sm, marginTop: spacing.sm },
-  featureRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  tick: { width: 20, height: 20, borderRadius: 10, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center" },
-  featureText: { ...typography.body, color: colors.ink, flex: 1 },
-
-  cta: { marginTop: spacing.md, backgroundColor: colors.primary, borderRadius: radius.md, paddingVertical: spacing.md, alignItems: "center", ...shadowLifted },
-  ctaPressed: { backgroundColor: colors.primaryPressed },
-  ctaDisabled: { opacity: 0.6 },
-  ctaText: { ...typography.bodyMedium, color: colors.onPrimary },
-  detailLink: { alignSelf: "center", paddingVertical: spacing.sm },
-  detailLinkText: { ...typography.caption, color: colors.primary, fontFamily: "Manrope_600SemiBold" },
+  column: { gap: spacing.xs },
+  row: { flexDirection: "row", alignItems: "flex-start", gap: spacing.lg },
+  rowItem: { flex: 1, minWidth: 0 },
+  worthNote: { ...typography.caption, color: colors.inkSoft, textAlign: "center", marginTop: spacing.lg },
 
   emptyNote: { ...typography.body, color: colors.inkSoft, textAlign: "center", paddingVertical: spacing.xl },
 
   sheet: { flex: 1, backgroundColor: colors.canvas },
   sheetHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.border },
-  sheetTitle: { ...typography.heading, color: colors.ink },
+  sheetName: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  sheetMedal: { width: 26, height: 26, borderRadius: 13 },
+  sheetTitle: { ...typography.heading, color: colors.ink, letterSpacing: 1 },
   sheetClose: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceMuted },
   sheetBody: { padding: spacing.lg, gap: spacing.xl, paddingBottom: spacing.xxxl },
   section: { gap: spacing.sm },

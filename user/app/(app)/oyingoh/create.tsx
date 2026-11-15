@@ -1,7 +1,7 @@
 import { GAME_AI_TYPES, GAME_DIFFICULTY_LABELS, type GameQuestionType } from "@jaxongirman/types";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Check, FileText, Presentation, Sparkles, SquarePen } from "lucide-react-native";
+import { Check, FileText, Grid3x3, LayoutGrid, ListChecks, Presentation, Sparkles, SquarePen } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pressable, Text, TextInput, View } from "react-native";
@@ -12,6 +12,7 @@ import { ScreenHeader } from "@/components/ScreenHeader";
 import { InlineError } from "@/components/StateBlocks";
 import { LANGUAGE_NAMES, type AppLanguage } from "@/i18n";
 import { asErrorMessage } from "@/lib/format";
+import { CROSSWORD_MINUTE_PRESETS, CROSSWORD_WORD_PRESETS } from "@/lib/crossword";
 import { generateGame } from "@/lib/games";
 import { labelOf } from "@/lib/labels";
 import { hasCyrillic, toLatin } from "@/lib/script";
@@ -35,7 +36,13 @@ export default function CreateGameScreen() {
   const styles = useStyles();
   const { t } = useTranslation("games");
   const router = useRouter();
-  const params = useLocalSearchParams<{ categoryId?: string; presentationId?: string }>();
+  const params = useLocalSearchParams<{ categoryId?: string; presentationId?: string; kind?: string }>();
+  /** A quiz or a crossword: the same sources, a different thing made from them. */
+  const [kind, setKind] = useState<"quiz" | "crossword" | "grid">(params.kind === "crossword" ? "crossword" : params.kind === "grid" ? "grid" : "quiz");
+  const crossword = kind === "crossword";
+  const grid = kind === "grid";
+  const [words, setWords] = useState<number>(15);
+  const [minutes, setMinutes] = useState<number>(10);
   const [mode, setMode] = useState<Mode>("topic");
   const [topic, setTopic] = useState("");
   const [text, setText] = useState("");
@@ -92,12 +99,13 @@ export default function CreateGameScreen() {
     setError(null);
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      if (mode === "manual") {
+      if (mode === "manual" && !crossword) {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error(t("form.signIn"));
         const { data, error: insertError } = await supabase
           .from("games")
           .insert({
+            kind: grid ? "grid" : "quiz",
             owner_id: user.id,
             title: topic.trim() || t("form.defaultTitle"),
             category_id: params.categoryId ?? null,
@@ -113,7 +121,9 @@ export default function CreateGameScreen() {
       }
 
       const result = await generateGame({
-        mode: mode === "presentation" ? "presentation" : mode,
+        mode: mode === "presentation" ? "presentation" : mode === "manual" ? "topic" : mode,
+        ...(crossword ? { kind: "crossword" as const, wordCount: words, minutes } : {}),
+        ...(grid ? { kind: "grid" as const } : {}),
         topic: topic.trim() || undefined,
         text: text.trim() || undefined,
         presentationId: deckId ?? undefined,
@@ -134,14 +144,37 @@ export default function CreateGameScreen() {
 
   return (
     <View style={styles.safe}>
-      <ScreenHeader title={t("form.title")} subtitle={t("title")} onLeave={() => router.back()} />
+      <ScreenHeader title={crossword ? t("crossword.createTitle") : grid ? t("grid.createTitle") : t("form.title")} subtitle={t("title")} onLeave={() => router.back()} />
       <View style={{ flex: 1 }}>
         <KeyboardAwareScrollView bottomOffset={spacing.xl} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <View style={styles.kindRow} accessibilityRole="radiogroup">
+            {([["quiz", ListChecks, t("crossword.kindQuiz")], ["crossword", Grid3x3, t("crossword.kindCrossword")], ["grid", LayoutGrid, t("grid.kind")]] as const).map(([value, Icon, label]) => (
+              <Pressable
+                key={value}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: kind === value }}
+                onPress={() => {
+                  setKind(value);
+                  if (value === "crossword" && mode === "manual") setMode("topic");
+                  void Haptics.selectionAsync();
+                }}
+                style={[styles.kindOption, kind === value && styles.kindOptionActive]}
+              >
+                <Icon color={kind === value ? colors.primaryDeep : colors.inkMuted} size={icon.md} strokeWidth={icon.stroke} />
+                <Text style={[styles.kindText, kind === value && styles.kindTextActive]}>{label}</Text>
+              </Pressable>
+            ))}
+          </View>
+          {crossword ? <Text style={styles.hint}>{t("crossword.createHint")}</Text> : null}
+          {grid ? <Text style={styles.hint}>{t("grid.createHint")}</Text> : null}
+
           <View style={styles.modeGrid}>
             <ModeCard active={mode === "topic"} icon={Sparkles} label={t("form.mode.topic")} hint={t("form.withAi")} onPress={() => setMode("topic")} />
             <ModeCard active={mode === "text"} icon={FileText} label={t("form.mode.text")} hint={t("form.withAi")} onPress={() => setMode("text")} />
             <ModeCard active={mode === "presentation"} icon={Presentation} label={t("form.mode.presentation")} hint={t("form.withAi")} onPress={() => setMode("presentation")} />
-            <ModeCard active={mode === "manual"} icon={SquarePen} label={t("form.mode.manual")} hint={t("form.blank")} onPress={() => setMode("manual")} />
+            {crossword ? null : (
+              <ModeCard active={mode === "manual"} icon={SquarePen} label={t("form.mode.manual")} hint={t("form.blank")} onPress={() => setMode("manual")} />
+            )}
           </View>
 
           {mode === "topic" || mode === "manual" ? (
@@ -220,6 +253,7 @@ export default function CreateGameScreen() {
 
           {mode !== "manual" ? (
             <>
+              {grid ? null : (
               <View style={styles.field}>
                 <Text style={styles.label}>{t("form.difficulty")}</Text>
                 <View style={styles.chipRow}>
@@ -228,6 +262,7 @@ export default function CreateGameScreen() {
                   ))}
                 </View>
               </View>
+              )}
 
               <View style={styles.field}>
                 <Text style={styles.label}>{t("form.audience")}</Text>
@@ -238,31 +273,57 @@ export default function CreateGameScreen() {
                 </View>
               </View>
 
-              <View style={styles.field}>
-                <Text style={styles.label}>{t("form.count")}</Text>
-                <View style={styles.chipRow}>
-                  {COUNT_PRESETS.map((preset) => (
-                    <Chip key={preset} active={count === preset} label={`${preset}`} onPress={() => setCount(preset)} />
-                  ))}
-                </View>
-              </View>
+              {grid ? null : crossword ? (
+                <>
+                  <View style={styles.field}>
+                    <Text style={styles.label}>{t("crossword.wordCount")}</Text>
+                    <View style={styles.chipRow}>
+                      {CROSSWORD_WORD_PRESETS.map((preset) => (
+                        <Chip key={preset} active={words === preset} label={`${preset}`} onPress={() => setWords(preset)} />
+                      ))}
+                    </View>
+                  </View>
+                  <View style={styles.field}>
+                    <Text style={styles.label}>{t("crossword.minutes")}</Text>
+                    <View style={styles.chipRow}>
+                      {CROSSWORD_MINUTE_PRESETS.map((preset) => (
+                        <Chip key={preset} active={minutes === preset} label={t("crossword.minutesValue", { count: preset })} onPress={() => setMinutes(preset)} />
+                      ))}
+                    </View>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <View style={styles.field}>
+                    <Text style={styles.label}>{t("form.count")}</Text>
+                    <View style={styles.chipRow}>
+                      {COUNT_PRESETS.map((preset) => (
+                        <Chip key={preset} active={count === preset} label={`${preset}`} onPress={() => setCount(preset)} />
+                      ))}
+                    </View>
+                  </View>
 
-              <View style={styles.field}>
-                <Text style={styles.label}>{t("form.types")}</Text>
-                <Text style={styles.hint}>{t("form.typesHint")}</Text>
-                <View style={styles.chipRow}>
-                  {GAME_AI_TYPES.map((type) => (
-                    <Chip key={type} active={types.has(type)} label={labelOf("gameType", type)} onPress={() => toggleType(type)} />
-                  ))}
-                </View>
-              </View>
+                  <View style={styles.field}>
+                    <Text style={styles.label}>{t("form.types")}</Text>
+                    <Text style={styles.hint}>{t("form.typesHint")}</Text>
+                    <View style={styles.chipRow}>
+                      {GAME_AI_TYPES.map((type) => (
+                        <Chip key={type} active={types.has(type)} label={labelOf("gameType", type)} onPress={() => toggleType(type)} />
+                      ))}
+                    </View>
+                  </View>
+                </>
+              )}
             </>
           ) : null}
 
           {error ? <InlineError message={error} /> : null}
 
           <PrimaryButton
-            label={mode === "manual" ? t("form.createManual") : busy ? t("form.creating") : t("form.createAi")}
+            label={crossword
+              ? (busy ? t("crossword.creating") : t("crossword.create"))
+              : grid && mode !== "manual" ? (busy ? t("form.creating") : t("grid.createTitle"))
+              : mode === "manual" ? t("form.createManual") : busy ? t("form.creating") : t("form.createAi")}
             loading={busy}
             disabled={!canSubmit}
             onPress={() => void submit()}
@@ -300,6 +361,14 @@ const useStyles = makeStyles((colors) => ({
   safe: { flex: 1, backgroundColor: colors.canvas },
   content: { padding: spacing.xl, gap: spacing.lg, paddingBottom: spacing.xxxl },
   modeGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  kindRow: { flexDirection: "row", gap: spacing.xs, padding: 4, borderRadius: radius.pill, backgroundColor: colors.surfaceMuted },
+  kindOption: {
+    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.xs,
+    paddingVertical: spacing.sm, borderRadius: radius.pill,
+  },
+  kindOptionActive: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.primary },
+  kindText: { ...typography.bodyMedium, color: colors.inkMuted },
+  kindTextActive: { color: colors.primaryDeep },
   modeCard: {
     width: "48%", flexGrow: 1, gap: 4, padding: spacing.lg,
     backgroundColor: colors.surfaceMuted, borderRadius: radius.lg,
@@ -321,7 +390,7 @@ const useStyles = makeStyles((colors) => ({
   latin: { gap: spacing.sm, alignItems: "flex-start" },
   latinText: { ...typography.caption, color: colors.danger },
   latinFix: { paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: radius.pill, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.primary },
-  latinFixText: { ...typography.caption, fontFamily: "Manrope_700Bold", color: colors.primary },
+  latinFixText: { ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", color: colors.primary },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   chip: {
     paddingHorizontal: spacing.lg, paddingVertical: spacing.sm,
@@ -330,7 +399,7 @@ const useStyles = makeStyles((colors) => ({
   },
   chipActive: { backgroundColor: colors.primarySoft, borderColor: colors.primary },
   chipText: { ...typography.body, color: colors.inkMuted },
-  chipTextActive: { color: colors.primaryDeep, fontFamily: "Manrope_600SemiBold" },
+  chipTextActive: { color: colors.primaryDeep, fontFamily: "JaxongirmanSans_600SemiBold" },
   deckRow: {
     flexDirection: "row", alignItems: "center", gap: spacing.md,
     padding: spacing.lg, borderRadius: radius.md,

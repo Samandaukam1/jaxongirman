@@ -1,6 +1,6 @@
 import * as Crypto from "expo-crypto";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { ArrowLeft, ArrowUpRight, ChevronRight, Search, ShieldCheck, UserRound } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -14,6 +14,7 @@ import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { CountUp, Rise, SuccessMark } from "@/components/SuccessMoment";
 import { EmptyState, InlineError } from "@/components/StateBlocks";
+import { chatProfile } from "@/lib/chat";
 import { asErrorMessage } from "@/lib/format";
 import { formatCoins, formatNumber } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
@@ -55,6 +56,14 @@ export default function SendCoinsScreen() {
   const [searchError, setSearchError] = useState<string | null>(null);
 
   const [recipient, setRecipient] = useState<Match | null>(null);
+  // Opened from a chat profile: the person is already chosen.
+  const { to } = useLocalSearchParams<{ to?: string }>();
+  useEffect(() => {
+    if (typeof to !== "string" || !to) return;
+    void chatProfile(to).then((peer) => {
+      if (peer?.username) setRecipient({ id: peer.id, full_name: peer.full_name, username: peer.username, avatar_url: peer.avatar_url });
+    }).catch(() => undefined);
+  }, [to]);
   const [amountText, setAmountText] = useState("");
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
@@ -366,7 +375,7 @@ const useStyles = makeStyles((colors) => ({
   matchName: { ...typography.bodyMedium, color: colors.ink },
   matchHandle: { ...typography.caption, color: colors.inkSoft, marginTop: 1 },
 
-  eyebrow: { ...typography.caption, fontFamily: "Manrope_700Bold", fontSize: 11, letterSpacing: 1.4, color: colors.inkSoft, marginBottom: -spacing.sm },
+  eyebrow: { ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", fontSize: 11, letterSpacing: 1.4, color: colors.inkSoft, marginBottom: -spacing.sm },
   recipientCard: {
     flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md,
     borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.borderStrong, ...shadow,
@@ -381,13 +390,13 @@ const useStyles = makeStyles((colors) => ({
 
   amountCard: { padding: spacing.xl - 4, gap: 2 },
   amountTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md },
-  amountEyebrow: { ...typography.caption, fontFamily: "Manrope_700Bold", fontSize: 11, letterSpacing: 1.4, color: brandInk.muted, flexShrink: 1 },
+  amountEyebrow: { ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", fontSize: 11, letterSpacing: 1.4, color: brandInk.muted, flexShrink: 1 },
   balancePill: {
     flexDirection: "row", alignItems: "center", gap: 5, paddingLeft: 6, paddingRight: 10, paddingVertical: 4, maxWidth: "60%",
     borderRadius: radius.pill, backgroundColor: "rgba(16,6,48,0.26)", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)",
   },
   balancePillCoin: { width: 18, height: 18 },
-  balancePillText: { ...typography.caption, fontFamily: "Manrope_700Bold", color: brandInk.strong, fontVariant: ["tabular-nums"] },
+  balancePillText: { ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", color: brandInk.strong, fontVariant: ["tabular-nums"] },
   amountRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginTop: spacing.md },
   amountCoin: { width: 46, height: 46 },
   // The field has a height of its own and a line height taller than its glyph.
@@ -398,10 +407,10 @@ const useStyles = makeStyles((colors) => ({
     // `minWidth: 0` lets the field shrink to the row: a browser gives an input a
     // width of its own, and at this size it pushed the whole screen sideways.
     flex: 1, minWidth: 0, height: 76, paddingVertical: 0, paddingHorizontal: 0,
-    fontFamily: "Manrope_800ExtraBold", fontSize: 48, lineHeight: 62, letterSpacing: -1.5,
+    fontFamily: "JaxongirmanSans_800ExtraBold", fontSize: 48, lineHeight: 62, letterSpacing: -1.5,
     color: brandInk.strong, includeFontPadding: false, textAlignVertical: "center", fontVariant: ["tabular-nums"],
   },
-  amountUnit: { fontFamily: "Manrope_600SemiBold", fontSize: 13, color: brandInk.muted, marginLeft: 46 + spacing.md, marginTop: -6 },
+  amountUnit: { fontFamily: "JaxongirmanSans_600SemiBold", fontSize: 13, color: brandInk.muted, marginLeft: 46 + spacing.md, marginTop: -6 },
   quickRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.lg },
   quick: {
     paddingHorizontal: 14, height: 36, borderRadius: radius.pill, alignItems: "center", justifyContent: "center",
@@ -409,7 +418,7 @@ const useStyles = makeStyles((colors) => ({
   },
   quickOff: { opacity: 0.35 },
   quickPressed: { opacity: 0.8, transform: [{ scale: 0.97 }] },
-  quickText: { fontFamily: "Manrope_700Bold", fontSize: 13, color: brandInk.strong, fontVariant: ["tabular-nums"] },
+  quickText: { fontFamily: "JaxongirmanSans_700Bold", fontSize: 13, color: brandInk.strong, fontVariant: ["tabular-nums"] },
   quickAll: { backgroundColor: brandInk.plate, borderColor: brandInk.plate },
   quickAllText: { color: brandInk.onPlate },
   fieldLabel: { ...typography.bodyMedium, color: colors.ink },
@@ -432,7 +441,7 @@ const useStyles = makeStyles((colors) => ({
     alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: brandInk.plate,
   },
   sendDiscSpacer: { width: 48 },
-  sendLabel: { flex: 1, textAlign: "center", fontFamily: "Manrope_800ExtraBold", fontSize: 16, color: brandInk.strong },
+  sendLabel: { flex: 1, textAlign: "center", fontFamily: "JaxongirmanSans_800ExtraBold", fontSize: 16, color: brandInk.strong },
   disclaimer: {
     flexDirection: "row", alignItems: "flex-start", gap: spacing.sm, padding: spacing.md,
     borderRadius: radius.md, backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border,
@@ -442,7 +451,7 @@ const useStyles = makeStyles((colors) => ({
   successBody: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: spacing.xl },
   successLines: { alignItems: "center", gap: spacing.sm, marginTop: -spacing.lg },
   successAmountRow: { flexDirection: "row", alignItems: "center" },
-  successAmount: { fontFamily: "Manrope_800ExtraBold", fontSize: 46, lineHeight: 52, color: colors.ink, letterSpacing: -1.4 },
+  successAmount: { fontFamily: "JaxongirmanSans_800ExtraBold", fontSize: 46, lineHeight: 52, color: colors.ink, letterSpacing: -1.4 },
   successCoin: { width: 52, height: 52, marginLeft: 4 },
   successCopy: { ...typography.body, color: colors.inkMuted, textAlign: "center" },
   successBalance: { ...typography.caption, color: colors.inkSoft, marginTop: spacing.sm },

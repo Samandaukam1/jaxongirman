@@ -38,7 +38,7 @@ export function ComingSoon({
         <Text style={styles.summary}>{summary}</Text>
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Bosqichlar</Text>
+          <Text style={styles.cardTitle}>Bosqiçlar</Text>
           {steps.map((step, index) => (
             <View key={step} style={styles.step}>
               <View style={styles.stepNumber}><Text style={styles.stepNumberText}>{index + 1}</Text></View>

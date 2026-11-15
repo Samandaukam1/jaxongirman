@@ -329,7 +329,7 @@ const useStyles = makeStyles((colors) => ({
     paddingHorizontal: spacing.md, height: 36, justifyContent: "center",
     borderRadius: radius.pill, backgroundColor: colors.primarySoft,
   },
-  chooseText: { ...typography.caption, fontFamily: "Manrope_700Bold", color: colors.primaryDeep },
+  chooseText: { ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", color: colors.primaryDeep },
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)" },
   sheet: {
     position: "absolute", left: 0, right: 0, bottom: 0,

@@ -17,7 +17,7 @@ import { InlineError } from "@/components/StateBlocks";
 import { lockedOnWeb } from "@/components/WebLocked";
 import { asErrorMessage } from "@/lib/format";
 import { isTransport } from "@/lib/retry";
-import { joinGame, joinGameByCode } from "@/lib/games";
+import { joinGame, joinGameByCode, previewJoin, type JoinPreview } from "@/lib/games";
 import { useAccount } from "@/providers/AccountProvider";
 import { icon, radius, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
@@ -52,6 +52,10 @@ function JoinGameScreen() {
   const [step, setStep] = useState<Step>(params.token || params.code ? "identity" : "scan");
   const [token, setToken] = useState<string | null>(params.token ?? null);
   const [code, setCode] = useState(params.code ?? "");
+  // The room as it stands, once there is a token or a code to ask with: which
+  // teams it offers, and whether it still lets a newcomer in.
+  const [preview, setPreview] = useState<JoinPreview | null>(null);
+  const [team, setTeam] = useState<string | null>(null);
   const [manualCode, setManualCode] = useState(false);
   const [nickname, setNickname] = useState("");
   const [avatarId, setAvatarId] = useState(() => Math.floor(Math.random() * GAME_AVATAR_COUNT));
@@ -102,14 +106,22 @@ function JoinGameScreen() {
     setStep("identity");
   }, []);
 
+  useEffect(() => {
+    if (step !== "identity" || (!token && !code)) return;
+    let active = true;
+    // A server without the preview simply offers no choice.
+    void previewJoin({ token, code }).then((found) => { if (active) setPreview(found); }, () => { if (active) setPreview(null); });
+    return () => { active = false; };
+  }, [code, step, token]);
+
   async function join() {
     setBusy(true);
     setError(null);
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       const result = token
-        ? await joinGame(token, nickname.trim(), avatarId)
-        : await joinGameByCode(code, nickname.trim(), avatarId);
+        ? await joinGame(token, nickname.trim(), avatarId, team)
+        : await joinGameByCode(code, nickname.trim(), avatarId, team);
       router.replace(`/oyingoh/play/${result.session_id}`);
     } catch (failure) {
       /**
@@ -250,12 +262,35 @@ function JoinGameScreen() {
             maxLength={30}
           />
 
+          {preview?.team_mode && preview.teams.length > 0 ? (
+            <>
+              <Text style={styles.label}>{t("entry.team")}</Text>
+              <View style={styles.teamRow} accessibilityRole="radiogroup">
+                {[null, ...preview.teams].map((name) => {
+                  const chosen = team === name;
+                  return (
+                    <Pressable
+                      key={name ?? "any"}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: chosen }}
+                      onPress={() => { setTeam(name); void Haptics.selectionAsync(); }}
+                      style={[styles.teamChip, chosen && styles.teamChipOn]}
+                    >
+                      <Text style={[styles.teamText, chosen && styles.teamTextOn]} numberOfLines={1}>{name ?? t("entry.teamAny")}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </>
+          ) : null}
+
+          {preview && !preview.joinable ? <InlineError message={t("entry.lateClosed")} /> : null}
           {error ? <InlineError message={error} /> : null}
 
           <PrimaryButton
             label={busy ? t("entry.joining") : t("entry.ready")}
             loading={busy}
-            disabled={nickname.trim().length < 1 || busy}
+            disabled={nickname.trim().length < 1 || busy || preview?.joinable === false}
             onPress={() => void join()}
           />
         </KeyboardAwareScrollView>
@@ -286,7 +321,7 @@ const useStyles = makeStyles((colors) => ({
     flexDirection: "row", alignItems: "center", gap: 6, height: 38, paddingHorizontal: spacing.lg,
     borderRadius: radius.pill, backgroundColor: colors.primary,
   },
-  diceText: { ...typography.caption, fontFamily: "Manrope_700Bold", color: colors.onPrimary },
+  diceText: { ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", color: colors.onPrimary },
   pressed: { opacity: 0.85, transform: [{ scale: 0.97 }] },
   groups: { gap: spacing.sm, paddingRight: spacing.sm },
   group: {
@@ -294,8 +329,8 @@ const useStyles = makeStyles((colors) => ({
     backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
   },
   groupActive: { backgroundColor: colors.primarySoft, borderColor: colors.primary },
-  groupText: { ...typography.caption, fontFamily: "Manrope_600SemiBold", color: colors.inkMuted },
-  groupTextActive: { color: colors.primaryDeep, fontFamily: "Manrope_700Bold" },
+  groupText: { ...typography.caption, fontFamily: "JaxongirmanSans_600SemiBold", color: colors.inkMuted },
+  groupTextActive: { color: colors.primaryDeep, fontFamily: "JaxongirmanSans_700Bold" },
   label: { ...typography.bodyMedium, color: colors.ink },
   avatarGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, justifyContent: "space-between" },
   avatarCell: {
@@ -304,6 +339,14 @@ const useStyles = makeStyles((colors) => ({
   avatarCellActive: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
   avatarPlaceholder: { width: 67, height: 67, borderRadius: 34, backgroundColor: colors.surfaceMuted },
   avatarSpacer: { width: 67, height: 0 },
+  teamRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  teamChip: {
+    height: 44, paddingHorizontal: spacing.lg, borderRadius: radius.pill, alignItems: "center", justifyContent: "center",
+    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, maxWidth: "100%",
+  },
+  teamChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  teamText: { ...typography.bodyMedium, color: colors.ink },
+  teamTextOn: { color: colors.onPrimary },
   nameInput: {
     ...typography.body, color: colors.ink, backgroundColor: colors.surfaceMuted,
     borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md,

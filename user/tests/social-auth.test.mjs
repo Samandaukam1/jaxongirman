@@ -145,7 +145,7 @@ test("an email already used by another way in gets one sentence", () => {
   }
   assert.equal(
     core.authError("duplicate_account").message,
-    "Bu email boshqa kirish usuli bilan allaqachon ishlatilgan.",
+    "Bu email boşqa kiriş usuli bilan allaqaçon işlatilgan.",
   );
 });
 

@@ -536,9 +536,9 @@ const useStyles = makeStyles((colors) => ({
 
   panBlock: { gap: spacing.sm },
   panRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, padding: spacing.lg, borderRadius: radius.md, backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border },
-  panPart: { fontFamily: "Manrope_600SemiBold", fontSize: 17, color: colors.ink, letterSpacing: 1.2 },
+  panPart: { fontFamily: "JaxongirmanSans_600SemiBold", fontSize: 17, color: colors.ink, letterSpacing: 1.2 },
   panInput: {
-    fontFamily: "Manrope_700Bold", fontSize: 17, color: colors.primary, letterSpacing: 3,
+    fontFamily: "JaxongirmanSans_700Bold", fontSize: 17, color: colors.primary, letterSpacing: 3,
     minWidth: 68, textAlign: "center", paddingVertical: 6,
     borderBottomWidth: 2, borderBottomColor: colors.primary,
   },
@@ -554,20 +554,20 @@ const useStyles = makeStyles((colors) => ({
   otpTitle: { ...typography.heading, color: colors.ink },
   otpCopy: { ...typography.caption, color: colors.inkMuted, lineHeight: 18 },
   otpInput: {
-    fontFamily: "Manrope_700Bold", fontSize: 30, color: colors.ink, letterSpacing: 12,
+    fontFamily: "JaxongirmanSans_700Bold", fontSize: 30, color: colors.ink, letterSpacing: 12,
     textAlign: "center", minHeight: 68,
     backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md,
   },
   sandboxHint: { padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.warningSoft },
   sandboxText: { ...typography.caption, color: colors.warning, textAlign: "center" },
   resend: { alignItems: "center", paddingVertical: spacing.md },
-  resendText: { ...typography.caption, color: colors.primary, fontFamily: "Manrope_600SemiBold" },
+  resendText: { ...typography.caption, color: colors.primary, fontFamily: "JaxongirmanSans_600SemiBold" },
   resendDisabled: { color: colors.inkSoft },
 
   privacy: { flexDirection: "row", gap: spacing.sm, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.surfaceMuted },
   privacyCopy: { flex: 1, gap: 4 },
   privacyText: { ...typography.caption, color: colors.inkMuted, lineHeight: 18 },
-  paymeBrand: { ...typography.caption, color: colors.primaryDeep, fontFamily: "Manrope_700Bold" },
+  paymeBrand: { ...typography.caption, color: colors.primaryDeep, fontFamily: "JaxongirmanSans_700Bold" },
 }));
 
 // Not in a browser yet: see WebLocked.

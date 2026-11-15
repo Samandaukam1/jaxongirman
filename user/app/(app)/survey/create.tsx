@@ -500,7 +500,7 @@ const useStyles = makeStyles((colors) => ({
 
   actions: { gap: spacing.md, marginTop: spacing.sm },
   templateButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: spacing.md },
-  templateText: { ...typography.caption, color: colors.primary, fontFamily: "Manrope_600SemiBold" },
+  templateText: { ...typography.caption, color: colors.primary, fontFamily: "JaxongirmanSans_600SemiBold" },
 
   backdrop: { flex: 1, backgroundColor: "rgba(21,14,36,.45)", alignItems: "center", justifyContent: "center", padding: spacing.xl },
   sheet: { alignSelf: "stretch", gap: spacing.md, padding: spacing.xl, borderRadius: radius.lg, backgroundColor: colors.surface },

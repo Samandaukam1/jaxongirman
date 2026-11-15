@@ -291,7 +291,7 @@ const useStyles = makeStyles((colors) => ({
   optionInput: { ...typography.body, color: colors.ink, flex: 1, backgroundColor: colors.surfaceMuted, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, minHeight: 42 },
   optionRemove: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: colors.surfaceMuted },
   optionAdd: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
-  optionAddText: { ...typography.caption, color: colors.primary, fontFamily: "Manrope_600SemiBold" },
+  optionAddText: { ...typography.caption, color: colors.primary, fontFamily: "JaxongirmanSans_600SemiBold" },
 
   rangeRow: { flexDirection: "row", gap: spacing.md },
   rangeField: { flex: 1, gap: 4 },
@@ -303,6 +303,6 @@ const useStyles = makeStyles((colors) => ({
   toggles: { gap: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
   toggleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md },
   toggleCopy: { flex: 1, gap: 1 },
-  toggleLabel: { ...typography.caption, color: colors.ink, fontFamily: "Manrope_600SemiBold" },
+  toggleLabel: { ...typography.caption, color: colors.ink, fontFamily: "JaxongirmanSans_600SemiBold" },
   toggleHint: { ...typography.caption, fontSize: 11, color: colors.inkSoft },
 }));

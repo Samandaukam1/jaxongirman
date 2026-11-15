@@ -2,6 +2,7 @@ import {
   RESET_PRESENTATION_VIEWPORT,
   SLIDE_HOLD_MS,
   clampPresentationViewport,
+  deckWithAds,
   settledSlide,
   slideAfter,
   type Json,
@@ -47,6 +48,27 @@ type ViewportMessage = {
 };
 
 const DECK_REFRESH_MS = 50 * 60 * 1000;
+
+type AdPage = { id: string; url: string };
+
+/**
+ * The ad pages this presenter's plan carries — the list the screen places
+ * too, so a page number means the same page on both. An ad is never a reason
+ * for the remote not to work: a failure here is a talk without ad pages.
+ */
+async function loadAdPages(ownerId: string | undefined): Promise<AdPage[]> {
+  if (!ownerId) return [];
+  const { data, error } = await supabase.rpc("presentation_ads_for", { p_owner: ownerId });
+  if (error || !data || typeof data !== "object" || Array.isArray(data)) return [];
+  const rows = (data as JsonObject).slides;
+  return (Array.isArray(rows) ? rows : []).flatMap((row) => {
+    const ad = object(row ?? null);
+    const path = typeof ad.path === "string" ? ad.path : "";
+    if (typeof ad.id !== "string" || !path) return [];
+    const url = supabase.storage.from("presentation-ads").getPublicUrl(path).data.publicUrl;
+    return url ? [{ id: ad.id, url }] : [];
+  });
+}
 
 function object(value: Json): JsonObject {
   return value && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : {};
@@ -123,6 +145,7 @@ function RemoteScreen() {
   const [decks, setDecks] = useState<Deck[]>([]);
   const [slides, setSlides] = useState<Slide[]>([]);
   const [elements, setElements] = useState<Element[]>([]);
+  const [adPages, setAdPages] = useState<AdPage[]>([]);
   const [viewport, setViewport] = useState<PresentationViewport>({ ...RESET_PRESENTATION_VIEWPORT });
   const [loading, setLoading] = useState(true);
   const [deckLoading, setDeckLoading] = useState(false);
@@ -225,21 +248,24 @@ function RemoteScreen() {
   const [defense, setDefense] = useState<Defense | null>(null);
   const [showScript, setShowScript] = useState(true);
 
+  const ownerId = user?.id;
   const loadDeck = useCallback(async (presentationId: string) => {
     const sequence = ++deckLoadSequence.current;
     setDeckLoading(true);
     setDeckError(null);
     try {
-      const [slideResult, elementRows] = await Promise.all([
+      const [slideResult, elementRows, ads] = await Promise.all([
         supabase.from("slides").select("*").eq("presentation_id", presentationId).order("position"),
         // Every element — a long deck is more than one page of the API.
         loadDeckElements(presentationId),
+        loadAdPages(ownerId),
       ]);
       if (slideResult.error) throw slideResult.error;
       const hydrated = await hydrateImages(elementRows);
       if (sequence !== deckLoadSequence.current) return;
       setSlides(slideResult.data);
       setElements(hydrated);
+      setAdPages(ads);
     } catch (deckFailure) {
       if (sequence !== deckLoadSequence.current) return;
       console.error("presentation preview load failed", deckFailure);
@@ -249,7 +275,7 @@ function RemoteScreen() {
     } finally {
       if (sequence === deckLoadSequence.current) setDeckLoading(false);
     }
-  }, [t]);
+  }, [ownerId, t]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -345,27 +371,39 @@ function RemoteScreen() {
     return () => { active = false; };
   }, [session?.presentation_id]);
 
-  const currentSlide = useMemo(
-    () => slides.find((slide) => slide.position === session?.current_slide) ?? null,
-    [session?.current_slide, slides],
-  );
+  /**
+   * The pages of the talk: the slides with the presenter's ad pages among them,
+   * as many as the session counted when the deck was chosen. `current_slide`
+   * is a page, so the script and the preview follow the slide it stands for.
+   */
+  const pages = useMemo(() => {
+    const room = Math.max((session?.slide_count ?? 0) - slides.length, 0);
+    return deckWithAds(slides.length, adPages.slice(0, room));
+  }, [adPages, session?.slide_count, slides.length]);
+  const currentPage = session && pages.length ? pages[Math.min(session.current_slide, pages.length - 1)] ?? null : null;
+  const slideIndex = currentPage?.kind === "slide" ? currentPage.index : null;
+  const currentSlide = slideIndex === null ? null : slides[slideIndex] ?? null;
+  const currentAd = currentPage?.kind === "ad" ? currentPage.ad : null;
+  const section = slideIndex === null ? undefined : defense?.sections[slideIndex];
   const currentElements = useMemo(
     () => currentSlide ? elements.filter((element) => element.slide_id === currentSlide.id) : [],
     [currentSlide, elements],
   );
 
-  // Warm the adjacent slides while the current one is on screen.
+  // Warm the adjacent pages while the current one is on screen.
   useEffect(() => {
-    if (!session || !slides.length) return;
-    const nearby = new Set(slides
-      .filter((slide) => Math.abs(slide.position - session.current_slide) <= 1)
-      .map((slide) => slide.id));
+    if (!session || !pages.length) return;
+    const near = [session.current_slide - 1, session.current_slide, session.current_slide + 1]
+      .map((at) => pages[at])
+      .filter((page) => page !== undefined);
+    const nearby = new Set(near.flatMap((page) => page.kind === "slide" && slides[page.index] ? [slides[page.index]!.id] : []));
+    for (const page of near) if (page.kind === "ad") void Image.prefetch(page.ad.url);
     for (const element of elements) {
       if (element.type !== "image" || !nearby.has(element.slide_id)) continue;
       const uri = object(element.content).signedUrl;
       if (typeof uri === "string") void Image.prefetch(uri);
     }
-  }, [elements, session, slides]);
+  }, [elements, pages, session, slides]);
 
   async function send(command: string, value?: number) {
     setCommandError(null);
@@ -426,6 +464,8 @@ function RemoteScreen() {
     const { data, error: deckFailure } = await supabase.rpc("presentation_session_set_deck", {
       p_session_id: sessionId,
       p_presentation_id: deck.id,
+      // This phone places ad pages (`deckWithAds`), so the session may count them.
+      p_with_ads: true,
     });
     if (deckFailure) setCommandError(asErrorMessage(deckFailure));
     else {
@@ -518,6 +558,11 @@ function RemoteScreen() {
 
             {deckLoading ? (
               <View style={styles.previewState}><ActivityIndicator color={colors.primary} size="large" /></View>
+            ) : currentAd ? (
+              <View style={styles.adPage}>
+                <Image source={{ uri: currentAd.url }} style={styles.adImage} resizeMode="contain" accessibilityLabel={t("adPage")} />
+                <Text style={styles.adLabel}>{t("adPage")}</Text>
+              </View>
             ) : deckError || !currentSlide ? (
               <View style={styles.previewState}>
                 <ErrorState message={t("slideFailed")} onRetry={() => {
@@ -578,12 +623,11 @@ function RemoteScreen() {
                 </View>
                 <ScrollView style={styles.scriptScroll} nestedScrollEnabled showsVerticalScrollIndicator>
                   <Text style={styles.scriptBody}>
-                    {defense.sections[session.current_slide]?.speaker_text?.trim()
-                      || t("noScript")}
+                    {currentAd ? t("adScript") : section?.speaker_text?.trim() || t("noScript")}
                   </Text>
-                  {defense.sections[session.current_slide]?.key_point ? (
+                  {section?.key_point ? (
                     <Text style={styles.scriptPoint}>
-                      {t("keyPoint", { point: defense.sections[session.current_slide]!.key_point })}
+                      {t("keyPoint", { point: section.key_point })}
                     </Text>
                   ) : null}
                 </ScrollView>
@@ -648,6 +692,12 @@ const useStyles = makeStyles((colors) => ({
   stageLabel: { ...typography.bodyMedium, color: colors.ink },
   stageCount: { ...typography.caption, color: colors.primary, backgroundColor: colors.primarySoft, paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: radius.pill },
   previewState: { width: "100%", aspectRatio: 16 / 9, alignItems: "center", justifyContent: "center", borderRadius: radius.lg, backgroundColor: colors.surfaceMuted },
+  adPage: { width: "100%", aspectRatio: 16 / 9, borderRadius: radius.lg, overflow: "hidden", backgroundColor: "#000" },
+  adImage: { width: "100%", height: "100%" },
+  adLabel: {
+    position: "absolute", right: spacing.sm, bottom: spacing.sm, paddingHorizontal: spacing.sm, paddingVertical: 2,
+    borderRadius: radius.sm, overflow: "hidden", ...typography.caption, color: "#fff", backgroundColor: "rgba(0,0,0,0.5)",
+  },
   gestureHint: { ...typography.caption, color: colors.inkSoft, textAlign: "center", marginTop: -spacing.sm },
   navRow: { flexDirection: "row", gap: spacing.md },
   navButton: {
@@ -674,7 +724,7 @@ const useStyles = makeStyles((colors) => ({
   scriptHideText: { ...typography.caption, color: colors.inkMuted },
   // Tall enough for a paragraph, short enough that the buttons stay on screen.
   scriptScroll: { maxHeight: 190 },
-  scriptBody: { fontFamily: "Manrope_400Regular", fontSize: 16, lineHeight: 26, color: colors.ink },
+  scriptBody: { fontFamily: "JaxongirmanSans_400Regular", fontSize: 16, lineHeight: 26, color: colors.ink },
   scriptPoint: { ...typography.caption, color: colors.inkMuted, marginTop: spacing.sm },
   scriptShow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, minHeight: 44, borderRadius: radius.pill, backgroundColor: colors.primarySoft },
   scriptShowText: { ...typography.caption, fontWeight: "700", color: colors.primaryDeep },

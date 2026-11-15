@@ -345,8 +345,8 @@ const useStyles = makeStyles((colors) => ({
     gap: 6,
   },
   // Serif and centred, because that is what the paper looks like.
-  sheetTitle: { fontFamily: "Manrope_700Bold", fontSize: 15, textAlign: "center", color: colors.ink, letterSpacing: 0.5 },
-  sheetName: { fontFamily: "Manrope_700Bold", fontSize: 14, textAlign: "center", color: colors.ink },
+  sheetTitle: { fontFamily: "JaxongirmanSans_700Bold", fontSize: 15, textAlign: "center", color: colors.ink, letterSpacing: 0.5 },
+  sheetName: { fontFamily: "JaxongirmanSans_700Bold", fontSize: 14, textAlign: "center", color: colors.ink },
   sheetRule: { height: 1, backgroundColor: colors.border, marginVertical: spacing.sm },
   sheetRow: { flexDirection: "row", gap: spacing.sm, paddingVertical: 3 },
   sheetLabel: { ...typography.caption, fontWeight: "700", color: colors.ink, flexShrink: 0, maxWidth: "48%" },

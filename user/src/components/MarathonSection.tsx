@@ -102,9 +102,9 @@ const useStyles = makeStyles((colors) => ({
     alignSelf: "flex-start", paddingHorizontal: spacing.md, height: 34,
     borderRadius: radius.pill, backgroundColor: colors.primarySoft,
   },
-  clockText: { ...typography.caption, fontFamily: "Manrope_700Bold", color: colors.primaryDeep },
+  clockText: { ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", color: colors.primaryDeep },
   rewardsTitle: {
-    ...typography.caption, fontFamily: "Manrope_700Bold", color: colors.inkMuted,
+    ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", color: colors.inkMuted,
     letterSpacing: 0.8, marginTop: spacing.sm,
   },
   rulesButton: {

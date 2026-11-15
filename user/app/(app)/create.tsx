@@ -8,7 +8,7 @@ import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import {
-  ArrowLeft, BookMarked, ChevronRight, Clock3, FileText, Gamepad2, ImagePlus, ListChecks, Paperclip, Sparkles, WandSparkles, X,
+  ArrowLeft, BookMarked, ChevronRight, Clock3, FileText, Gamepad2, ImagePlus, Link2, ListChecks, Paperclip, Sparkles, WandSparkles, X,
   type LucideIcon,
 } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
@@ -89,6 +89,8 @@ export default function CreatePresentationScreen() {
   const [allowance, setAllowance] = useState<Allowance | null>(null);
   /** When on, the finished deck is followed by an AI-written O‘yingoh match. */
   const [withGame, setWithGame] = useState(false);
+  // "Har bir sahifada manba": each slide names its source at its foot.
+  const [pageSources, setPageSources] = useState(false);
   /** Automatic unless the author turns it off and picks a style and colour. */
   const [design, setDesign] = useState<DesignChoice>(AUTOMATIC);
 
@@ -335,6 +337,7 @@ export default function CreatePresentationScreen() {
           sources: sourceLines.slice(0, 30),
           requirements: requirements.trim() || null,
           design: designRequestOf(design),
+          ...(pageSources ? { sourcesOnPages: true } : {}),
           language: deckLanguage,
           uploadPaths: uploadedPaths,
           images: placedImages,
@@ -432,7 +435,7 @@ export default function CreatePresentationScreen() {
                   accessibilityRole="radio"
                   accessibilityState={{ selected }}
                   onPress={() => { setDeckLanguage(code); void Haptics.selectionAsync(); }}
-                  style={[styles.language, selected && styles.chipSelected]}
+                  style={[styles.language, deckLanguages.length > 3 && styles.languageHalf, selected && styles.chipSelected]}
                 >
                   <Text style={[styles.chipText, selected && styles.chipTextSelected]} numberOfLines={1}>{LANGUAGE_NAMES[code]}</Text>
                 </Pressable>
@@ -461,6 +464,24 @@ export default function CreatePresentationScreen() {
               onPress={() => setSheet("requirements")}
             />
           </View>
+          <Pressable
+            accessibilityRole="switch"
+            accessibilityState={{ checked: pageSources }}
+            accessibilityLabel={t("pageSources.title")}
+            onPress={() => { setPageSources((value) => !value); void Haptics.selectionAsync(); }}
+            style={[styles.sourcesRow, pageSources && styles.sourcesRowOn]}
+          >
+            <IconChip icon={Link2} variant={pageSources ? "brand" : "soft"} size="sm" />
+            <View style={styles.sourcesCopy}>
+              <Text style={styles.sourcesTitle}>{t("pageSources.title")}</Text>
+              <Text style={styles.sourcesBody}>{t("pageSources.body")}</Text>
+            </View>
+            <View style={[styles.gameSwitch, styles.sourcesSwitch, pageSources && styles.gameSwitchOn]}>
+              <Text style={[styles.gameSwitchText, pageSources && styles.gameSwitchTextOn]}>
+                {pageSources ? t("pageSources.on") : t("pageSources.off")}
+              </Text>
+            </View>
+          </Pressable>
         </View>
 
         <View style={styles.group}>
@@ -704,7 +725,7 @@ const useStyles = makeStyles((colors) => ({
   heroOrbA: { position: "absolute", width: 180, height: 180, borderRadius: 90, right: -50, top: -60, backgroundColor: "rgba(255,255,255,0.12)", borderWidth: 1, borderColor: "rgba(255,255,255,0.28)" },
   heroOrbB: { position: "absolute", width: 90, height: 90, borderRadius: 45, right: 46, bottom: -38, backgroundColor: "rgba(255,255,255,0.08)", borderWidth: 1, borderColor: "rgba(255,255,255,0.22)" },
   heroBadge: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: radius.pill, backgroundColor: "rgba(255,255,255,0.16)", borderWidth: 1, borderColor: "rgba(255,255,255,0.3)" },
-  heroBadgeText: { ...typography.caption, fontFamily: "Manrope_700Bold", color: brandInk.strong, letterSpacing: 0.3 },
+  heroBadgeText: { ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", color: brandInk.strong, letterSpacing: 0.3 },
   heroTitle: { ...typography.heading, color: brandInk.strong, marginTop: spacing.xs },
   heroBody: { ...typography.caption, color: brandInk.muted, lineHeight: 19 },
   group: { gap: spacing.md },
@@ -746,11 +767,13 @@ const useStyles = makeStyles((colors) => ({
   chipText: { ...typography.bodyMedium, color: colors.inkMuted },
   chipTextSelected: { color: colors.surface },
   chipLocked: { opacity: 0.35 },
-  freeNote: { ...typography.caption, color: colors.primary, fontFamily: "Manrope_600SemiBold" },
-  languages: { flexDirection: "row", gap: spacing.sm },
+  freeNote: { ...typography.caption, color: colors.primary, fontFamily: "JaxongirmanSans_600SemiBold" },
+  // Four languages sit two by two: four across left "Русский" no room.
+  languages: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  languageHalf: { flexBasis: "45%" },
   language: { flex: 1, height: 44, paddingHorizontal: spacing.sm, borderRadius: 13, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   latinFix: { alignSelf: "flex-start", marginTop: -spacing.lg, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: radius.pill, backgroundColor: colors.primarySoft, borderWidth: 1, borderColor: colors.primary },
-  latinFixText: { ...typography.caption, fontFamily: "Manrope_700Bold", color: colors.primary },
+  latinFixText: { ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", color: colors.primary },
   customInput: { ...typography.body, minHeight: 50, paddingHorizontal: spacing.lg, color: colors.ink, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
   gameCard: {
     backgroundColor: colors.surface, padding: spacing.xl, borderRadius: radius.lg,
@@ -766,6 +789,15 @@ const useStyles = makeStyles((colors) => ({
     borderRadius: radius.pill, backgroundColor: colors.surfaceMuted,
   },
   gameSwitchOn: { backgroundColor: colors.primary },
+  sourcesRow: {
+    flexDirection: "row", alignItems: "center", gap: spacing.md, marginTop: spacing.md,
+    padding: spacing.md, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface,
+  },
+  sourcesRowOn: { borderColor: colors.primary },
+  sourcesCopy: { flex: 1, gap: 2 },
+  sourcesTitle: { ...typography.bodyMedium, color: colors.ink },
+  sourcesBody: { ...typography.caption, color: colors.inkMuted, lineHeight: 17 },
+  sourcesSwitch: { alignSelf: "center", paddingHorizontal: spacing.md },
   gameSwitchText: { ...typography.caption, color: colors.inkMuted, letterSpacing: 1.2 },
   gameSwitchTextOn: { color: colors.onPrimary },
   estimateCard: { backgroundColor: colors.surface, padding: spacing.xl, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, ...shadow },

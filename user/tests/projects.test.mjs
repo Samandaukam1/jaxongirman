@@ -60,6 +60,19 @@ test("an empty query is not a filter", () => {
   assert.equal(searchProjects(items, "   ").length, items.length);
 });
 
-test("normalising folds case, apostrophes and runs of spaces", () => {
-  assert.equal(normalise("  O‘QUV   Jarayoni "), "o'quv jarayoni");
+test("normalising folds case, apostrophes, both alphabets and runs of spaces", () => {
+  assert.equal(normalise("  O‘QUV   Jarayoni "), "oquv jarayoni");
+  assert.equal(normalise("Öquv jarayoni"), "oquv jarayoni");
+  assert.equal(normalise("Ma’lumot"), "ma'lumot");
+});
+
+test("a title in either alphabet is found by a query in either alphabet", () => {
+  const titles = [
+    { title: "Toshkent shahri tarixi", detail: "", kind: "" },
+    { title: "Özbekiston çöllari", detail: "", kind: "" },
+  ];
+  for (const typed of ["Şahri", "shahri", "toşkent"]) assert.equal(searchProjects(titles, typed).length, 1, typed);
+  for (const typed of ["o‘zbekiston", "Özbekiston", "ozbekiston", "chollari", "çöllari"]) {
+    assert.equal(searchProjects(titles, typed).length, 1, typed);
+  }
 });

@@ -13,6 +13,7 @@ import { EmptyState, ErrorState, SkeletonCard } from "@/components/StateBlocks";
 import { formatShortDateTime } from "@/lib/datetime";
 import { asErrorMessage } from "@/lib/format";
 import { labelOf } from "@/lib/labels";
+import { listingPrice } from "@/lib/marketplace";
 import { formatSom } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
 import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
@@ -143,7 +144,7 @@ export default function SellerDashboardScreen() {
                   </View>
                 </View>
                 <Text style={styles.cardMeta}>
-                  {t("seller.meta", { price: formatSom(product.base_price), count: product.sales_count, date: formatShortDateTime(product.created_at) })}
+                  {t("seller.meta", { price: listingPrice(product.base_price), count: product.sales_count, date: formatShortDateTime(product.created_at) })}
                 </Text>
                 {product.status === "rejected" && product.rejection_reason ? (
                   <Text style={styles.rejection}>{t("seller.reason", { reason: product.rejection_reason })}</Text>

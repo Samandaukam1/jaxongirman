@@ -1,15 +1,16 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { usePathname, useRouter, type Href } from "expo-router";
 import {
-  Bell, ClipboardList, Gamepad2, House, Layers, LifeBuoy, Plus, Sparkles, Store, type LucideIcon,
+  Bell, ClipboardList, Gamepad2, House, Layers, LifeBuoy, Plus, Sparkles, MessageCircle, Store, type LucideIcon,
 } from "lucide-react-native";
-import type { PropsWithChildren } from "react";
+import { useEffect, type PropsWithChildren } from "react";
 import { useTranslation } from "react-i18next";
 import { Image, Pressable, ScrollView, Text, View } from "react-native";
 
 import appIcon from "../../assets/icon-320.png";
 import coinIcon from "../../assets/coin/coin-icon.png";
 import { Avatar } from "@/components/Avatar";
+import { PlanNudge } from "@/components/PlanNudge";
 import { formatNumber } from "@/lib/money";
 import { useRoom } from "@/lib/useDesktop";
 import { profileInitials, useAccount } from "@/providers/AccountProvider";
@@ -48,7 +49,7 @@ const FULL = [
 const WIDE = [
   /^\/$/, /^\/projects$/, /^\/marketplace$/, /^\/games$/,
   /^\/presentation\/[^/]+$/, /^\/survey$/, /^\/survey\/results\//, /^\/marketplace\/library/,
-  /^\/marathon/, /^\/oyingoh\/results\//,
+  /^\/marathon/, /^\/oyingoh\/results\//, /^\/tarif/,
 ];
 
 function widthFor(pathname: string): Width {
@@ -58,7 +59,7 @@ function widthFor(pathname: string): Width {
 }
 
 type Place = {
-  key: "home" | "projects" | "store" | "games" | "profile" | "notifications" | "surveys" | "plans" | "support";
+  key: "home" | "projects" | "chat" | "store" | "games" | "profile" | "notifications" | "surveys" | "plans" | "support";
   href: Href;
   icon: LucideIcon | null;
   /** Paths that belong to this place, so it stays lit on the pages under it. */
@@ -71,6 +72,7 @@ const MAIN: Place[] = [
     key: "projects", href: "/(app)/(tabs)/projects", icon: Layers,
     owns: /^\/(projects|presentation|generation|defense|portrait|obyektivka|ilmiy|import)(\/|$)/,
   },
+  { key: "chat", href: "/(app)/(tabs)/chat", icon: MessageCircle, owns: /^\/chat(\/|$)/ },
   { key: "store", href: "/(app)/(tabs)/marketplace", icon: Store, owns: /^\/(marketplace|orders)(\/|$)/ },
   { key: "games", href: "/(app)/(tabs)/games", icon: Gamepad2, owns: /^\/(games|oyingoh|game-pair)(\/|$)/ },
   { key: "profile", href: "/(app)/(tabs)/profile", icon: null, owns: /^\/(profile|profile-edit|devices|cards|earnings|coins\/send)(\/|$)/ },
@@ -106,7 +108,9 @@ function Sidebar({ pathname }: { pathname: string }) {
   const styles = useStyles();
   const { colors } = useTheme();
   const { t } = useTranslation("nav");
-  const { profile, balance, unreadCount } = useAccount();
+  const { profile, balance, unreadCount, needsPlan, refreshWallet } = useAccount();
+  // Moving between pages is when the wallet may have changed (a deck made).
+  useEffect(() => { refreshWallet(); }, [pathname, refreshWallet]);
   const { user } = useAuth();
 
   // The menu goes to a top-level place: whatever was opened on top is closed
@@ -167,6 +171,7 @@ function Sidebar({ pathname }: { pathname: string }) {
       </ScrollView>
 
       <View style={styles.footer}>
+        {needsPlan ? <PlanNudge block /> : null}
         <Pressable
           accessibilityRole="link"
           onPress={() => router.push("/(app)/coins/buy")}
@@ -210,14 +215,14 @@ const useStyles = makeStyles((colors) => ({
   sidebarScroll: { padding: spacing.lg, gap: spacing.md },
   brand: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: spacing.xs, paddingVertical: spacing.xs },
   brandIcon: { width: 34, height: 34, borderRadius: 10 },
-  brandText: { ...typography.caption, fontFamily: "Manrope_800ExtraBold", fontSize: 13, letterSpacing: 2.4, color: colors.primary },
+  brandText: { ...typography.caption, fontFamily: "JaxongirmanSans_800ExtraBold", fontSize: 13, letterSpacing: 2.4, color: colors.primary },
 
   create: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm,
     minHeight: 46, borderRadius: radius.md, paddingHorizontal: spacing.lg,
     boxShadow: "0 10px 24px rgba(108, 52, 201, 0.28)",
   },
-  createText: { ...typography.bodyMedium, fontFamily: "Manrope_700Bold", color: "#FFFFFF" },
+  createText: { ...typography.bodyMedium, fontFamily: "JaxongirmanSans_700Bold", color: "#FFFFFF" },
   pressed: { opacity: 0.88 },
 
   group: { gap: 2 },
@@ -229,9 +234,9 @@ const useStyles = makeStyles((colors) => ({
   itemHover: { backgroundColor: colors.surfaceMuted },
   itemActive: { backgroundColor: colors.primarySoft },
   itemText: { ...typography.bodyMedium, color: colors.inkMuted, flex: 1 },
-  itemTextActive: { color: colors.primaryDeep, fontFamily: "Manrope_700Bold" },
+  itemTextActive: { color: colors.primaryDeep, fontFamily: "JaxongirmanSans_700Bold" },
   badge: { minWidth: 22, height: 20, borderRadius: 10, paddingHorizontal: 6, alignItems: "center", justifyContent: "center", backgroundColor: colors.primary },
-  badgeText: { ...typography.caption, fontSize: 11, lineHeight: 14, color: colors.onPrimary, fontFamily: "Manrope_700Bold" },
+  badgeText: { ...typography.caption, fontSize: 11, lineHeight: 14, color: colors.onPrimary, fontFamily: "JaxongirmanSans_700Bold" },
 
   footer: { padding: spacing.lg, gap: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border },
   wallet: {
@@ -242,8 +247,8 @@ const useStyles = makeStyles((colors) => ({
   walletCoin: { width: 34, height: 34 },
   walletText: { flex: 1, minWidth: 0 },
   walletLabel: { ...typography.caption, color: colors.inkMuted },
-  walletAmount: { fontFamily: "Manrope_800ExtraBold", fontSize: 22, lineHeight: 26, color: colors.ink, letterSpacing: -0.4 },
-  walletTopUp: { ...typography.caption, fontFamily: "Manrope_700Bold", color: colors.primary },
+  walletAmount: { fontFamily: "JaxongirmanSans_800ExtraBold", fontSize: 22, lineHeight: 26, color: colors.ink, letterSpacing: -0.4 },
+  walletTopUp: { ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", color: colors.primary },
   me: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.sm, borderRadius: radius.sm },
   meText: { flex: 1, minWidth: 0 },
   meName: { ...typography.bodyMedium, color: colors.ink },

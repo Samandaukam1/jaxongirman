@@ -6,11 +6,14 @@ import {
 } from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { GameLeaderboardList } from "@/components/GameAnswerInput";
 import { GameAvatar } from "@/components/GameAvatar";
+import { GridHost } from "@/components/GridHost";
 import { HostablePicker } from "@/components/HostablePicker";
+import { MafiaHost } from "@/components/Mafia";
+import { HostQuestionCard } from "@/components/HostQuestionCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { QrCode } from "@/components/QrCode";
 import { ScreenHeader } from "@/components/ScreenHeader";
@@ -57,6 +60,8 @@ const REWARD_STEPS: (keyof GameRewardPlan & ("first" | "second" | "third" | "par
  * rather than an implementation detail.
  */
 const RESULT_SECONDS = 6;
+/** A crossword's answers on the board: longer than one question's. */
+const CROSSWORD_RESULT_SECONDS = 20;
 const LEADERBOARD_SECONDS = 8;
 
 function HostGameScreen() {
@@ -172,7 +177,8 @@ function HostGameScreen() {
         delay = Math.max(0, new Date(state.phase_deadline).getTime() - Date.now());
       }
     } else if (state.status === "question_result" && !waitingOnVerdict) {
-      delay = RESULT_SECONDS * 1000;
+      // A solved crossword stays up long enough for the room to read its answers.
+      delay = (state.current_question?.type === "crossword" ? CROSSWORD_RESULT_SECONDS : RESULT_SECONDS) * 1000;
     } else if (state.status === "leaderboard") {
       delay = LEADERBOARD_SECONDS * 1000;
     }
@@ -181,6 +187,13 @@ function HostGameScreen() {
     const timer = setTimeout(() => { void advance("next"); }, delay);
     return () => clearTimeout(timer);
   }, [advance, autoPaused, busy, openAnswers.length, state]);
+
+  // A crossword's race is not a phase change, so it is read while it runs.
+  useEffect(() => {
+    if (state?.status !== "question" || state.current_question?.type !== "crossword") return;
+    const timer = setInterval(() => { void refresh(); }, 4000);
+    return () => clearInterval(timer);
+  }, [refresh, state?.current_question?.type, state?.status]);
 
   // Open answers need a human verdict, so they are loaded whenever a result is
   // on screen.
@@ -230,7 +243,7 @@ function HostGameScreen() {
   }
 
   /** One of the two lobby switches the projector and the phones both read. */
-  async function toggleSetting(key: "showOnPhones" | "soundEnabled", value: boolean) {
+  async function toggleSetting(key: "showOnPhones" | "soundEnabled" | "allowLateJoin", value: boolean) {
     if (!sessionId) return;
     try {
       setError(null);
@@ -248,7 +261,8 @@ function HostGameScreen() {
       const next = !state.team_mode;
       await configureSession(sessionId, {
         teamMode: next,
-        teams: next ? [t("host.teams.blue"), t("host.teams.red")] : [],
+        // Two numbered teams to start with; the host picks how many and names them.
+        teams: next ? [1, 2].map((number) => t("host.teamName", { number })) : [],
       });
       await refresh();
     } catch (failure) {
@@ -257,12 +271,47 @@ function HostGameScreen() {
   }
 
 
+  /** One to three teams: the names already chosen are kept, new ones are numbered. */
+  async function setTeams(names: string[]) {
+    if (!sessionId) return;
+    try {
+      setError(null);
+      await configureSession(sessionId, { teams: names });
+      await refresh();
+    } catch (failure) {
+      setError(asErrorMessage(failure));
+    }
+  }
+
+  function teamCount(count: number) {
+    if (!state) return;
+    const names = Array.from({ length: count }, (_, index) => state.teams[index] ?? t("host.teamName", { number: index + 1 }));
+    void Haptics.selectionAsync();
+    void setTeams(names);
+  }
+
+  function renameTeam(index: number, name: string) {
+    if (!state) return;
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === state.teams[index]) return;
+    void setTeams(state.teams.map((current, at) => (at === index ? trimmed : current)));
+  }
+
   function confirmCancel() {
     Alert.alert(t("host.cancelTitle"), t("host.cancelBody"), [
       { text: t("common:no"), style: "cancel" },
       { text: t("common:cancel"), style: "destructive", onPress: () => void advance("cancel") },
     ]);
   }
+
+  // How many questions a grid game has: its cells are dealt from them.
+  const [gridQuestions, setGridQuestions] = useState(0);
+  const gridGameId = state?.game_kind === "grid" ? state.game_id : null;
+  useEffect(() => {
+    if (!gridGameId) return;
+    void supabase.from("games").select("question_count").eq("id", gridGameId).maybeSingle()
+      .then(({ data }) => setGridQuestions(data?.question_count ?? 0));
+  }, [gridGameId]);
 
   if (fatal) {
     return (
@@ -298,7 +347,13 @@ function HostGameScreen() {
     }
   })();
 
-  const controls = (
+  // A team grid game has its own controls: teams, cells, verdicts.
+  const controls = state.game_kind === "grid" && state.game_id && sessionId ? (
+    <GridHost sessionId={sessionId} state={state} questionCount={gridQuestions} onChanged={refresh} onCancel={confirmCancel} />
+  ) : state.game_kind === "mafia" && state.game_id && sessionId ? (
+    // Mafia: the narrator's own controls — the room, the deck, the table.
+    <MafiaHost sessionId={sessionId} state={state} showQr={!beside} onChanged={refresh} onCancel={confirmCancel} />
+  ) : (
     <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       {state.status === "lobby" && !state.game_id ? (
         // A host who scanned a projector has not chosen a game yet: that
@@ -334,11 +389,57 @@ function HostGameScreen() {
             <Text style={styles.settingText}>{t("host.teamMode")}</Text>
           </Pressable>
 
+          {state.team_mode ? (
+            <View style={styles.teamCard}>
+              <Text style={styles.hint}>{t("host.teamCount")}</Text>
+              <View style={styles.teamCounts} accessibilityRole="radiogroup">
+                {[1, 2, 3].map((count) => {
+                  const chosen = state.teams.length === count;
+                  return (
+                    <Pressable
+                      key={count}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: chosen }}
+                      onPress={() => teamCount(count)}
+                      style={[styles.teamCount, chosen && styles.teamCountOn]}
+                    >
+                      <Text style={[styles.teamCountText, chosen && styles.teamCountTextOn]}>{count}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              {state.teams.map((name, index) => (
+                <TextInput
+                  // Keyed by the saved name, so a rename from elsewhere refreshes the field.
+                  key={`${index}-${name}`}
+                  defaultValue={name}
+                  maxLength={24}
+                  onEndEditing={(event) => renameTeam(index, event.nativeEvent.text)}
+                  onSubmitEditing={(event) => renameTeam(index, event.nativeEvent.text)}
+                  placeholder={t("host.teamName", { number: index + 1 })}
+                  placeholderTextColor={colors.inkSoft}
+                  style={styles.teamInput}
+                  returnKeyType="done"
+                />
+              ))}
+            </View>
+          ) : null}
+
           <Pressable style={styles.settingRow} onPress={() => void toggleSetting("showOnPhones", !state.show_on_phones)}>
             {state.show_on_phones
               ? <SquareCheck color={colors.primary} size={icon.lg} strokeWidth={icon.strokeBold} />
               : <Square color={colors.borderStrong} size={icon.lg} strokeWidth={icon.stroke} />}
             <Text style={styles.settingText}>{t("host.onPhones")}</Text>
+          </Pressable>
+
+          <Pressable style={styles.settingRow} onPress={() => void toggleSetting("allowLateJoin", !state.allow_late_join)}>
+            {state.allow_late_join
+              ? <SquareCheck color={colors.primary} size={icon.lg} strokeWidth={icon.strokeBold} />
+              : <Square color={colors.borderStrong} size={icon.lg} strokeWidth={icon.stroke} />}
+            <View style={{ flex: 1 }}>
+              <Text style={styles.settingText}>{t("host.lateJoin")}</Text>
+              <Text style={styles.hint}>{t("host.lateJoinHint")}</Text>
+            </View>
           </Pressable>
 
           <Pressable style={styles.settingRow} onPress={() => void toggleSetting("soundEnabled", !state.sound_enabled)}>
@@ -416,6 +517,8 @@ function HostGameScreen() {
           ) : null}
         </View>
       ) : null}
+
+      {state.current_question ? <HostQuestionCard question={state.current_question} number={state.current_index + 1} /> : null}
 
       {openAnswers.length > 0 ? (
         <>
@@ -504,7 +607,9 @@ function HostGameScreen() {
     <View style={styles.safe}>
       <ScreenHeader
         title={t("host.title")}
-        subtitle={state.status === "lobby" ? t("host.lobby") : t("host.question", { number: state.current_index + 1 })}
+        subtitle={state.game_kind === "grid" ? t("games:grid.title")
+          : state.game_kind === "mafia" ? t("games:mafia.title")
+          : state.status === "lobby" ? t("host.lobby") : t("host.question", { number: state.current_index + 1 })}
         onLeave={() => router.back()}
       />
       {beside && screenUrl ? (
@@ -530,7 +635,7 @@ const useStyles = makeStyles((colors) => ({
   content: { padding: spacing.xl, gap: spacing.md, paddingBottom: spacing.xxxl },
   codeCard: { alignItems: "center", gap: 4, backgroundColor: colors.primarySoft, borderRadius: radius.lg, padding: spacing.xl },
   codeLabel: { ...typography.caption, color: colors.primaryDeep },
-  codeValue: { fontFamily: "Manrope_700Bold", fontSize: 40, color: colors.primaryDeep, letterSpacing: 4 },
+  codeValue: { fontFamily: "JaxongirmanSans_700Bold", fontSize: 40, color: colors.primaryDeep, letterSpacing: 4 },
   codeHint: { ...typography.caption, color: colors.inkMuted, textAlign: "center" },
   countRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm },
   countText: { ...typography.heading, color: colors.ink },
@@ -566,6 +671,13 @@ const useStyles = makeStyles((colors) => ({
     paddingRight: spacing.md, paddingLeft: 4, paddingVertical: 4, maxWidth: "48%",
   },
   playerName: { ...typography.caption, color: colors.ink, flexShrink: 1 },
+  teamCard: { gap: spacing.sm, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.surfaceMuted },
+  teamCounts: { flexDirection: "row", gap: spacing.sm },
+  teamCount: { width: 52, height: 40, borderRadius: radius.md, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  teamCountOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  teamCountText: { ...typography.bodyMedium, color: colors.ink },
+  teamCountTextOn: { color: colors.onPrimary },
+  teamInput: { ...typography.body, color: colors.ink, height: 44, paddingHorizontal: spacing.md, borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   liveCard: { backgroundColor: colors.surfaceMuted, borderRadius: radius.lg, padding: spacing.lg, gap: 4 },
   liveStatus: { ...typography.heading, color: colors.ink },
   reviewRow: {

@@ -145,6 +145,6 @@ const useStyles = makeStyles((colors) => ({
   },
   chipOn: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
   chipText: { ...typography.caption, color: colors.inkMuted },
-  chipTextOn: { color: colors.primary, fontFamily: "Manrope_600SemiBold" },
+  chipTextOn: { color: colors.primary, fontFamily: "JaxongirmanSans_600SemiBold" },
   actions: { paddingHorizontal: spacing.xl, paddingTop: spacing.md },
 }));

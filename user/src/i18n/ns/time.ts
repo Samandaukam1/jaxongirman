@@ -77,4 +77,28 @@ export default translations(
       months_one: "Осталось месяцев: {{count}}", months_few: "Осталось месяцев: {{count}}", months_many: "Осталось месяцев: {{count}}", months_other: "Осталось месяцев: {{count}}",
     },
   },
+  {
+    now: "şimdi",
+    past: "{{span}} önce",
+    future: "{{span}} sonra",
+    unit: {
+      year_one: "{{count}} yıl", year_few: "{{count}} yıl", year_many: "{{count}} yıl", year_other: "{{count}} yıl",
+      month_one: "{{count}} ay", month_few: "{{count}} ay", month_many: "{{count}} ay", month_other: "{{count}} ay",
+      week_one: "{{count}} hafta", week_few: "{{count}} hafta", week_many: "{{count}} hafta", week_other: "{{count}} hafta",
+      day_one: "{{count}} gün", day_few: "{{count}} gün", day_many: "{{count}} gün", day_other: "{{count}} gün",
+      hour_one: "{{count}} saat", hour_few: "{{count}} saat", hour_many: "{{count}} saat", hour_other: "{{count}} saat",
+      minute_one: "{{count}} dakika", minute_few: "{{count}} dakika", minute_many: "{{count}} dakika", minute_other: "{{count}} dakika",
+    },
+    countdown: {
+      none: "Süre belirlenmedi",
+      expired: "Süre doldu",
+      withDays: "{{days}} gün {{clock}} kaldı",
+      clock: "{{clock}} kaldı",
+    },
+    window: {
+      expired: "Süresi doldu",
+      days_one: "{{count}} gün kaldı", days_few: "{{count}} gün kaldı", days_many: "{{count}} gün kaldı", days_other: "{{count}} gün kaldı",
+      months_one: "{{count}} ay kaldı", months_few: "{{count}} ay kaldı", months_many: "{{count}} ay kaldı", months_other: "{{count}} ay kaldı",
+    },
+  },
 );

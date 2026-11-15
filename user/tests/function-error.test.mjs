@@ -96,6 +96,6 @@ test("a response with only text() is still read", async () => {
   assert.equal(await asFunctionErrorMessage(error), "quota tugadi");
 });
 
-test("an error with no context at all is unchanged", async () => {
-  assert.equal(await asFunctionErrorMessage(new Error("tarmoq yo‘q")), "tarmoq yo‘q");
+test("an error with no context at all keeps its own words, in the updated alphabet", async () => {
+  assert.equal(await asFunctionErrorMessage(new Error("tarmoq yo‘q")), "tarmoq yöq");
 });

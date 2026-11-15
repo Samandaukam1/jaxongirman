@@ -240,7 +240,7 @@ const useStyles = makeStyles((colors) => ({
 
   cardActions: { gap: spacing.sm },
   secondaryAction: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: spacing.sm },
-  secondaryText: { ...typography.caption, color: colors.primary, fontFamily: "Manrope_600SemiBold" },
+  secondaryText: { ...typography.caption, color: colors.primary, fontFamily: "JaxongirmanSans_600SemiBold" },
   primaryAction: { minHeight: 48 },
 
   backdrop: { flex: 1, backgroundColor: "rgba(21,14,36,.45)", alignItems: "center", justifyContent: "center", padding: spacing.xl },

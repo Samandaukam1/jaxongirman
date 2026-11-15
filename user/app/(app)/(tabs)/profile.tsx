@@ -9,18 +9,20 @@ import { ActivityIndicator, Alert, Platform, Pressable, RefreshControl, Share, T
 import Animated, { useAnimatedScrollHandler, useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { BOTTOM_NAV_SPACE } from "@/components/BottomNav";
+import { BOTTOM_NAV_SPACE, useBottomNavSpace } from "@/components/BottomNav";
 import { DeleteAccountSheet } from "@/components/DeleteAccountSheet";
 import { ProfileHeroCard } from "@/components/ProfileHeroCard";
 import { MarathonProfileCard } from "@/components/MarathonProfileCard";
 import { PlanUsageCard } from "@/components/PlanUsageCard";
 import { SegmentedSwitch, type Segment } from "@/components/SegmentedSwitch";
 import { useFocusRefresh } from "@/lib/useFocusRefresh";
+import { installedVersion } from "@/lib/app-version";
 import { asErrorMessage } from "@/lib/format";
 import { myMembership } from "@/lib/subscription";
 import { supabase } from "@/lib/supabase";
 import { supportUnread } from "@/lib/support";
 import { tierOf } from "@/lib/tier";
+import { versionLabel } from "@/lib/version-core";
 import { LANGUAGE_NAMES, type AppLanguage } from "@/i18n";
 import { useAuth } from "@/providers/AuthProvider";
 import { useLanguage } from "@/providers/LanguageProvider";
@@ -81,6 +83,7 @@ const APPEARANCE_ICONS = { system: SunMoon, light: Sun, dark: Moon } as const;
  * settings.
  */
 export default function ProfileScreen() {
+  const bottomSpace = useBottomNavSpace();
   const { colors, mode, setMode } = useTheme();
   const { t } = useTranslation(["profile", "common"]);
   const { language, setLanguage, uiLanguages } = useLanguage();
@@ -142,7 +145,7 @@ export default function ProfileScreen() {
         supabase.from("credit_wallets").select("balance").eq("user_id", user.id).single(),
         myMembership().catch(() => null),
         supabase.from("presentations").select("id", { count: "exact", head: true }).eq("owner_id", user.id),
-        supabase.from("games").select("id", { count: "exact", head: true }).eq("owner_id", user.id),
+        supabase.from("games").select("id", { count: "exact", head: true }).eq("owner_id", user.id).neq("kind", "mafia"),
       ]);
 
       if (profileResult.error) setError(asErrorMessage(profileResult.error));
@@ -195,7 +198,7 @@ export default function ProfileScreen() {
       <Animated.ScrollView
         onScroll={onScroll}
         scrollEventThrottle={16}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: bottomSpace + spacing.xl }]}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={colors.primary} />}
       >
@@ -341,6 +344,12 @@ export default function ProfileScreen() {
             </View>
           </View>
         </View>
+
+        {/* Whose app this is and which version, quietly, at the very end. */}
+        <View style={styles.footer} accessibilityRole="text">
+          <Text style={styles.footerMaker}>{t("footer.maker")}</Text>
+          <Text style={styles.footerVersion}>{t("footer.version", { version: versionLabel(installedVersion()) })}</Text>
+        </View>
       </Animated.ScrollView>
 
       <DeleteAccountSheet visible={confirmingDelete} onClose={() => setConfirmingDelete(false)} />
@@ -368,7 +377,7 @@ const useStyles = makeStyles((colors) => ({
   errorBox: { marginHorizontal: spacing.xl, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.dangerSoft },
   errorText: { ...typography.caption, color: colors.danger },
   section: { marginHorizontal: spacing.xl, gap: spacing.sm },
-  sectionTitle: { ...typography.caption, fontFamily: "Manrope_700Bold", fontSize: 11, letterSpacing: 1.1, color: colors.inkSoft, marginLeft: spacing.xs },
+  sectionTitle: { ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", fontSize: 11, letterSpacing: 1.1, color: colors.inkSoft, marginLeft: spacing.xs },
   // The shadow on the outer view, the clipping on the inner: one view cannot do both on iOS.
   group: { borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, ...shadow },
   groupClip: { borderRadius: radius.lg - 1, overflow: "hidden" },
@@ -380,7 +389,10 @@ const useStyles = makeStyles((colors) => ({
   rowCopy: { flex: 1, gap: 1 },
   rowLabel: { ...typography.bodyMedium, color: colors.ink, fontSize: 15 },
   supportBadge: { minWidth: 22, height: 22, paddingHorizontal: 6, borderRadius: 11, alignItems: "center", justifyContent: "center", backgroundColor: colors.primary },
-  supportBadgeText: { ...typography.caption, fontSize: 11, fontFamily: "Manrope_700Bold", color: colors.onPrimary },
+  supportBadgeText: { ...typography.caption, fontSize: 11, fontFamily: "JaxongirmanSans_700Bold", color: colors.onPrimary },
   rowDetail: { ...typography.caption, fontSize: 11.5, color: colors.inkSoft },
   dangerLabel: { color: colors.danger },
+  footer: { alignItems: "center", gap: 2, paddingTop: spacing.sm },
+  footerMaker: { ...typography.caption, fontFamily: "JaxongirmanSans_600SemiBold", color: colors.inkSoft },
+  footerVersion: { ...typography.caption, fontSize: 11.5, color: colors.inkSoft },
 }));

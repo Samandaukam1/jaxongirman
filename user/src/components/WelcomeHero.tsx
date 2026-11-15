@@ -137,12 +137,12 @@ const useStyles = makeStyles(() => ({
   body: { gap: spacing.lg },
 
   top: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md },
-  label: { ...typography.caption, fontFamily: "Manrope_700Bold", fontSize: 12.5, letterSpacing: 0.2, color: brandInk.muted, flexShrink: 1 },
+  label: { ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", fontSize: 12.5, letterSpacing: 0.2, color: brandInk.muted, flexShrink: 1 },
   pill: {
     paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill,
     backgroundColor: "rgba(255,255,255,0.14)", borderWidth: 1, borderColor: "rgba(255,255,255,0.18)",
   },
-  pillText: { ...typography.caption, fontFamily: "Manrope_700Bold", fontSize: 12, color: brandInk.strong, fontVariant: ["tabular-nums"] },
+  pillText: { ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", fontSize: 12, color: brandInk.strong, fontVariant: ["tabular-nums"] },
 
   hero: { flexDirection: "row", alignItems: "flex-end", gap: spacing.md + 2 },
   // The line box is taller than the glyph on purpose. At 84 against a 92 pt
@@ -151,12 +151,12 @@ const useStyles = makeStyles(() => ({
   // height is given back with negative margins, so the card does not grow, and
   // the side padding keeps the tight tracking from shaving the last digit.
   figure: {
-    fontFamily: "Manrope_800ExtraBold", fontSize: 92, lineHeight: 112, letterSpacing: -5,
+    fontFamily: "JaxongirmanSans_800ExtraBold", fontSize: 92, lineHeight: 112, letterSpacing: -5,
     color: brandInk.strong, fontVariant: ["tabular-nums"], includeFontPadding: false,
     marginTop: -14, marginBottom: -14, paddingRight: 6,
   },
   words: { flex: 1, gap: 4, paddingBottom: 6 },
-  wordsText: { fontFamily: "Manrope_800ExtraBold", fontSize: 21, lineHeight: 24, letterSpacing: -0.3, color: brandInk.strong },
+  wordsText: { fontFamily: "JaxongirmanSans_800ExtraBold", fontSize: 21, lineHeight: 24, letterSpacing: -0.3, color: brandInk.strong },
   detail: { ...typography.caption, fontSize: 13, color: brandInk.muted },
   lead: { ...typography.caption, fontSize: 13.5, lineHeight: 19, color: brandInk.muted },
 
@@ -171,17 +171,17 @@ const useStyles = makeStyles(() => ({
   slot: { flex: 1, gap: 6 },
   track: { height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.18)", overflow: "hidden" },
   fill: { height: "100%", borderRadius: 3, backgroundColor: brandInk.strong },
-  caption: { ...typography.caption, fontFamily: "Manrope_600SemiBold", fontSize: 11.5, color: brandInk.muted, fontVariant: ["tabular-nums"] },
+  caption: { ...typography.caption, fontFamily: "JaxongirmanSans_600SemiBold", fontSize: 11.5, color: brandInk.muted, fontVariant: ["tabular-nums"] },
   captionSpent: { color: "rgba(255,255,255,0.45)", textDecorationLine: "line-through" },
 
   cta: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm,
     minHeight: 50, borderRadius: radius.pill, backgroundColor: brandInk.plate, paddingHorizontal: spacing.xl,
   },
-  ctaText: { ...typography.bodyMedium, fontFamily: "Manrope_800ExtraBold", fontSize: 15, color: brandInk.onPlate },
+  ctaText: { ...typography.bodyMedium, fontFamily: "JaxongirmanSans_800ExtraBold", fontSize: 15, color: brandInk.onPlate },
   pressed: { opacity: 0.9, transform: [{ scale: 0.985 }] },
 
   foot: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: spacing.sm },
   footLabel: { ...typography.caption, flexShrink: 1, color: brandInk.muted },
-  footBalance: { ...typography.caption, fontFamily: "Manrope_800ExtraBold", color: brandInk.strong, fontVariant: ["tabular-nums"] },
+  footBalance: { ...typography.caption, fontFamily: "JaxongirmanSans_800ExtraBold", color: brandInk.strong, fontVariant: ["tabular-nums"] },
 }));

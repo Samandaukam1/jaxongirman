@@ -1,8 +1,10 @@
 import type { Tables } from "@jaxongirman/types";
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type PropsWithChildren } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from "react";
+import { AppState } from "react-native";
 
 import { asErrorMessage } from "@/lib/format";
 import { changesChannel, supabase } from "@/lib/supabase";
+import { fetchWallet, type Wallet } from "@/lib/wallet";
 import { useAuth } from "@/providers/AuthProvider";
 
 type Profile = Pick<Tables<"profiles">, "id" | "full_name" | "first_name" | "last_name" | "username" | "avatar_url">;
@@ -15,6 +17,15 @@ type AccountState = {
   unreadCount: number;
   /** Live entitlements, newest expiry last. Empty means no paid module. */
   entitlements: Entitlement[];
+  /** The whole wallet as `my_wallet` reads it: welcome decks, the plan, the rate. */
+  wallet: Wallet | null;
+  /**
+   * The free welcome decks are spent and there is no plan: the moment to
+   * offer one ("Tarif oling" above the tab bar). False while unknown.
+   */
+  needsPlan: boolean;
+  /** Re-reads the wallet; cheap, and skipped when it was read moments ago. */
+  refreshWallet: (force?: boolean) => void;
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
@@ -40,15 +51,32 @@ export function AccountProvider({ children }: PropsWithChildren) {
   const [reserved, setReserved] = useState(0);
   const [unreadCount, setUnreadCount] = useState(0);
   const [entitlements, setEntitlements] = useState<Entitlement[]>([]);
+  const [wallet, setWallet] = useState<Wallet | null>(null);
+  const walletReadAt = useRef(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Welcome pages live outside the wallet row realtime follows, so the wallet is
+  // read again when the app comes back, when a tab changes and after a payment.
+  const refreshWallet = useCallback((force = false) => {
+    if (!user) return;
+    const now = Date.now();
+    if (!force && now - walletReadAt.current < 15_000) return;
+    walletReadAt.current = now;
+    // Same answer, same object (see sameJson): a wallet read on every tab
+    // change must not re-render every screen that reads this context.
+    void fetchWallet()
+      .then((next) => setWallet((current) => (sameJson(current, next) ? current : next)))
+      .catch(() => { /* keep the last answer */ });
+  }, [user]);
+
   const refresh = useCallback(async () => {
     if (!user) {
-      setProfile(null); setBalance(0); setReserved(0); setUnreadCount(0); setEntitlements([]);
+      setProfile(null); setBalance(0); setReserved(0); setUnreadCount(0); setEntitlements([]); setWallet(null);
       setLoading(false);
       return;
     }
+    refreshWallet(true);
     try {
       const [profileResult, walletResult, unreadResult, entitlementResult] = await Promise.all([
         supabase.from("profiles").select("id,full_name,first_name,last_name,username,avatar_url").eq("id", user.id).single(),
@@ -81,7 +109,7 @@ export function AccountProvider({ children }: PropsWithChildren) {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [refreshWallet, user]);
 
   useEffect(() => { void refresh(); }, [refresh]);
 
@@ -97,6 +125,7 @@ export function AccountProvider({ children }: PropsWithChildren) {
           const row = payload.new as Tables<"credit_wallets">;
           setBalance(row.balance);
           setReserved(row.reserved);
+          refreshWallet(true);
         },
       )
       .on(
@@ -106,11 +135,18 @@ export function AccountProvider({ children }: PropsWithChildren) {
       )
       .subscribe();
     return () => { void supabase.removeChannel(channel); };
-  }, [user]);
+  }, [refreshWallet, user]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => { if (state === "active") refreshWallet(); });
+    return () => subscription.remove();
+  }, [refreshWallet]);
+
+  const needsPlan = Boolean(wallet && !wallet.plan && wallet.welcome.remaining <= 0);
 
   const value = useMemo<AccountState>(
-    () => ({ profile, balance, reserved, unreadCount, entitlements, loading, error, refresh, setUnreadCount }),
-    [balance, entitlements, error, loading, profile, refresh, reserved, unreadCount],
+    () => ({ profile, balance, reserved, unreadCount, entitlements, wallet, needsPlan, refreshWallet, loading, error, refresh, setUnreadCount }),
+    [balance, entitlements, error, loading, needsPlan, profile, refresh, refreshWallet, reserved, unreadCount, wallet],
   );
 
   return <AccountContext.Provider value={value}>{children}</AccountContext.Provider>;
@@ -133,7 +169,7 @@ export function displayFirstName(profile: Profile | null): string {
   const full = profile?.full_name?.trim();
   if (full) return full.split(/\s+/)[0] ?? full;
   if (profile?.username) return profile.username;
-  return "Foydalanuvchi";
+  return "Foydalanuvçi";
 }
 
 /** Initials for the avatar fallback: "JQ", or a single letter when that is all there is. */

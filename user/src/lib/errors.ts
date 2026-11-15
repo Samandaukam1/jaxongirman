@@ -1,4 +1,5 @@
 import { i18n } from "../i18n";
+import { toNewAlphabet } from "./alphabet";
 import type errors from "../i18n/ns/errors";
 
 type ErrorKey = Extract<keyof (typeof errors)["uz"], string>;
@@ -155,7 +156,7 @@ export function localizeError(message: string | null | undefined, code?: string)
   const text = (message ?? "").trim();
   if (NETWORK.test(text)) return i18n.t("errors:network");
   if (!text || TRANSPORT.test(text)) return i18n.t("errors:unexpected");
-  if (i18n.language === "uz" && !ENGLISH.test(text) && !LOWER_ASCII.test(text)) return text;
+  if (i18n.language === "uz" && !ENGLISH.test(text) && !LOWER_ASCII.test(text)) return toNewAlphabet(text);
   const found = match(text, code);
   return found ? i18n.t(`errors:${found.key}`, found.values ?? {}) : text;
 }

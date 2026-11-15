@@ -42,7 +42,9 @@ function HostScanScreen() {
   const styles = useStyles();
   const { t } = useTranslation("games");
   const router = useRouter();
-  const params = useLocalSearchParams<{ token?: string }>();
+  const params = useLocalSearchParams<{ token?: string; gameId?: string }>();
+  /** A game chosen before the board was scanned: it goes up as soon as the board is claimed. */
+  const chosenGame = typeof params.gameId === "string" && params.gameId ? params.gameId : undefined;
   const [permission, requestPermission] = useCameraPermissions();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,14 +57,14 @@ function HostScanScreen() {
     setError(null);
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     try {
-      const session = await claimPairing(token);
+      const session = await claimPairing(token, chosenGame);
       router.replace({ pathname: "/(app)/oyingoh/host/[sessionId]", params: { sessionId: session.session_id } });
     } catch (failure) {
       setError(asErrorMessage(failure));
       setBusy(false);
       claiming.current = false;
     }
-  }, [router]);
+  }, [chosenGame, router]);
 
   // Arriving from the phone's own camera app, the token is already in hand — so
   // claim it without ever showing the viewfinder.

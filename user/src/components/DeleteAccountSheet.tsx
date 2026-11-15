@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Touchable } from "@/components/Touchable";
 import { deleteMyAccount, forgetLocalAccount } from "@/lib/account";
+import { toNewAlphabet } from "@/lib/alphabet";
 import { radius, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
@@ -39,14 +40,17 @@ type Props = {
  * apostrophe look-alikes (' ’ ‘ ʻ ʼ) and a keyboard offers whichever it likes,
  * so the phrase is matched on letters. Case is ignored too — the field shows
  * capitals, but a phone that starts a sentence lower-case must not lock the
- * button.
+ * button. So are the two Uzbek alphabets — the phrase is shown as
+ * "ÖÇIRAMAN", and a keyboard without Ö and Ç types "o‘chiraman" — and the
+ * Turkish dotted capital İ, which a phone may or may not produce.
  */
 function normalisePhrase(value: string): string {
-  return value
+  return toNewAlphabet(value
     .replace(/[\u2018\u2019\u02BB\u02BC\u0060\u00B4]/g, "'")
     .replace(/\s+/g, " ")
-    .trim()
-    .toLocaleUpperCase("en-US");
+    .trim())
+    .toLocaleUpperCase("en-US")
+    .replace(/İ/g, "I");
 }
 
 export function DeleteAccountSheet({ visible, onClose }: Props) {
@@ -195,7 +199,7 @@ const useStyles = makeStyles((colors) => ({
   body: { ...typography.body, color: colors.inkMuted, textAlign: "center" },
   phraseBlock: { gap: spacing.sm },
   phraseLead: { ...typography.caption, color: colors.inkMuted, textAlign: "center" },
-  phrase: { fontFamily: "Manrope_800ExtraBold", fontSize: 17, letterSpacing: 0.8, color: colors.danger, textAlign: "center" },
+  phrase: { fontFamily: "JaxongirmanSans_800ExtraBold", fontSize: 17, letterSpacing: 0.8, color: colors.danger, textAlign: "center" },
   phraseInput: {
     ...typography.bodyMedium, height: 52, textAlign: "center", color: colors.ink, letterSpacing: 0.6,
     borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.borderStrong, backgroundColor: colors.surfaceMuted,
@@ -215,6 +219,6 @@ const useStyles = makeStyles((colors) => ({
   cancel: { backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border },
   cancelText: { ...typography.bodyMedium, color: colors.ink, letterSpacing: 0.4 },
   destructive: { backgroundColor: colors.danger },
-  destructiveText: { ...typography.bodyMedium, color: colors.onPrimary, letterSpacing: 0.6, fontFamily: "Manrope_700Bold" },
+  destructiveText: { ...typography.bodyMedium, color: colors.onPrimary, letterSpacing: 0.6, fontFamily: "JaxongirmanSans_700Bold" },
   dimmed: { opacity: 0.5 },
 }));

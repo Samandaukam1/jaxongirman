@@ -11,8 +11,7 @@ import { EmptyState, ErrorState, SkeletonCard } from "@/components/StateBlocks";
 import { useSuccessToast } from "@/components/SuccessToast";
 import { formatShortDateTime } from "@/lib/datetime";
 import { asErrorMessage, asFunctionErrorMessage } from "@/lib/format";
-import { downloadPurchasedFile, shareFile } from "@/lib/marketplace";
-import { formatSom } from "@/lib/money";
+import { downloadPurchasedFile, shareFile, listingPrice } from "@/lib/marketplace";
 import { supabase } from "@/lib/supabase";
 import { radius, shadow, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
@@ -49,14 +48,33 @@ export default function LibraryScreen() {
   const load = useCallback(async (isRefresh = false) => {
     if (!user) return;
     if (isRefresh) setRefreshing(true); else setLoading(true);
-    const { data, error: requestError } = await supabase
-      .from("marketplace_purchases")
-      .select("id,product_id,buyer_total,purchased_at,marketplace_products(title,material_type,file_format,has_study_guide)")
-      // Mine, stated. The policy also lets an admin read every purchase.
-      .eq("buyer_id", user.id)
-      .order("purchased_at", { ascending: false });
+    const [bought, taken] = await Promise.all([
+      supabase
+        .from("marketplace_purchases")
+        .select("id,product_id,buyer_total,purchased_at,marketplace_products(title,material_type,file_format,has_study_guide)")
+        // Mine, stated. The policy also lets an admin read every purchase.
+        .eq("buyer_id", user.id)
+        .order("purchased_at", { ascending: false }),
+      // Free listings are taken, not bought: they live as entitlements alone.
+      supabase
+        .from("purchase_entitlements")
+        .select("id,product_id,granted_at,marketplace_products(title,material_type,file_format,has_study_guide)")
+        .eq("user_id", user.id)
+        .eq("source", "free")
+        .is("revoked_at", null),
+    ]);
+    const requestError = bought.error ?? taken.error;
     if (requestError) setError(asErrorMessage(requestError));
-    else { setPurchases((data ?? []) as unknown as Purchase[]); setError(null); }
+    else {
+      const free = (taken.data ?? []).map((row) => ({
+        id: row.id, product_id: row.product_id, buyer_total: 0, purchased_at: row.granted_at,
+        marketplace_products: row.marketplace_products,
+      }));
+      const all = [...((bought.data ?? []) as unknown as Purchase[]), ...(free as unknown as Purchase[])]
+        .sort((a, b) => b.purchased_at.localeCompare(a.purchased_at));
+      setPurchases(all);
+      setError(null);
+    }
     setLoading(false);
     setRefreshing(false);
   }, [user]);
@@ -109,7 +127,7 @@ export default function LibraryScreen() {
                     {purchase.marketplace_products?.title ?? t("library.fallback")}
                   </Text>
                   <Text style={styles.cardMeta}>
-                    {formatSom(purchase.buyer_total)} · {formatShortDateTime(purchase.purchased_at)}
+                    {listingPrice(purchase.buyer_total)} · {formatShortDateTime(purchase.purchased_at)}
                     {purchase.marketplace_products?.file_format ? ` · ${purchase.marketplace_products.file_format.toUpperCase()}` : ""}
                   </Text>
                 </Pressable>
@@ -157,7 +175,7 @@ const useStyles = makeStyles((colors) => ({
   cardCopy: { gap: 2 },
   actions: { flexDirection: "row", gap: spacing.sm },
   action: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, height: 42, borderRadius: radius.md, backgroundColor: colors.primarySoft },
-  actionText: { ...typography.caption, color: colors.primary, fontFamily: "Manrope_600SemiBold" },
+  actionText: { ...typography.caption, color: colors.primary, fontFamily: "JaxongirmanSans_600SemiBold" },
   cardTitle: { ...typography.bodyMedium, color: colors.ink, fontSize: 15 },
   cardMeta: { ...typography.caption, color: colors.inkSoft },
 }));

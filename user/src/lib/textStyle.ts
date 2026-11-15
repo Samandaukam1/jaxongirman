@@ -119,10 +119,10 @@ export function nextTextCase(current: TextCase): TextCase {
 }
 
 export const TEXT_EFFECTS = [
-  { key: "none", label: "Yo‘q" },
+  { key: "none", label: "Yöq" },
   { key: "shadow", label: "Soya" },
   { key: "glow", label: "Nur" },
-  { key: "lift", label: "Ko‘tarish" },
+  { key: "lift", label: "Kötariş" },
 ] as const;
 
 export type TextEffect = (typeof TEXT_EFFECTS)[number]["key"];

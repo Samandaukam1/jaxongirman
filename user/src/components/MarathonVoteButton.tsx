@@ -121,5 +121,5 @@ const useStyles = makeStyles(() => ({
     flexDirection: "row", alignItems: "center", justifyContent: "center",
     gap: 6, height: 40, paddingHorizontal: spacing.md,
   },
-  label: { ...typography.caption, fontFamily: "Manrope_600SemiBold", color: brandInk.strong },
+  label: { ...typography.caption, fontFamily: "JaxongirmanSans_600SemiBold", color: brandInk.strong },
 }));

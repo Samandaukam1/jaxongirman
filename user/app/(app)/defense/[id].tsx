@@ -1,14 +1,14 @@
 import * as FileSystem from "expo-file-system/legacy";
 import { useLocalSearchParams } from "expo-router";
 import * as Sharing from "expo-sharing";
-import { ChevronLeft, ChevronRight, Download, RefreshCw, Sparkles } from "lucide-react-native";
+import { ChevronLeft, ChevronRight, Download, PenLine, RefreshCw, Sparkles } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, Platform, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { EmptyState, ErrorState } from "@/components/StateBlocks";
-import { defensePdf, defensePdfUrl, loadDefense, writeDefense, type Defense } from "@/lib/defense";
+import { defensePdf, defensePdfUrl, editDefense, loadDefense, writeDefense, type Defense } from "@/lib/defense";
 import { localizeError } from "@/lib/errors";
 import { asErrorMessage } from "@/lib/format";
 import { icon, radius, shadow, spacing, typography } from "@/theme/tokens";
@@ -36,6 +36,9 @@ export default function DefenseScreen() {
   const [working, setWorking] = useState<"write" | "pdf" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [at, setAt] = useState(-1);
+  // The part being rewritten by hand, and its words so far.
+  const [draft, setDraft] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const scroller = useRef<ScrollView>(null);
 
   const load = useCallback(async () => {
@@ -88,7 +91,24 @@ export default function DefenseScreen() {
     }
   }
 
+  async function saveDraft() {
+    if (!id || draft === null || !defense) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const total = defense.sections.length;
+      await editDefense(id, at < 0 ? "introduction" : at >= total ? "conclusion" : "section", at >= 0 && at < total ? at : null, draft);
+      setDraft(null);
+      await load();
+    } catch (failure) {
+      setError(asErrorMessage(failure));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function go(next: number) {
+    setDraft(null);
     setAt(next);
     scroller.current?.scrollTo({ y: 0, animated: false });
   }
@@ -161,7 +181,27 @@ export default function DefenseScreen() {
         <View style={styles.card}>
           <Text style={styles.marker}>{heading}</Text>
           {section?.slide_title ? <Text style={styles.slideTitle}>{section.slide_title}</Text> : null}
-          <Text style={styles.speech}>{body || "—"}</Text>
+          {draft !== null ? (
+            <>
+              <TextInput style={[styles.speech, styles.editor]} value={draft} onChangeText={setDraft} multiline autoFocus maxLength={6000} />
+              <View style={styles.editRow}>
+                <Pressable onPress={() => setDraft(null)} disabled={saving} style={styles.editButton}>
+                  <Text style={styles.editButtonText}>{t("defense.cancelEdit")}</Text>
+                </Pressable>
+                <Pressable onPress={() => void saveDraft()} disabled={saving} style={[styles.editButton, styles.editSave]}>
+                  {saving ? <ActivityIndicator color={colors.onPrimary} size="small" /> : <Text style={[styles.editButtonText, styles.editSaveText]}>{t("defense.save")}</Text>}
+                </Pressable>
+              </View>
+            </>
+          ) : (
+            <>
+              <Text style={styles.speech}>{body || "—"}</Text>
+              <Pressable accessibilityRole="button" onPress={() => setDraft(body ?? "")} style={styles.editLink}>
+                <PenLine color={colors.primary} size={icon.sm} strokeWidth={2} />
+                <Text style={styles.editLinkText}>{t("defense.edit")}</Text>
+              </Pressable>
+            </>
+          )}
 
           {section?.key_point ? (
             <View style={styles.note}>
@@ -198,6 +238,14 @@ export default function DefenseScreen() {
 }
 
 const useStyles = makeStyles((colors) => ({
+  editor: { minHeight: 180, textAlignVertical: "top", borderRadius: radius.md, padding: spacing.md, backgroundColor: colors.surfaceMuted },
+  editRow: { flexDirection: "row", gap: spacing.sm, justifyContent: "flex-end" },
+  editButton: { paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, borderRadius: radius.pill, backgroundColor: colors.surfaceMuted, minWidth: 96, alignItems: "center" },
+  editButtonText: { ...typography.bodyMedium, color: colors.ink },
+  editSave: { backgroundColor: colors.primary },
+  editSaveText: { color: colors.onPrimary },
+  editLink: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start" },
+  editLinkText: { ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", color: colors.primary },
   screen: { flex: 1, backgroundColor: colors.canvas },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.md },
   waiting: { ...typography.caption, color: colors.inkMuted },
@@ -209,7 +257,7 @@ const useStyles = makeStyles((colors) => ({
   slideTitle: { ...typography.heading, color: colors.ink },
   // Set larger than body text on purpose: read from a distance, in a hurry, by
   // somebody who is about to speak.
-  speech: { fontFamily: "Manrope_400Regular", fontSize: 18, lineHeight: 30, color: colors.ink },
+  speech: { fontFamily: "JaxongirmanSans_400Regular", fontSize: 18, lineHeight: 30, color: colors.ink },
   note: { paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.border, gap: 2 },
   noteLabel: { ...typography.caption, fontWeight: "700", color: colors.inkSoft },
   noteText: { ...typography.caption, color: colors.inkMuted },

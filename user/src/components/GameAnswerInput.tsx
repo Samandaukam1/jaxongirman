@@ -1,9 +1,10 @@
 import * as Haptics from "expo-haptics";
-import { Check, Square, SquareCheck } from "lucide-react-native";
+import { Check, Square, SquareCheck, X } from "lucide-react-native";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Image, LayoutChangeEvent, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
+import { SortableOrder } from "@/components/SortableOrder";
 import type { SanitizedQuestion } from "@/lib/games";
 import { formatNumber } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
@@ -179,46 +180,11 @@ export function GameAnswerInput({ question, locked, onSubmit }: Props) {
 
     case "ordering": {
       const items = question.config.items ?? [];
-      const byId = new Map(items.map((item) => [item.id, item.text]));
       return (
-        <View style={{ gap: spacing.sm }}>
+        <View style={{ gap: spacing.md }}>
           <Text style={styles.hint}>{t("answer.order")}</Text>
-          {order.map((itemId, index) => (
-            <View key={itemId} style={styles.orderRow}>
-              <Text style={styles.orderIndex}>{index + 1}</Text>
-              <Text style={styles.orderText}>{byId.get(itemId) ?? ""}</Text>
-              <Pressable
-                style={styles.orderArrow}
-                disabled={locked || index === 0}
-                onPress={() => {
-                  tap();
-                  setOrder((current) => {
-                    const next = [...current];
-                    [next[index - 1], next[index]] = [next[index]!, next[index - 1]!];
-                    return next;
-                  });
-                }}
-                accessibilityLabel={t("answer.up")}
-              >
-                <Text style={[styles.arrowGlyph, (locked || index === 0) && styles.arrowDim]}>↑</Text>
-              </Pressable>
-              <Pressable
-                style={styles.orderArrow}
-                disabled={locked || index === order.length - 1}
-                onPress={() => {
-                  tap();
-                  setOrder((current) => {
-                    const next = [...current];
-                    [next[index], next[index + 1]] = [next[index + 1]!, next[index]!];
-                    return next;
-                  });
-                }}
-                accessibilityLabel={t("answer.down")}
-              >
-                <Text style={[styles.arrowGlyph, (locked || index === order.length - 1) && styles.arrowDim]}>↓</Text>
-              </Pressable>
-            </View>
-          ))}
+          {/* Keyed by the question: a new question deals a new hand. */}
+          <SortableOrder key={question.id} items={items} disabled={locked} onChange={setOrder} />
           <SubmitBar label={t("answer.submit")} disabled={locked} onPress={() => send({ order })} />
         </View>
       );
@@ -385,9 +351,11 @@ function SubmitBar({ label, disabled, onPress }: { label: string; disabled: bool
 }
 
 /** The reveal: what the room chose, and what was right. Read-only. */
-export function GameRevealPanel({ question, config, stats }: {
+export function GameRevealPanel({ question, config, stats, mine }: {
   question: SanitizedQuestion;
   config: Record<string, unknown>;
+  /** What this phone sent, when it answered: lets a sequence be marked place by place. */
+  mine?: Record<string, unknown> | null;
   stats: { answers: number; correct: number; incorrect: number; choices: Record<string, number>; words: Record<string, number> };
 }) {
   const { colors } = useTheme();
@@ -451,11 +419,29 @@ export function GameRevealPanel({ question, config, stats }: {
     const items = question.config.items ?? [];
     const byId = new Map(items.map((item) => [item.id, item.text]));
     const sequence = Array.isArray(config.order) ? config.order as string[] : [];
+    const sent = Array.isArray(mine?.order) ? mine.order as string[] : null;
+    // The right order, place by place; beside each, whether this phone put
+    // that item there — and if not, what it put there instead.
     return (
-      <View style={{ gap: 4 }}>
-        {sequence.map((itemId, index) => (
-          <Text key={itemId} style={styles.revealAnswer}>{index + 1}. {byId.get(itemId) ?? ""}</Text>
-        ))}
+      <View style={styles.sequence}>
+        {sequence.map((itemId, index) => {
+          const theirs = sent?.[index];
+          const right = sent ? theirs === itemId : null;
+          return (
+            <View key={itemId} style={[styles.sequenceRow, right === true && styles.sequenceRight, right === false && styles.sequenceWrong]}>
+              <Text style={styles.sequenceNumber}>{index + 1}</Text>
+              <View style={styles.sequenceCopy}>
+                <Text style={styles.revealAnswer}>{byId.get(itemId) ?? ""}</Text>
+                {right === false && theirs ? (
+                  <Text style={styles.sequenceTheirs}>{t("answer.yourOrder")}: {byId.get(theirs) ?? ""}</Text>
+                ) : null}
+              </View>
+              {right === null ? null : right
+                ? <Check color={colors.success} size={18} strokeWidth={2.6} accessibilityLabel={t("answer.rightPlace")} />
+                : <X color={colors.danger} size={18} strokeWidth={2.6} accessibilityLabel={t("answer.wrongPlace")} />}
+            </View>
+          );
+        })}
       </View>
     );
   }
@@ -548,16 +534,6 @@ const useStyles = makeStyles((colors) => ({
     backgroundColor: colors.primary, borderRadius: radius.lg, paddingVertical: spacing.lg,
   },
   submitText: { ...typography.bodyMedium, color: colors.onPrimary, fontSize: 16 },
-  orderRow: {
-    flexDirection: "row", alignItems: "center", gap: spacing.sm,
-    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
-    borderRadius: radius.md, padding: spacing.md,
-  },
-  orderIndex: { ...typography.bodyMedium, color: colors.primaryDeep, width: 22, textAlign: "center" },
-  orderText: { ...typography.body, color: colors.ink, flex: 1 },
-  orderArrow: { width: 38, height: 38, alignItems: "center", justifyContent: "center", borderRadius: radius.sm, backgroundColor: colors.surfaceMuted },
-  arrowGlyph: { fontSize: 20, color: colors.ink },
-  arrowDim: { color: colors.border },
   matchColumns: { flexDirection: "row", gap: spacing.sm },
   matchColumn: { flex: 1, gap: spacing.sm },
   matchCell: {
@@ -577,7 +553,7 @@ const useStyles = makeStyles((colors) => ({
   textAnswerTall: { ...typography.body, minHeight: 120, textAlignVertical: "top" },
   hotspotImage: { width: "100%", height: 300, borderRadius: radius.lg, backgroundColor: colors.surfaceMuted },
   cloudWrap: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md, alignItems: "center", justifyContent: "center", paddingVertical: spacing.lg },
-  cloudWord: { fontFamily: "Manrope_700Bold", color: colors.primaryDeep },
+  cloudWord: { fontFamily: "JaxongirmanSans_700Bold", color: colors.primaryDeep },
   resultRow: {
     flexDirection: "row", alignItems: "center", gap: spacing.sm,
     backgroundColor: colors.surfaceMuted, borderRadius: radius.md,
@@ -588,6 +564,17 @@ const useStyles = makeStyles((colors) => ({
   resultText: { ...typography.body, color: colors.ink, flex: 1 },
   resultCount: { ...typography.bodyMedium, color: colors.ink },
   revealAnswer: { ...typography.bodyMedium, color: colors.ink },
+  sequence: { gap: spacing.sm },
+  sequenceRow: {
+    flexDirection: "row", alignItems: "center", gap: spacing.md,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 2, borderRadius: radius.md,
+    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
+  },
+  sequenceRight: { borderColor: colors.success },
+  sequenceWrong: { borderColor: colors.danger },
+  sequenceNumber: { ...typography.bodyMedium, fontFamily: "JaxongirmanSans_700Bold", color: colors.primaryDeep, width: 22, textAlign: "center" },
+  sequenceCopy: { flex: 1, gap: 2 },
+  sequenceTheirs: { ...typography.caption, color: colors.danger },
   splitBar: { flexDirection: "row", height: 12, borderRadius: 6, overflow: "hidden", backgroundColor: colors.surfaceMuted },
   splitCorrect: { backgroundColor: colors.success },
   splitWrong: { backgroundColor: colors.danger },

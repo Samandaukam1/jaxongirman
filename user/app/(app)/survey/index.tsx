@@ -207,7 +207,7 @@ const useStyles = makeStyles((colors) => ({
   tabs: { flexDirection: "row", gap: spacing.sm, backgroundColor: colors.surfaceMuted, padding: 5, borderRadius: radius.pill },
   tab: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, height: 42, borderRadius: radius.pill },
   tabActive: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  tabText: { ...typography.caption, color: colors.inkMuted, fontFamily: "Manrope_600SemiBold" },
+  tabText: { ...typography.caption, color: colors.inkMuted, fontFamily: "JaxongirmanSans_600SemiBold" },
   tabTextActive: { color: colors.ink },
   tabCount: { ...typography.caption, fontSize: 10, color: colors.inkSoft, backgroundColor: colors.surface, paddingHorizontal: 6, paddingVertical: 1, borderRadius: radius.pill, overflow: "hidden" },
   tabCountActive: { color: colors.primary, backgroundColor: colors.primarySoft },

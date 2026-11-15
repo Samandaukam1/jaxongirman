@@ -119,7 +119,7 @@ export default function SupportScreen() {
 const useStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.canvas },
   content: { paddingHorizontal: spacing.xl, paddingBottom: 48, gap: spacing.md },
-  sectionTitle: { ...typography.caption, fontFamily: "Manrope_700Bold", fontSize: 11, letterSpacing: 1.1, color: colors.inkSoft, marginTop: spacing.md, marginLeft: spacing.xs },
+  sectionTitle: { ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", fontSize: 11, letterSpacing: 1.1, color: colors.inkSoft, marginTop: spacing.md, marginLeft: spacing.xs },
   quiet: { flexDirection: "row", gap: spacing.md, alignItems: "center", padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
   quietText: { ...typography.caption, flex: 1, color: colors.inkMuted, lineHeight: 18 },
   list: { gap: spacing.sm },
@@ -134,7 +134,7 @@ const useStyles = makeStyles((colors) => ({
   ticketFoot: { flexDirection: "row", alignItems: "center", gap: spacing.sm, flexWrap: "wrap", marginTop: 2 },
   ticketDate: { ...typography.caption, fontSize: 11.5, color: colors.inkSoft },
   unread: { minWidth: 22, height: 22, borderRadius: 11, paddingHorizontal: 6, alignItems: "center", justifyContent: "center", backgroundColor: colors.primary },
-  unreadText: { ...typography.caption, fontSize: 11, fontFamily: "Manrope_700Bold", color: colors.onPrimary },
+  unreadText: { ...typography.caption, fontSize: 11, fontFamily: "JaxongirmanSans_700Bold", color: colors.onPrimary },
   faq: { borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
   faqItem: { padding: spacing.lg, gap: spacing.sm },
   faqRule: { borderTopWidth: 1, borderTopColor: colors.border },

@@ -1,11 +1,11 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { BadgeCheck, CirclePlus, Crown, Gamepad2, HandCoins, Layers, Pencil, Share2, type LucideIcon } from "lucide-react-native";
-import { useEffect, useId, useState } from "react";
+import { BadgeCheck, ChevronLeft, CirclePlus, Crown, Gamepad2, HandCoins, Layers, Pencil, Share2, type LucideIcon } from "lucide-react-native";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Image, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import Svg, { Defs, FeGaussianBlur, Filter, G, Image as SvgImage, LinearGradient as SvgGradient, Mask, Rect, Stop } from "react-native-svg";
 import Animated, {
-  Easing, FadeIn, FadeInDown, FadeInLeft, ZoomIn, cancelAnimation, interpolate, useAnimatedStyle, useSharedValue, withDelay,
+  Easing, FadeIn, FadeInDown, FadeInLeft, FadeInRight, ZoomIn, cancelAnimation, interpolate, useAnimatedStyle, useSharedValue, withDelay,
   withRepeat, withSequence, withTiming, Extrapolation, type SharedValue,
 } from "react-native-reanimated";
 
@@ -28,19 +28,38 @@ type Props = {
   decks: number;
   games: number;
   coins: number;
-  onEdit: () => void;
-  onSend: () => void;
-  onTopUp: () => void;
-  onShare: () => void;
+  onEdit?: () => void;
+  onSend?: () => void;
+  onTopUp?: () => void;
+  onShare?: () => void;
+  /**
+   * Someone else's card (a chat profile) says other things: its own figures
+   * and its own four buttons, and no plan badge — whose plan is theirs to tell.
+   */
+  stats?: CardStat[];
+  actions?: CardAction[];
+  badge?: boolean;
+  /**
+   * A card that is a screen of its own (a profile opened from chat): it runs
+   * nearer the screen's edges, everything on it is a size larger, and it
+   * carries its own way back in the photograph's corner — the plan badge then
+   * moves to the other corner.
+   */
+  size?: "regular" | "large";
+  onBack?: () => void;
   /** The screen's scroll offset: pulling past the top stretches the card. */
   scrollY?: SharedValue<number>;
 };
 
 /** The card's own corner; the metal rim is drawn outside it. */
+export type CardStat = { key: string; value: string; label: string; glyph: ReactNode };
+export type CardAction = { key: string; label: string; glyph: LucideIcon; onPress: () => void };
+
 const CARD_RADIUS = 32;
 const RIM = 2.5;
-/** The space either side of the card. */
+/** The space either side of the card: on Profil, and on a screen of its own. */
 const INSET = spacing.xl;
+const INSET_LARGE = 10;
 /** How far the text — name to figures — rises into the foot of the photograph. */
 const OVERLAP = 134;
 /** Entrance timing: the card first, then its lines in reading order. */
@@ -58,13 +77,18 @@ const ENTER = 90;
  * crosses the card every few seconds.
  */
 export function ProfileHeroCard(props: Props) {
-  const { name, handle, bio, study, avatarUrl, initials, tier, planName, decks, games, coins, onEdit, onSend, onTopUp, onShare, scrollY } = props;
+  const { name, handle, bio, study, avatarUrl, initials, tier, planName, decks, games, coins, onEdit, onSend, onTopUp, onShare, onBack, scrollY } = props;
+  const noop = () => undefined;
   const styles = useStyles();
   const { t } = useTranslation("profile");
+  const { t: tc } = useTranslation("common");
+  const big = props.size === "large";
+  const inset = big ? INSET_LARGE : INSET;
+  const glyph = big ? 18 : 15;
   const { width } = useWindowDimensions();
   const reduced = useReduceMotion();
   const look = TIER_LOOK[tier];
-  const [side, setSide] = useState(Math.min(width, 520) - INSET * 2 - RIM * 2);
+  const [side, setSide] = useState(Math.min(width, 520) - inset * 2 - RIM * 2);
   const [cardHeight, setCardHeight] = useState(side * 1.6);
   // The drawing reaches past the card's foot by a little, so a card that grows
   // by a line between two measurements never shows an undrawn strip.
@@ -115,23 +139,23 @@ export function ProfileHeroCard(props: Props) {
     };
   });
 
-  const stats = [
-    { key: "decks", value: formatNumber(decks), label: t("stats.decks"), glyph: <Layers color="#FFFFFF" size={15} strokeWidth={2.2} /> },
-    { key: "games", value: formatNumber(games), label: t("stats.games"), glyph: <Gamepad2 color="#FFFFFF" size={15} strokeWidth={2.2} /> },
-    { key: "coins", value: formatNumber(coins), label: t("stats.coins"), glyph: <Image source={coinIcon} style={styles.coin} resizeMode="contain" /> },
+  const stats: CardStat[] = props.stats ?? [
+    { key: "decks", value: formatNumber(decks), label: t("stats.decks"), glyph: <Layers color="#FFFFFF" size={glyph} strokeWidth={2.2} /> },
+    { key: "games", value: formatNumber(games), label: t("stats.games"), glyph: <Gamepad2 color="#FFFFFF" size={glyph} strokeWidth={2.2} /> },
+    { key: "coins", value: formatNumber(coins), label: t("stats.coins"), glyph: <Image source={coinIcon} style={{ width: glyph, height: glyph }} resizeMode="contain" /> },
   ];
 
-  const actions: { key: string; label: string; glyph: LucideIcon; onPress: () => void }[] = [
-    { key: "edit", label: t("actions.edit"), glyph: Pencil, onPress: onEdit },
-    { key: "send", label: t("actions.send"), glyph: HandCoins, onPress: onSend },
-    { key: "topUp", label: t("actions.topUp"), glyph: CirclePlus, onPress: onTopUp },
-    { key: "share", label: t("actions.share"), glyph: Share2, onPress: onShare },
+  const actions: CardAction[] = props.actions ?? [
+    { key: "edit", label: t("actions.edit"), glyph: Pencil, onPress: onEdit ?? noop },
+    { key: "send", label: t("actions.send"), glyph: HandCoins, onPress: onSend ?? noop },
+    { key: "topUp", label: t("actions.topUp"), glyph: CirclePlus, onPress: onTopUp ?? noop },
+    { key: "share", label: t("actions.share"), glyph: Share2, onPress: onShare ?? noop },
   ];
 
   return (
     <Animated.View
       entering={FadeInDown.duration(520).springify().damping(17)}
-      style={styles.outer}
+      style={{ marginHorizontal: inset }}
       onLayout={(event) => setSide(event.nativeEvent.layout.width - RIM * 2)}
     >
       <Animated.View style={[styles.pull, pullStyle]}>
@@ -198,58 +222,71 @@ export function ProfileHeroCard(props: Props) {
             {/* A light wash at the top so the badge reads on a bright sky. */}
             <LinearGradient pointerEvents="none" colors={["rgba(0,0,0,0.32)", "rgba(0,0,0,0)"]} style={styles.topShade} />
 
+            {/* The way back, in the photograph's own corner, when the card is
+                the whole screen; the badge then answers it from the other one. */}
+            {onBack ? (
+              <Animated.View entering={FadeInLeft.delay(ENTER * 2).duration(420)} style={styles.backSlot}>
+                <BackButton label={tc("back")} onPress={onBack} />
+              </Animated.View>
+            ) : null}
+
             {/* A badge, not a button: the tariff is reached from its one
                 Sozlamalar row (see tests/profile-screen). */}
-            <Animated.View entering={FadeInLeft.delay(ENTER * 3).duration(420)} style={styles.badgeSlot}>
-            <LinearGradient colors={look.metal} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.badge}>
-              <Crown color={look.onMetal} size={13} strokeWidth={2.6} />
-              <Text numberOfLines={1} style={[styles.badgeText, { color: look.onMetal }]}>
-                {tier === "free" ? t("tier.free") : `${planName ?? ""} · ${t(`tier.${tier}`)}`}
-              </Text>
-            </LinearGradient>
-            </Animated.View>
+            {props.badge === false ? null : (
+              <Animated.View
+                entering={(onBack ? FadeInRight : FadeInLeft).delay(ENTER * 3).duration(420)}
+                style={onBack ? styles.badgeSlotRight : styles.badgeSlot}
+              >
+                <LinearGradient colors={look.metal} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.badge, big && styles.badgeLarge]}>
+                  <Crown color={look.onMetal} size={big ? 15 : 13} strokeWidth={2.6} />
+                  <Text numberOfLines={1} style={[styles.badgeText, big && styles.badgeTextLarge, { color: look.onMetal }]}>
+                    {tier === "free" ? t("tier.free") : `${planName ?? ""} · ${t(`tier.${tier}`)}`}
+                  </Text>
+                </LinearGradient>
+              </Animated.View>
+            )}
           </View>
 
           {/* ------------------------------------------- the person */}
           {/* Each line arrives a beat after the one above it, in reading order. */}
-          <View style={[styles.body, { marginTop: -OVERLAP }]}>
+          <View style={[styles.body, big && styles.bodyLarge, { marginTop: -OVERLAP }]}>
             {/* The seal rides at the end of the name's last line, so a name
                 that wraps does not leave it stranded at the card's edge. */}
             <Animated.View entering={FadeInDown.delay(ENTER * 2).duration(420)}>
-              <Text style={styles.name} numberOfLines={2}>
+              <Text style={[styles.name, big && styles.nameLarge]} numberOfLines={2}>
                 {name}
                 {tier !== "free" ? (
                   <>
                     {" "}
-                    <View style={styles.sealBox}>
-                      <BadgeCheck color={look.onMetal} fill={look.metal[1]} size={18} strokeWidth={2} />
+                    <View style={[styles.sealBox, big && styles.sealBoxLarge]}>
+                      <BadgeCheck color={look.onMetal} fill={look.metal[1]} size={big ? 22 : 18} strokeWidth={2} />
                     </View>
                   </>
                 ) : null}
               </Text>
             </Animated.View>
             <Animated.View entering={FadeInDown.delay(ENTER * 3).duration(420)}>
-              <Text style={styles.handle} numberOfLines={1}>{handle}</Text>
+              <Text style={[styles.handle, big && styles.handleLarge]} numberOfLines={1}>{handle}</Text>
             </Animated.View>
             {bio ? (
               <Animated.View entering={FadeInDown.delay(ENTER * 4).duration(420)}>
-                <Text style={styles.bio} numberOfLines={3}>{bio}</Text>
+                <Text style={[styles.bio, big && styles.bioLarge]} numberOfLines={3}>{bio}</Text>
               </Animated.View>
             ) : null}
             {study ? (
               <Animated.View entering={FadeIn.delay(ENTER * 4).duration(420)}>
-                <Text style={styles.study} numberOfLines={1}>{study}</Text>
+                <Text style={[styles.study, big && styles.studyLarge]} numberOfLines={1}>{study}</Text>
               </Animated.View>
             ) : null}
 
-            <Animated.View entering={FadeInDown.delay(ENTER * 5).duration(460).springify().damping(18)} style={styles.stats}>
+            <Animated.View entering={FadeInDown.delay(ENTER * 5).duration(460).springify().damping(18)} style={[styles.stats, big && styles.statsLarge]}>
               {stats.map((stat, index) => (
                 <View key={stat.key} style={[styles.stat, index > 0 && styles.statRule]}>
                   <View style={styles.statValueRow}>
                     {stat.glyph}
-                    <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{stat.value}</Text>
+                    <Text style={[styles.statValue, big && styles.statValueLarge]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{stat.value}</Text>
                   </View>
-                  <Text style={styles.statLabel} numberOfLines={1}>{stat.label}</Text>
+                  <Text style={[styles.statLabel, big && styles.statLabelLarge]} numberOfLines={1}>{stat.label}</Text>
                 </View>
               ))}
             </Animated.View>
@@ -257,9 +294,9 @@ export function ProfileHeroCard(props: Props) {
             {/* Four equal tiles of frosted glass, icon over word — the row a
                 messenger puts under a profile. They pop in one after another
                 and give under a finger like a spring. */}
-            <View style={styles.actions}>
-              {actions.map(({ key, label, glyph, onPress }, index) => (
-                <ActionTile key={key} label={label} glyph={glyph} onPress={onPress} delay={ENTER * 6 + index * 55} />
+            <View style={[styles.actions, big && styles.actionsLarge]}>
+              {actions.map(({ key, label, glyph: Glyph, onPress }, index) => (
+                <ActionTile key={key} label={label} glyph={Glyph} onPress={onPress} delay={ENTER * 6 + index * 55} big={big} />
               ))}
             </View>
           </View>
@@ -282,12 +319,12 @@ export function ProfileHeroCard(props: Props) {
 }
 
 /** One frosted tile: springs in on arrival, springs under a press. */
-function ActionTile({ label, glyph: Glyph, onPress, delay }: { label: string; glyph: LucideIcon; onPress: () => void; delay: number }) {
+function ActionTile({ label, glyph: Glyph, onPress, delay, big }: { label: string; glyph: LucideIcon; onPress: () => void; delay: number; big: boolean }) {
   const styles = useStyles();
   const press = usePressScale();
   return (
     <Animated.View entering={ZoomIn.delay(delay).springify().damping(14)} style={styles.actionSlot}>
-      <Animated.View style={[styles.action, press.style]}>
+      <Animated.View style={[styles.action, big && styles.actionLarge, press.style]}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={label}
@@ -296,16 +333,36 @@ function ActionTile({ label, glyph: Glyph, onPress, delay }: { label: string; gl
           onPressOut={press.handlers.onPressOut}
           style={styles.actionHit}
         >
-          <Glyph color="#FFFFFF" size={19} strokeWidth={2} />
-          <Text style={styles.actionText} numberOfLines={1}>{label}</Text>
+          <Glyph color="#FFFFFF" size={big ? 23 : 19} strokeWidth={2} />
+          <Text style={[styles.actionText, big && styles.actionTextLarge]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>{label}</Text>
         </Pressable>
       </Animated.View>
     </Animated.View>
   );
 }
 
+/** A round pane of smoked glass with a chevron: the card's own way back. */
+function BackButton({ label, onPress }: { label: string; onPress: () => void }) {
+  const styles = useStyles();
+  const press = usePressScale();
+  return (
+    <Animated.View style={[styles.back, press.style]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        hitSlop={8}
+        onPress={onPress}
+        onPressIn={press.handlers.onPressIn}
+        onPressOut={press.handlers.onPressOut}
+        style={styles.backHit}
+      >
+        <ChevronLeft color="#FFFFFF" size={26} strokeWidth={2.4} style={styles.backGlyph} />
+      </Pressable>
+    </Animated.View>
+  );
+}
+
 const useStyles = makeStyles(() => ({
-  outer: { marginHorizontal: INSET },
   // Grows from its top edge, so a pull stretches the card downwards.
   pull: { transformOrigin: "top" },
   zoom: { transformOrigin: "top" },
@@ -317,27 +374,45 @@ const useStyles = makeStyles(() => ({
   rim: { borderRadius: CARD_RADIUS + RIM, padding: RIM },
   card: { borderRadius: CARD_RADIUS, overflow: "hidden" },
   empty: { alignItems: "center", justifyContent: "center" },
-  initials: { fontFamily: "Manrope_800ExtraBold", fontSize: 88, color: "rgba(255,255,255,0.9)", letterSpacing: 2, marginBottom: 120 },
+  initials: { fontFamily: "JaxongirmanSans_800ExtraBold", fontSize: 88, color: "rgba(255,255,255,0.9)", letterSpacing: 2, marginBottom: 120 },
   topShade: { position: "absolute", top: 0, left: 0, right: 0, height: 110 },
   band: { position: "absolute", left: 0, width: 90 },
 
   badgeSlot: { position: "absolute", top: spacing.lg, left: spacing.lg },
+  // Level with the back button's middle (44 high) on the right.
+  badgeSlotRight: { position: "absolute", top: spacing.lg + 6, right: spacing.lg },
+  backSlot: { position: "absolute", top: spacing.lg, left: spacing.lg },
+  back: {
+    width: 44, height: 44, borderRadius: 22, overflow: "hidden",
+    backgroundColor: "rgba(12,6,28,0.34)", borderWidth: 1, borderColor: "rgba(255,255,255,0.32)",
+  },
+  backHit: { flex: 1, alignItems: "center", justifyContent: "center" },
+  // The chevron's weight sits left of its box; this centres it by eye.
+  backGlyph: { marginLeft: -2 },
   badge: {
     flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 11, paddingVertical: 6, borderRadius: radius.pill, maxWidth: 230,
     borderWidth: 1, borderColor: "rgba(255,255,255,0.55)",
   },
-  badgeText: { fontFamily: "Manrope_800ExtraBold", fontSize: 11.5, letterSpacing: 0.6, flexShrink: 1 },
+  badgeText: { fontFamily: "JaxongirmanSans_800ExtraBold", fontSize: 11.5, letterSpacing: 0.6, flexShrink: 1 },
+  badgeLarge: { gap: 6, paddingHorizontal: 13, paddingVertical: 7 },
+  badgeTextLarge: { fontSize: 12.5 },
 
   body: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, gap: 2 },
+  bodyLarge: { paddingHorizontal: 18, paddingBottom: 18, gap: 3 },
   name: {
-    fontFamily: "Manrope_800ExtraBold", fontSize: 23, lineHeight: 27, letterSpacing: -0.4, color: "#FFFFFF",
+    fontFamily: "JaxongirmanSans_800ExtraBold", fontSize: 23, lineHeight: 27, letterSpacing: -0.4, color: "#FFFFFF",
     textShadowColor: "rgba(0,0,0,0.25)", textShadowRadius: 12, textShadowOffset: { width: 0, height: 1 },
   },
   // Lifted onto the letters' middle: an inline view sits on the baseline.
   sealBox: { width: 19, height: 19, transform: [{ translateY: 3 }] },
-  handle: { fontFamily: "Manrope_600SemiBold", fontSize: 13, lineHeight: 17, color: "rgba(255,255,255,0.78)" },
-  bio: { fontFamily: "Manrope_500Medium", fontSize: 13.5, lineHeight: 18, color: "rgba(255,255,255,0.94)", marginTop: 3 },
-  study: { fontFamily: "Manrope_500Medium", fontSize: 12, lineHeight: 16, color: "rgba(255,255,255,0.7)" },
+  sealBoxLarge: { width: 23, height: 23 },
+  nameLarge: { fontSize: 28, lineHeight: 33, letterSpacing: -0.5 },
+  handleLarge: { fontSize: 15, lineHeight: 20 },
+  bioLarge: { fontSize: 15.5, lineHeight: 21, marginTop: 4 },
+  studyLarge: { fontSize: 13.5, lineHeight: 18 },
+  handle: { fontFamily: "JaxongirmanSans_600SemiBold", fontSize: 13, lineHeight: 17, color: "rgba(255,255,255,0.78)" },
+  bio: { fontFamily: "JaxongirmanSans_500Medium", fontSize: 13.5, lineHeight: 18, color: "rgba(255,255,255,0.94)", marginTop: 3 },
+  study: { fontFamily: "JaxongirmanSans_500Medium", fontSize: 12, lineHeight: 16, color: "rgba(255,255,255,0.7)" },
 
   stats: {
     flexDirection: "row", marginTop: spacing.sm + 2, paddingVertical: spacing.sm, borderRadius: 16,
@@ -346,9 +421,11 @@ const useStyles = makeStyles(() => ({
   stat: { flex: 1, alignItems: "center", gap: 2, paddingHorizontal: 6 },
   statRule: { borderLeftWidth: 1, borderLeftColor: "rgba(255,255,255,0.14)" },
   statValueRow: { flexDirection: "row", alignItems: "center", gap: 5, maxWidth: "100%" },
-  statValue: { fontFamily: "Manrope_800ExtraBold", fontSize: 16, lineHeight: 21, color: "#FFFFFF", flexShrink: 1, fontVariant: ["tabular-nums"] },
-  statLabel: { fontFamily: "Manrope_600SemiBold", fontSize: 10.5, lineHeight: 14, color: "rgba(255,255,255,0.7)" },
-  coin: { width: 15, height: 15 },
+  statValue: { fontFamily: "JaxongirmanSans_800ExtraBold", fontSize: 16, lineHeight: 21, color: "#FFFFFF", flexShrink: 1, fontVariant: ["tabular-nums"] },
+  statLabel: { fontFamily: "JaxongirmanSans_600SemiBold", fontSize: 10.5, lineHeight: 14, color: "rgba(255,255,255,0.7)" },
+  statsLarge: { marginTop: spacing.md, paddingVertical: spacing.md, borderRadius: 18 },
+  statValueLarge: { fontSize: 20, lineHeight: 25 },
+  statLabelLarge: { fontSize: 12, lineHeight: 16 },
 
   actions: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm },
   actionSlot: { flex: 1 },
@@ -357,5 +434,8 @@ const useStyles = makeStyles(() => ({
     backgroundColor: "rgba(255,255,255,0.12)", borderWidth: 1, borderColor: "rgba(255,255,255,0.18)",
   },
   actionHit: { flex: 1, alignItems: "center", justifyContent: "center", gap: 4 },
-  actionText: { fontFamily: "Manrope_700Bold", fontSize: 11, lineHeight: 14, color: "rgba(255,255,255,0.92)", paddingHorizontal: 2 },
+  actionText: { fontFamily: "JaxongirmanSans_700Bold", fontSize: 11, lineHeight: 14, color: "rgba(255,255,255,0.92)", paddingHorizontal: 2 },
+  actionsLarge: { gap: 10, marginTop: spacing.md },
+  actionLarge: { height: 66, borderRadius: 18 },
+  actionTextLarge: { fontSize: 12.5, lineHeight: 16 },
 }));

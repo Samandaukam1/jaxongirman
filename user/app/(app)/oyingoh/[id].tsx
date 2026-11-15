@@ -2,12 +2,13 @@ import { GAME_QUESTION_TYPES, type GameQuestionType } from "@jaxongirman/types";
 import * as Crypto from "expo-crypto";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Play, Plus, ShoppingBag, Sparkles, X } from "lucide-react-native";
+import { MessageCircle, MonitorPlay, Play, Plus, ShoppingBag, Sparkles, X } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Alert, Modal, Platform, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
+import { CrosswordOverview } from "@/components/CrosswordOverview";
 import { GameQuestionCard } from "@/components/GameQuestionCard";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ScreenHeader } from "@/components/ScreenHeader";
@@ -47,6 +48,8 @@ function defaultConfig(type: GameQuestionType): Record<string, unknown> {
     case "open_answer": return { reference: "", ai_grading: false };
     case "word_cloud": return {};
     case "hotspot": return { shape: "circle" };
+    // Never added by hand: a crossword is generated as a game of its own.
+    case "crossword": return { width: 0, height: 0, words: [] };
   }
 }
 
@@ -60,6 +63,7 @@ export default function GameEditorScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
   const { t } = useTranslation(["games", "common"]);
+  const { t: tChat } = useTranslation("chat");
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [game, setGame] = useState<Game | null>(null);
@@ -67,7 +71,7 @@ export default function GameEditorScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<null | "ready" | "host" | "sell">(null);
+  const [busy, setBusy] = useState<null | "ready" | "host" | "sell" | "board" | "chat">(null);
   const [typePicker, setTypePicker] = useState(false);
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -209,14 +213,20 @@ export default function GameEditorScreen() {
     }
   }
 
-  async function markReadyAnd(next: "ready" | "host" | "sell") {
+  async function markReadyAnd(next: "ready" | "host" | "sell" | "board" | "chat") {
     if (!game) return;
     setBusy(next);
     setActionError(null);
     try {
       await setGameStatus(game.id, "ready");
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      if (next === "host") {
+      if (next === "chat") {
+        // Only a game marked ready can be shared: it is checked again on send.
+        router.push({ pathname: "/(app)/chat/share", params: { kind: "game", id: game.id, title: game.title } });
+      } else if (next === "board") {
+        // The board is claimed by scanning its code; the game goes up with it.
+        router.push({ pathname: "/(app)/oyingoh/scan", params: { gameId: game.id } });
+      } else if (next === "host") {
         const session = await createSession(game.id);
         router.push(`/oyingoh/host/${session.session_id}`);
       } else if (next === "sell") {
@@ -252,8 +262,8 @@ export default function GameEditorScreen() {
       <View style={[styles.safe, styles.center, { gap: spacing.lg, padding: spacing.xl }]}>
         <Sparkles color={colors.primary} size={44} strokeWidth={icon.stroke} />
         <ActivityIndicator color={colors.primary} />
-        <Text style={styles.generatingTitle}>{t("editor.generating")}</Text>
-        <Text style={styles.generatingHint}>{t("editor.generatingBody")}</Text>
+        <Text style={styles.generatingTitle}>{game.kind === "crossword" ? t("crossword.generating") : t("editor.generating")}</Text>
+        <Text style={styles.generatingHint}>{game.kind === "crossword" ? t("crossword.generatingBody") : t("editor.generatingBody")}</Text>
       </View>
     );
   }
@@ -262,16 +272,28 @@ export default function GameEditorScreen() {
     return (
       <View style={styles.safe}>
         <ScreenHeader title={t("editor.fallback")} onLeave={() => router.back()} />
-        <ErrorState message={game.failure_reason ? localizeError(game.failure_reason) : t("editor.failed")} onRetry={() => router.replace("/oyingoh/create")} />
+        <ErrorState
+          message={game.failure_reason ? localizeError(game.failure_reason) : t("editor.failed")}
+          onRetry={() => router.replace(game.kind === "crossword" ? "/oyingoh/create?kind=crossword" : "/oyingoh/create")}
+        />
       </View>
     );
   }
+
+  // A crossword has no questions to edit: it is solved, printed or hosted.
+  if (game.kind === "crossword") return <CrosswordOverview game={game} />;
 
   return (
     <View style={styles.safe}>
       <ScreenHeader title={t("editor.title")} subtitle={t("questions", { count: questions.length })} onLeave={() => router.back()} />
       <View style={{ flex: 1 }}>
         <KeyboardAwareScrollView bottomOffset={spacing.xl} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          {game.kind === "grid" ? (
+            <View style={styles.gridBanner}>
+              <Text style={styles.gridBannerTitle}>{t("grid.badge")}</Text>
+              <Text style={styles.gridHint}>{t("grid.editorHint")}</Text>
+            </View>
+          ) : null}
           {questions.length > 0 && game.source_type !== "manual" ? (
             <View style={styles.readyBanner}>
               <Text style={styles.readyBannerText}>{t("editor.ready")}</Text>
@@ -311,7 +333,7 @@ export default function GameEditorScreen() {
             />
           ))}
 
-          <Pressable style={styles.addButton} onPress={() => setTypePicker(true)}>
+          <Pressable style={styles.addButton} onPress={() => (game.kind === "grid" ? void addQuestion("open_answer") : setTypePicker(true))}>
             <Plus color={colors.primary} size={icon.lg} strokeWidth={icon.strokeBold} />
             <Text style={styles.addButtonText}>{t("editor.addQuestion")}</Text>
           </Pressable>
@@ -324,13 +346,34 @@ export default function GameEditorScreen() {
             disabled={busy !== null}
             onPress={() => void markReadyAnd("ready")}
           />
-          <PrimaryButton
-            label={t("editor.start")}
-            icon={Play}
-            loading={busy === "host"}
-            disabled={busy !== null}
-            onPress={() => void markReadyAnd("host")}
-          />
+          {game.kind === "grid" && Platform.OS !== "web" ? (
+            <>
+              <PrimaryButton
+                label={t("grid.startBoard")}
+                icon={MonitorPlay}
+                loading={busy === "board"}
+                disabled={busy !== null}
+                onPress={() => void markReadyAnd("board")}
+              />
+              <Text style={styles.gridHint}>{t("grid.startBoardHint")}</Text>
+              <PrimaryButton
+                label={t("grid.startPhone")}
+                icon={Play}
+                tone="secondary"
+                loading={busy === "host"}
+                disabled={busy !== null}
+                onPress={() => void markReadyAnd("host")}
+              />
+            </>
+          ) : (
+            <PrimaryButton
+              label={t("editor.start")}
+              icon={Play}
+              loading={busy === "host"}
+              disabled={busy !== null}
+              onPress={() => void markReadyAnd("host")}
+            />
+          )}
           <PrimaryButton
             label={t("editor.sell")}
             icon={ShoppingBag}
@@ -338,6 +381,14 @@ export default function GameEditorScreen() {
             loading={busy === "sell"}
             disabled={busy !== null}
             onPress={() => void markReadyAnd("sell")}
+          />
+          <PrimaryButton
+            label={tChat("sendToChat")}
+            icon={MessageCircle}
+            tone="ghost"
+            loading={busy === "chat"}
+            disabled={busy !== null}
+            onPress={() => void markReadyAnd("chat")}
           />
         </KeyboardAwareScrollView>
       </View>
@@ -372,6 +423,9 @@ const useStyles = makeStyles((colors) => ({
   generatingTitle: { ...typography.heading, color: colors.ink, textAlign: "center" },
   generatingHint: { ...typography.body, color: colors.inkMuted, textAlign: "center" },
   readyBanner: { backgroundColor: colors.successSoft, borderRadius: radius.md, padding: spacing.md },
+  gridBanner: { gap: 4, backgroundColor: colors.primarySoft, borderRadius: radius.md, padding: spacing.md },
+  gridBannerTitle: { ...typography.bodyMedium, color: colors.primaryDeep },
+  gridHint: { ...typography.caption, color: colors.inkMuted },
   readyBannerText: { ...typography.bodyMedium, color: colors.success, textAlign: "center" },
   titleInput: {
     ...typography.heading, color: colors.ink, backgroundColor: colors.surfaceMuted,

@@ -7,11 +7,14 @@ import { ActivityIndicator, Image, ScrollView, Text, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { CrosswordMatch, CrosswordReveal } from "@/components/CrosswordMatch";
+import { MafiaPlayerScreen } from "@/components/Mafia";
 import { GameAnswerInput, GameLeaderboardList, GameRevealPanel, GameStatsSummary } from "@/components/GameAnswerInput";
 import { GameAvatar } from "@/components/GameAvatar";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ErrorState } from "@/components/StateBlocks";
 import { lockedOnWeb } from "@/components/WebLocked";
+import { crosswordLanguage } from "@/lib/crossword";
 import { asErrorMessage } from "@/lib/format";
 import { playerState, submitAnswer, subscribeToSession, type PlayerState } from "@/lib/games";
 import { formatNumber } from "@/lib/money";
@@ -55,6 +58,7 @@ function PlayGameScreen() {
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [sent, setSent] = useState<{ index: number; payload: Record<string, unknown> } | null>(null);
   const celebrated = useRef<number | null>(null);
 
   const refresh = useCallback(async () => {
@@ -111,6 +115,8 @@ function PlayGameScreen() {
     setSubmitting(true);
     try {
       await submitAnswer(sessionId, state.current_index, payload);
+      // Kept for the reveal, which marks a sequence place by place.
+      setSent({ index: state.current_index, payload });
       await refresh();
     } catch (failure) {
       setError(asErrorMessage(failure));
@@ -136,6 +142,11 @@ function PlayGameScreen() {
   }
 
   const me = state.me;
+
+  // Mafia has no questions: the phone is the player's card.
+  if (state.game_kind === "mafia" && sessionId) {
+    return <MafiaPlayerScreen sessionId={sessionId} state={state} connected={connected} offlineLabel={t("player.offline")} />;
+  }
 
   return (
     <View style={[styles.safe, { paddingTop: Math.max(insets.top, 20) + spacing.xs }]}>
@@ -180,7 +191,19 @@ function PlayGameScreen() {
         </View>
       ) : null}
 
-      {state.status === "question" && state.question ? (
+      {/* A crossword fills the screen with its grid and its own keyboard. */}
+      {state.status === "question" && state.question?.type === "crossword" && sessionId ? (
+        <CrosswordMatch
+          key={state.current_index}
+          sessionId={sessionId}
+          state={state}
+          language={crosswordLanguage((state.question.config as { language?: unknown }).language)}
+          remaining={remaining}
+          bottom={insets.bottom}
+        />
+      ) : null}
+
+      {state.status === "question" && state.question && state.question.type !== "crossword" ? (
         <KeyboardAwareScrollView bottomOffset={spacing.xl} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.questionMeta}>
             <Text style={styles.questionIndex}>{state.current_index + 1} / {state.question_count}</Text>
@@ -220,11 +243,19 @@ function PlayGameScreen() {
         <ScrollView contentContainerStyle={styles.content}>
           {state.reveal.my_answer ? (
             <View style={[styles.verdict, state.reveal.my_answer.is_correct === true ? styles.verdictGood
+              : state.reveal.my_answer.is_correct === false && state.reveal.my_answer.score_awarded > 0 ? styles.verdictPartial
               : state.reveal.my_answer.is_correct === false ? styles.verdictBad : styles.verdictNeutral]}>
               {state.reveal.my_answer.is_correct === true ? (
                 <>
                   <Check color={colors.onPrimary} size={34} strokeWidth={icon.strokeBold} />
                   <Text style={styles.verdictTitle}>{t("player.correct")}</Text>
+                  <Text style={styles.verdictScore}>+{formatNumber(state.reveal.my_answer.score_awarded)}</Text>
+                </>
+              ) : state.reveal.my_answer.is_correct === false && state.reveal.my_answer.score_awarded > 0 ? (
+                <>
+                  {/* Some of the right options, not all: their share of the points. */}
+                  <Check color={colors.onPrimary} size={34} strokeWidth={icon.strokeBold} />
+                  <Text style={styles.verdictTitle}>{t("player.partial")}</Text>
                   <Text style={styles.verdictScore}>+{formatNumber(state.reveal.my_answer.score_awarded)}</Text>
                 </>
               ) : state.reveal.my_answer.is_correct === false ? (
@@ -243,14 +274,21 @@ function PlayGameScreen() {
           )}
 
           <Text style={styles.prompt}>{state.question.prompt}</Text>
-          <GameRevealPanel
-            question={state.question}
-            config={(state.reveal.config ?? {}) as Record<string, unknown>}
-            stats={state.reveal.stats}
-          />
-          {state.question.type !== "poll" && state.question.type !== "word_cloud" ? (
-            <GameStatsSummary stats={state.reveal.stats} />
-          ) : null}
+          {state.question.type === "crossword" ? (
+            <CrosswordReveal config={state.reveal.config} mine={state.progress?.solved_ids ?? []} />
+          ) : (
+            <>
+              <GameRevealPanel
+                question={state.question}
+                config={(state.reveal.config ?? {}) as Record<string, unknown>}
+                stats={state.reveal.stats}
+                mine={sent?.index === state.current_index ? sent.payload : null}
+              />
+              {state.question.type !== "poll" && state.question.type !== "word_cloud" ? (
+                <GameStatsSummary stats={state.reveal.stats} />
+              ) : null}
+            </>
+          )}
           {state.reveal.explanation ? (
             <View style={styles.explanationCard}>
               <Text style={styles.explanationText}>{state.reveal.explanation}</Text>
@@ -332,11 +370,11 @@ const useStyles = makeStyles((colors) => ({
   waitTitle: { ...typography.title, color: colors.ink, textAlign: "center" },
   waitText: { ...typography.body, color: colors.inkMuted, textAlign: "center" },
   playerCount: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  countdownNumber: { fontFamily: "Manrope_700Bold", fontSize: 96, color: colors.primary, textAlign: "center" },
+  countdownNumber: { fontFamily: "JaxongirmanSans_700Bold", fontSize: 96, color: colors.primary, textAlign: "center" },
   // A digit is one glyph and a word is ten. Sized for the word, then allowed to
   // shrink further on a narrow phone rather than break in half.
   countdownGo: {
-    fontFamily: "Manrope_700Bold", fontSize: 52, color: colors.primary,
+    fontFamily: "JaxongirmanSans_700Bold", fontSize: 52, color: colors.primary,
     textAlign: "center", letterSpacing: -0.5, paddingHorizontal: spacing.lg,
   },
   questionMeta: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
@@ -358,6 +396,7 @@ const useStyles = makeStyles((colors) => ({
   verdict: { alignItems: "center", gap: spacing.sm, borderRadius: radius.lg, paddingVertical: spacing.xl },
   verdictGood: { backgroundColor: colors.success },
   verdictBad: { backgroundColor: colors.danger },
+  verdictPartial: { backgroundColor: colors.warning },
   verdictNeutral: { backgroundColor: colors.surfaceMuted },
   verdictTitle: { ...typography.heading, color: colors.onPrimary },
   verdictScore: { ...typography.title, color: colors.onPrimary },
