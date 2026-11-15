@@ -46,7 +46,7 @@ select ok(not has_function_privilege('anon', 'public.game_session_advance(uuid, 
   'a signed-out caller cannot drive a match');
 select ok(not has_function_privilege('anon', 'public.game_submit_answer(uuid, integer, jsonb)', 'EXECUTE'),
   'a signed-out caller cannot answer');
-select ok(not has_function_privilege('anon', 'public.game_join(text, text, integer)', 'EXECUTE'),
+select ok(not has_function_privilege('anon', 'public.game_join(text, text, integer, text)', 'EXECUTE'),
   'joining requires an account');
 select ok(not has_table_privilege('authenticated', 'public.game_pairing_tokens', 'SELECT'),
   'pairing tokens are unreadable by any client');

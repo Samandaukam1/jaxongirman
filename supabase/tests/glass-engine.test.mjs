@@ -92,11 +92,19 @@ function hostileDecks(style) {
     }, { topic: "t", count });
     const slides = outline.slides.map((entry) => readSlide(hostileSlide(next, entry.kind), entry));
     const pictures = new Map(outline.slides.filter((entry) => entry.imageQuery).map((entry) => [entry.imageQuery, { url: "https://example.test/p.jpg" }]));
+    // Half the decks name each page's sources at its foot, some of them long.
+    // A stream of their own, so the decks themselves stay the ones they were.
+    const noteNext = stream(seed + 9973);
+    const pageSources = noteNext() < 0.5
+      ? slides.map(() => noteNext() < 0.85
+        ? `${sentence(noteNext, 1, noteNext() < 0.3 ? 30 : 8)} (uz.wikipedia.org/wiki/${sentence(noteNext, 1, 4).replace(/\s+/g, "_")})`
+        : null)
+      : undefined;
     const deck = composeDeck({
       dna, face, topic: sentence(next, 3, next() < 0.3 ? 40 : 12), shortTitle: outline.shortTitle, subtitle: outline.subtitle,
       author: next() < 0.7 ? sentence(next, 2, 6) : null, teacher: next() < 0.5 ? sentence(next, 2, 4) : null, year: 2026,
       slides, sources: Array.from({ length: Math.floor(next() * 14) }, () => sentence(next, 4, 30)),
-      cover: next() < 0.6 ? { url: "https://example.test/c.jpg" } : null, pictures,
+      cover: next() < 0.6 ? { url: "https://example.test/c.jpg" } : null, pictures, pageSources,
     });
     assert.equal(deck.length, count + 4);
     for (const [index, page] of deck.entries()) {
@@ -798,3 +806,55 @@ test("a deck's own words follow its language, and a Russian deck is set only in 
     for (const page of deck) assert.deepEqual(pageFaults(page.rows), [], `${language} ${page.layout}: clean page`);
   }
 });
+
+/**
+ * "Har bir sahifada manbani ko‘rsatish": a content page names its sources at
+ * its foot, where the deck's name otherwise stands — in every style, readable
+ * (not in capitals), and never on a cover, an agenda or the closing pages.
+ */
+test("each content page names its own sources at its foot, in every style", async () => {
+  const { STYLES } = await import(`${edge}/glass/dna.js`);
+  const next = stream(4242);
+  for (const style of STYLES) {
+    const direction = readArtDirection({ mode: "light", hue: 210, mood: MOODS[0], typography: "sans", energy: "calm" }, "Amir Temur");
+    const dna = buildDNA({ direction, seed: 77, available, style });
+    const outline = readOutline({
+      shortTitle: "Amir Temur", subtitle: "Hayoti", coverQuery: "x",
+      slides: SLIDE_KINDS.map((kind, index) => ({ title: `Bo‘lim ${index + 1}`, kind, focus: "f", imageQuery: null })),
+    }, { topic: "Amir Temur", count: SLIDE_KINDS.length });
+    const slides = outline.slides.map((entry) => readSlide(hostileSlide(next, entry.kind), entry));
+    const note = "uz.wikipedia.org/wiki/Amir_Temur; Ahmedov B. Amir Temur o‘gitlari. Toshkent, 1992";
+    const deck = composeDeck({
+      dna, face, topic: "Amir Temur hayoti", shortTitle: "Amir Temur", subtitle: "Hayoti", author: null, teacher: null, year: 2026,
+      slides, sources: [], cover: null, pictures: new Map(), pageSources: slides.map((_, index) => index === 1 ? null : note),
+    });
+    const saying = (page) => page.rows.filter((row) => row.type === "text" && String(row.content.text).startsWith("Manba: "));
+    assert.equal(saying(deck[0]).length, 0, `${style}: the cover names no page source`);
+    assert.equal(saying(deck[1]).length, 0, `${style}: the agenda names no page source`);
+    assert.equal(saying(deck[3]).length, 0, `${style}: a page given none says none`);
+    for (const [index, page] of deck.slice(2, -2).entries()) {
+      if (index === 1) continue;
+      const [line] = saying(page);
+      assert.ok(line, `${style}: content page ${index + 3} (${page.layout}) names its source`);
+      assert.match(String(line.content.text), /uz\.wikipedia\.org\/wiki\/Amir_Temur/);
+      assert.notEqual(line.style.textTransform, "uppercase", `${style}: an address is not set in capitals`);
+      assert.deepEqual(pageFaults(page.rows), [], `${style}: page ${index + 3} stays clean with its source`);
+    }
+  }
+});
+
+test("the writer names a page's sources by number, and the numbers never reach the slide", async () => {
+  const { contentPrompt } = await import(`${edge}/glass/content.js`);
+  const entry = { title: "T", kind: "bullets", focus: "f", imageQuery: null };
+  const slide = readSlide({ title: "Temur saltanati [2]", lead: "Samarqand poytaxt bo‘ldi [1][3].", points: [{ title: "Bir", text: "Matn [4]" }], sources: [2, 2, 3, 0, -1, 99, "x"] }, entry);
+  assert.deepEqual(slide.sources, [2, 3], "1-based, unique, within range");
+  assert.equal(slide.title, "Temur saltanati");
+  assert.equal(slide.lead, "Samarqand poytaxt bo‘ldi.");
+  assert.equal(readSlide({ title: "T" }, entry).sources, undefined, "no list asked for, none read");
+
+  const asked = contentPrompt({ topic: "t", slides: [{ index: 0, entry }], research: "Fakt [1]", requirements: "", references: ["wikipedia.org (uz.wikipedia.org/wiki/X)", "Ahmedov B."] });
+  assert.match(asked, /MANBALAR \(raqami bilan\):\n\[1\] wikipedia\.org/);
+  assert.match(asked, /\[2\] Ahmedov B\./);
+  assert.doesNotMatch(contentPrompt({ topic: "t", slides: [{ index: 0, entry }], research: "Fakt", requirements: "" }), /MANBALAR/);
+});
+

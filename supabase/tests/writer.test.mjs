@@ -4,7 +4,7 @@ import test from "node:test";
 import { buildEdgeModules } from "../scripts/build-edge.mjs";
 
 const edge = buildEdgeModules();
-const { GeminiWriter, ProviderUnavailable, attributionMetadata, retryable, userFacingFailure } =
+const { GeminiWriter, ProviderUnavailable, attributionMetadata, markedText, retryable, userFacingFailure } =
   await import(`${edge}/writer.js`);
 
 /**
@@ -512,3 +512,28 @@ test("a slow answer that arrives inside the limit is kept", async () => {
   const answer = await writer.structured({ prompt: "x", schemaName: "s", schema: { type: "object", properties: {} } });
   assert.deepEqual(answer.data, { ok: true });
 });
+
+/**
+ * For "Har bir sahifada manbani ko‘rsatish": the research notes carry, after
+ * every grounded sentence, the numbers of the pages it came from — numbered as
+ * `citations` lists them (first appearance, one number per page), so a slide
+ * that used "[2]" names `citations[1]` and nothing it guessed.
+ */
+test("grounded notes mark each sentence with the number of the page it came from", () => {
+  const text = "Temur 1336-yilda tug‘ilgan. Samarqand poytaxt bo‘ldi. Bu jumla manbasiz.";
+  const payload = { candidates: [{ groundingMetadata: {
+    groundingChunks: [
+      { web: { uri: "https://a.example/temur", title: "a.example" } },
+      { web: { uri: "https://b.example/samarqand", title: "b.example" } },
+      { web: { uri: "https://a.example/temur", title: "a.example" } },
+    ],
+    groundingSupports: [
+      { segment: { text: "Temur 1336-yilda tug‘ilgan." }, groundingChunkIndices: [0] },
+      { segment: { text: "Samarqand poytaxt bo‘ldi." }, groundingChunkIndices: [1, 2] },
+      { segment: { text: "Matnda yo‘q jumla." }, groundingChunkIndices: [1] },
+    ],
+  } }] };
+  assert.equal(markedText(payload, text), "Temur 1336-yilda tug‘ilgan. [1] Samarqand poytaxt bo‘ldi. [1][2] Bu jumla manbasiz.");
+  assert.equal(markedText({ candidates: [{}] }, text), text, "no grounding, the notes as they were");
+});
+

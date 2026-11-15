@@ -7,6 +7,8 @@ const edge = buildEdgeModules();
 const { FIELDS, RELATIVE_COLUMNS, missingFields, objectiveBlocks, sinceLine } = await import(`${edge}/objective.js`);
 const { buildDocx, cmToEmu, cmToTwips, escapeXml } = await import(`${edge}/docx.js`);
 const { unzip } = await import(`${edge}/unzip.js`);
+// The obyektivka is printed in the updated alphabet; the form's own labels are written in the old one.
+const { toNewAlphabet: spelled } = await import(`${edge}/alphabet.js`);
 
 /**
  * The obyektivka is a specific document, not a form somebody designed here.
@@ -64,16 +66,16 @@ test("the document carries the three headings the form has", () => {
 test("the relatives page starts on a new page and names the person again", () => {
   const broken = blocks().filter((block) => block.kind === "paragraph" && block.pageBreakBefore);
   assert.equal(broken.length, 1);
-  assert.match(broken[0].runs.map((run) => run.text).join(""), /yaqin qarindoshlari haqida/);
+  assert.match(broken[0].runs.map((run) => run.text).join(""), new RegExp(spelled("yaqin qarindoshlari haqida")));
 });
 
 test("every field the form names is present, in its order", () => {
   const all = words(blocks());
   for (const field of FIELDS) {
-    assert.ok(all.includes(field.label), `"${field.label}" yo‘q`);
+    assert.ok(all.includes(spelled(field.label)), `"${field.label}" yo‘q`);
   }
-  assert.ok(all.indexOf("Tug‘ilgan yili:") < all.indexOf("Millati:"));
-  assert.ok(all.indexOf("Millati:") < all.indexOf("Ilmiy darajasi:"));
+  assert.ok(all.indexOf(spelled("Tug‘ilgan yili:")) < all.indexOf(spelled("Millati:")));
+  assert.ok(all.indexOf(spelled("Millati:")) < all.indexOf(spelled("Ilmiy darajasi:")));
 });
 
 test("paired fields share a line, and full-width ones do not", () => {
@@ -100,7 +102,7 @@ test("the relatives table has the five columns of the sample, with a repeating h
   assert.equal(bordered.rows[0].header, true);
   assert.deepEqual(
     bordered.rows[0].cells.map((cell) => cell.blocks[0].runs[0].text),
-    [...RELATIVE_COLUMNS],
+    RELATIVE_COLUMNS.map(spelled),
   );
 });
 
@@ -119,8 +121,8 @@ test("a photograph is placed only when one was chosen", () => {
 test("what is still missing is named, so the form can say so", () => {
   assert.deepEqual(missingFields(sample), []);
   const missing = missingFields({ fullName: "", fields: {}, work: [], relatives: [] });
-  assert.ok(missing.includes("F.I.Sh."));
-  assert.ok(missing.includes("Tug‘ilgan yili"));
+  assert.ok(missing.includes(spelled("F.I.Sh.")));
+  assert.ok(missing.includes(spelled("Tug‘ilgan yili")));
 });
 
 /* ------------------------------------------------------------------ docx */

@@ -88,7 +88,9 @@ test("the sell screen can always show what went wrong", () => {
  */
 test("a database refusal keeps its own message", () => {
   const text = readFileSync(path.join(repoRoot, "user", "src", "lib", "format.ts"), "utf8");
-  const start = text.indexOf("export function asErrorMessage");
+  // `asErrorMessage` translates; the reading of the failure is `rawErrorMessage`.
+  assert.match(text, /export function asErrorMessage[^}]*rawErrorMessage\(error\)/, "the shown message is read from the failure itself");
+  const start = text.indexOf("function rawErrorMessage");
   const body = text.slice(start, text.indexOf("\n}", start));
   assert.match(body, /typeof error === "object"/, "a plain error object must be read, not discarded");
   assert.match(body, /row\.message/, "and its message is the sentence worth showing");
