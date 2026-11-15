@@ -6,6 +6,7 @@ import {
   SLIDE_MODEL_HEIGHT,
   SLIDE_MODEL_WIDTH,
   clampPresentationViewport,
+  deckWithAds,
   settledSlide,
   slideAfter,
   type PendingSlide,
@@ -27,6 +28,7 @@ import { QrVideoExperience } from "@/app/_qr/QrVideoExperience";
 
 import { ArenaScreen } from "@/app/oyingoh/ArenaScreen";
 
+import { AdBanner, type BannerTiming, type ScreenAd } from "./AdBanner";
 import { PhoneNotice } from "./PhoneNotice";
 import { WebSlideCanvas } from "./SlideRenderer";
 
@@ -55,6 +57,32 @@ type OpenedSession = {
   realtime_token: string;
 };
 
+/** The deck, and the ads its owner's plan carries (see `presentation_ads_for`). */
+type ScreenDeck = PresentationScreenDeck & {
+  ads: { pages: ScreenAd[]; banners: ScreenAd[]; banner: BannerTiming };
+};
+
+const NO_BANNER: BannerTiming = { first_seconds: 30, every_seconds: 240, show_seconds: 15 };
+
+function screenAds(value: unknown): ScreenDeck["ads"] {
+  const root = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  const list = (rows: unknown): ScreenAd[] => (Array.isArray(rows) ? rows : []).flatMap((row) => {
+    const ad = row as Record<string, unknown> | null;
+    if (typeof ad?.id !== "string" || typeof ad.url !== "string" || !ad.url.startsWith("https://") && !ad.url.startsWith("http://")) return [];
+    return [{ id: ad.id, url: ad.url, link: typeof ad.link === "string" && ad.link.startsWith("https://") ? ad.link : null }];
+  });
+  const timing = root.banner && typeof root.banner === "object" ? root.banner as Record<string, unknown> : {};
+  const seconds = (key: keyof BannerTiming) => {
+    const number = Number(timing[key]);
+    return Number.isFinite(number) && number > 0 ? number : NO_BANNER[key];
+  };
+  return {
+    pages: list(root.pages),
+    banners: list(root.banners),
+    banner: { first_seconds: seconds("first_seconds"), every_seconds: seconds("every_seconds"), show_seconds: seconds("show_seconds") },
+  };
+}
+
 type ViewportMessage = {
   scale: number;
   translate_x: number;
@@ -82,7 +110,7 @@ function viewportMessage(value: unknown): ViewportMessage | null {
   return { scale: safe.scale, translate_x: safe.translateX, translate_y: safe.translateY, slide };
 }
 
-function screenDeck(value: unknown): PresentationScreenDeck | null {
+function screenDeck(value: unknown): ScreenDeck | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const root = value as Record<string, unknown>;
   const nested = root.presentation && typeof root.presentation === "object" && !Array.isArray(root.presentation)
@@ -96,11 +124,12 @@ function screenDeck(value: unknown): PresentationScreenDeck | null {
     title,
     slides: slides as RenderableSlide[],
     elements: elements as RenderableSlideElement[],
+    ads: screenAds(root.ads),
   };
 }
 
-function imageUrls(deck: PresentationScreenDeck, slidePositions: number[]): string[] {
-  const ids = new Set(deck.slides.filter((slide) => slidePositions.includes(slide.position)).map((slide) => slide.id));
+function imageUrls(deck: PresentationScreenDeck, slideIds: string[]): string[] {
+  const ids = new Set(slideIds);
   const urls: string[] = [];
   for (const element of deck.elements) {
     if (element.type !== "image" || !ids.has(element.slide_id) || !element.content || typeof element.content !== "object" || Array.isArray(element.content)) continue;
@@ -123,7 +152,7 @@ export function PairingScreen({ experienceRow }: { experienceRow: unknown | null
   // pairing card with the film arriving a moment later.
   const [experience, setExperience] = useState<QrExperience | null>(() => experienceFromRow(experienceRow));
   const [session, setSession] = useState<Session | null>(null);
-  const [deck, setDeck] = useState<PresentationScreenDeck | null>(null);
+  const [deck, setDeck] = useState<ScreenDeck | null>(null);
   const [viewport, setViewport] = useState<PresentationViewport>({ ...RESET_PRESENTATION_VIEWPORT });
   const [fitScale, setFitScale] = useState(1);
   const [error, setError] = useState<string | null>(null);
@@ -396,10 +425,19 @@ export function PairingScreen({ experienceRow }: { experienceRow: unknown | null
     return () => clearTimeout(timer);
   }, [deck, loadDeck]);
 
-  const currentSlide = useMemo(
-    () => deck?.slides.find((slide) => slide.position === session?.current_slide) ?? null,
-    [deck, session?.current_slide],
-  );
+  /**
+   * The pages of the talk: the deck's slides with its owner's ad pages placed
+   * among them, as many as the session counted when the deck was chosen — the
+   * phone lays them out the same way, so "page 6" is the same page on both.
+   */
+  const pages = useMemo(() => {
+    if (!deck) return [];
+    const room = Math.max((session?.slide_count ?? 0) - deck.slides.length, 0);
+    return deckWithAds(deck.slides.length, deck.ads.pages.slice(0, room));
+  }, [deck, session?.slide_count]);
+  const currentPage = session && pages.length ? pages[Math.min(session.current_slide, pages.length - 1)] : null;
+  const currentSlide = currentPage?.kind === "slide" ? deck?.slides[currentPage.index] ?? null : null;
+  const currentAd = currentPage?.kind === "ad" ? currentPage.ad : null;
   const currentElements = useMemo(
     () => currentSlide ? deck?.elements.filter((element) => element.slide_id === currentSlide.id) ?? [] : [],
     [currentSlide, deck],
@@ -407,11 +445,16 @@ export function PairingScreen({ experienceRow }: { experienceRow: unknown | null
 
   useEffect(() => {
     if (!deck || !session) return;
-    for (const url of imageUrls(deck, [session.current_slide - 1, session.current_slide, session.current_slide + 1])) {
+    const near = [session.current_slide - 1, session.current_slide, session.current_slide + 1]
+      .map((at) => pages[at])
+      .filter((page) => page !== undefined);
+    const slideIds = near.flatMap((page) => page.kind === "slide" && deck.slides[page.index] ? [deck.slides[page.index]!.id] : []);
+    const adUrls = near.flatMap((page) => page.kind === "ad" ? [page.ad.url] : []);
+    for (const url of [...imageUrls(deck, slideIds), ...adUrls]) {
       const image = new window.Image();
       image.src = url;
     }
-  }, [deck, session]);
+  }, [deck, pages, session]);
 
   useEffect(() => {
     const stage = stageRef.current;
@@ -527,6 +570,10 @@ export function PairingScreen({ experienceRow }: { experienceRow: unknown | null
           </div>
         ) : deckLoading ? (
           <div className="presentation-waiting"><span className="presentation-spinner" /><p>Slayd yuklanmoqda…</p></div>
+        ) : currentAd ? (
+          <div className="presentation-slide-wrap presentation-ad-page">
+            <img src={currentAd.url} alt="Reklama" draggable={false} />
+          </div>
         ) : deckError || !deck || !currentSlide ? (
           <div className="presentation-waiting">
             <h1>Slayd yuklanmadi</h1>
@@ -543,6 +590,10 @@ export function PairingScreen({ experienceRow }: { experienceRow: unknown | null
             </div>
           </div>
         )}
+
+        {deck && deck.ads.banners.length ? (
+          <AdBanner ads={deck.ads.banners} timing={deck.ads.banner} paused={Boolean(currentAd) || !currentSlide} />
+        ) : null}
 
         {session.slide_count > 0 ? (
           <div className="presentation-overlay">

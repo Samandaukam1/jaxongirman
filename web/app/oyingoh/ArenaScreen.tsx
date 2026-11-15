@@ -12,6 +12,9 @@ import { supabase } from "@/lib/supabase";
 
 import { QrVideoExperience } from "@/app/_qr/QrVideoExperience";
 
+import { ArenaCrossword, type Racer } from "./ArenaCrossword";
+import { ArenaGrid, type GridBoard } from "./ArenaGrid";
+import { ArenaMafia, type MafiaBoard } from "./ArenaMafia";
 import { ARENA_WORDS, arenaLanguage } from "./arena-words";
 import { GameAvatar } from "./GameAvatar";
 import { Podium } from "./Podium";
@@ -38,10 +41,20 @@ type Snapshot = {
   phase_deadline: string | null;
   question_started_at: string | null;
   team_mode: boolean;
+  /** The host's "O‘rtadan qo‘shilish": latecomers welcome once the match is running. */
+  allow_late_join?: boolean;
   player_count: number;
   state_version: number;
   players: Player[];
   answered_count?: number;
+  /** quiz, crossword or grid. */
+  game_kind?: string;
+  /** A team grid game only: the board's picture of it. */
+  grid?: GridBoard | null;
+  /** Mafia only: who is in and who is out — never a card while a game is on. */
+  mafia?: MafiaBoard | null;
+  /** A crossword only: the race, best first. */
+  crossword_progress?: Racer[];
   question?: {
     id: string;
     type: GameQuestionType;
@@ -259,6 +272,14 @@ export function ArenaScreen({ handoff, hostSessionId, experienceRow }: {
     return () => clearInterval(timer);
   }, [readSnapshot]);
 
+  // A crossword's race moves without a phase change; the board reads it often.
+  const solvingCrossword = snapshot?.status === "question" && snapshot.question?.type === "crossword";
+  useEffect(() => {
+    if (!solvingCrossword) return;
+    const timer = setInterval(() => { void readSnapshot(); }, 3_000);
+    return () => clearInterval(timer);
+  }, [readSnapshot, solvingCrossword]);
+
   useEffect(() => {
     const changed = () => setFullscreen(Boolean(document.fullscreenElement));
     document.addEventListener("fullscreenchange", changed);
@@ -369,6 +390,10 @@ export function ArenaScreen({ handoff, hostSessionId, experienceRow }: {
   const options = question?.config.options ?? [];
   const reveal = snapshot?.reveal;
   const correct = reveal?.config?.correct;
+  // A team grid game draws itself, from the lobby to the end: none of the quiz's screens apply.
+  const gridGame = snapshot?.game_kind === "grid" && snapshot.game_selected;
+  // Mafia shares the lobby; after it, the board is its own (no questions, no leaderboard).
+  const mafiaGame = snapshot?.game_kind === "mafia" && snapshot.game_selected;
 
   return (
     <main className="arena">
@@ -386,7 +411,25 @@ export function ArenaScreen({ handoff, hostSessionId, experienceRow }: {
         </div>
       ) : null}
 
-      {snapshot?.status === "lobby" && snapshot.game_selected ? (
+      {/* The door stays open in the corner while the host lets latecomers in. */}
+      {gridGame && snapshot ? (
+        <ArenaGrid status={snapshot.status} title={snapshot.game_title} grid={snapshot.grid ?? null} words={words} />
+      ) : null}
+
+      {mafiaGame && snapshot?.mafia && snapshot.status !== "lobby" ? <ArenaMafia mafia={snapshot.mafia} words={words} /> : null}
+
+      {!gridGame && snapshot?.allow_late_join && joinQr
+        && ["countdown", "question", "question_result", "leaderboard"].includes(snapshot.status) ? (
+        <aside className="arena-late-join" aria-label={words.joinHint}>
+          <img src={joinQr} alt={words.qrAlt} width={112} height={112} />
+          <div>
+            <p className="arena-late-join-label">{words.code}</p>
+            <p className="arena-late-join-code">{spacedCode}</p>
+          </div>
+        </aside>
+      ) : null}
+
+      {!gridGame && snapshot?.status === "lobby" && snapshot.game_selected ? (
         <div className="arena-lobby">
           <div className="arena-lobby-main">
             <p className="eyebrow">JAXONGIRMAN O&lsquo;YINGOH</p>
@@ -419,7 +462,7 @@ export function ArenaScreen({ handoff, hostSessionId, experienceRow }: {
         </div>
       ) : null}
 
-      {(snapshot?.status === "question" || snapshot?.status === "question_result") && question ? (
+      {!gridGame && (snapshot?.status === "question" || snapshot?.status === "question_result") && question ? (
         <div className="arena-question">
           <div className="arena-question-head">
             <span className="arena-pill">{words.types[question.type]}</span>
@@ -437,13 +480,20 @@ export function ArenaScreen({ handoff, hostSessionId, experienceRow }: {
             ) : null}
           </div>
 
-          <h1 className="arena-prompt">{question.prompt}</h1>
+          <h1 className={`arena-prompt${question.type === "crossword" ? " is-small" : ""}`}>{question.prompt}</h1>
 
           {question.media_path ? (
             <img className="arena-media" src={mediaUrl(question.media_path)} alt="" />
           ) : null}
 
-          {question.type === "true_false" ? (
+          {question.type === "crossword" ? (
+            <ArenaCrossword
+              config={question.config}
+              answers={snapshot.status === "question_result" ? reveal?.config ?? null : null}
+              race={snapshot.crossword_progress ?? []}
+              words={words}
+            />
+          ) : question.type === "true_false" ? (
             <div className="arena-options two">
               <div className="arena-option" style={{ background: "#17B283" }}>
                 <span className="arena-option-glyph">✓</span><span>{words.truth}</span>
@@ -478,6 +528,19 @@ export function ArenaScreen({ handoff, hostSessionId, experienceRow }: {
             <WordCloud words={reveal.stats.words} empty={words.noWords} />
           ) : snapshot.status === "question_result" ? (
             <RevealText question={question} config={reveal?.config ?? {}} closed={words.closed} />
+          ) : question.type === "ordering" && (question.config.items ?? []).length > 0 ? (
+            // The room sees what is being ordered, in the order the phones were dealt it.
+            <div className="arena-order-wrap">
+              <ol className="arena-order">
+                {(question.config.items ?? []).map((item, index) => (
+                  <li key={item.id} className="arena-order-item" style={{ ["--i" as string]: index }}>
+                    <span className="arena-order-tag">{String.fromCharCode(65 + index)}</span>
+                    <span>{item.text}</span>
+                  </li>
+                ))}
+              </ol>
+              <p className="arena-await small">{words.answerOnPhone}</p>
+            </div>
           ) : (
             <p className="arena-await">{words.answerOnPhone}</p>
           )}
@@ -496,7 +559,7 @@ export function ArenaScreen({ handoff, hostSessionId, experienceRow }: {
         </div>
       ) : null}
 
-      {snapshot?.status === "leaderboard" && snapshot.leaderboard ? (
+      {!gridGame && !mafiaGame && snapshot?.status === "leaderboard" && snapshot.leaderboard ? (
         <div className="arena-board">
           <h1 className="arena-title">{words.leaderboard}</h1>
           {/* In team mode the teams lead: the individual board is still shown
@@ -523,7 +586,7 @@ export function ArenaScreen({ handoff, hostSessionId, experienceRow }: {
         </div>
       ) : null}
 
-      {snapshot?.status === "finished" && snapshot.leaderboard ? (
+      {!gridGame && !mafiaGame && snapshot?.status === "finished" && snapshot.leaderboard ? (
         <Podium
           players={snapshot.leaderboard.players}
           words={words}
@@ -575,9 +638,15 @@ function RevealText({ question, config, closed }: {
     const items = question.config.items ?? [];
     const byId = new Map(items.map((item) => [item.id, item.text]));
     const order = Array.isArray(config.order) ? config.order as string[] : [];
+    // The right order, place by place, arriving one after another.
     return (
-      <ol className="arena-reveal-list">
-        {order.map((id) => <li key={id}>{byId.get(id) ?? ""}</li>)}
+      <ol className="arena-order revealed">
+        {order.map((id, index) => (
+          <li key={id} className="arena-order-item" style={{ ["--i" as string]: index }}>
+            <span className="arena-order-tag">{index + 1}</span>
+            <span>{byId.get(id) ?? ""}</span>
+          </li>
+        ))}
       </ol>
     );
   }

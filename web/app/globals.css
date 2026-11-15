@@ -470,6 +470,37 @@ body.presentation-live > .site-footer { display: none; }
 }
 .presentation-command-error { top: auto; bottom: 86px; color: #FFD7DD; }
 
+/* An ad page: the ad's picture on black, the same 16:9 frame a slide has. */
+.presentation-ad-page { display: grid; place-items: center; }
+.presentation-ad-page img { width: 100%; height: 100%; object-fit: contain; user-select: none; }
+
+/* The 7:1 banner that comes down from the top now and then. It stops short of
+   the full-screen button on both sides, and its "Reklama" tab hangs below it
+   so the mark never covers what the ad says. */
+.presentation-banner {
+  position: fixed; z-index: 105; left: 50%; top: max(18px, env(safe-area-inset-top));
+  width: min(86vw, 1100px, calc(100vw - 170px));
+  transform: translate(-50%, calc(-100% - 60px)); opacity: 0;
+  transition: transform .7s cubic-bezier(.2,.8,.2,1), opacity .5s ease;
+  pointer-events: none;
+}
+.presentation-banner.is-shown { transform: translate(-50%, 0); opacity: 1; pointer-events: auto; }
+.presentation-banner-frame {
+  aspect-ratio: 7 / 1; border-radius: 14px; overflow: hidden; background: #000;
+  box-shadow: 0 18px 50px rgba(0,0,0,.45);
+}
+.presentation-banner a { display: block; width: 100%; height: 100%; }
+.presentation-banner img { display: block; width: 100%; height: 100%; object-fit: cover; user-select: none; }
+.presentation-banner-label {
+  position: absolute; right: 18px; top: 100%; padding: 2px 9px 3px; border-radius: 0 0 7px 7px;
+  color: rgba(255,255,255,.82); background: rgba(10,8,14,.78);
+  font: 600 11px/1.4 "Manrope_600SemiBold", Manrope, sans-serif; letter-spacing: .3px;
+}
+@media (max-width: 640px) {
+  .presentation-banner { width: calc(100vw - 140px); }
+  .presentation-banner-frame { border-radius: 8px; }
+}
+
 @media (max-width: 640px) {
   .presentation-fullscreen { right: 12px; top: 12px; }
   .presentation-overlay { bottom: 12px; }
@@ -478,6 +509,7 @@ body.presentation-live > .site-footer { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
   .presentation-spinner { animation-duration: 1.6s; }
+  .presentation-banner { transform: translate(-50%, 0); transition: opacity .5s ease; }
   .presentation-waiting svg.is-turning { animation-duration: 2.8s; }
 }
 
@@ -600,6 +632,138 @@ body:has(.arena) .arena { min-height: 100vh; }
   letter-spacing: -1.4px;
   font-weight: 700;
 }
+.arena-prompt.is-small { font-size: clamp(22px, 2.6vw, 38px); letter-spacing: -.6px; }
+
+/* ----------------------------------------------------------- crossword -- */
+.arena-xw { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: clamp(18px, 2.4vw, 40px); }
+.arena-xw-grid { min-height: 0; display: grid; place-items: center; }
+.arena-xw-grid svg { width: 100%; max-height: 68vh; height: auto; }
+.arena-xw-grid rect { fill: #fff; stroke: #22093F; stroke-width: .045; }
+.arena-xw-grid rect.is-revealed { fill: #F0E9FC; }
+.arena-xw-number { font-size: .27px; font-weight: 700; fill: #6B6280; }
+.arena-xw-letter { font-size: .58px; font-weight: 800; fill: #150E24; text-anchor: middle; }
+.arena-xw-side { min-height: 0; display: flex; flex-direction: column; gap: clamp(14px, 1.6vw, 24px); }
+.arena-xw-heading { margin: 0 0 8px; font-size: clamp(13px, 1.1vw, 17px); font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: var(--primary-bright); }
+.arena-xw-race { display: grid; gap: 8px; }
+.arena-xw-racer {
+  position: relative; overflow: hidden; display: flex; align-items: center; gap: 12px;
+  padding: 8px 14px; border-radius: 12px; background: rgba(255,255,255,.08);
+}
+.arena-xw-racer.is-done { background: rgba(23,178,131,.18); }
+.arena-xw-racer svg { border-radius: 50%; flex: 0 0 auto; position: relative; }
+.arena-xw-rank { width: 22px; font-weight: 800; color: var(--primary-bright); position: relative; }
+.arena-xw-name { flex: 1; font-size: clamp(15px, 1.3vw, 20px); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: relative; }
+.arena-xw-solved { font-size: clamp(14px, 1.2vw, 18px); font-weight: 800; font-variant-numeric: tabular-nums; position: relative; }
+.arena-xw-bar { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--primary-bright); transition: width .5s ease; }
+.arena-xw-clues {
+  min-height: 0; flex: 1; overflow: hidden; display: grid; grid-template-columns: 1fr 1fr; gap: 18px;
+  -webkit-mask-image: linear-gradient(180deg, #000 85%, transparent); mask-image: linear-gradient(180deg, #000 85%, transparent);
+}
+.arena-xw-clues ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.arena-xw-clues li { display: flex; gap: 8px; font-size: clamp(12px, 1vw, 16px); line-height: 1.35; color: rgba(255,255,255,.82); }
+.arena-xw-clues b { min-width: 20px; color: rgba(255,255,255,.55); }
+.arena-xw-clues strong { color: #7CE0BC; letter-spacing: .5px; }
+@media (max-width: 900px) { .arena-xw { grid-template-columns: 1fr; } }
+
+/* ---------------------------------------------------------- team grid -- */
+.arena-grid { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: clamp(10px, 1.4vw, 20px); position: relative; }
+.arena-grid-teams { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: clamp(10px, 1.4vw, 22px); }
+.arena-grid-team {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: clamp(12px, 1.4vw, 20px) clamp(16px, 2vw, 28px); border-radius: 18px;
+  background: rgba(255,255,255,.07); border: 2px solid transparent; transition: background .3s, border-color .3s, transform .3s;
+}
+.arena-grid-team.is-turn { border-color: var(--team); background: color-mix(in srgb, var(--team) 26%, transparent); transform: translateY(-2px); }
+.arena-grid-team-name { font-size: clamp(18px, 1.9vw, 30px); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.arena-grid-team-score { font-size: clamp(26px, 3vw, 48px); font-weight: 800; font-variant-numeric: tabular-nums; color: var(--team); }
+.arena-grid-turn { margin: 0; font-size: clamp(15px, 1.4vw, 22px); font-weight: 700; }
+.arena-grid-cells { flex: 1; min-height: 0; display: grid; gap: clamp(8px, 1vw, 14px); grid-auto-rows: minmax(0, 1fr); }
+.arena-grid-cell {
+  position: relative; min-height: 0; border-radius: 14px; display: grid; place-items: center; align-content: center; gap: 2px;
+  background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.16); transition: background .3s, opacity .3s, transform .3s;
+}
+.arena-grid-number { font-size: clamp(22px, 2.6vw, 44px); font-weight: 800; line-height: 1; }
+.arena-grid-points { font-size: clamp(12px, 1.1vw, 17px); font-weight: 700; color: var(--primary-bright); }
+.arena-grid-cell.is-won { background: var(--team); border-color: var(--team); }
+.arena-grid-owner { font-size: clamp(11px, 1vw, 15px); font-weight: 700; opacity: .9; max-width: 90%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.arena-grid-cell.is-missed { opacity: .28; }
+.arena-grid-cell.is-open { transform: scale(1.06); background: rgba(255,255,255,.28); }
+.arena-grid-open {
+  position: absolute; inset: 0; display: grid; place-items: center; padding: clamp(16px, 4vw, 64px);
+  background: rgba(15, 8, 30, .72); backdrop-filter: blur(6px); animation: arena-grid-in .35s ease both;
+}
+@keyframes arena-grid-in { from { opacity: 0; } to { opacity: 1; } }
+.arena-grid-card {
+  width: min(1100px, 100%); display: grid; gap: clamp(14px, 2vw, 28px); padding: clamp(24px, 3.4vw, 56px);
+  border-radius: 28px; background: #1E1236; border: 2px solid var(--team); box-shadow: 0 30px 80px rgba(0,0,0,.45);
+  animation: arena-grid-pop .45s cubic-bezier(.2,.8,.2,1) both;
+}
+@keyframes arena-grid-pop { from { transform: scale(.92); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.arena-grid-card-head { margin: 0; display: flex; gap: 14px; flex-wrap: wrap; font-size: clamp(14px, 1.3vw, 20px); font-weight: 700; }
+.arena-grid-card-head span { padding: 6px 14px; border-radius: 999px; background: rgba(255,255,255,.1); }
+.arena-grid-card-head span:last-child { background: var(--team); }
+.arena-grid-prompt { margin: 0; font-size: clamp(28px, 3.8vw, 58px); line-height: 1.15; letter-spacing: -1px; }
+.arena-grid-answer {
+  margin: 0; display: flex; align-items: baseline; gap: 16px; padding: 16px 22px; border-radius: 16px;
+  background: rgba(23,178,131,.18); color: #7CE0BC; font-size: clamp(22px, 2.6vw, 40px); font-weight: 800;
+}
+.arena-grid-answer span { font-size: clamp(13px, 1.1vw, 17px); letter-spacing: 1px; text-transform: uppercase; color: rgba(255,255,255,.65); }
+.arena-grid-final { flex: 1; display: grid; place-content: center; justify-items: center; gap: clamp(14px, 2vw, 28px); text-align: center; }
+.arena-grid-standings { width: min(760px, 90vw); display: grid; gap: 12px; }
+.arena-grid-standing {
+  display: flex; align-items: center; gap: 18px; padding: 14px 24px; border-radius: 18px;
+  background: rgba(255,255,255,.08); border: 2px solid var(--team); animation: arena-slide 380ms cubic-bezier(.2,.8,.3,1) both;
+}
+.arena-grid-standing.is-first { background: color-mix(in srgb, var(--team) 30%, transparent); transform: scale(1.04); }
+.arena-grid-place { font-size: clamp(22px, 2.4vw, 36px); font-weight: 800; width: 40px; color: var(--team); }
+.arena-grid-name { flex: 1; text-align: left; font-size: clamp(20px, 2.2vw, 34px); font-weight: 700; }
+.arena-grid-total { font-size: clamp(24px, 2.8vw, 44px); font-weight: 800; font-variant-numeric: tabular-nums; }
+
+/* Mafia on the board: the night is deep, the day is warm; a card is never shown until the game is over. */
+.arena:has(.arena-mafia.is-night) { background: radial-gradient(120% 90% at 50% 0%, #2B1466 0%, #0D0820 70%); }
+.arena:has(.arena-mafia.is-day) { background: radial-gradient(120% 90% at 50% 0%, #6B3FB8 0%, #2A1150 72%); }
+.arena-mafia { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: clamp(16px, 2.4vw, 36px); text-align: center; }
+.arena-mafia-head { display: grid; justify-items: center; gap: 6px; }
+.arena-mafia-phase {
+  display: inline-flex; align-items: center; gap: clamp(10px, 1.4vw, 22px); margin: 0;
+  font-size: clamp(48px, 7vw, 112px); font-weight: 800; letter-spacing: -0.02em; line-height: 1;
+}
+.arena-mafia-phase svg { width: 0.8em; height: 0.8em; }
+.arena-mafia.is-night .arena-mafia-phase svg { color: #CFC2FF; }
+.arena-mafia.is-day .arena-mafia-phase svg { color: #FFD27A; }
+.arena-mafia-hint { margin: 0; font-size: clamp(16px, 1.6vw, 26px); opacity: .78; }
+.arena-mafia-table {
+  flex: 1; min-height: 0; align-content: center;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(clamp(120px, 11vw, 180px), 1fr)); gap: clamp(10px, 1.4vw, 22px);
+}
+.arena-mafia-seat {
+  display: grid; justify-items: center; align-content: start; gap: 8px; padding: clamp(14px, 1.6vw, 24px) 10px;
+  border-radius: 20px; background: rgba(255,255,255,.07); border: 2px solid rgba(255,255,255,.08);
+  transition: opacity .4s, filter .4s, transform .4s;
+}
+.arena-mafia-seat.is-out { opacity: .45; filter: grayscale(1); transform: scale(.96); }
+.arena-mafia-seat.is-out .arena-mafia-name { text-decoration: line-through; }
+.arena-mafia-seat.is-revealed { border-color: var(--role); background: color-mix(in srgb, var(--role) 22%, transparent); }
+.arena-mafia-seat.is-revealed.is-out { opacity: .7; filter: none; }
+.arena-mafia-name { font-size: clamp(16px, 1.5vw, 24px); font-weight: 800; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.arena-mafia-out { font-size: clamp(12px, 1vw, 16px); font-weight: 700; color: #FF9DB0; }
+.arena-mafia-role {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px;
+  background: var(--role); color: #fff; font-weight: 800; font-size: clamp(13px, 1.1vw, 18px);
+}
+.arena-mafia-role svg { width: 1.1em; height: 1.1em; }
+.arena-mafia-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; }
+.arena-mafia-deck { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.arena-mafia-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
+  background: color-mix(in srgb, var(--role) 30%, rgba(255,255,255,.06)); border: 1px solid color-mix(in srgb, var(--role) 70%, transparent);
+  font-weight: 700; font-size: clamp(13px, 1.1vw, 17px);
+}
+.arena-mafia-chip svg { width: 1.1em; height: 1.1em; }
+.arena-mafia.is-over { justify-content: center; }
+.arena-mafia-winner { display: inline-flex; align-items: center; justify-content: center; gap: 14px; color: #fff; }
+.arena-mafia-winner svg { width: .9em; height: .9em; color: #FFD27A; }
+
 .arena-media {
   max-height: 34vh;
   align-self: center;
@@ -638,6 +802,44 @@ body:has(.arena) .arena { min-height: 100vh; }
   font-size: clamp(18px, 2.4vw, 34px); line-height: 1.7; color: #A8F0D8;
 }
 .arena-explanation { margin: 0; font-size: clamp(15px, 1.6vw, 22px); color: rgba(255,255,255,.72); line-height: 1.5; }
+
+/* "Tartibga soling" on the board: the items while the phones order them, then
+ * the right order, one place after another. */
+.arena-order-wrap { margin: auto 0; display: grid; gap: clamp(12px, 1.6vw, 22px); }
+.arena-order {
+  margin: auto 0; padding: 0; list-style: none;
+  display: grid; gap: clamp(8px, 1vw, 14px);
+}
+.arena-order-wrap .arena-order { margin: 0; }
+.arena-order-item {
+  display: flex; align-items: center; gap: clamp(12px, 1.4vw, 20px);
+  padding: clamp(10px, 1.4vw, 18px) clamp(14px, 1.8vw, 24px);
+  border-radius: 16px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14);
+  font-size: clamp(18px, 2.2vw, 30px); font-weight: 700;
+  animation: arena-order-in 420ms cubic-bezier(.2,.8,.2,1) both;
+  animation-delay: calc(var(--i, 0) * 90ms);
+}
+.arena-order-tag {
+  display: grid; place-items: center; flex: none;
+  width: clamp(36px, 3.6vw, 54px); height: clamp(36px, 3.6vw, 54px);
+  border-radius: 12px; background: rgba(0,0,0,.24);
+  font-size: clamp(15px, 1.6vw, 22px); font-variant-numeric: tabular-nums;
+}
+.arena-order.revealed .arena-order-item { background: rgba(23,178,131,.16); border-color: rgba(23,178,131,.55); color: #E8FFF6; }
+.arena-order.revealed .arena-order-tag { background: #17B283; color: #04261B; }
+.arena-await.small { margin: 0; font-size: clamp(14px, 1.5vw, 20px); }
+/* Latecomers welcome: a small QR and the code, out of the question's way. */
+.arena-late-join {
+  position: fixed; right: max(18px, env(safe-area-inset-right)); bottom: max(18px, env(safe-area-inset-bottom)); z-index: 20;
+  display: flex; align-items: center; gap: 12px; padding: 10px 14px 10px 10px;
+  border-radius: 18px; background: rgba(12, 8, 30, .72); border: 1px solid rgba(255,255,255,.16);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+}
+.arena-late-join img { width: clamp(72px, 7vw, 112px); height: auto; border-radius: 10px; background: #fff; }
+.arena-late-join-label { margin: 0; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.6); }
+.arena-late-join-code { margin: 2px 0 0; font-size: clamp(20px, 2.2vw, 30px); font-weight: 800; letter-spacing: .06em; font-variant-numeric: tabular-nums; color: #fff; }
+@keyframes arena-order-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .arena-order-item { animation: none; } }
 .arena-stats { margin: 0; font-size: clamp(14px, 1.4vw, 19px); color: rgba(255,255,255,.55); }
 .arena-cloud {
   flex: 1; display: flex; flex-wrap: wrap; gap: 10px 28px;
