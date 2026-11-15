@@ -3,17 +3,17 @@ import { supabase } from "./supabase";
 /**
  * Tillar va tarjimalar, as the console edits it.
  *
- * The app's interface words ship inside the app, in three static tables, and
+ * The app's interface words ship inside the app, in four static tables, and
  * are not edited here. What is edited here is the operator's own content — plan
  * names, coin packages, material types, the iOS payment notice, the refund
- * policy — in English and Russian beside its Uzbek source, and which languages
+ * policy — in English, Russian and Turkish beside its Uzbek source, and which languages
  * are offered for the interface and for deck generation. Every change goes
  * through an RPC that writes the audit log.
  */
 
-export type Language = "uz" | "en" | "ru";
-export const LANGUAGES: readonly Language[] = ["uz", "en", "ru"];
-export const LANGUAGE_NAMES: Record<Language, string> = { uz: "O‘zbekcha", en: "English", ru: "Русский" };
+export type Language = "uz" | "en" | "ru" | "tr";
+export const LANGUAGES: readonly Language[] = ["uz", "en", "ru", "tr"];
+export const LANGUAGE_NAMES: Record<Language, string> = { uz: "O‘zbekcha", en: "English", ru: "Русский", tr: "Türkçe" };
 
 export type LanguageSettings = { ui: Language[]; deck: Language[] };
 
@@ -23,7 +23,7 @@ export type TranslationEntry = {
   group: string;
   field: string;
   source: string;
-  values: { en?: string; ru?: string };
+  values: { en?: string; ru?: string; tr?: string };
   active: boolean;
 };
 
@@ -60,7 +60,7 @@ export const loadTranslationEntries = () => call<TranslationEntry[]>("admin_tran
 export const saveLanguageSettings = (settings: LanguageSettings, reason: string) =>
   call<LanguageSettings>("admin_set_language_settings", { p_value: settings, p_reason: reason });
 
-export const saveTranslation = (entry: Pick<TranslationEntry, "entity" | "id" | "field">, values: { en: string; ru: string }, reason = "") =>
+export const saveTranslation = (entry: Pick<TranslationEntry, "entity" | "id" | "field">, values: { en: string; ru: string; tr: string }, reason = "") =>
   call<{ values: { en?: string; ru?: string } }>("admin_set_translation", {
     p_entity: entry.entity, p_id: entry.id, p_field: entry.field, p_values: values, p_reason: reason,
   });

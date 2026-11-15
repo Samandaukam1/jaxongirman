@@ -1550,3 +1550,28 @@ audio.promo-block-media { background: transparent; max-height: none; }
   .promo-fonts { grid-template-columns: 1fr; }
   .pp-phone { width: 320px; height: 640px; }
 }
+
+/* Taqdimot reklamasi */
+.ads-section { display: grid; gap: 16px; }
+.ads-section-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.ads-section-head h2 { margin: 0 0 6px; font-size: 18px; }
+.ads-section-head .muted { margin: 0; max-width: 760px; font-size: 13.5px; }
+.ads-size { margin: 8px 0 0; font-size: 13px; font-weight: 600; color: var(--ink-muted); }
+.ads-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+.ads-grid.wide { grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); }
+.ads-card { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+.ads-card.is-off .ads-frame { opacity: .45; }
+.ads-frame { aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: #000; }
+.ads-frame.banner { aspect-ratio: 7 / 1; }
+.ads-frame img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.ads-card-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 640px) {
+  .ads-section-head { flex-direction: column; }
+  .ads-grid.wide { grid-template-columns: 1fr; }
+}
+
+/* Hammaga xabar: how a broadcast lands on a lock screen. */
+.broadcast-preview { margin-top: 18px; max-width: 380px; padding: 12px 14px; border-radius: 16px; background: var(--surface-muted, #f4f1fb); border: 1px solid var(--border); display: grid; gap: 4px; }
+.broadcast-preview strong { font-size: 15px; }
+.broadcast-preview p { margin: 0; color: var(--muted, #6b6680); font-size: 14px; }
+.broadcast-app { display: flex; align-items: center; gap: 6px; font-size: 11px; letter-spacing: .06em; color: var(--muted, #6b6680); font-weight: 700; }

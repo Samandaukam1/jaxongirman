@@ -213,7 +213,7 @@ function TranslationsPanel({ entries, onDone }: { entries: TranslationEntry[]; o
 
   const shown = useMemo(() => entries.filter((entry) =>
     (entity === "all" || entry.entity === entity)
-    && (!missingOnly || !entry.values.en || !entry.values.ru)), [entity, entries, missingOnly]);
+    && (!missingOnly || !entry.values.en || !entry.values.ru || !entry.values.tr)), [entity, entries, missingOnly]);
 
   return (
     <section className="panel flush">
@@ -231,7 +231,7 @@ function TranslationsPanel({ entries, onDone }: { entries: TranslationEntry[]; o
       </div>
       <div className="table-wrap">
         <table className="language-table">
-          <thead><tr><th>Kontent</th><th>O‘zbekcha (asl)</th><th>English</th><th>Русский</th><th /></tr></thead>
+          <thead><tr><th>Kontent</th><th>O‘zbekcha (asl)</th><th>English</th><th>Русский</th><th>Türkçe</th><th /></tr></thead>
           <tbody>
             {shown.map((entry) => <TranslationRow key={`${entry.entity}:${entry.id}:${entry.field}`} entry={entry} onDone={onDone} />)}
             {shown.length === 0 ? <tr><td colSpan={5} className="muted">Ko‘rsatiladigan kontent yo‘q.</td></tr> : null}
@@ -246,16 +246,17 @@ function TranslationsPanel({ entries, onDone }: { entries: TranslationEntry[]; o
 function TranslationRow({ entry, onDone }: { entry: TranslationEntry; onDone: (message: string) => Promise<void> }) {
   const [en, setEn] = useState(entry.values.en ?? "");
   const [ru, setRu] = useState(entry.values.ru ?? "");
+  const [tr, setTr] = useState(entry.values.tr ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const long = entry.source.length > 90;
-  const dirty = en !== (entry.values.en ?? "") || ru !== (entry.values.ru ?? "");
+  const dirty = en !== (entry.values.en ?? "") || ru !== (entry.values.ru ?? "") || tr !== (entry.values.tr ?? "");
 
   async function save() {
     setBusy(true);
     setError(null);
     try {
-      await saveTranslation(entry, { en: en.trim(), ru: ru.trim() });
+      await saveTranslation(entry, { en: en.trim(), ru: ru.trim(), tr: tr.trim() });
       await onDone(`${entry.group} — ${FIELD_LABELS[entry.field] ?? entry.field}: tarjima saqlandi.`);
     } catch (failure) {
       setError(errorMessage(failure));
@@ -275,6 +276,7 @@ function TranslationRow({ entry, onDone }: { entry: TranslationEntry; onDone: (m
       <td className="language-source">{entry.source}</td>
       <td><Field className="cell-input language-input" value={en} onChange={(e: { target: { value: string } }) => setEn(e.target.value)} lang="en" /></td>
       <td><Field className="cell-input language-input" value={ru} onChange={(e: { target: { value: string } }) => setRu(e.target.value)} lang="ru" /></td>
+      <td><Field className="cell-input language-input" value={tr} onChange={(e: { target: { value: string } }) => setTr(e.target.value)} lang="tr" /></td>
       <td>
         <button className="secondary-button compact" type="button" disabled={busy || !dirty} onClick={() => void save()}>
           {busy ? "…" : dirty ? <><Save size={14} /> Saqlash</> : <Check size={14} />}

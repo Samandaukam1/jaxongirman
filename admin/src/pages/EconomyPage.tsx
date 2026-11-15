@@ -260,7 +260,7 @@ function PlansPanel({ data, onEdit }: { data: EconomyOverview; onEdit: (plan: Ec
 function I18nFields({ label, value, onChange }: { label: string; value: I18n; onChange: (value: I18n) => void }) {
   return (
     <>
-      {(["uz", "en", "ru"] as const).map((language) => (
+      {(["uz", "en", "ru", "tr"] as const).map((language) => (
         <label key={language}>{label} ({language.toUpperCase()})
           <input value={value[language] ?? ""} onChange={(e) => onChange({ ...value, [language]: e.target.value })} />
         </label>
