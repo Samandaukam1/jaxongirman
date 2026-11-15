@@ -13,7 +13,7 @@
  * The languages a card can be read in. Uzbek is the default everywhere, so the
  * console's preview — which passes none — reads exactly as it always has.
  */
-export type CardLanguage = "uz" | "en" | "ru";
+export type CardLanguage = "uz" | "en" | "ru" | "tr";
 
 type Words = {
   som: string;
@@ -49,35 +49,35 @@ type Words = {
 
 const WORDS: Record<CardLanguage, Words> = {
   uz: {
-    som: "so‘m",
+    som: "söm",
     period: { month: "oy", week: "hafta", year: "yil", days: (n) => `${n} kun` },
     per: { day: "Kuniga", week: "Haftasiga", month: "Oyiga" },
     perUnit: { day: " / kun", week: " / hafta", month: " / oy" },
     periodNoun: { day: "Kunlik", week: "Haftalik", month: "Oylik" },
     presentations: (period, n) => `${{ day: "Kuniga", week: "Haftasiga", month: "Oyiga" }[period]} ${n} ta prezentatsiya`,
-    slidesUpTo: (n) => `Har birida ${n} tagacha slayd`,
-    unlocks: (n) => `Haftasiga ${n} ta premium ochish`,
-    tradeSell: "Marketplace’da sotish",
-    editProjects: "Marketplace loyihalarini tahrirlash",
-    gamesUnlimited: "Cheksiz O‘yingoh o‘yinlari",
-    gamesDaily: (n) => `Kuniga ${n} ta O‘yingoh o‘yini`,
+    slidesUpTo: (n) => `Har birida ${n} tagaça slayd`,
+    unlocks: (n) => `Haftasiga ${n} ta premium oçiş`,
+    tradeSell: "Marketplace’da sotiş",
+    editProjects: "Marketplace loyihalarini tahrirlaş",
+    gamesUnlimited: "Çeksiz Öyingoh öyinlari",
+    gamesDaily: (n) => `Kuniga ${n} ta Öyingoh öyini`,
     jcoin: "J Tanga ekotizimi",
-    unlimited: "Cheksiz",
+    unlimited: "Çeksiz",
     count: "ta",
-    upTo: (n) => `${n} tagacha`,
-    sections: { presentation: "Prezentatsiyalar", marathon: "Marafonlar", marketplace: "Marketplace", game: "O‘yingoh", pptx: "PPTX", jcoin: "J Tanga" },
+    upTo: (n) => `${n} tagaça`,
+    sections: { presentation: "Prezentatsiyalar", marathon: "Marafonlar", marketplace: "Marketplace", game: "Öyingoh", pptx: "PPTX", jcoin: "J Tanga" },
     rows: {
-      limit: "limit", slideCount: "Slayd soni", rollover: "Ishlatilmagan limit keyingi davrga", unlock: "Premium ochish",
-      sell: "Sotish", edit: "Tahrirlash", present: "Taqdimot qilish", download: "Yuklab olish", resale: "Qayta sotish",
-      freeGames: "Bepul o‘yinlar", afterFree: "Limitdan keyin", externalPptx: "Tashqi PPTX namoyishi",
-      outsidePlan: "Barcha tarifdan tashqari amallar", withJcoin: "J Tanga bilan",
+      limit: "limit", slideCount: "Slayd soni", rollover: "Işlatilmagan limit keyingi davrga", unlock: "Premium oçiş",
+      sell: "Sotiş", edit: "Tahrirlaş", present: "Taqdimot qiliş", download: "Yuklab oliş", resale: "Qayta sotiş",
+      freeGames: "Bepul öyinlar", afterFree: "Limitdan keyin", externalPptx: "Taşqi PPTX namoyişi",
+      outsidePlan: "Barça tarifdan taşqari amallar", withJcoin: "J Tanga bilan",
     },
-    usage: { presentation_weekly: "Prezentatsiyalar", marathon_unlock: "Premium ochish", game_free_daily: "O‘yinlar" },
-    used: (used, limit) => `${used} / ${limit} ishlatildi`,
+    usage: { presentation_weekly: "Prezentatsiyalar", marathon_unlock: "Premium oçiş", game_free_daily: "Öyinlar" },
+    used: (used, limit) => `${used} / ${limit} işlatildi`,
     resetsToday: "Yangi limitlar bugun yangilanadi",
     resetsTomorrow: "Yangi limitlar ertaga yangilanadi",
     resetsOn: (day) => `Yangi limitlar ${day} kuni yangilanadi`,
-    weekdays: ["yakshanba", "dushanba", "seshanba", "chorshanba", "payshanba", "juma", "shanba"],
+    weekdays: ["yakşanba", "duşanba", "seşanba", "çorşanba", "payşanba", "juma", "şanba"],
   },
   en: {
     som: "UZS",
@@ -140,6 +140,37 @@ const WORDS: Record<CardLanguage, Words> = {
     resetsTomorrow: "Лимиты обновятся завтра",
     resetsOn: (day) => `Лимиты обновятся: ${day}`,
     weekdays: ["воскресенье", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота"],
+  },
+  tr: {
+    som: "UZS",
+    period: { month: "ay", week: "hafta", year: "yıl", days: (n) => `${n} gün` },
+    per: { day: "Günlük:", week: "Haftalık:", month: "Aylık:" },
+    perUnit: { day: " / gün", week: " / hafta", month: " / ay" },
+    periodNoun: { day: "Günlük", week: "Haftalık", month: "Aylık" },
+    presentations: (period, n) => `${{ day: "Günde", week: "Haftada", month: "Ayda" }[period]} ${n} sunum`,
+    slidesUpTo: (n) => `Her biri en fazla ${n} slayt`,
+    unlocks: (n) => `Haftada ${n} premium kilit açma`,
+    tradeSell: "Mağazada satış",
+    editProjects: "Mağaza projelerini düzenleme",
+    gamesUnlimited: "Sınırsız Öyingoh oyunu",
+    gamesDaily: (n) => `Günde ${n} Öyingoh oyunu`,
+    jcoin: "J Tanga ekosistemi",
+    unlimited: "Sınırsız",
+    count: "",
+    upTo: (n) => `en fazla ${n}`,
+    sections: { presentation: "Sunumlar", marathon: "Maratonlar", marketplace: "Mağaza", game: "Öyingoh", pptx: "PPTX", jcoin: "J Tanga" },
+    rows: {
+      limit: "limit", slideCount: "Slayt sayısı", rollover: "Kullanılmayan limit sonraki döneme aktarılır", unlock: "Premium kilit açma",
+      sell: "Satış", edit: "Düzenleme", present: "Sunum yapma", download: "İndirme", resale: "Yeniden satış",
+      freeGames: "Ücretsiz oyunlar", afterFree: "Limitten sonra", externalPptx: "Dışarıdan PPTX sunma",
+      outsidePlan: "Plan dışındaki her şey", withJcoin: "J Tanga ile",
+    },
+    usage: { presentation_weekly: "Sunumlar", marathon_unlock: "Premium kilit açma", game_free_daily: "Oyunlar" },
+    used: (used, limit) => `${used} / ${limit} kullanıldı`,
+    resetsToday: "Limitler bugün yenilenir",
+    resetsTomorrow: "Limitler yarın yenilenir",
+    resetsOn: (day) => `Limitler ${day} günü yenilenir`,
+    weekdays: ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"],
   },
 };
 
@@ -384,6 +415,56 @@ export function economicsOf(plan: Pick<Plan, "priceAmount"> & { estimatedCostAmo
     marginPercent: price > 0 ? Math.round((grossProfit / price) * 100) : 0,
     lossy: price > 0 && grossProfit < 0,
   };
+}
+
+/* ----------------------------------------------------------------- worth */
+
+/** A J Tanga package as it is sold: coins (with any bonus) for a price. */
+export type CoinPackage = { coins: number; bonusCoins?: number; priceAmount: number; currency: string };
+
+/**
+ * The cheapest price of one J Tanga among the packages on sale, in so'm.
+ *
+ * The cheapest, on purpose: what a plan is compared against has to be the best
+ * deal a buyer could have got without it, or the saving it shows is overstated.
+ */
+export function coinRate(packages: readonly CoinPackage[]): number | null {
+  let best: number | null = null;
+  for (const pack of packages) {
+    const coins = pack.coins + (pack.bonusCoins ?? 0);
+    if (pack.currency !== "UZS" || coins <= 0 || pack.priceAmount <= 0) continue;
+    const rate = pack.priceAmount / coins;
+    if (best === null || rate < best) best = rate;
+  }
+  return best;
+}
+
+export type Worth = {
+  /** The plan's month of J Tanga, bought as packages instead. */
+  worth: number;
+  /** How much less the plan costs than that, per period. */
+  save: number;
+  /** The saving as a share of `worth`, rounded down so it is never overstated. */
+  percent: number;
+};
+
+/**
+ * What a coin plan is worth next to buying the same J Tanga separately.
+ *
+ * Only the coins are counted — selling in the shop, unlimited games and the
+ * rest are worth something too, but have no price to compare with, so the
+ * figure a card shows is the least the plan saves, never a guess. Null when the
+ * plan saves nothing that way, or there is nothing to compare with.
+ */
+export function planWorth(
+  plan: Pick<Plan, "priceAmount"> & { includedCoins: number },
+  rate: number | null,
+): Worth | null {
+  if (rate === null || rate <= 0 || plan.includedCoins <= 0 || plan.priceAmount <= 0) return null;
+  const worth = Math.round(plan.includedCoins * rate);
+  if (worth <= plan.priceAmount) return null;
+  const save = worth - plan.priceAmount;
+  return { worth, save, percent: Math.floor((save / worth) * 100) };
 }
 
 /* ---------------------------------------------------------------- usage */

@@ -29,7 +29,7 @@ function build() {
 }
 
 const dir = build();
-const { cardLines, detailSections, economicsOf, formatAmount, priceLine } = await import(`${dir}/index.js`);
+const { cardLines, coinRate, detailSections, economicsOf, formatAmount, planWorth, priceLine } = await import(`${dir}/index.js`);
 process.on("exit", () => rmSync(dir, { recursive: true, force: true }));
 
 /** The plan as it ships, so the tests describe what a buyer actually sees. */
@@ -62,7 +62,7 @@ test("the price reads the way it is spoken, and cannot wrap mid-number", () => {
 
   const { amount, unit } = priceLine(plan);
   assert.equal(amount, "36\u202F000");
-  assert.equal(unit, "so‘m / oy");
+  assert.equal(unit, "söm / oy");
   assert.ok(!amount.includes(" "), "an ordinary space here would let the price break in two");
 });
 
@@ -73,17 +73,17 @@ test("the price reads the way it is spoken, and cannot wrap mid-number", () => {
 test("every card line is generated from the plan, never hardcoded", () => {
   const labels = cardLines(plan).map((line) => line.label);
   assert.ok(labels.includes("Haftasiga 4 ta prezentatsiya"));
-  assert.ok(labels.includes("Har birida 16 tagacha slayd"));
-  assert.ok(labels.includes("Haftasiga 1 ta premium ochish"));
+  assert.ok(labels.includes("Har birida 16 tagaça slayd"));
+  assert.ok(labels.includes("Haftasiga 1 ta premium oçiş"));
 
   const five = { ...plan, features: { ...plan.features, presentation_weekly: { enabled: true, limit: 5, period: "week" } } };
   assert.ok(cardLines(five).map((l) => l.label).includes("Haftasiga 5 ta prezentatsiya"));
 });
 
 test("an allowance with no ceiling says so rather than showing a number", () => {
-  assert.ok(cardLines(plan).map((l) => l.label).includes("Cheksiz O‘yingoh o‘yinlari"));
+  assert.ok(cardLines(plan).map((l) => l.label).includes("Çeksiz Öyingoh öyinlari"));
   const limited = { ...plan, features: { ...plan.features, game_free_daily: { enabled: true, limit: 3, period: "day" } } };
-  assert.ok(cardLines(limited).map((l) => l.label).includes("Kuniga 3 ta O‘yingoh o‘yini"));
+  assert.ok(cardLines(limited).map((l) => l.label).includes("Kuniga 3 ta Öyingoh öyini"));
 });
 
 /**
@@ -94,25 +94,25 @@ test("an allowance with no ceiling says so rather than showing a number", () => 
 test("a switched-off capability leaves the card but appears in the detail", () => {
   const noSelling = { ...plan, features: { ...plan.features, marketplace_sell: { enabled: false } } };
   const labels = cardLines(noSelling).map((l) => l.label);
-  assert.ok(!labels.includes("Marketplace’da sotish"), "the card stops claiming it");
+  assert.ok(!labels.includes("Marketplace’da sotiş"), "the card stops claiming it");
   assert.ok(!labels.some((label) => /xarid/i.test(label)), "and never sells buying, which is open to everyone");
-  assert.ok(cardLines(plan).map((l) => l.label).includes("Marketplace’da sotish"), "a plan that sells says so");
+  assert.ok(cardLines(plan).map((l) => l.label).includes("Marketplace’da sotiş"), "a plan that sells says so");
 
   const marketplace = detailSections(noSelling).find((s) => s.key === "marketplace");
-  assert.ok(!marketplace.rows.some((r) => r.label === "Xarid qilish"), "buying is no row of a plan");
-  const sell = marketplace.rows.find((r) => r.label === "Sotish");
+  assert.ok(!marketplace.rows.some((r) => r.label === "Xarid qiliş"), "buying is no row of a plan");
+  const sell = marketplace.rows.find((r) => r.label === "Sotiş");
   assert.equal(sell.included, false, "the detail says plainly that it is not included");
   assert.equal(sell.value, "✕");
 });
 
 test("the detail answers the questions a buyer arrives with", () => {
   const marketplace = detailSections(plan).find((s) => s.key === "marketplace");
-  assert.equal(marketplace.rows.find((r) => r.label === "Yuklab olish").value, "✕");
-  assert.equal(marketplace.rows.find((r) => r.label === "Qayta sotish").value, "✕");
-  assert.equal(marketplace.rows.find((r) => r.label === "Tahrirlash").value, "✓");
+  assert.equal(marketplace.rows.find((r) => r.label === "Yuklab oliş").value, "✕");
+  assert.equal(marketplace.rows.find((r) => r.label === "Qayta sotiş").value, "✕");
+  assert.equal(marketplace.rows.find((r) => r.label === "Tahrirlaş").value, "✓");
 
   const game = detailSections(plan).find((s) => s.key === "game");
-  assert.equal(game.rows.find((r) => r.label === "Bepul o‘yinlar").value, "Cheksiz");
+  assert.equal(game.rows.find((r) => r.label === "Bepul öyinlar").value, "Çeksiz");
   assert.equal(game.rows.find((r) => r.label === "Limitdan keyin").value, "20 J");
 
   const pptx = detailSections(plan).find((s) => s.key === "pptx");
@@ -155,8 +155,8 @@ test("usage says what is left, not merely that somebody is premium", () => {
   ]);
 
   assert.equal(lines.length, 3, "a capability that is switched off has no allowance to report");
-  assert.deepEqual(lines.map((l) => l.detail), ["3 / 4 ishlatildi", "0 / 1 ishlatildi", "Cheksiz"]);
-  assert.deepEqual(lines.map((l) => l.label), ["Prezentatsiyalar", "Premium ochish", "O‘yinlar"]);
+  assert.deepEqual(lines.map((l) => l.detail), ["3 / 4 işlatildi", "0 / 1 işlatildi", "Çeksiz"]);
+  assert.deepEqual(lines.map((l) => l.label), ["Prezentatsiyalar", "Premium oçiş", "Öyinlar"]);
   assert.equal(lines[2].limit, null, "an unlimited line has no bar to fill");
 });
 
@@ -175,3 +175,32 @@ test("the reset is said as a day, because that is how a week is planned", () => 
   assert.equal(resetLabel(null), null, "nothing to say when there is no reset");
   assert.equal(resetLabel("not a date"), null);
 });
+
+/**
+ * The struck-through price on a card is what the plan's J Tanga would cost as
+ * packages — a real figure a buyer can check on the J Tanga screen, never an
+ * invented "old price". The prices are the ones on sale on 2026-10-22.
+ */
+test("a plan is compared with its own coins bought at the cheapest package rate", () => {
+  const packages = [
+    { coins: 100, priceAmount: 2900, currency: "UZS" },
+    { coins: 1000, priceAmount: 29000, currency: "UZS" },
+    { coins: 0, priceAmount: 2900, currency: "UZS" },
+  ];
+  assert.equal(coinRate(packages), 29);
+  assert.equal(coinRate([...packages, { coins: 500, bonusCoins: 100, priceAmount: 14500, currency: "UZS" }]), 14500 / 600,
+    "a bonus makes a package cheaper per coin, and the cheapest is what a plan has to beat");
+  assert.equal(coinRate([]), null);
+  assert.equal(coinRate([{ coins: 100, priceAmount: 5, currency: "USD" }]), null, "another currency is not compared with so'm");
+
+  assert.deepEqual(planWorth({ priceAmount: 19000, includedCoins: 1230 }, 29), { worth: 35670, save: 16670, percent: 46 });
+  assert.deepEqual(planWorth({ priceAmount: 34000, includedCoins: 2200 }, 29), { worth: 63800, save: 29800, percent: 46 });
+});
+
+test("a plan that saves nothing shows no saving", () => {
+  assert.equal(planWorth({ priceAmount: 40000, includedCoins: 1000 }, 29), null, "dearer than its coins");
+  assert.equal(planWorth({ priceAmount: 29000, includedCoins: 1000 }, 29), null, "exactly its coins");
+  assert.equal(planWorth({ priceAmount: 19000, includedCoins: 0 }, 29), null, "a quota plan has no coins to compare");
+  assert.equal(planWorth({ priceAmount: 19000, includedCoins: 1230 }, null), null, "no packages on sale");
+});
+
