@@ -3,6 +3,7 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js";
 import { requestContext } from "../_shared/auth.ts";
 import { preflight } from "../_shared/cors.ts";
 import { ExportAssetLoader } from "../_shared/export-assets.ts";
+import { ownerSlideAds, withAdPages } from "../_shared/export-ads.ts";
 import { loadExportDeck } from "../_shared/export-deck.ts";
 import { safeFileName, type ExportFormat } from "../_shared/export-model.ts";
 import { bodyJson, errorResponse, HttpError, json } from "../_shared/http.ts";
@@ -61,7 +62,8 @@ async function generateExport(
       error_message: null,
     });
 
-    const deck = await loadExportDeck(service, presentationId, ownerId);
+    // A free owner's file carries the ad pages their presentation shows.
+    const deck = withAdPages(await loadExportDeck(service, presentationId, ownerId), await ownerSlideAds(service, ownerId));
     await updateJob(service, jobId, ownerId, { progress: 20 });
 
     const assets = new ExportAssetLoader(service, ownerId, presentationId);

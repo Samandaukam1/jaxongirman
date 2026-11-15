@@ -17,10 +17,11 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js";
 
 import { createClient } from "npm:@supabase/supabase-js";
 
+import { toNewAlphabet } from "../_shared/alphabet.ts";
 import { requestContext } from "../_shared/auth.ts";
 import { preflight } from "../_shared/cors.ts";
 import {
-  DEFENSE_SCHEMA_NAME, defensePrompt, defenseSchema, defenseSystem, isUsable, readDefense,
+  DEFENSE_SCHEMA_NAME, defensePrompt, defenseSchema, defenseSystem, isUsable, readDefense, spellDefense,
   type DefenseScript, type DefenseSlide,
 } from "../_shared/defense.ts";
 import { renderDefensePdf } from "../_shared/defense-pdf.ts";
@@ -159,7 +160,8 @@ async function write(service: SupabaseClient, presentationId: string, ownerId: s
       attempts: 2,
     });
 
-    const script = readDefense(answer.data, deck);
+    // An Uzbek script is kept in the updated alphabet, so the screen and the PDF agree.
+    const script = spellDefense(readDefense(answer.data, deck), language);
     if (!isUsable(script)) throw new Error("script came back mostly empty");
 
     const stored = await service.from("presentation_defenses").upsert({
@@ -173,6 +175,10 @@ async function write(service: SupabaseClient, presentationId: string, ownerId: s
       failure_reason: null,
     });
     if (stored.error) throw stored.error;
+    // A new text needs a new file. Separate, and allowed to fail, so a
+    // database without the columns (202611150004) still gets its script.
+    await service.from("presentation_defenses").update({ pdf_path: null, pdf_rendered_at: null })
+      .eq("presentation_id", presentationId).then(() => {}, () => {});
 
     await service.from("ai_usage").insert({
       owner_id: ownerId,
@@ -198,7 +204,7 @@ async function write(service: SupabaseClient, presentationId: string, ownerId: s
       presentation_id: presentationId,
       owner_id: ownerId,
       status: "failed",
-      failure_reason: "Himoya matni yozilmadi. Qayta urinib ko‘ring.",
+      failure_reason: toNewAlphabet("Himoya matni yozilmadi. Qayta urinib ko‘ring."),
     });
     throw failure;
   }
@@ -265,6 +271,9 @@ Deno.serve(async (request) => {
     }
 
     if (body.action === "pdf") {
+      // The deck as it was when drawing began: an edit made during the render
+      // must leave the kept file older than the deck.
+      const renderStarted = new Date().toISOString();
       const stored = await service
         .from("presentation_defenses")
         .select("introduction, conclusion, sections, status")
@@ -304,6 +313,10 @@ Deno.serve(async (request) => {
       if (upload.error) throw upload.error;
       // The drawn slides were only ever a step on the way here.
       if (body.slidesPath === slidesPath) await service.storage.from("exports").remove([slidesPath]).catch(() => {});
+      // Kept, so the next download is a read rather than another render.
+      // Stamped before the deck can change again; allowed to fail like above.
+      await service.from("presentation_defenses").update({ pdf_path: path, pdf_rendered_at: renderStarted })
+        .eq("presentation_id", presentationId).eq("owner_id", ownerId).then(() => {}, () => {});
 
       return json({ ok: true, storagePath: path, sizeBytes: bytes.byteLength });
     }

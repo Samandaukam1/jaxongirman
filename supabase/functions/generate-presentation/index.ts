@@ -43,6 +43,8 @@ type RequestBody = {
    * Absent or unreadable means automatic.
    */
   design?: unknown;
+  /** "Har bir sahifada manbani ko‘rsatish": each content page names its sources at its foot. */
+  sourcesOnPages?: boolean;
   /** Accepted from older builds and ignored: every deck's design is invented for it. */
   paletteCode?: string;
   designSlug?: string;
@@ -58,12 +60,16 @@ function requirementsOf(value: unknown): string | null {
   return text || null;
 }
 
-/** Writes the design choice onto the job, keeping whatever else its context holds. */
-async function rememberDesign(service: SupabaseClient, jobId: string, design: DesignRequest): Promise<void> {
+/**
+ * Writes the author's choices onto the job — the design, and whether pages name
+ * their sources — keeping whatever else its context holds. The pipeline reads
+ * them from there, and a retry carries them to its own job.
+ */
+async function rememberOnJob(service: SupabaseClient, jobId: string, choices: { design?: DesignRequest; sources_on_pages?: true }): Promise<void> {
   const current = await service.from("generation_jobs").select("context").eq("id", jobId).maybeSingle();
   const context = (current.data?.context && typeof current.data.context === "object" ? current.data.context : {}) as Record<string, unknown>;
-  const saved = await service.from("generation_jobs").update({ context: { ...context, design } }).eq("id", jobId);
-  if (saved.error) console.error(JSON.stringify({ event: "design_not_remembered", job_id: jobId, reason: saved.error.message }));
+  const saved = await service.from("generation_jobs").update({ context: { ...context, ...choices } }).eq("id", jobId);
+  if (saved.error) console.error(JSON.stringify({ event: "choices_not_remembered", job_id: jobId, reason: saved.error.message }));
 }
 
 Deno.serve(async (request) => {
@@ -88,8 +94,12 @@ Deno.serve(async (request) => {
       const earlier = await context.serviceClient.from("generation_jobs").select("context")
         .eq("presentation_id", body.presentationId).eq("owner_id", context.user.id).neq("id", job.job_id)
         .order("created_at", { ascending: false }).limit(1).maybeSingle();
-      const carried = readDesignRequest((earlier.data?.context as { design?: unknown } | null)?.design);
-      if (carried) await rememberDesign(context.serviceClient, job.job_id, carried);
+      const earlierContext = earlier.data?.context as { design?: unknown; sources_on_pages?: unknown } | null;
+      const carried = readDesignRequest(earlierContext?.design);
+      const sourcesOnPages = earlierContext?.sources_on_pages === true;
+      if (carried || sourcesOnPages) {
+        await rememberOnJob(context.serviceClient, job.job_id, { ...(carried ? { design: carried } : {}), ...(sourcesOnPages ? { sources_on_pages: true as const } : {}) });
+      }
     } else {
       if (!body.topic || body.topic.trim().length < 3 || body.topic.length > 2000) throw new HttpError(400, "Topic must be 3–2000 characters", "invalid_topic");
       if (!body.style || !styles.has(body.style)) throw new HttpError(400, "Presentation style is invalid", "invalid_style");
@@ -157,10 +167,11 @@ Deno.serve(async (request) => {
       const requirements = requirementsOf(body.requirements);
       // Only a style and a family from the known lists are ever stored.
       const design = readDesignRequest(body.design);
-      if (design) {
+      const sourcesOnPages = body.sourcesOnPages === true;
+      if (design || sourcesOnPages) {
         // On the job first: nothing constrains that column, so the choice
         // reaches the generator even when the deck's own column refuses it.
-        await rememberDesign(context.serviceClient, job.job_id, design);
+        await rememberOnJob(context.serviceClient, job.job_id, { ...(design ? { design } : {}), ...(sourcesOnPages ? { sources_on_pages: true as const } : {}) });
       }
       if (requirements) {
         const stored = await context.serviceClient.from("presentations")
@@ -178,7 +189,7 @@ Deno.serve(async (request) => {
           .eq("id", body.presentationId).eq("owner_id", context.user.id);
         if (stored.error) console.error(JSON.stringify({ event: "design_request_not_stored", presentation_id: body.presentationId, style: design.style, reason: stored.error.message }));
       }
-      console.log(JSON.stringify({ event: "design_request", presentation_id: body.presentationId, style: design?.style ?? "auto", palette: design?.palette ?? null }));
+      console.log(JSON.stringify({ event: "design_request", presentation_id: body.presentationId, style: design?.style ?? "auto", palette: design?.palette ?? null, sources_on_pages: sourcesOnPages }));
 
       const prefix = `${context.user.id}/${body.presentationId}/`;
       const uploadPaths = Array.isArray(body.uploadPaths) ? [...new Set(body.uploadPaths.map(String))].filter((path) => path.startsWith(prefix)).slice(0, 8) : [];

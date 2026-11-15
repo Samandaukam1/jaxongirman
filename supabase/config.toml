@@ -500,3 +500,8 @@ enabled = true
 # declarative_schema_path = "./database"
 # JSON string passed through to pg-delta SQL formatting.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":80,\"commaStyle\":\"trailing\"}"
+
+# Woken by the database (pg_net), never by a client: it checks the shared
+# PUSH_DISPATCH_SECRET itself, so there is no user token to verify.
+[functions.push-dispatch]
+verify_jwt = false

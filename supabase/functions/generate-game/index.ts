@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js";
 
+import { toNewAlphabet } from "../_shared/alphabet.ts";
+import { crosswordAnswer, layoutCrossword, type Crossword } from "../_shared/crossword.ts";
 import { privacySafeIdentifier, requestContext } from "../_shared/auth.ts";
 import { preflight } from "../_shared/cors.ts";
 import { bodyJson, errorResponse, HttpError, json } from "../_shared/http.ts";
@@ -37,6 +39,12 @@ type RequestBody = {
   categoryId?: string | null;
   /** The language the questions are written in; a deck's own when made from one. */
   language?: string;
+  /** "crossword" makes a crossword, "grid" a team grid game, from the same sources. */
+  kind?: "quiz" | "crossword" | "grid";
+  /** Crossword only: how many words the grid should hold. */
+  wordCount?: number;
+  /** Crossword only: how long the room has to solve it, in minutes. */
+  minutes?: number;
 };
 
 /**
@@ -44,7 +52,7 @@ type RequestBody = {
  * The instructions to the model stay in Uzbek; one line says which language
  * every question, option and explanation must be in. No translation pass.
  */
-const GAME_LANGUAGES = ["uz", "en", "ru"] as const;
+const GAME_LANGUAGES = ["uz", "en", "ru", "tr"] as const;
 type GameLanguage = (typeof GAME_LANGUAGES)[number];
 const isGameLanguage = (value: unknown): value is GameLanguage =>
   typeof value === "string" && (GAME_LANGUAGES as readonly string[]).includes(value);
@@ -53,9 +61,30 @@ const WRITE_IN: Record<GameLanguage, string> = {
   uz: "- Barcha matn o‘zbek lotin alifbosida (o‘ va g‘ harflari bilan), imloviy xatosiz bo‘lsin. Turkcha yoki ruscha so‘z aralashmasin.",
   en: "- Write every question, option, answer and explanation in English (these instructions are in Uzbek; the answer is not). Correct spelling, no words from other languages.",
   ru: "- Все вопросы, варианты, ответы и пояснения пишите на русском языке, кириллицей (инструкции на узбекском, ответ — нет). Без ошибок и слов из других языков.",
+  tr: "- Write every question, option, answer and explanation in Turkish, with correct Turkish letters (ç ğ ı İ ö ş ü) (these instructions are in Uzbek; the answer is not). Correct spelling, no Uzbek or English words mixed in.",
 };
 
-const NEW_GAME_TITLE: Record<GameLanguage, string> = { uz: "Yangi o‘yin", en: "New game", ru: "Новая игра" };
+const NEW_GAME_TITLE: Record<GameLanguage, string> = { uz: "Yangi öyin", en: "New game", ru: "Новая игра", tr: "Yeni oyun" };
+
+/**
+ * An Uzbek game in the updated alphabet (O‘ → Ö, G‘ → Ğ, Sh → Ş, Ch → Ç).
+ *
+ * The model writes the current alphabet; players read the updated one. Typed
+ * answers are respelled too — grading folds both alphabets together
+ * (`game_normalize_text`), so «Toshkent» typed on an old keyboard still counts.
+ */
+function spellQuestion(raw: RawQuestion): RawQuestion {
+  const all = (values: string[] | null) => values?.map(toNewAlphabet) ?? null;
+  return {
+    ...raw,
+    prompt: toNewAlphabet(raw.prompt ?? ""),
+    explanation: toNewAlphabet(raw.explanation ?? ""),
+    options: all(raw.options),
+    ordered_items: all(raw.ordered_items),
+    pairs: raw.pairs?.map((pair) => ({ left: toNewAlphabet(pair.left ?? ""), right: toNewAlphabet(pair.right ?? "") })) ?? null,
+    accepted_answers: all(raw.accepted_answers),
+  };
+}
 
 const CYRILLIC = /[Ѐ-ӿ]/;
 
@@ -161,6 +190,11 @@ type RawGame = { title: string; description: string; questions: RawQuestion[] };
 
 // ---------------------------------------------------------------- mapping --
 const optionId = (index: number) => String.fromCharCode(97 + index); // a, b, c …
+
+/** A game's own title or description, respelled when the game is Uzbek. */
+function spellFor(language: GameLanguage, value: string | null | undefined): string {
+  return language === "uz" ? toNewAlphabet(value ?? "") : value ?? "";
+}
 
 function clean(value: string | null | undefined, max: number): string {
   return (value ?? "").trim().slice(0, max);
@@ -549,6 +583,8 @@ function adviceFor(code: string): string {
       return "AI bu mavzuda savol tuza olmadi. Mavzuni aniqroq yozing yoki boshqa savol turlarini tanlang.";
     case "save_failed":
       return "Savollar saqlanmadi. Qayta urinib ko‘ring.";
+    case "crossword_too_few":
+      return "Bu mavzuda bir-biri bilan kesishadigan yetarli so‘z topilmadi. Mavzuni kengroq yozing yoki so‘zlar sonini kamaytiring.";
     default:
       return "O‘yin yaratilmadi. Qayta urinib ko‘ring — muammo takrorlansa mavzuni qisqartiring.";
   }
@@ -625,7 +661,8 @@ async function runGeneration(task: GenerationTask): Promise<void> {
     }
 
     const returned = game.questions?.length ?? 0;
-    const mapped = game.questions.map(mapQuestion).filter((question) => question !== null);
+    const spelled = task.language === "uz" ? game.questions.map(spellQuestion) : game.questions;
+    const mapped = spelled.map(mapQuestion).filter((question) => question !== null);
     /**
      * One malformed question used to lose the whole game.
      *
@@ -677,8 +714,8 @@ async function runGeneration(task: GenerationTask): Promise<void> {
       await service.from("games").update({
         status: "draft",
         failure_reason: null,
-        title: current?.title?.trim() ? current.title : clean(game.title, 160) || NEW_GAME_TITLE[task.language],
-        description: current?.description?.trim() ? current.description : clean(game.description, 2000),
+        title: current?.title?.trim() ? current.title : clean(spellFor(task.language, game.title), 160) || NEW_GAME_TITLE[task.language],
+        description: current?.description?.trim() ? current.description : clean(spellFor(task.language, game.description), 2000),
       }).eq("id", task.gameId);
     }
 
@@ -718,6 +755,362 @@ async function runGeneration(task: GenerationTask): Promise<void> {
       failure_code: code,
       failure_detail: detail,
     }).eq("id", task.gameId).eq("status", "generating");
+  }
+}
+
+// ------------------------------------------------------------- crosswords --
+/**
+ * A crossword: the model chooses words and writes clues, `layoutCrossword`
+ * decides where they go. More words are asked for than the grid will hold,
+ * because some never cross anything and some are not one plain word.
+ */
+type CrosswordTask = {
+  service: SupabaseClient;
+  ownerId: string;
+  gameId: string;
+  source: string;
+  onlyFromSource: boolean;
+  difficulty: string;
+  audience: string;
+  /** How many words the grid should hold. */
+  words: number;
+  seconds: number;
+  safetyIdentifier: string;
+  language: GameLanguage;
+};
+
+type RawCrossword = { title: string; description: string; words: { answer: string; clue: string }[] };
+
+const crosswordSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["title", "description", "words"],
+  properties: {
+    title: { type: "string", description: "Krossvord nomi, qisqa" },
+    description: { type: "string", description: "1 gaplik tavsif" },
+    words: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["answer", "clue"],
+        properties: {
+          answer: { type: "string", description: "Javob: bitta so‘z, bo‘sh joysiz va tiresiz" },
+          clue: { type: "string", description: "Savol: javob so‘zini ishlatmasdan, qisqa va aniq" },
+        },
+      },
+    },
+  },
+} as const;
+
+/** One letter on Uzbek keyboards the grid has no cell for: w, c (not ch), x is fine. */
+const CROSSWORD_LETTERS: Record<GameLanguage, string> = {
+  uz: "- Javoblar faqat o‘zbek lotin harflarida (o‘, g‘, sh, ch bilan); w, c, é kabi o‘zbekcha bo‘lmagan harfli so‘z olma.",
+  en: "- Answers use the letters A–Z only: no accents, digits or apostrophes.",
+  ru: "- Ответы — только буквы русского алфавита, без цифр и дефисов.",
+  tr: "- Cevaplar yalnızca Türk alfabesinin harfleriyle (ç ğ ı İ ö ş ü dahil) yazılsın; rakam ve kesme işareti olmasın.",
+};
+
+function crosswordSystem(language: GameLanguage): string {
+  return [
+    "Sen Jaxongirman uchun krossvord tuzadigan metodistsan. Sen faqat so‘zlar va ularning savollarini tanlaysan; to‘rni dastur o‘zi chizadi.",
+    "Qoidalar:",
+    WRITE_IN[language],
+    CROSSWORD_LETTERS[language],
+    "- Har bir javob — BITTA so‘z: bo‘sh joysiz, tiresiz, raqamsiz, qisqartma emas; 3 dan 12 tagacha harf.",
+    "- Javoblar turli uzunlikda bo‘lsin; ko‘p uchraydigan harflari bor so‘zlar kesishishga qulay.",
+    "- Savol (clue) javob so‘zini ham, uning o‘zagini ham ichiga olmasin; 3–14 so‘zli, aniq va bir ma’noli bo‘lsin.",
+    "- Javoblar takrorlanmasin; hammasi mavzuga oid va faktik jihatdan to‘g‘ri bo‘lsin.",
+  ].join("\n");
+}
+
+function crosswordPrompt(task: CrosswordTask, asked: number): string {
+  return [
+    task.source,
+    "",
+    difficultyLine(task.difficulty),
+    audienceLine(task.audience),
+    `So‘zlar soni: ${asked} ta (to‘rga ulardan ${task.words} tasi kiradi, shuning uchun har xil uzunlikdagi so‘zlar bo‘lsin).`,
+    task.onlyFromSource
+      ? "MUHIM: So‘zlar va savollar FAQAT yuqoridagi manba matniga asoslansin."
+      : "So‘zlar va savollar mavzu bo‘yicha ishonchli faktlarga asoslansin.",
+    WRITE_IN[task.language].slice(2),
+  ].join("\n");
+}
+
+function mockCrossword(source: string): RawCrossword {
+  const words = [
+    ["MAKTAB", "Bolalar o‘qiydigan joy"], ["KITOB", "Sahifalari bor bilim manbai"], ["DAFTAR", "Yozish uchun varaqlar"],
+    ["QALAM", "Yozish quroli"], ["SINF", "Darslar o‘tadigan xona"], ["BILIM", "O‘qish natijasi"], ["DARSLIK", "Fan kitobi"],
+    ["MUALLIM", "Ustoz, o‘qituvchi"], ["IMTIHON", "Bilimni sinash"], ["TANAFFUS", "Darslar orasidagi dam"],
+    ["DOSKA", "Bo‘r bilan yoziladigan yuz"], ["ALIFBO", "Harflar tartibi"],
+  ];
+  return {
+    title: `Sinov krossvordi — ${source.replace(/^Mavzu: /, "").slice(0, 40)}`,
+    description: "Mock rejimida yaratilgan sinov krossvordi.",
+    words: words.map(([answer, clue]) => ({ answer: answer!, clue: clue! })),
+  };
+}
+
+/** The grid's entries: answers made grid words, clues spelled, the unusable dropped. */
+export function crosswordEntries(raw: RawCrossword, language: GameLanguage): { answer: string; clue: string }[] {
+  return (raw.words ?? []).flatMap((word) => {
+    const spelled = language === "uz" ? toNewAlphabet(word.answer ?? "") : word.answer ?? "";
+    const answer = crosswordAnswer(spelled, language);
+    const clue = clean(spellFor(language, word.clue), 200);
+    if (!answer || clue.length < 2) return [];
+    // A clue that gives its own answer away is no clue.
+    if (clue.toLocaleUpperCase(language === "tr" ? "tr" : undefined).replace(/[\s'‘’ʻʼ-]/g, "").includes(answer)) return [];
+    return [{ answer, clue }];
+  });
+}
+
+async function runCrossword(task: CrosswordTask): Promise<void> {
+  const { service } = task;
+  const log = { gameId: task.gameId, ownerId: task.ownerId, count: task.words } as unknown as GenerationTask;
+  stage("crossword_generation_started", log);
+  try {
+    const mode = Deno.env.get("GENERATION_MODE") ?? "real";
+    const asked = Math.min(task.words + 10, 35);
+    let raw: RawCrossword;
+    let usage: { input_tokens?: number; output_tokens?: number } = {};
+    let requestId: string | null = null;
+    let model = "mock";
+
+    if (mode === "mock") {
+      raw = mockCrossword(task.source);
+    } else {
+      const writer = geminiWriter();
+      if (!writer.configured) throw new GenerationFailure("provider_not_configured", "GEMINI_API_KEY is not set");
+      model = writer.writingModel;
+      const system = crosswordSystem(task.language);
+      try {
+        const answer = await writer.structured<RawCrossword>({
+          prompt: `${system}\n\n${crosswordPrompt(task, asked)}`,
+          system,
+          schemaName: "crossword",
+          schema: crosswordSchema as unknown as Record<string, unknown>,
+          maxOutputTokens: 4_000,
+        });
+        raw = answer.data;
+        usage = answer.usage;
+        requestId = answer.requestId;
+      } catch (refusal) {
+        const reason = refusal instanceof ProviderUnavailable ? refusal.reason : "unknown";
+        const code = reason === "not_configured" ? "provider_not_configured"
+          : /^http_4\d\d$/.test(reason) ? "provider_refused" : "provider_unavailable";
+        throw new GenerationFailure(code, `${reason}: ${String((refusal as Error)?.message ?? "").slice(0, 200)}`);
+      }
+    }
+
+    const entries = crosswordEntries(raw, task.language);
+    const maxSize = task.words <= 10 ? 13 : task.words <= 15 ? 15 : 17;
+    const crossword: Crossword | null = layoutCrossword(entries, { target: task.words, maxSize });
+    // A grid of a handful of words is not the crossword that was asked for.
+    if (!crossword || crossword.words.length < Math.min(6, task.words)) {
+      throw new GenerationFailure("crossword_too_few",
+        `model returned ${raw.words?.length ?? 0} word(s), ${entries.length} usable, ${crossword?.words.length ?? 0} placed`);
+    }
+    stage("crossword_generation_laid_out", log, { asked, returned: raw.words?.length ?? 0, usable: entries.length, placed: crossword.words.length });
+
+    const title = clean(spellFor(task.language, raw.title), 160) || NEW_GAME_TITLE[task.language];
+    const { error } = await service.from("game_questions").insert({
+      game_id: task.gameId,
+      owner_id: task.ownerId,
+      position: 0,
+      type: "crossword",
+      prompt: title.slice(0, 600),
+      explanation: "",
+      time_limit_seconds: Math.min(Math.max(task.seconds, 60), 3600),
+      base_points: 1000,
+      config: crossword,
+    });
+    if (error) throw new GenerationFailure("save_failed", `${error.code ?? ""} ${error.message}`.trim().slice(0, 300));
+
+    const { data: current } = await service.from("games").select("title, description").eq("id", task.gameId).single();
+    // Nothing to review: the grid is ready to solve, print or host as it is.
+    await service.from("games").update({
+      status: "ready",
+      failure_reason: null,
+      title: current?.title?.trim() ? current.title : title,
+      description: current?.description?.trim() ? current.description : clean(spellFor(task.language, raw.description), 2000),
+    }).eq("id", task.gameId);
+
+    const pricing = await providerPricing(service, model);
+    await service.from("ai_usage").insert({
+      owner_id: task.ownerId,
+      provider: mode === "mock" ? "mock" : "google",
+      model,
+      operation: "crossword_generation",
+      input_tokens: usage.input_tokens ?? 0,
+      output_tokens: usage.output_tokens ?? 0,
+      provider_cost_usd: ((usage.input_tokens ?? 0) / 1_000_000) * pricing.inputPerMillion
+        + ((usage.output_tokens ?? 0) / 1_000_000) * pricing.outputPerMillion,
+      request_id: requestId,
+      metadata: { game_id: task.gameId, words: crossword.words.length, language: task.language },
+    });
+    stage("crossword_generation_completed", log, { placed: crossword.words.length });
+  } catch (failure) {
+    const code = failure instanceof GenerationFailure ? failure.code : "unknown";
+    const detail = failure instanceof GenerationFailure ? failure.detail : String((failure as Error)?.message ?? failure).slice(0, 400);
+    stage("crossword_generation_failed", log, { code, detail });
+    await service.from("games").update({
+      status: "failed",
+      failure_reason: adviceFor(code),
+      failure_code: code,
+      failure_detail: detail,
+    }).eq("id", task.gameId).eq("status", "generating");
+  }
+}
+
+// --------------------------------------------------------------- team grid --
+/**
+ * The team grid game: open questions answered aloud, each with a short
+ * answer for the host, in three worths. One request per worth, side by side,
+ * so the board always has as many easy cells as hard ones.
+ */
+type GridTask = {
+  service: SupabaseClient; ownerId: string; gameId: string; source: string; onlyFromSource: boolean;
+  audience: string; language: GameLanguage;
+};
+
+const GRID_LEVELS = [
+  { points: 500, line: "Daraja: OSON — ko‘pchilik biladigan asosiy faktlar." },
+  { points: 1000, line: "Daraja: O‘RTACHA — mavzuni yaxshi bilgan odam javob beradi." },
+  { points: 1500, line: "Daraja: QIYIN — chuqur bilim yoki nozik fakt talab qiladi." },
+] as const;
+const GRID_PER_LEVEL = 12;
+
+type RawGrid = { title: string; description: string; questions: { prompt: string; answer: string }[] };
+
+const gridSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["title", "description", "questions"],
+  properties: {
+    title: { type: "string", description: "O‘yin nomi, qisqa" },
+    description: { type: "string", description: "1 gaplik tavsif" },
+    questions: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["prompt", "answer"],
+        properties: {
+          prompt: { type: "string", description: "Savol: og‘zaki javob beriladigan, aniq" },
+          answer: { type: "string", description: "Qisqa to‘g‘ri javob (1–5 so‘z), mezbon uchun" },
+        },
+      },
+    },
+  },
+} as const;
+
+function gridSystem(language: GameLanguage): string {
+  return [
+    "Sen jamoaviy viktorina o‘yini uchun savol tuzadigan metodistsan. Jamoalar savolga og‘zaki javob beradi, mezbon javobni tekshiradi.",
+    "Qoidalar:",
+    WRITE_IN[language],
+    "- Har bir savolning javobi qisqa va bir ma’noli bo‘lsin (1–5 so‘z, son yoki nom) — mezbon bir qarashda tekshira olsin.",
+    "- Variantli (A, B, C) savol emas, ochiq savol yoz; «ha/yo‘q» savollar bo‘lmasin.",
+    "- Savollar takrorlanmasin, faktik jihatdan aniq bo‘lsin va mavzuni har tomondan qamrasin.",
+  ].join("\n");
+}
+
+async function runGrid(task: GridTask): Promise<void> {
+  const { service } = task;
+  const log = { gameId: task.gameId, ownerId: task.ownerId, count: GRID_LEVELS.length * GRID_PER_LEVEL } as unknown as GenerationTask;
+  stage("grid_generation_started", log);
+  try {
+    const mode = Deno.env.get("GENERATION_MODE") ?? "real";
+    let model = "mock";
+    let usage = { input_tokens: 0, output_tokens: 0 };
+    let title = "";
+    let description = "";
+    const spell = (text: string) => spellFor(task.language, text);
+    const rows: { prompt: string; answer: string; points: number }[] = [];
+
+    if (mode === "mock") {
+      GRID_LEVELS.forEach((level, at) => {
+        for (let n = 1; n <= GRID_PER_LEVEL; n += 1) rows.push({ prompt: `Sinov savoli ${at + 1}.${n}`, answer: `Javob ${n}`, points: level.points });
+      });
+      title = "Sinov jamoaviy o‘yini";
+    } else {
+      const writer = geminiWriter();
+      if (!writer.configured) throw new GenerationFailure("provider_not_configured", "GEMINI_API_KEY is not set");
+      model = writer.writingModel;
+      const system = gridSystem(task.language);
+      let firstFailure: unknown = null;
+      const answers = await Promise.all(GRID_LEVELS.map(async (level, at) => {
+        try {
+          const answer = await writer.structured<RawGrid>({
+            prompt: `${system}\n\n${[
+              task.source, "", level.line, audienceLine(task.audience),
+              `Savollar soni: ${GRID_PER_LEVEL} ta.`,
+              task.onlyFromSource ? "MUHIM: Savollar FAQAT yuqoridagi manba matniga asoslansin." : "Savollar ishonchli faktlarga asoslansin.",
+              at > 0 ? "Boshqa darajalardagi savollarni takrorlama: bu savollar boshqacha bo‘lsin." : "",
+              WRITE_IN[task.language].slice(2),
+            ].filter(Boolean).join("\n")}`,
+            system,
+            schemaName: "team_grid_game",
+            schema: gridSchema as unknown as Record<string, unknown>,
+            maxOutputTokens: 4_000,
+          });
+          usage = { input_tokens: usage.input_tokens + (answer.usage.input_tokens ?? 0), output_tokens: usage.output_tokens + (answer.usage.output_tokens ?? 0) };
+          return { level, data: answer.data };
+        } catch (failure) {
+          firstFailure = firstFailure ?? failure;
+          return null;
+        }
+      }));
+      if (answers.every((entry) => entry === null)) {
+        const reason = firstFailure instanceof ProviderUnavailable ? firstFailure.reason : "unknown";
+        const code = reason === "not_configured" ? "provider_not_configured" : /^http_4\d\d$/.test(reason) ? "provider_refused" : "provider_unavailable";
+        throw new GenerationFailure(code, `${reason}: ${String((firstFailure as Error)?.message ?? "").slice(0, 200)}`);
+      }
+      const seen = new Set<string>();
+      for (const entry of answers) {
+        if (!entry) continue;
+        title = title || entry.data.title;
+        description = description || entry.data.description;
+        for (const question of entry.data.questions ?? []) {
+          const prompt = clean(spell(question.prompt), 600);
+          const answer = clean(spell(question.answer), 500);
+          if (prompt.length < 3 || !answer || seen.has(prompt.toLowerCase())) continue;
+          seen.add(prompt.toLowerCase());
+          rows.push({ prompt, answer, points: entry.level.points });
+        }
+      }
+    }
+    if (rows.length < 9) throw new GenerationFailure("no_usable_questions", `${rows.length} usable grid questions`);
+
+    const { error } = await service.from("game_questions").insert(rows.map((row, position) => ({
+      game_id: task.gameId, owner_id: task.ownerId, position, type: "open_answer", prompt: row.prompt, explanation: "",
+      time_limit_seconds: 30, base_points: row.points, config: { reference: row.answer, ai_grading: false },
+    })));
+    if (error) throw new GenerationFailure("save_failed", `${error.code ?? ""} ${error.message}`.trim().slice(0, 300));
+
+    const { data: current } = await service.from("games").select("title, description").eq("id", task.gameId).single();
+    await service.from("games").update({
+      status: "ready",
+      failure_reason: null,
+      title: current?.title?.trim() ? current.title : clean(spell(title), 160) || NEW_GAME_TITLE[task.language],
+      description: current?.description?.trim() ? current.description : clean(spell(description), 2000),
+    }).eq("id", task.gameId);
+
+    const pricing = await providerPricing(service, model);
+    await service.from("ai_usage").insert({
+      owner_id: task.ownerId, provider: mode === "mock" ? "mock" : "google", model, operation: "grid_generation",
+      input_tokens: usage.input_tokens, output_tokens: usage.output_tokens,
+      provider_cost_usd: (usage.input_tokens / 1_000_000) * pricing.inputPerMillion + (usage.output_tokens / 1_000_000) * pricing.outputPerMillion,
+      metadata: { game_id: task.gameId, count: rows.length, language: task.language },
+    });
+    stage("grid_generation_completed", log, { saved: rows.length });
+  } catch (failure) {
+    const code = failure instanceof GenerationFailure ? failure.code : "unknown";
+    const detail = failure instanceof GenerationFailure ? failure.detail : String((failure as Error)?.message ?? failure).slice(0, 400);
+    stage("grid_generation_failed", log, { code, detail });
+    await service.from("games").update({ status: "failed", failure_reason: adviceFor(code), failure_code: code, failure_detail: detail })
+      .eq("id", task.gameId).eq("status", "generating");
   }
 }
 
@@ -829,6 +1222,53 @@ Deno.serve(async (request) => {
       if (Array.isArray(enabled) && !enabled.includes(language)) {
         throw new HttpError(400, "Bu tilda o‘yin yaratish hozircha o‘chirilgan.", "language_disabled");
       }
+    }
+
+    if (body.kind === "grid") {
+      const { data: made, error: makeError } = await service
+        .from("games")
+        .insert({
+          owner_id: context.user.id, title, status: "generating", kind: "grid", source_type: sourceType,
+          source_presentation_id: presentationId, difficulty, audience, language,
+          category_id: body.categoryId && uuidPattern.test(body.categoryId) ? body.categoryId : null,
+        })
+        .select("id")
+        .single();
+      if (makeError || !made) throw makeError ?? new Error("game row was not created");
+      const gridWork = runGrid({ service, ownerId: context.user.id, gameId: made.id, source, onlyFromSource, audience, language });
+      if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(gridWork);
+      else await gridWork;
+      return json({ gameId: made.id, status: "generating", kind: "grid" }, 202);
+    }
+
+    if (body.kind === "crossword") {
+      const words = Number.isInteger(body.wordCount) ? Math.min(Math.max(body.wordCount!, 6), 25) : 15;
+      const minutes = Number.isInteger(body.minutes) ? Math.min(Math.max(body.minutes!, 2), 60) : Math.max(3, Math.round(words / 2));
+      const { data: made, error: makeError } = await service
+        .from("games")
+        .insert({
+          owner_id: context.user.id,
+          title,
+          status: "generating",
+          kind: "crossword",
+          source_type: sourceType,
+          source_presentation_id: presentationId,
+          difficulty,
+          audience,
+          language,
+          category_id: body.categoryId && uuidPattern.test(body.categoryId) ? body.categoryId : null,
+        })
+        .select("id")
+        .single();
+      if (makeError || !made) throw makeError ?? new Error("game row was not created");
+      const crosswordTask: CrosswordTask = {
+        service, ownerId: context.user.id, gameId: made.id, source, onlyFromSource,
+        difficulty, audience, words, seconds: minutes * 60, safetyIdentifier, language,
+      };
+      const crosswordWork = runCrossword(crosswordTask);
+      if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(crosswordWork);
+      else await crosswordWork;
+      return json({ gameId: made.id, status: "generating", kind: "crossword" }, 202);
     }
 
     const { data: created, error: createError } = await service

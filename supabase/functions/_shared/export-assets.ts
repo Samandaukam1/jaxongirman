@@ -3,7 +3,7 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js";
 import { object, string, type ExportElement } from "./export-model.ts";
 
 const OWNER_BUCKETS = new Set(["user-uploads", "presentation-assets", "generated-images", "stock-images"]);
-const PUBLIC_ASSET_BUCKETS = new Set(["design-assets", "jelement-assets"]);
+const PUBLIC_ASSET_BUCKETS = new Set(["design-assets", "jelement-assets", "presentation-ads"]);
 const MAX_ASSET_BYTES = 20 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 96 * 1024 * 1024;
 const MAX_ASSETS = 160;

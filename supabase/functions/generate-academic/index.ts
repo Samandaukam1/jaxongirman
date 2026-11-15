@@ -18,41 +18,33 @@
 import type { SupabaseClient } from "npm:@supabase/supabase-js";
 
 import {
-  PLAN_SCHEMA_NAME, PLAN_SYSTEM, REFERENCES_HEADING, SECTION_SCHEMA_NAME, SECTION_SYSTEM,
-  documentBlocks, planPrompt, planSchema, readPlan, readSection, sectionPrompt, sectionSchema,
-  skeletonFor, wordCount, type Source, type WorkKind,
+  PLAN_SCHEMA_NAME, PLAN_SYSTEM, SECTION_SCHEMA_NAME, SECTION_SYSTEM,
+  abstractLanguages, documentBlocks, pageOf, planPrompt, planSchema, readLayout, readPlan, readSection, sectionPrompt, sectionSchema,
+  sectionWords, skeletonFor, spellUzbek, structureOf, wordCount,
+  type Author, type CitationStyle, type DocLanguage, type FigureInput, type Source, type WorkKind,
 } from "../_shared/academic.ts";
+import { toNewAlphabet } from "../_shared/alphabet.ts";
 import { requestContext } from "../_shared/auth.ts";
-import { renderBlocksPdf } from "../_shared/blocks-pdf.ts";
+import { renderTypesetPdf } from "../_shared/blocks-pdf.ts";
+import { readSource } from "../_shared/citations.ts";
 import { preflight } from "../_shared/cors.ts";
-import { buildDocx } from "../_shared/docx.ts";
+import { buildDocx, type DocxImage } from "../_shared/docx.ts";
 import { geminiWriter } from "../_shared/gemini.ts";
 import { bodyJson, errorResponse, HttpError, json } from "../_shared/http.ts";
 import { ProviderUnavailable } from "../_shared/writer.ts";
 
-type Body = { workId?: string; action?: "plan" | "section" | "document"; format?: "docx" | "pdf" };
+type Body = { workId?: string; action?: "plan" | "section" | "document" | "preview"; format?: "docx" | "pdf" };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-/** Roughly how long each kind's sections run. Longer works, longer sections. */
-/**
- * How long each kind's sections run.
- *
- * Doubled: twelve pages of a course paper were coming out as ten, because a
- * section written to four hundred words is a page and a half and the structure
- * assumes three. A page of Times New Roman 14 at one-and-a-half spacing holds
- * roughly 300 words, so these are the counts that make the stated page range
- * true rather than aspirational.
- */
-const WORDS: Record<WorkKind, number> = {
-  article: 840, independent: 1240, referat: 1040, coursework: 1500,
-};
-
-/** Short sections that are lists rather than prose. */
-/** Sections that are lists or fixed-length blocks rather than prose. */
-const SHORT = new Set(["keywords", "plan"]);
-/** Three languages of abstract is three times one abstract. */
-const ABSTRACT_WORDS = 600;
+const LANGUAGE_CODES: ReadonlySet<string> = new Set(["uz", "ru", "en", "tr"]);
+const languageOf = (work: { language?: string | null }): DocLanguage =>
+  (LANGUAGE_CODES.has(String(work.language)) ? work.language : "uz") as DocLanguage;
+/** Uzbek is set in the updated alphabet; every other language as written. */
+const spellFor = (language: DocLanguage) => (language === "uz" ? spellUzbek : (text: string) => text);
+/** The work's sources in one shape, whether the research found them today or an older work stored them. */
+const sourcesOf = (work: { sources?: unknown }): Source[] =>
+  (Array.isArray(work.sources) ? work.sources : []).map(readSource).filter((source): source is Source => source !== null);
 
 function step(event: string, workId: string, extra: Record<string, unknown> = {}): void {
   console.log(JSON.stringify({ event, work_id: workId, ...extra }));
@@ -111,7 +103,7 @@ async function plan(service: SupabaseClient, workId: string, ownerId: string) {
   if (!held.ok) {
     await service.from("academic_works").update({
       status: "paused",
-      paused_reason: "Hisobingizdagi tangalar yetmadi. Tangalar qo‘shib, davom ettiring.",
+      paused_reason: toNewAlphabet("Hisobingizdagi tangalar yetmadi. Tangalar qo‘shib, davom ettiring."),
     }).eq("id", workId);
     throw new HttpError(402, "Tangalar yetarli emas.", "insufficient_credits");
   }
@@ -122,12 +114,19 @@ async function plan(service: SupabaseClient, workId: string, ownerId: string) {
   try {
     // The skeleton is guessed empirical first only so the planner sees the
     // fuller shape; it decides, and the skeleton is chosen again below.
+    const kind = work.kind as WorkKind;
+    const language = languageOf(work);
+    // An article's structure is the person's choice; an older one without it is decided by the research.
+    const chosen = kind === "article" ? structureOf(kind, work.structure, true) : null;
+    const skeleton = skeletonFor(kind, chosen, language);
     const prompt = planPrompt({
-      kind: work.kind as WorkKind,
+      kind,
+      structure: chosen,
+      language,
       topic: work.topic,
       field: work.field,
       requirements: work.requirements,
-      skeleton: skeletonFor(work.kind as WorkKind, true),
+      skeleton,
     });
     const answer = await writer.structured<unknown>({
       prompt: `${PLAN_SYSTEM}\n\n${prompt}`,
@@ -138,16 +137,19 @@ async function plan(service: SupabaseClient, workId: string, ownerId: string) {
       attempts: 2,
     });
 
-    const draft = readPlan(answer.data, skeletonFor(work.kind as WorkKind, true));
-    // Now that the planner has answered, the real skeleton is known.
-    const settled = readPlan(answer.data, skeletonFor(work.kind as WorkKind, draft.empirical));
+    const draft = readPlan(answer.data, skeleton);
+    // An article without a chosen structure takes the one the research supports.
+    const structure = kind === "article" && !work.structure ? structureOf(kind, null, draft.empirical) : chosen;
+    const settled = structure === chosen ? draft : readPlan(answer.data, skeletonFor(kind, structure, language));
+    const spell = spellFor(language);
 
     const rows = settled.sections.map((section, index) => ({
       work_id: workId,
       owner_id: ownerId,
       position: index,
       key: section.key,
-      heading: section.heading,
+      // Uzbek is shown in the updated alphabet, like everything Uzbek the app writes.
+      heading: spell(section.heading),
       brief: section.brief,
       status: "pending",
     }));
@@ -160,6 +162,9 @@ async function plan(service: SupabaseClient, workId: string, ownerId: string) {
     await service.from("academic_works").update({
       status: "writing",
       empirical: settled.empirical,
+      structure,
+      // The research suggests a UDC code; the author's own, when given, stands.
+      udc: String(work.udc ?? "").trim() || settled.udc,
       sources: settled.sources,
       estimated_credits: held.amount + rows.length * perSection,
       spent_credits: held.amount,
@@ -183,7 +188,7 @@ async function plan(service: SupabaseClient, workId: string, ownerId: string) {
     await refund(service, key, "academic_plan_failed", workId);
     await service.from("academic_works").update({
       status: "failed",
-      failure_reason: "Reja tuzilmadi. Qayta urinib ko‘ring.",
+      failure_reason: toNewAlphabet("Reja tuzilmadi. Qayta urinib ko‘ring."),
     }).eq("id", workId);
     throw failure;
   }
@@ -218,8 +223,8 @@ async function writeSection(service: SupabaseClient, workId: string, ownerId: st
   if (!held.ok) {
     await service.from("academic_works").update({
       status: "paused",
-      paused_reason: "Hisobingizdagi tangalar tugab qoldi. Tarifingizni yangilang yoki tanga sotib oling — "
-        + "yozilgan qismlar saqlab qo‘yildi.",
+      paused_reason: toNewAlphabet("Hisobingizdagi tangalar tugab qoldi. Tarifingizni yangilang yoki tanga sotib oling — "
+        + "yozilgan qismlar saqlab qo‘yildi."),
     }).eq("id", workId);
     throw new HttpError(402, "Tangalar yetarli emas.", "insufficient_credits");
   }
@@ -228,7 +233,10 @@ async function writeSection(service: SupabaseClient, workId: string, ownerId: st
   step("academic_section_started", workId, { key: pending.key, position: pending.position });
 
   try {
-    const sources = (work.sources ?? []) as Source[];
+    const sources = sourcesOf(work);
+    const kind = work.kind as WorkKind;
+    const language = languageOf(work);
+    const structure = structureOf(kind, work.structure, Boolean(work.empirical));
     const earlier = (sections.data ?? [])
       .filter((section) => section.status === "ready" && section.position < pending.position)
       .slice(-3)
@@ -241,17 +249,19 @@ async function writeSection(service: SupabaseClient, workId: string, ownerId: st
     const next = (sections.data ?? []).find((section) => section.position === pending.position + 1);
 
     const prompt = sectionPrompt({
-      kind: work.kind as WorkKind,
+      kind,
+      structure,
+      language,
+      empirical: Boolean(work.empirical),
       topic: work.topic,
       field: work.field,
+      key: pending.key as string,
       heading: pending.heading,
       brief: pending.brief,
       earlier,
       next: next ? (next.heading as string) : null,
       sources,
-      words: SHORT.has(pending.key as string)
-        ? 160
-        : pending.key === "abstract" ? ABSTRACT_WORDS : WORDS[work.kind as WorkKind],
+      words: sectionWords(kind, structure, pending.key as string, abstractLanguages(language).length),
     });
 
     const answer = await writer.structured<unknown>({
@@ -270,7 +280,7 @@ async function writeSection(service: SupabaseClient, workId: string, ownerId: st
     // Saved before anything else, which is what makes the work resumable.
     const stored = await service.from("academic_sections").update({
       status: "ready",
-      body: written.body,
+      body: spellFor(language)(written.body),
       citations: written.citations,
       words: wordCount(written.body),
     }).eq("id", pending.id);
@@ -313,40 +323,84 @@ async function writeSection(service: SupabaseClient, workId: string, ownerId: st
 
 /* -------------------------------------------------------------- document */
 
-async function render(service: SupabaseClient, workId: string, ownerId: string, format: "docx" | "pdf") {
+type Figure = { path: string; caption: string; width: number; height: number };
+
+/**
+ * Everything the finished paper is made of: its blocks, its pictures and its
+ * layout. The authors are the ones the person entered; an older work without
+ * any is signed with the profile, as it always was.
+ */
+async function documentFor(service: SupabaseClient, workId: string, ownerId: string, withPictures: boolean) {
   const work = await loadWork(service, workId, ownerId);
   const sections = await service
-    .from("academic_sections").select("key, heading, body, status").eq("work_id", workId).order("position");
+    .from("academic_sections").select("key, heading, body, status, figures").eq("work_id", workId).order("position");
   if (sections.error) throw sections.error;
-
   const written = (sections.data ?? []).filter((section) => section.status === "ready" && section.body);
   if (written.length === 0) throw new HttpError(409, "Hali hech narsa yozilmagan.", "empty");
 
-  const profile = await service.from("profiles")
-    .select("first_name, last_name, organization").eq("id", ownerId).maybeSingle();
-  // The address the person signs in with, which is the one an article prints.
-  const account = await service.auth.admin.getUserById(ownerId);
-  const authorName = [profile.data?.last_name, profile.data?.first_name].filter(Boolean).join(" ") || null;
+  let authors: Author[] = (Array.isArray(work.authors) ? work.authors : []).map((entry: Record<string, unknown>) => ({
+    name: String(entry?.name ?? ""), affiliation: String(entry?.affiliation ?? ""),
+    orcid: String(entry?.orcid ?? ""), email: String(entry?.email ?? ""),
+  })).filter((author: Author) => author.name.trim());
+  if (authors.length === 0) {
+    const profile = await service.from("profiles").select("first_name, last_name, organization").eq("id", ownerId).maybeSingle();
+    const account = await service.auth.admin.getUserById(ownerId);
+    const name = [profile.data?.last_name, profile.data?.first_name].filter(Boolean).join(" ");
+    if (name) authors = [{ name, affiliation: profile.data?.organization ?? "", orcid: "", email: account.data?.user?.email ?? "" }];
+  }
 
+  // The person's figures, at most 14 cm wide and 12 cm tall, in proportion.
+  const images: DocxImage[] = [];
+  const paths: string[] = [];
+  const figuresOf = async (list: unknown): Promise<FigureInput[]> => {
+    const out: FigureInput[] = [];
+    for (const figure of (Array.isArray(list) ? list : []) as Figure[]) {
+      if (!figure?.path || !(figure.width > 0) || !(figure.height > 0)) continue;
+      const scale = Math.min(14 / figure.width, 12 / figure.height);
+      if (withPictures) {
+        const file = await service.storage.from("user-uploads").download(figure.path);
+        if (file.error || !file.data) continue;
+        images.push({ bytes: new Uint8Array(await file.data.arrayBuffer()), extension: figure.path.toLowerCase().endsWith(".png") ? "png" : "jpeg" });
+      }
+      out.push({ index: paths.length, caption: String(figure.caption ?? ""), widthCm: figure.width * scale, heightCm: figure.height * scale });
+      paths.push(figure.path);
+    }
+    return out;
+  };
+  const withFigures: { key: string; heading: string; body: string; figures: FigureInput[] }[] = [];
+  for (const section of written) {
+    withFigures.push({
+      key: section.key as string, heading: section.heading as string, body: section.body as string,
+      figures: await figuresOf(section.figures),
+    });
+  }
+
+  const layout = readLayout(work.layout);
+  const kind = work.kind as WorkKind;
   const blocks = documentBlocks({
-    kind: work.kind as WorkKind,
-    topic: work.topic,
+    kind,
+    structure: structureOf(kind, work.structure, Boolean(work.empirical)),
+    language: languageOf(work),
+    title: work.topic,
     field: work.field,
-    authorName,
-    organization: profile.data?.organization ?? null,
-    email: account.data?.user?.email ?? null,
-    sections: written.map((section) => ({
-      key: section.key as string,
-      heading: section.heading as string,
-      body: section.body as string,
-    })),
-    sources: (work.sources ?? []) as Source[],
+    authors,
+    udc: String(work.udc ?? ""),
+    acknowledgements: String(work.acknowledgements ?? ""),
+    funding: String(work.funding ?? ""),
+    sections: withFigures,
+    sources: sourcesOf(work),
+    style: (work.citation_style ?? "gost") as CitationStyle,
+    layout,
   });
+  return { blocks, images, paths, layout, sections: written.length };
+}
 
+async function render(service: SupabaseClient, workId: string, ownerId: string, format: "docx" | "pdf") {
+  const { blocks, images, layout, sections } = await documentFor(service, workId, ownerId, true);
+  const page = pageOf(layout);
   const bytes = format === "pdf"
-    ? await renderBlocksPdf({ blocks, fontSize: 14, serif: true })
-    : await buildDocx({ blocks, fontSize: 14 });
-
+    ? (await renderTypesetPdf({ blocks, images, fontSize: layout.fontSize, page, pageNumbers: layout.pageNumbers })).pdf!
+    : await buildDocx({ blocks, images, fontSize: layout.fontSize, page, pageNumbers: layout.pageNumbers });
   const path = `${ownerId}/ilmiy/${workId}.${format}`;
   const upload = await service.storage.from("exports").upload(path, bytes, {
     contentType: format === "pdf"
@@ -355,8 +409,35 @@ async function render(service: SupabaseClient, workId: string, ownerId: string, 
     upsert: true,
   });
   if (upload.error) throw upload.error;
+  return { storagePath: path, format, sizeBytes: bytes.byteLength, sections };
+}
 
-  return { storagePath: path, format, sizeBytes: bytes.byteLength, sections: written.length, referencesHeading: REFERENCES_HEADING };
+const r1 = (value: number) => Math.round(value * 10) / 10;
+
+/**
+ * The A4 preview: the very layout the PDF is drawn from, page by page — each
+ * word where the file puts it — compacted for the wire. Pictures come as
+ * short-lived links rather than bytes.
+ */
+async function preview(service: SupabaseClient, workId: string, ownerId: string) {
+  const { blocks, paths, layout } = await documentFor(service, workId, ownerId, false);
+  const set = (await renderTypesetPdf({
+    blocks, fontSize: layout.fontSize, page: pageOf(layout), pageNumbers: layout.pageNumbers, layoutOnly: true,
+  })).layout;
+  const pictures = await Promise.all(paths.map(async (path) => {
+    const signed = await service.storage.from("user-uploads").createSignedUrl(path, 3600);
+    return signed.data?.signedUrl ?? null;
+  }));
+  return {
+    width: r1(set.width),
+    height: r1(set.height),
+    pictures,
+    pages: set.pages.map((page) => page.items.map((item) => (item.kind === "text"
+      ? [r1(item.x), r1(item.y), r1(item.size), (item.bold ? 1 : 0) + (item.italic ? 2 : 0), item.text]
+      : item.kind === "box"
+        ? ["b", r1(item.x), r1(item.y), r1(item.width), r1(item.height)]
+        : ["i", r1(item.x), r1(item.y), r1(item.width), r1(item.height), item.index]))),
+  };
 }
 
 Deno.serve(async (request) => {
@@ -374,6 +455,7 @@ Deno.serve(async (request) => {
     const ownerId = context.user.id;
 
     if (body.action === "plan") return json({ ok: true, ...await plan(service, workId, ownerId) });
+    if (body.action === "preview") return json({ ok: true, ...await preview(service, workId, ownerId) });
     if (body.action === "document") {
       return json({ ok: true, ...await render(service, workId, ownerId, body.format === "pdf" ? "pdf" : "docx") });
     }

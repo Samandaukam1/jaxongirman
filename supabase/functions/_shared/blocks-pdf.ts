@@ -16,7 +16,8 @@ import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, rgb, StandardFonts, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
 
 import type { Block, DocxImage, Paragraph, Run, Table } from "./docx.ts";
-import { DEFAULT_FACE, SERIF_BOLD_FACE, SERIF_FACE, bundledUrl } from "./fonts.ts";
+import { DEFAULT_FACE, SERIF_BOLD_FACE, SERIF_BOLD_ITALIC_FACE, SERIF_FACE, SERIF_ITALIC_FACE, bundledUrl } from "./fonts.ts";
+import { typeset, type Measure, type PageGeometry, type Typeset } from "./typeset.ts";
 
 /** Points per centimetre. */
 const PT_PER_CM = 72 / 2.54;
@@ -311,4 +312,80 @@ export async function renderBlocksPdf(input: {
   }
 
   return await pdf.save();
+}
+
+/* ------------------------------------------------------- a typeset page */
+
+/** The four faces of Tinos — Times New Roman's metrics — embedded whole (see above for why never subset). */
+export type SerifBook = { regular: PDFFont; bold: PDFFont; italic: PDFFont; boldItalic: PDFFont };
+
+export async function serifBook(pdf: PDFDocument): Promise<SerifBook> {
+  pdf.registerFontkit(fontkit);
+  const [regularBytes, boldBytes, italicBytes, boldItalicBytes] = await Promise.all(
+    [SERIF_FACE, SERIF_BOLD_FACE, SERIF_ITALIC_FACE, SERIF_BOLD_ITALIC_FACE].map((face) => load(bundledUrl(face))),
+  );
+  const regular = regularBytes ? await pdf.embedFont(regularBytes) : await pdf.embedFont(StandardFonts.TimesRoman);
+  const bold = boldBytes ? await pdf.embedFont(boldBytes) : await pdf.embedFont(StandardFonts.TimesRomanBold);
+  const italic = italicBytes ? await pdf.embedFont(italicBytes) : regular;
+  const boldItalic = boldItalicBytes ? await pdf.embedFont(boldItalicBytes) : bold;
+  return { regular, bold, italic, boldItalic };
+}
+
+const faceOf = (book: SerifBook, bold?: boolean, italic?: boolean) =>
+  bold ? (italic ? book.boldItalic : book.bold) : italic ? book.italic : book.regular;
+
+/** Measures with the faces the PDF will draw in, so the layout and the drawing agree. */
+export const serifMeasure = (book: SerifBook): Measure => (text, size, face) => {
+  try {
+    return faceOf(book, face.bold, face.italic).widthOfTextAtSize(text, size);
+  } catch {
+    return text.length * size * 0.5;
+  }
+};
+
+/**
+ * A document laid out by `typeset`, and the PDF of that layout. The layout is
+ * returned too: it is the A4 preview the app draws, word for word the file.
+ */
+export async function renderTypesetPdf(input: {
+  blocks: readonly Block[];
+  images?: readonly DocxImage[];
+  fontSize: number;
+  page: PageGeometry;
+  pageNumbers?: boolean;
+  /** Only the layout: no PDF is drawn. */
+  layoutOnly?: boolean;
+}): Promise<{ layout: Typeset; pdf: Uint8Array | null }> {
+  const pdf = await PDFDocument.create();
+  const book = await serifBook(pdf);
+  const layout = typeset(input.blocks, serifMeasure(book), { page: input.page, fontSize: input.fontSize, pageNumbers: input.pageNumbers });
+  if (input.layoutOnly) return { layout, pdf: null };
+
+  const pictures = new Map<number, PDFImage>();
+  for (const [index, picture] of (input.images ?? []).entries()) {
+    try {
+      pictures.set(index, picture.extension === "png" ? await pdf.embedPng(picture.bytes) : await pdf.embedJpg(picture.bytes));
+    } catch {
+      // A picture that will not decode is left out rather than failing the paper.
+    }
+  }
+
+  for (const sheetPage of layout.pages) {
+    const page = pdf.addPage([layout.width, layout.height]);
+    for (const item of sheetPage.items) {
+      if (item.kind === "text") {
+        try {
+          page.drawText(item.text, { x: item.x, y: layout.height - item.y, size: item.size, font: faceOf(book, item.bold, item.italic), color: INK });
+        } catch {
+          // A character no face has: the rest of the line still prints.
+        }
+      } else if (item.kind === "box") {
+        page.drawRectangle({ x: item.x, y: layout.height - item.y - item.height, width: item.width, height: item.height, borderColor: LINE, borderWidth: 0.75 });
+      } else {
+        const picture = pictures.get(item.index);
+        if (picture) page.drawImage(picture, { x: item.x, y: layout.height - item.y - item.height, width: item.width, height: item.height });
+      }
+    }
+  }
+  return { layout, pdf: await pdf.save() };
 }

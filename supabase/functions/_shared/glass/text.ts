@@ -46,6 +46,9 @@ export function cleanLine(value: unknown, max = 400): string {
   const text = normalizeUz(
     value
       .replace(/\*\*|__|`/g, "")
+      // Citation marks from the research notes ("[2]", "[1][3]") are for the
+      // writer to name its sources by, never words on a slide.
+      .replace(/\s*(?:\[\d{1,2}\])+/g, "")
       .replace(/^\s*(?:[-*•▪◦]|\d+[.)])\s+/, "")
       .replace(/\s*\n+\s*/g, " "),
   );
@@ -96,7 +99,8 @@ export function textWidth(text: string, size: number, font: FontPick, upper = fa
   let units = 0;
   let count = 0;
   for (const char of upper ? text.toUpperCase() : text) {
-    units += widths.get(char) ?? (/[A-ZÀ-Þ]/.test(char) ? average * 1.25 : average);
+    // A letter with a mark (Ö Ğ Ş Ç, é…) is as wide as the letter under it.
+    units += widths.get(char) ?? widths.get(char.normalize("NFD")[0]!) ?? (/[A-ZÀ-Þ]/.test(char) ? average * 1.25 : average);
     count += 1;
   }
   return units * size * SAFETY + tracking * count;

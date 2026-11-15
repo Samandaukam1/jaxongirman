@@ -3,7 +3,9 @@ import type { SupabaseClient } from "npm:@supabase/supabase-js";
 import { geminiWriter } from "./gemini.ts";
 import { attributionMetadata, ProviderUnavailable, userFacingFailure, type Attachment } from "./writer.ts";
 import type { PresentationStyle } from "./presentation-types.ts";
-import { resolveCitations } from "./glass/sources.ts";
+import { address, resolveCitations } from "./glass/sources.ts";
+import { toNewAlphabet } from "./alphabet.ts";
+import { spellOutline, spellSlide, spellText } from "./glass/spelling.ts";
 import { composeGlassDeck, deckSources, findPictures, glassRows, inventDesign, libraryFaces, notesSources, pictureWishes, writeOutline, writeSlides, type Call } from "./glass-engine.ts";
 import type { Picture } from "./glass/compose.ts";
 import { placeSourceImages, readOutline, readSlide, type SourceImage } from "./glass/content.ts";
@@ -55,7 +57,7 @@ async function runStage<T>(service: SupabaseClient, input: PipelineInput, key: t
     const recorded = await service.from("generation_steps").update({
       status: "succeeded", progress: 100, completed_at: new Date().toISOString(),
       duration_ms: took,
-      message: successMessage?.(value) ?? null,
+      message: successMessage ? toNewAlphabet(successMessage(value)) : null,
     }).eq("job_id", input.jobId).eq("key", key);
     // Read, not discarded. A column added minutes ago is missing from the API's
     // schema cache for a while, and an unchecked write in that window drops the
@@ -330,12 +332,14 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
       // deck's column is held to a list of styles by a constraint, and a style
       // newer than that list was refused there — which used to turn the choice
       // silently into "automatic". The job's copy has no such list.
-      const jobContext = (jobResult.data?.context ?? {}) as { design?: unknown };
+      const jobContext = (jobResult.data?.context ?? {}) as { design?: unknown; sources_on_pages?: unknown };
       const request = readDesignRequest(presentationResult.data.design_request) ?? readDesignRequest(jobContext.design);
       return {
         presentation: { ...presentationResult.data, design_request: request },
         sources: sourcesResult.data.map((row) => row.label),
         assets: assetsResult.data,
+        // "Har bir sahifada manbani ko‘rsatish", asked for on the create screen.
+        sourcesOnPages: jobContext.sources_on_pages === true,
       };
     }, (value) => `${value.presentation.requested_slide_count} ta slayd uchun ish boshlandi`);
 
@@ -369,6 +373,7 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
     const research = await runStage(input.service, input, "researching", async () => {
       const empty = {
         text: "",
+        marked: "",
         citations: [] as { title: string; url: string }[],
         usage: {} as { input_tokens?: number; output_tokens?: number },
         requestId: null as string | null,
@@ -488,6 +493,7 @@ export async function runGenerationPipeline(input: PipelineInput): Promise<void>
       attachments: context.attachments,
       images: context.images,
       pricing: await providerPricing(input.service),
+      sourcesOnPages: prepared.sourcesOnPages,
     });
 
     /**
@@ -618,7 +624,7 @@ async function runGlass(params: {
     language?: string | null;
   };
   research: {
-    text: string; citations: { title: string; url: string }[];
+    text: string; marked?: string; citations: { title: string; url: string }[];
     usage: { input_tokens?: number; output_tokens?: number }; provider: string; model: string; attempts: number; groundedSearch?: boolean;
   };
   entered: string[];
@@ -626,6 +632,8 @@ async function runGlass(params: {
   /** The author's pictures that were read, each already in the deck's folder. */
   images: LoadedImage[];
   pricing: { for(model: string): { inputPerMillion: number; outputPerMillion: number } };
+  /** Each content page names the sources its words came from, small at its foot. */
+  sourcesOnPages?: boolean;
 }): Promise<number> {
   const { input, writer, presentation } = params;
   const mock = params.mode === "mock";
@@ -641,9 +649,19 @@ async function runGlass(params: {
     return await writeOutline({ writer, language, topic: presentation.topic, count, research, requirements, attachments: params.attachments, images, calls });
   }, (value) => `${value.slides.length} ta mazmun slaydi rejalashtirildi`);
 
+  /**
+   * The numbered list a page's sources are named from: the pages the search
+   * read, in the order the notes' `[n]` marks count them, then the sources the
+   * author typed in. Asked for only when the author turned the setting on.
+   */
+  const searched = params.research.citations.slice(0, 10);
+  const references = params.sourcesOnPages
+    ? [...searched.map((citation) => `${citation.title} (${address(citation.url, 70)})`), ...params.entered]
+    : [];
   const written = await withDeadline(runStage(input.service, input, "writing_content", async () => {
     if (mock) return { slides: outline.slides.map((entry) => readSlide(mockGlassSlide(entry.title), entry)), fallbacks: [] as number[] };
-    return await writeSlides({ writer, language, topic: presentation.topic, outline, research, requirements, calls });
+    const notes = references.length && params.research.marked ? params.research.marked.trim() : research;
+    return await writeSlides({ writer, language, topic: presentation.topic, outline, research: notes, requirements, references, calls });
   }, (value) => value.fallbacks.length
     ? `${value.slides.length} ta slayd yozildi (${value.fallbacks.length} tasi rejadan tiklandi)`
     : `${value.slides.length} ta slayd matni yozildi`), 150_000, "writing_content");
@@ -678,16 +696,26 @@ async function runGlass(params: {
     : [];
   const cited = mock ? params.research.citations : await resolveCitations(params.research.citations.slice(0, 10));
   const sources = deckSources(params.entered, cited, fromNotes);
+  // Each page's own sources, as the reader will see them: a page the search
+  // read by its address, a source the author typed in as they typed it.
+  const nameOf = (n: number): string | null => n >= 1 && n <= searched.length
+    ? address(cited[n - 1]?.url ?? searched[n - 1]!.url, 90)
+    : params.entered[n - searched.length - 1] ?? null;
+  const pageSources = params.sourcesOnPages
+    ? written.slides.map((slide) => [...new Set((slide.sources ?? []).map(nameOf).filter((name): name is string => Boolean(name)))].slice(0, 2).join("; ") || null)
+    : undefined;
   const pages = await runStage(input.service, input, "building_layouts", async () => composeGlassDeck({
     dna: design.dna,
     language,
     face: design.face,
-    topic: presentation.topic,
-    outline,
-    slides: written.slides,
-    author: presentation.author_name,
-    teacher: presentation.teacher_name,
+    // An Uzbek deck is shown in the updated alphabet; sources keep their own spelling.
+    topic: spellText(presentation.topic, language),
+    outline: spellOutline(outline, language),
+    slides: written.slides.map((slide) => spellSlide(slide, language)),
+    author: spellText(presentation.author_name, language),
+    teacher: spellText(presentation.teacher_name, language),
     sources,
+    pageSources,
     pictures,
   }), (value) => `${value.length} ta sahifa noldan kompozitsiya qilindi`);
 

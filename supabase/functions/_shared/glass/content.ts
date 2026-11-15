@@ -46,6 +46,8 @@ export type SlideContent = {
   imageQuery: string | null;
   /** The page's subject as an icon, for the large mark behind it. */
   icon?: string;
+  /** Which numbered sources the page's words came from (1-based), when asked for. */
+  sources?: number[];
 };
 
 export type OutlineEntry = { title: string; kind: SlideKind; focus: string; imageQuery: string | null };
@@ -177,6 +179,11 @@ export function contentSchema(): Record<string, unknown> {
             },
             left: side,
             right: side,
+            sources: {
+              type: "array",
+              items: { type: "integer" },
+              description: "Shu slayd matni olingan manbalarning raqamlari MANBALAR ro‘yxatidan (1–2 ta). Ro‘yxat berilmagan bo‘lsa yoki mos manba bo‘lmasa — []",
+            },
           },
           required: ["index", "eyebrow", "icon", "title", "lead", "points", "stats", "quote", "chart", "left", "right"],
         },
@@ -253,7 +260,10 @@ export function contentPrompt(input: {
   slides: { index: number; entry: OutlineEntry }[];
   research: string;
   requirements: string;
+  /** Numbered sources a page may name, in the order the notes' `[n]` marks count them. */
+  references?: readonly string[];
 }): string {
+  const references = input.references ?? [];
   const pages = input.slides.map(({ index, entry }) =>
     `#${index} [${entry.kind}] ${entry.title}\n   Maqsad: ${entry.focus}\n   Talab: ${KIND_BRIEF[entry.kind]}`).join("\n");
   return [
@@ -267,6 +277,15 @@ export function contentPrompt(input: {
     "",
     pages,
     input.research ? `\nTEKSHIRILGAN MA’LUMOTLAR (faqat shulardan foydalaning):\n${input.research}` : "",
+    references.length
+      ? [
+        "\nMANBALAR (raqami bilan):",
+        ...references.map((reference, at) => `[${at + 1}] ${reference}`),
+        "Har bir slaydning sources maydoniga shu slayddagi ma’lumot olingan manbalarning raqamlarini yozing (1–2 ta).",
+        "Ma’lumotlardagi [n] belgisi o‘sha jumla qaysi manbadan ekanini bildiradi — raqamni shundan oling. Taxmin qilmang: mos manba bo‘lmasa sources=[].",
+        "[n] belgilarini slayd matnining o‘ziga yozmang.",
+      ].join("\n")
+      : "",
   ].filter((line) => line !== "").join("\n");
 }
 
@@ -503,6 +522,9 @@ export function readSlide(value: unknown, outline: OutlineEntry): SlideContent {
     right: side(raw.right),
     imageQuery: outline.imageQuery,
     ...(isIcon(raw.icon) ? { icon: raw.icon } : {}),
+    ...(Array.isArray(raw.sources)
+      ? { sources: [...new Set(raw.sources.filter((n): n is number => Number.isInteger(n) && n >= 1 && n <= 40))].slice(0, 3) }
+      : {}),
   };
 
   if (isRecord(raw.chart)) {

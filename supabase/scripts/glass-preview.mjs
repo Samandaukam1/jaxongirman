@@ -24,6 +24,8 @@ const args = process.argv.slice(2);
 const outDir = path.resolve(args.find((arg) => !arg.startsWith("--")) ?? path.join(tmpdir(), "glass-preview"));
 const seedArg = Number(args.find((arg) => arg.startsWith("--seed="))?.split("=")[1] ?? 0);
 const style = args.find((arg) => arg.startsWith("--style="))?.split("=")[1] ?? "glass";
+// --sources: every content page names a source at its foot ("Har bir sahifada manbani ko‘rsatish").
+const withSources = args.includes("--sources");
 mkdirSync(outDir, { recursive: true });
 
 const edge = buildEdgeModules();
@@ -105,6 +107,9 @@ directions.forEach((raw, index) => {
     author: "Jaxongir Qurbonnazarov", teacher: "D. Karimova", year: 2026,
     slides, sources: ["UNESCO. AI and the Future of Education, 2023", "OECD Digital Education Outlook 2023", "HolonIQ: Education AI market, 2024", "O‘zbekiston Respublikasi Raqamli texnologiyalar vazirligi, 2024"],
     cover: picture(`cover${index}`), pictures,
+    pageSources: withSources
+      ? slides.map((_, at) => at % 2 ? "unesco.org/en/digital-education/artificial-intelligence" : "oecd.org/education/digital-education-outlook-2023; HolonIQ: Education AI market, 2024")
+      : undefined,
   });
   for (const [at, slide] of deck.entries()) {
     const faults = pageFaults(slide.rows);

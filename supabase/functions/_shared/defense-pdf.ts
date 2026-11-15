@@ -233,6 +233,9 @@ class Script {
   safe(value: string): string {
     if (this.book.unicode) return value;
     return value
+      // Ğ and Ş are not in WinAnsi (Ö and Ç are): spelled the old way rather than dropped.
+      .replace(/Ş/g, "Sh").replace(/ş/g, "sh").replace(/Ğ/g, "G'").replace(/ğ/g, "g'")
+      .replace(/ı/g, "i").replace(/İ/g, "I")
       .replace(/[‘’ʻʼ]/g, "'")
       .replace(/[“”]/g, "\"")
       .replace(/[–—]/g, "-")
@@ -283,8 +286,8 @@ function thumbnail(page: PDFPage, book: Book, slide: PDFEmbeddedPage | null, num
 
 /** The script's headings, in the deck's language. */
 const LABELS = {
-  uz: { script: "Himoya matni", scriptUpper: "HIMOYA MATNI", presenter: "TAQDIMOTCHI", teacher: "O‘QITUVCHI", slides: "SLAYDLAR", duration: "DAVOMIYLIGI",
-        intro: "Kirish", slide: "SLAYD", keyPoint: "ASOSIY FIKR", next: "KEYINGI SLAYDGA O‘TISH", end: "YAKUN", conclusion: "Xulosa", thanks: "E’tiboringiz uchun rahmat!",
+  uz: { script: "Himoya matni", scriptUpper: "HIMOYA MATNI", presenter: "TAQDIMOTÇI", teacher: "ÖQITUVÇI", slides: "SLAYDLAR", duration: "DAVOMIYLIGI",
+        intro: "Kiriş", slide: "SLAYD", keyPoint: "ASOSIY FIKR", next: "KEYINGI SLAYDGA ÖTIŞ", end: "YAKUN", conclusion: "Xulosa", thanks: "E’tiboringiz uçun rahmat!",
         count: (n: number) => `${n} ta`,
         minutes: (value: number) => (value < 1 ? "1 daqiqadan kam" : `~${Math.round(value)} daqiqa`) },
   en: { script: "Presentation script", scriptUpper: "PRESENTATION SCRIPT", presenter: "PRESENTER", teacher: "SUPERVISOR", slides: "SLIDES", duration: "DURATION",
@@ -295,6 +298,10 @@ const LABELS = {
         intro: "Вступление", slide: "СЛАЙД", keyPoint: "ГЛАВНАЯ МЫСЛЬ", next: "ПЕРЕХОД К СЛЕДУЮЩЕМУ СЛАЙДУ", end: "ЗАВЕРШЕНИЕ", conclusion: "Заключение", thanks: "Спасибо за внимание!",
         count: (n: number) => String(n),
         minutes: (value: number) => (value < 1 ? "меньше минуты" : `~${Math.round(value)} мин`) },
+  tr: { script: "Konuşma metni", scriptUpper: "KONUŞMA METNİ", presenter: "SUNUCU", teacher: "DANIŞMAN", slides: "SLAYTLAR", duration: "SÜRE",
+        intro: "Giriş", slide: "SLAYT", keyPoint: "ANA FİKİR", next: "SONRAKİ SLAYDA GEÇİŞ", end: "KAPANIŞ", conclusion: "Sonuç", thanks: "Dinlediğiniz için teşekkürler!",
+        count: (n: number) => String(n),
+        minutes: (value: number) => (value < 1 ? "bir dakikadan az" : `~${Math.round(value)} dk`) },
 };
 
 export async function renderDefensePdf(input: {

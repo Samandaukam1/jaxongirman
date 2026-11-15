@@ -1,3 +1,4 @@
+import { toNewAlphabet } from "../_shared/alphabet.ts";
 import { requestContext } from "../_shared/auth.ts";
 import { preflight } from "../_shared/cors.ts";
 import { bodyJson, errorResponse, HttpError, json } from "../_shared/http.ts";
@@ -32,7 +33,7 @@ Deno.serve(async (request) => {
     const command = body.command.trim().slice(0, 600);
 
     const [presentationResult, slideResult, elementResult] = await Promise.all([
-      context.userClient.from("presentations").select("id,title,visual_dna").eq("id", body.presentationId).single(),
+      context.userClient.from("presentations").select("id,title,visual_dna,language").eq("id", body.presentationId).single(),
       context.userClient.from("slides").select("id,title,layout,background").eq("id", body.slideId).eq("presentation_id", body.presentationId).single(),
       context.userClient.from("slide_elements").select("id,slide_id,type,x,y,width,height,rotation,z_index,opacity,style,content").eq("slide_id", body.slideId).order("z_index"),
     ]);
@@ -114,7 +115,9 @@ Deno.serve(async (request) => {
       if (operation.color !== null) style.color = operation.color;
       if (operation.fontSize !== null) style.fontSize = clamp(operation.fontSize, old.type === "text" ? 16 : 1, 140);
       if (JSON.stringify(style) !== JSON.stringify(oldStyle)) { patch.style = style; inverse.style = oldStyle; }
-      if (operation.text !== null && old.type === "text") { patch.content = { ...(old.content ?? {}), text: operation.text.slice(0, 1200) }; inverse.content = old.content; }
+      // An Uzbek deck keeps the updated alphabet when the model rewrites a line.
+      const written = operation.text !== null && (presentationResult.data.language ?? "uz") === "uz" ? toNewAlphabet(operation.text) : operation.text;
+      if (written !== null && old.type === "text") { patch.content = { ...(old.content ?? {}), text: written.slice(0, 1200) }; inverse.content = old.content; }
       if (!Object.keys(patch).length) continue;
       const { error } = await context.userClient.rpc("apply_editor_operation", {
         p_presentation_id: body.presentationId,

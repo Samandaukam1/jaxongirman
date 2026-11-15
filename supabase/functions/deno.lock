@@ -9,6 +9,7 @@
     "npm:@supabase/realtime-js@2.112.2": "2.112.2",
     "npm:@supabase/storage-js@2.112.2": "2.112.2",
     "npm:@supabase/supabase-js@*": "2.117.3",
+    "npm:jpeg-js@0.4.4": "0.4.4",
     "npm:pdf-lib@1.17.1": "1.17.1",
     "npm:pptxgenjs@4.0.1": "4.0.1"
   },
@@ -150,6 +151,9 @@
     },
     "isarray@1.0.0": {
       "integrity": "sha512-VLghIWNM6ELQzo7zwmcg0NmTVyWKYjvIeM83yjp0wRDTmUnrM678fQbcKBo6n2CJEF0szoG//ytg+TKla89ALQ=="
+    },
+    "jpeg-js@0.4.4": {
+      "integrity": "sha512-WZzeDOEtTOBK4Mdsar0IqEU5sMr3vSV2RqkAIzUEV2BHnUfKGyswWFPFwK5EeDo93K3FohSHbLAjj0s1Wzd+dg=="
     },
     "jszip@3.10.2": {
       "integrity": "sha512-3l+rb15IOWtUhU0H5MFqES/T6Kh7abYwjosBey/vD6hDt8zoEffkSC5Ws5SGtgVw3gBx2NEbhTeSW1+kWkpyTQ==",

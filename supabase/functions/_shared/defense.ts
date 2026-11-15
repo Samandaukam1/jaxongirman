@@ -1,3 +1,4 @@
+import { toNewAlphabet } from "./alphabet.ts";
 import type { DeckLanguage } from "./glass/language.ts";
 /**
  * Writing what to say while the deck is on the screen.
@@ -85,6 +86,7 @@ const SPOKEN: Record<DeckLanguage, string> = {
   uz: "1. Faqat mukammal o‘zbek lotin tilida. Jonli, og‘zaki nutq — yozma insho emas.",
   en: "1. Matnni faqat INGLIZ tilida yozing (ko‘rsatmalar o‘zbekcha, javob — yo‘q). Jonli, og‘zaki nutq — yozma insho emas.",
   ru: "1. Matnni faqat RUS tilida, kirill yozuvida yozing (ko‘rsatmalar o‘zbekcha, javob — yo‘q). Jonli, og‘zaki nutq — yozma insho emas.",
+  tr: "1. Matnni faqat TURK tilida, turkcha harflar bilan (ç ğ ı İ ö ş ü) yozing (ko‘rsatmalar o‘zbekcha, javob — yo‘q). Jonli, og‘zaki nutq — yozma insho emas.",
 };
 
 export function defensePrompt(input: {
@@ -129,6 +131,7 @@ const SPOKEN_AS: Record<DeckLanguage, string> = {
   uz: "natural spoken Uzbek Latin",
   en: "natural spoken English",
   ru: "natural spoken Russian, in Cyrillic",
+  tr: "natural spoken Turkish",
 };
 
 /** The coach's brief, in the language the script is to be spoken in. */
@@ -181,6 +184,25 @@ export function readDefense(answer: unknown, slides: readonly DefenseSlide[]): D
 }
 
 /** Whether there is enough here to show somebody. */
+/**
+ * An Uzbek script in the updated alphabet (O‘ → Ö, G‘ → Ğ, Sh → Ş, Ch → Ç).
+ * The model writes the current alphabet; the reader sees the updated one.
+ */
+export function spellDefense(script: DefenseScript, language: string): DefenseScript {
+  if (language !== "uz") return script;
+  return {
+    introduction: toNewAlphabet(script.introduction),
+    conclusion: toNewAlphabet(script.conclusion),
+    sections: script.sections.map((section) => ({
+      ...section,
+      slide_title: toNewAlphabet(section.slide_title),
+      speaker_text: toNewAlphabet(section.speaker_text),
+      key_point: toNewAlphabet(section.key_point),
+      transition_to_next: toNewAlphabet(section.transition_to_next),
+    })),
+  };
+}
+
 export function isUsable(script: DefenseScript): boolean {
   if (!script.introduction) return false;
   const written = script.sections.filter((section) => section.speaker_text.length > 20);

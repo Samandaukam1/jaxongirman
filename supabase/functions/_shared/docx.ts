@@ -42,6 +42,9 @@ export type Run = {
   underline?: boolean;
   /** Points. Falls back to the document's own size. */
   size?: number;
+  superscript?: boolean;
+  /** An internal link: the `bookmark` of the paragraph it points at. */
+  link?: string;
 };
 
 export type Paragraph = {
@@ -56,6 +59,14 @@ export type Paragraph = {
   /** `Heading1`…`Heading3`, so Word's navigator and any table of contents work. */
   style?: "Heading1" | "Heading2" | "Heading3";
   pageBreakBefore?: boolean;
+  /** Points of space before. */
+  spaceBefore?: number;
+  /** Every line but the first starts this far in, centimetres: a bibliography's hanging entry. */
+  hanging?: number;
+  /** Kept on the same page as the paragraph after it: a heading, a caption. */
+  keepNext?: boolean;
+  /** A name a `Run.link` can point at. */
+  bookmark?: string;
 };
 
 export type Cell = {
@@ -95,6 +106,24 @@ export const paragraph = (runs: Run[] | string, options: Omit<Paragraph, "runs">
 });
 
 export const table = (options: Table): Block => ({ kind: "table", ...options });
+
+/**
+ * The same blocks with every run's words passed through `spell` — tables and
+ * their cells included, formatting untouched. Used to set a document's Uzbek
+ * in the updated alphabet once it is built, so no label is missed.
+ */
+export function spellBlocks(blocks: readonly Block[], spell: (text: string) => string): Block[] {
+  return blocks.map((block): Block => {
+    if (block.kind === "paragraph") return { ...block, runs: block.runs.map((run) => ({ ...run, text: spell(run.text) })) };
+    if (block.kind === "table") {
+      return {
+        ...block,
+        rows: block.rows.map((row) => ({ ...row, cells: row.cells.map((cell) => ({ ...cell, blocks: spellBlocks(cell.blocks, spell) })) })),
+      };
+    }
+    return block;
+  });
+}
 export const image = (options: ImageBlock): Block => ({ kind: "image", ...options });
 
 /* ------------------------------------------------------------------ runs */
@@ -104,7 +133,8 @@ function runXml(run: Run, defaults: { font: string; size: number }): string {
     `<w:rFonts w:ascii="${escapeXml(run.text ? defaults.font : defaults.font)}" w:hAnsi="${escapeXml(defaults.font)}" w:cs="${escapeXml(defaults.font)}"/>`,
     run.bold ? "<w:b/>" : "",
     run.italic ? "<w:i/>" : "",
-    run.underline ? '<w:u w:val="single"/>' : "",
+    run.underline ? '<w:u w:val="single"/>' : run.link ? '<w:u w:val="none"/>' : "",
+    run.superscript ? '<w:vertAlign w:val="superscript"/>' : "",
     `<w:sz w:val="${Math.round((run.size ?? defaults.size) * 2)}"/>`,
     `<w:szCs w:val="${Math.round((run.size ?? defaults.size) * 2)}"/>`,
   ].join("");
@@ -114,22 +144,33 @@ function runXml(run: Run, defaults: { font: string; size: number }): string {
   const text = run.text.split("\n").map((line, index) =>
     `${index === 0 ? "" : "<w:br/>"}<w:t xml:space="preserve">${escapeXml(line)}</w:t>`).join("");
 
-  return `<w:r><w:rPr>${properties}</w:rPr>${text}</w:r>`;
+  const xml = `<w:r><w:rPr>${properties}</w:rPr>${text}</w:r>`;
+  return run.link ? `<w:hyperlink w:anchor="${escapeXml(run.link)}" w:history="1">${xml}</w:hyperlink>` : xml;
 }
+
+/** Bookmark ids are numbers unique within one document; names are what links use. */
+let bookmarkId = 0;
 
 function paragraphXml(block: Paragraph, defaults: { font: string; size: number }): string {
   const properties = [
     block.style ? `<w:pStyle w:val="${block.style}"/>` : "",
     block.pageBreakBefore ? "<w:pageBreakBefore/>" : "",
     block.align ? `<w:jc w:val="${block.align}"/>` : "",
-    block.indent ? `<w:ind w:firstLine="${cmToTwips(block.indent)}"/>` : "",
+    block.keepNext ? "<w:keepNext/>" : "",
+    block.hanging
+      ? `<w:ind w:left="${cmToTwips(block.hanging)}" w:hanging="${cmToTwips(block.hanging)}"/>`
+      : block.indent ? `<w:ind w:firstLine="${cmToTwips(block.indent)}"/>` : "",
     block.lineSpacing
       // 240 twentieths of a line is single; `auto` lets Word do the arithmetic.
-      ? `<w:spacing w:line="${Math.round(block.lineSpacing * 240)}" w:lineRule="auto"${block.spaceAfter ? ` w:after="${Math.round(block.spaceAfter * 20)}"` : ' w:after="0"'}/>`
-      : `<w:spacing w:after="${Math.round((block.spaceAfter ?? 0) * 20)}"/>`,
+      ? `<w:spacing${block.spaceBefore ? ` w:before="${Math.round(block.spaceBefore * 20)}"` : ""} w:line="${Math.round(block.lineSpacing * 240)}" w:lineRule="auto"${block.spaceAfter ? ` w:after="${Math.round(block.spaceAfter * 20)}"` : ' w:after="0"'}/>`
+      : `<w:spacing${block.spaceBefore ? ` w:before="${Math.round(block.spaceBefore * 20)}"` : ""} w:after="${Math.round((block.spaceAfter ?? 0) * 20)}"/>`,
   ].join("");
 
-  const runs = block.runs.length > 0 ? block.runs.map((run) => runXml(run, defaults)).join("") : "";
+  let runs = block.runs.length > 0 ? block.runs.map((run) => runXml(run, defaults)).join("") : "";
+  if (block.bookmark) {
+    bookmarkId += 1;
+    runs = `<w:bookmarkStart w:id="${bookmarkId}" w:name="${escapeXml(block.bookmark)}"/>${runs}<w:bookmarkEnd w:id="${bookmarkId}"/>`;
+  }
   return `<w:p>${properties ? `<w:pPr>${properties}</w:pPr>` : ""}${runs}</w:p>`;
 }
 
@@ -216,6 +257,8 @@ export type DocxOptions = {
   fontSize?: number;
   page?: { widthCm: number; heightCm: number; marginCm: { top: number; right: number; bottom: number; left: number } };
   title?: string;
+  /** A centred page number in the footer of every page. */
+  pageNumbers?: boolean;
 };
 
 /** A4 with the margins a submitted document is expected to have. */
@@ -237,7 +280,9 @@ export async function buildDocx(options: DocxOptions): Promise<Uint8Array> {
     + `<w:pgSz w:w="${cmToTwips(page.widthCm)}" w:h="${cmToTwips(page.heightCm)}"/>`
     + `<w:pgMar w:top="${cmToTwips(page.marginCm.top)}" w:right="${cmToTwips(page.marginCm.right)}"`
     + ` w:bottom="${cmToTwips(page.marginCm.bottom)}" w:left="${cmToTwips(page.marginCm.left)}"`
-    + ` w:header="708" w:footer="708" w:gutter="0"/></w:sectPr>`;
+    + ` w:header="708" w:footer="708" w:gutter="0"/>`
+    + (options.pageNumbers ? '<w:footerReference w:type="default" r:id="rIdFooter"/>' : "")
+    + `</w:sectPr>`;
 
   const document = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
@@ -260,14 +305,18 @@ ${[1, 2, 3].map((level) => `<w:style w:type="paragraph" w:styleId="Heading${leve
     `<Relationship Id="rIdImage${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image${index + 1}.${picture.extension}"/>`).join("");
 
   const documentRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdStyles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>${imageRels}</Relationships>`;
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdStyles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>${imageRels}${options.pageNumbers ? '<Relationship Id="rIdFooter" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>' : ""}</Relationships>`;
+
+  // The page number is a field Word fills in, not a number we guess.
+  const footer = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:sz w:val="${Math.max(16, (defaults.size - 2) * 2)}"/></w:rPr><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> PAGE </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>1</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p></w:ftr>`;
 
   const rootRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`;
 
   const extensions = [...new Set(images.map((picture) => picture.extension))];
   const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>${extensions.map((extension) => `<Default Extension="${extension}" ContentType="image/${extension}"/>`).join("")}<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>`;
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>${extensions.map((extension) => `<Default Extension="${extension}" ContentType="image/${extension}"/>`).join("")}<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>${options.pageNumbers ? '<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>' : ""}</Types>`;
 
   const files: ZipFile[] = [
     { name: "[Content_Types].xml", bytes: encoder.encode(contentTypes) },
@@ -276,6 +325,7 @@ ${[1, 2, 3].map((level) => `<w:style w:type="paragraph" w:styleId="Heading${leve
     { name: "word/styles.xml", bytes: encoder.encode(styles) },
     { name: "word/_rels/document.xml.rels", bytes: encoder.encode(documentRels) },
   ];
+  if (options.pageNumbers) files.push({ name: "word/footer1.xml", bytes: encoder.encode(footer) });
   images.forEach((picture, index) => {
     files.push({ name: `word/media/image${index + 1}.${picture.extension}`, bytes: picture.bytes });
   });

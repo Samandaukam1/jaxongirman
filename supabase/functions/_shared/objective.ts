@@ -18,7 +18,8 @@
  * typing and what comes out of the printer cannot disagree.
  */
 
-import { cmToTwips, image, paragraph, table, type Block, type Cell } from "./docx.ts";
+import { toNewAlphabet } from "./alphabet.ts";
+import { cmToTwips, image, paragraph, spellBlocks, table, type Block, type Cell } from "./docx.ts";
 
 /** One labelled field of the biography, by the id the form binds to. */
 export type FieldId =
@@ -216,7 +217,8 @@ export function objectiveBlocks(objective: Objective, options: { textWidthCm: nu
 
   blocks.push(table({ borders: true, width: textWidth, rows: [header, ...body] }));
 
-  return blocks;
+  // An Uzbek document, set in the updated alphabet (O‘ → Ö, G‘ → Ğ, Sh → Ş, Ch → Ç).
+  return spellBlocks(blocks, toNewAlphabet);
 }
 
 /** What is missing before this is worth handing in. */
@@ -226,5 +228,5 @@ export function missingFields(objective: Objective): string[] {
   for (const field of FIELDS) {
     if (field.layout === "pair" && !(objective.fields[field.id] ?? "").trim()) missing.push(field.label.replace(":", ""));
   }
-  return missing;
+  return missing.map(toNewAlphabet);
 }

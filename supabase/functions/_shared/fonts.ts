@@ -51,6 +51,8 @@ const BUNDLED: Record<string, string> = {
    */
   Tinos_400Regular: "https://unpkg.com/@expo-google-fonts/tinos@0.4.2/400Regular/Tinos_400Regular.ttf",
   Tinos_700Bold: "https://unpkg.com/@expo-google-fonts/tinos@0.4.2/700Bold/Tinos_700Bold.ttf",
+  Tinos_400Regular_Italic: "https://unpkg.com/@expo-google-fonts/tinos@0.4.2/400Regular_Italic/Tinos_400Regular_Italic.ttf",
+  Tinos_700Bold_Italic: "https://unpkg.com/@expo-google-fonts/tinos@0.4.2/700Bold_Italic/Tinos_700Bold_Italic.ttf",
   Arimo_400Regular: "https://unpkg.com/@expo-google-fonts/arimo@0.4.3/400Regular/Arimo_400Regular.ttf",
   Arimo_700Bold: "https://unpkg.com/@expo-google-fonts/arimo@0.4.3/700Bold/Arimo_700Bold.ttf",
   PinyonScript_400Regular: "https://unpkg.com/@expo-google-fonts/pinyon-script@0.4.1/400Regular/PinyonScript_400Regular.ttf",
@@ -64,6 +66,8 @@ export const DEFAULT_FACE = "Manrope_400Regular";
 /** The serif an academic document is required to be set in. */
 export const SERIF_FACE = "Tinos_400Regular";
 export const SERIF_BOLD_FACE = "Tinos_700Bold";
+export const SERIF_ITALIC_FACE = "Tinos_400Regular_Italic";
+export const SERIF_BOLD_ITALIC_FACE = "Tinos_700Bold_Italic";
 export const DEFAULT_BOLD_FACE = "Manrope_700Bold";
 
 /** The PowerPoint display name for a bundled family file name. */

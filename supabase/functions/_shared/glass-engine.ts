@@ -96,6 +96,8 @@ export async function writeSlides(input: {
   outline: DeckOutline;
   research: string;
   requirements: string;
+  /** Numbered sources each page names its own from; empty when not asked for. */
+  references?: readonly string[];
   calls: Call[];
 }): Promise<{ slides: SlideContent[]; fallbacks: number[] }> {
   const items = input.outline.slides.map((entry, index) => ({ index, entry }));
@@ -104,7 +106,7 @@ export async function writeSlides(input: {
     size: BATCH,
     ask: async (batch, attempts) => {
       const answer = await input.writer.structured<{ slides?: unknown[] }>({
-        prompt: contentPrompt({ language: input.language, topic: input.topic, slides: batch, research: input.research, requirements: input.requirements }),
+        prompt: contentPrompt({ language: input.language, topic: input.topic, slides: batch, research: input.research, requirements: input.requirements, references: input.references }),
         system: systemFor(input.language),
         schemaName: "glass_slides",
         schema: contentSchema(),
@@ -341,6 +343,8 @@ export function composeGlassDeck(input: {
   author: string | null;
   teacher: string | null;
   sources: string[];
+  /** Per content page: the sources named at its foot, when the author asked for them. */
+  pageSources?: readonly (string | null)[];
   pictures: ReadonlyMap<string, Picture>;
 }): ComposedSlide[] {
   return composeDeck({
@@ -355,6 +359,7 @@ export function composeGlassDeck(input: {
     year: new Date().getFullYear(),
     slides: input.slides,
     sources: input.sources,
+    pageSources: input.pageSources,
     cover: input.pictures.get(input.outline.coverQuery) ?? null,
     pictures: input.pictures,
   });

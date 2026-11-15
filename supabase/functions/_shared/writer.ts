@@ -37,6 +37,12 @@ export type Attribution = {
 
 export type ResearchAnswer = {
   text: string;
+  /**
+   * The same notes with `[n]` after every sentence the search grounded, `n`
+   * being that page's place in `citations` (1-based). Equal to `text` when the
+   * search cited nothing. Used only where a page has to name its own source.
+   */
+  marked: string;
   citations: { title: string; url: string }[];
   usage: WriterUsage;
   requestId: string | null;
@@ -84,7 +90,10 @@ export function retryable(reason: string): boolean {
 type GeminiPart = { text?: string };
 type GeminiCandidate = {
   content?: { parts?: GeminiPart[] };
-  groundingMetadata?: { groundingChunks?: Array<{ web?: { uri?: string; title?: string } }> };
+  groundingMetadata?: {
+    groundingChunks?: Array<{ web?: { uri?: string; title?: string } }>;
+    groundingSupports?: Array<{ segment?: { text?: string }; groundingChunkIndices?: number[] }>;
+  };
   finishReason?: string;
 };
 type GeminiResponse = {
@@ -140,6 +149,42 @@ function usageOf(payload: GeminiResponse): WriterUsage {
     input_tokens: payload.usageMetadata?.promptTokenCount ?? 0,
     output_tokens: payload.usageMetadata?.candidatesTokenCount ?? 0,
   };
+}
+
+/**
+ * The notes with each grounded sentence followed by its sources' numbers.
+ *
+ * Gemini says which sentence of its answer came from which page it read
+ * (`groundingSupports` → `groundingChunkIndices`). Those chunks are numbered
+ * the way `citationsOf` lists them — first appearance, one number per page —
+ * so `[2]` in the notes and `citations[1]` are the same page. Found by the
+ * segment's text rather than its offsets, which are counted in bytes.
+ */
+export function markedText(payload: GeminiResponse, text: string): string {
+  const meta = payload.candidates?.[0]?.groundingMetadata;
+  const chunks = meta?.groundingChunks ?? [];
+  const numberOf = new Map<string, number>();
+  const chunkNumber = chunks.map((chunk) => {
+    const url = chunk.web?.uri;
+    if (!url) return null;
+    if (!numberOf.has(url)) numberOf.set(url, numberOf.size + 1);
+    return numberOf.get(url)!;
+  });
+  let out = text;
+  let from = 0;
+  for (const support of meta?.groundingSupports ?? []) {
+    const segment = support.segment?.text?.trim();
+    if (!segment) continue;
+    const numbers = [...new Set((support.groundingChunkIndices ?? []).map((at) => chunkNumber[at]).filter((n): n is number => n != null))];
+    if (!numbers.length) continue;
+    const at = out.indexOf(segment, from);
+    if (at < 0) continue;
+    const end = at + segment.length;
+    const mark = numbers.sort((a, b) => a - b).map((n) => `[${n}]`).join("");
+    out = `${out.slice(0, end)} ${mark}${out.slice(end)}`;
+    from = end + mark.length + 1;
+  }
+  return out;
 }
 
 /** Every page the grounded search actually cited. */
@@ -414,7 +459,8 @@ export class GeminiWriter {
     try {
       const { value, attempts } = await this.withRetries(3, async () => {
         const payload = await this.call(model, request(true));
-        return { text: textOf(payload), citations: citationsOf(payload), usage: usageOf(payload) };
+        const text = textOf(payload);
+        return { text, marked: markedText(payload, text), citations: citationsOf(payload), usage: usageOf(payload) };
       });
       return { ...value, requestId: null, provider: "google", model, attempts, groundedSearch: true };
     } catch (failure) {
@@ -424,7 +470,8 @@ export class GeminiWriter {
 
       const { value, attempts } = await this.withRetries(2, async () => {
         const payload = await this.call(model, request(false));
-        return { text: textOf(payload), usage: usageOf(payload) };
+        const text = textOf(payload);
+        return { text, marked: text, usage: usageOf(payload) };
       });
       return {
         ...value, citations: [], requestId: null,

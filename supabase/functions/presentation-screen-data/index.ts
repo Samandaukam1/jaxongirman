@@ -54,6 +54,17 @@ const IMAGE_BUCKETS = new Set(["generated-images", "presentation-assets", "stock
 const PUBLIC_BUCKETS = new Set(["design-assets", "jelement-assets"]);
 const SIGNED_URL_SECONDS = 60 * 60;
 
+/** An ad as the screen draws it: a public picture, and where it leads. */
+type ScreenAd = { id: string; url: string; link: string | null };
+type ScreenAds = {
+  /** Ad pages, in the order `deckWithAds` places them. */
+  pages: ScreenAd[];
+  /** 7:1 banners, taken in turn. */
+  banners: ScreenAd[];
+  banner: { first_seconds: number; every_seconds: number; show_seconds: number };
+};
+const NO_ADS: ScreenAds = { pages: [], banners: [], banner: { first_seconds: 30, every_seconds: 240, show_seconds: 15 } };
+
 type Snapshot = {
   session_id: string;
   presentation_id: string | null;
@@ -90,7 +101,7 @@ Deno.serve(async (request) => {
     if (!snapshot.presentation_id) {
       // Paired, but the phone has not chosen a deck yet. That is a state, not a
       // failure, and the screen renders a waiting frame for it.
-      return json({ title: "Taqdimot", slides: [], elements: [], deckRevision: snapshot.deck_revision });
+      return json({ title: "Taqdimot", slides: [], elements: [], ads: NO_ADS, deckRevision: snapshot.deck_revision });
     }
 
     const presentation = await service
@@ -136,6 +147,7 @@ Deno.serve(async (request) => {
       title: typeof title === "string" && title ? title : "Taqdimot",
       slides: slides.data,
       elements: rendered,
+      ads: await screenAds(service, ownerId),
       deckRevision: snapshot.deck_revision,
     });
   } catch (error) {
@@ -145,6 +157,43 @@ Deno.serve(async (request) => {
     return errorResponse(error);
   }
 });
+
+/**
+ * The ads this owner's talk carries — decided by their plan in
+ * `presentation_ads_for`, the same answer `presentation_session_set_deck`
+ * counted the pages with. An ad is never a reason for the deck not to show,
+ * so a failure here is a talk without ads.
+ */
+async function screenAds(service: SupabaseClient, ownerId: string): Promise<ScreenAds> {
+  const { data, error } = await service.rpc("presentation_ads_for", { p_owner: ownerId });
+  if (error || !data || typeof data !== "object") {
+    if (error) console.error("presentation_ads_for failed", error);
+    return NO_ADS;
+  }
+  const answer = data as Record<string, unknown>;
+  const list = (value: unknown): ScreenAd[] => (Array.isArray(value) ? value : []).flatMap((row) => {
+    const ad = row as Record<string, unknown> | null;
+    const path = typeof ad?.path === "string" ? ad.path : "";
+    if (typeof ad?.id !== "string" || !path || path.includes("..") || path.startsWith("/")) return [];
+    const { data: address } = service.storage.from("presentation-ads").getPublicUrl(path);
+    if (!address?.publicUrl) return [];
+    return [{ id: ad.id, url: address.publicUrl, link: typeof ad.link === "string" ? ad.link : null }];
+  });
+  const timing = (answer.banner ?? {}) as Record<string, unknown>;
+  const seconds = (value: unknown, fallback: number) => {
+    const number = Number(value);
+    return Number.isFinite(number) && number > 0 ? number : fallback;
+  };
+  return {
+    pages: list(answer.slides),
+    banners: list(answer.banners),
+    banner: {
+      first_seconds: seconds(timing.first_seconds, NO_ADS.banner.first_seconds),
+      every_seconds: seconds(timing.every_seconds, NO_ADS.banner.every_seconds),
+      show_seconds: seconds(timing.show_seconds, NO_ADS.banner.show_seconds),
+    },
+  };
+}
 
 /**
  * Signs one image, or refuses.

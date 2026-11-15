@@ -67,6 +67,8 @@ type Ctx = {
   /** Below 1 when a page is being rebuilt because it did not fit. */
   scale: number;
   rows: Row[];
+  /** The page's own sources, said at its foot instead of the deck's name; null when not asked for. */
+  note?: string | null;
 };
 
 /** `ground`: a page that is a field of colour rather than the deck's white. */
@@ -93,6 +95,10 @@ function row(type: Row["type"], rect: Rect, style: Record<string, unknown>, cont
   };
 }
 
+/** Capitals as the deck's language writes them: Turkish "i" is "İ", not "I". */
+export const capitals = (value: string, language: DeckLanguage): string =>
+  language === "tr" ? value.toLocaleUpperCase("tr") : value.toUpperCase();
+
 const serifLike = (pick: FontPick) => /serif|prata|gloock|gilda|caslon|playfair|standard|instrument/i.test(pick.family);
 
 /** Display sans tightens as it grows; serifs are drawn to be set as they are. */
@@ -111,7 +117,7 @@ function text(ctx: Ctx, at: { x: number; y: number; width: number }, fitted: Fit
     letterSpacing: trackingFor(pick, fitted.size),
     verticalAlign: "top",
     ...ctx.face(pick),
-  }, { text: options.upper ? fitted.text.toUpperCase() : fitted.text, role }));
+  }, { text: options.upper ? capitals(fitted.text, ctx.language) : fitted.text, role }));
   return at.y + height;
 }
 
@@ -463,6 +469,23 @@ function leadFit(ctx: Ctx, value: string, width: number, height: number, max?: n
   return fit({ text: value, font: ctx.dna.fonts.body, width, height, max: max ?? sizes(ctx).lead, min: 12, leading: 1.45 });
 }
 
+/**
+ * "Manba: uz.wikipedia.org/wiki/Amir_Temur" — the page's own sources, in the
+ * footer's place for the deck's name, small and in the label face but not in
+ * capitals (an address in capitals is a different address). Two lines at most,
+ * shrinking to fit; returns false when the page has no sources to name.
+ */
+function sourceNote(ctx: Ctx, at: { x: number; width: number; y?: number }, color: string, lines = 2): boolean {
+  if (!ctx.note) return false;
+  const label = { ...ctx.dna.fonts.label, tracking: 0.2 };
+  const words = `${L(ctx).source}: ${ctx.note}`;
+  const fitted = fit({ text: words, font: label, width: at.width, height: lines === 1 ? 11 : 22, max: 8, min: 6.5, leading: 1.3, maxLines: lines });
+  // The first line always sits on the page number's line; a second one, when
+  // the note needs it, runs below toward the edge (there is room to 562).
+  text(ctx, { x: at.x, y: at.y ?? 526, width: at.width }, fitted, label, color, "footer");
+  return true;
+}
+
 function footer(ctx: Ctx, from = MX): void {
   const { colors, fonts } = ctx.dna;
   const label = { ...fonts.label, tracking: 1.6 };
@@ -471,6 +494,9 @@ function footer(ctx: Ctx, from = MX): void {
   if (corp(ctx)) {
     const nav = fit({ text: ctx.short, font: label, width: 300, height: 12, max: 8.5, min: 7.5, leading: 1.3, upper: true, maxLines: 1 });
     text(ctx, { x: 60, y: 26, width: 300 }, nav, label, alpha(colors.inkSoft, 0.85), "footer", { upper: true });
+    // The page's sources go to its foot like every other style's; the brand's
+    // forms are laid around the words, so they keep clear of it.
+    sourceNote(ctx, { x: from, width: RIGHT - from - 140 }, alpha(colors.inkSoft, 0.9));
     const page = `${num(ctx.index - 1)} / ${String(ctx.total).padStart(2, "0")}`;
     text(ctx, { x: RIGHT - 120, y: 26, width: 120 }, { text: page, size: 8.5, lineHeight: 11, lines: 1, height: 11 }, label, alpha(colors.inkSoft, 0.85), "page", { align: "right" });
     return;
@@ -482,14 +508,17 @@ function footer(ctx: Ctx, from = MX): void {
     const pageWidth = textWidth(page, 8.5, label) + 4;
     text(ctx, { x: from, y: 526, width: pageWidth }, { text: page, size: 8.5, lineHeight: 11, lines: 1, height: 11 }, label, colors.accent, "page");
     ctx.rows.push(...starRows({ x: from + pageWidth + 9, y: 531.5 }, 7, { fill: alpha(colors.accent, 0.6) }, "accent"));
+    if (sourceNote(ctx, { x: from + pageWidth + 20, width: 420 }, alpha(colors.inkSoft, 0.85))) return;
     const title = fit({ text: ctx.short, font: label, width: 420, height: 12, max: 8.5, min: 7.5, leading: 1.3, upper: true, maxLines: 1 });
     text(ctx, { x: from + pageWidth + 20, y: 526, width: 420 }, title, label, alpha(colors.inkSoft, 0.8), "footer", { upper: true });
     return;
   }
   // The editorial page closes on a hairline, as a printed one does.
   if (paper(ctx)) rule(ctx, { x: from, y: 517 }, RIGHT - from, colors.line);
-  const left = fit({ text: ctx.short, font: label, width: Math.min(520, RIGHT - from - 140), height: 12, max: 8.5, min: 7.5, leading: 1.3, upper: true, maxLines: 1 });
-  text(ctx, { x: from, y: 526, width: Math.min(520, RIGHT - from - 140) }, left, label, alpha(colors.inkSoft, 0.8), "footer", { upper: true });
+  if (!sourceNote(ctx, { x: from, width: RIGHT - from - 140 }, alpha(colors.inkSoft, 0.85))) {
+    const left = fit({ text: ctx.short, font: label, width: Math.min(520, RIGHT - from - 140), height: 12, max: 8.5, min: 7.5, leading: 1.3, upper: true, maxLines: 1 });
+    text(ctx, { x: from, y: 526, width: Math.min(520, RIGHT - from - 140) }, left, label, alpha(colors.inkSoft, 0.8), "footer", { upper: true });
+  }
   const page = `${num(ctx.index - 1)} / ${String(ctx.total).padStart(2, "0")}`;
   if (softly(ctx)) {
     const pill = textWidth(page, 8.5, label) + 22;
@@ -1401,6 +1430,7 @@ function heroFooter(ctx: Ctx, col: Column): void {
   text(ctx, { x: col.x, y: 526, width: pageWidth }, { text: page, size: 8.5, lineHeight: 11, lines: 1, height: 11 }, label, WHITE, "page");
   ctx.rows.push(row("shape", { x: col.x + pageWidth + 7, y: 530, width: 4, height: 4 }, { shape: "ellipse", fill: alpha(WHITE, 0.7) }, { kind: "accent" }));
   const width = Math.min(380, col.width - pageWidth - 20);
+  if (sourceNote(ctx, { x: col.x + pageWidth + 20, width }, alpha(WHITE, 0.9))) return;
   const title = fit({ text: ctx.short, font: label, width, height: 12, max: 8.5, min: 7.5, leading: 1.3, upper: true, maxLines: 1 });
   text(ctx, { x: col.x + pageWidth + 20, y: 526, width }, title, label, alpha(WHITE, 0.88), "footer", { upper: true });
 }
@@ -1719,6 +1749,8 @@ export type DeckInput = DeckText & {
   face: FaceResolver;
   slides: SlideContent[];
   sources: string[];
+  /** Per content page (aligned with `slides`): the sources it names at its foot. */
+  pageSources?: readonly (string | null)[];
   cover: Picture | null;
   /** Photographs found for content pages, keyed by their search query. */
   pictures: ReadonlyMap<string, Picture>;
@@ -1775,7 +1807,7 @@ export function composeDeck(input: DeckInput): ComposedSlide[] {
   const pages: ComposedSlide[] = [];
   const short = clip(input.shortTitle || input.topic, 48);
 
-  const page = (index: number, title: string, layout: string, build: (ctx: Ctx) => Built, fallback?: (ctx: Ctx) => Built, subject?: string) => {
+  const page = (index: number, title: string, layout: string, build: (ctx: Ctx) => Built, fallback?: (ctx: Ctx) => Built, subject?: string, note?: string | null) => {
     const variant = (used.get(layout) ?? 0) + (input.dna.seed % 2);
     used.set(layout, (used.get(layout) ?? 0) + 1);
 
@@ -1794,7 +1826,7 @@ export function composeDeck(input: DeckInput): ComposedSlide[] {
       ...(fallback ? [{ scale: 1, build: fallback }, { scale: 0.85, build: fallback }] : []),
     ];
     for (const trial of tries) {
-      const ctx: Ctx = { dna: input.dna, language: input.language ?? "uz", face: input.face, index, total, short, variant, scale: trial.scale, rows: [] };
+      const ctx: Ctx = { dna: input.dna, language: input.language ?? "uz", face: input.face, index, total, short, variant, scale: trial.scale, rows: [], note: note ?? null };
       const built = trial.build(ctx);
       const faults = pageFaults(ctx.rows);
       attempt = { ctx, built, faults };
@@ -1876,7 +1908,7 @@ export function composeDeck(input: DeckInput): ComposedSlide[] {
         case "photo": return photo(ctx, slide, picture!);
         default: return statement(ctx, slide);
       }
-    }, kind === "statement" ? undefined : plain, MARKED.has(kind) ? slide.icon ?? pickIcon(`${slide.title} ${slide.eyebrow} ${slide.lead}`) : undefined);
+    }, kind === "statement" ? undefined : plain, MARKED.has(kind) ? slide.icon ?? pickIcon(`${slide.title} ${slide.eyebrow} ${slide.lead}`) : undefined, input.pageSources?.[offset] ?? null);
   });
   page(total - 1, chrome.references, "references", (ctx) => references(ctx, input.sources));
   page(total, chrome.thanksTitle, "closing", (ctx) => closing(ctx, input));
