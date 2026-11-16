@@ -5,6 +5,7 @@ import {
 import { ROLE_LABELS } from "@jaxongirman/types";
 import { useEffect, useState, type ReactNode } from "react";
 
+import logo from "@/assets/logo.png";
 import { AppLink } from "@/lib/router";
 import { supportUnreadCount } from "@/lib/support";
 import { useAuth } from "@/providers/AuthProvider";
@@ -81,7 +82,7 @@ export function AdminLayout({ pathname, children }: { pathname: string; children
       {open && <button className="sidebar-scrim" type="button" aria-label="Menyuni yopish" onClick={() => setOpen(false)} />}
       <aside className={`sidebar ${open ? "sidebar-open" : ""}`}>
         <div className="sidebar-brand">
-          <span className="brand-mark">J</span>
+          <img className="brand-mark" src={logo} alt="" width={42} height={42} />
           <div><strong>Jaxongirman</strong><small>Control Center</small></div>
           <button className="sidebar-close" type="button" aria-label="Yopish" onClick={() => setOpen(false)}><X size={20} /></button>
         </div>

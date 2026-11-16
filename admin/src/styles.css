@@ -11,8 +11,10 @@
   --brand-soft: #F0E9FC;
   --brand-tint: #DCCBF6;
   --on-brand: #F1EAFD;
-  --on-brand-dim: #C9B6EC;
-  --on-brand-faint: #A992DA;
+  /* Held above 4.5:1 on the violet panel — the small print once sat at 2.6:1.
+     Dim stays a step brighter than faint so the menu reads above the caption. */
+  --on-brand-dim: #E2D6F8;
+  --on-brand-faint: #D8C9F5;
   --canvas: #F6F5FA;
   --surface: #FFFFFF;
   --surface-muted: #FAF9FD;
@@ -61,7 +63,10 @@ h1, h2, h3 { font-family: "Manrope", sans-serif; letter-spacing: -0.035em; }
 .login-story p:not(.eyebrow) { max-width: 550px; font-size: 18px; line-height: 1.7; color: var(--on-brand-dim); }
 .login-story small { color: var(--on-brand-faint); }
 .brand-lockup { display: flex; align-items: center; gap: 12px; font: 700 17px "Manrope"; }
-.brand-mark { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 13px; color: var(--brand); background: var(--canvas); }
+/* The app icon, cut the way the phone cuts it — the same tile the website's
+   header carries. The picture has its own white ground, so it reads the same
+   on the violet panel by day and the dark one at night. */
+.brand-mark { width: 42px; height: 42px; display: block; flex: 0 0 auto; border-radius: 12px; object-fit: cover; background: #fff; box-shadow: 0 0 0 1px rgba(255,255,255,.16), 0 6px 16px rgba(12,5,28,.3); }
 .login-panel { display: grid; place-items: center; padding: 36px; }
 .login-card { width: min(430px, 100%); background: var(--surface); padding: clamp(28px, 5vw, 52px); border: 1px solid var(--border); border-radius: 24px; box-shadow: 0 24px 64px rgba(40,26,64,.09); }
 .login-card h2 { font-size: 34px; margin: 10px 0 8px; }
@@ -91,7 +96,6 @@ textarea:focus, select:focus { border-color: var(--brand-ink); box-shadow: 0 0 0
 .admin-shell { min-height: 100vh; background: var(--canvas); }
 .sidebar { position: fixed; inset: 0 auto 0 0; z-index: 30; width: 268px; height: 100vh; height: 100dvh; overflow: hidden; padding: 22px 16px 18px; display: flex; flex-direction: column; color: var(--on-brand); background: var(--brand-surface); border-right: 1px solid rgba(255,255,255,.08); }
 .sidebar-brand { min-height: 58px; padding: 3px 8px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid rgba(255,255,255,.1); }
-.sidebar-brand .brand-mark { color: var(--brand); background: var(--brand-soft); flex: 0 0 auto; }
 .sidebar-brand div { display: grid; gap: 3px; min-width: 0; }
 .sidebar-brand strong { font: 700 16px "Manrope", sans-serif; }
 .sidebar-brand small { color: var(--on-brand-faint); font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
@@ -125,11 +129,11 @@ textarea:focus, select:focus { border-color: var(--brand-ink); box-shadow: 0 0 0
 .mobile-menu { display: none; position: fixed; z-index: 28; top: 16px; left: 16px; width: 42px; height: 42px; place-items: center; color: var(--on-brand-solid); border: 0; border-radius: 12px; background: var(--brand-surface); box-shadow: 0 8px 20px rgba(108,52,201,.28); }
 .metric-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
 .metric-grid.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.metric-card { min-height: 190px; padding: 22px; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 18px; background: #fff; box-shadow: 0 10px 30px rgba(40,26,64,.045); }
+.metric-card { min-height: 190px; padding: 22px; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 18px; background: var(--surface); box-shadow: 0 10px 30px rgba(40,26,64,.045); }
 .metric-icon { width: 38px; height: 38px; display: grid; place-items: center; margin-bottom: 24px; color: var(--brand-ink); border-radius: 11px; background: var(--brand-soft); }
 .metric-card > span { color: var(--ink-muted); font-size: 12px; font-weight: 600; }
 .metric-card > strong { margin: 6px 0 3px; font: 700 clamp(26px, 2.4vw, 36px) "Manrope", sans-serif; letter-spacing: -.05em; }
-.metric-card > small { margin-top: auto; color: var(--ink-soft); font-size: 11px; }
+.metric-card > small { margin-top: auto; color: var(--ink-muted); font-size: 11px; }
 .insight-strip { padding: 19px 22px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; color: var(--on-brand); border-radius: 16px; background: var(--brand-panel-deep, var(--brand-deep)); }
 .insight-strip div { display: flex; align-items: center; gap: 10px; font-size: 13px; }
 .insight-strip svg { color: var(--on-brand-dim); }
@@ -185,7 +189,7 @@ td small { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; 
   position: relative; width: min(500px, 100%);
   max-height: calc(100dvh - 44px);
   display: flex; flex-direction: column;
-  border-radius: 20px; background: #fff; box-shadow: 0 30px 90px rgba(24,10,48,.3);
+  border-radius: 20px; background: var(--surface); box-shadow: 0 30px 90px rgba(24,10,48,.3);
 }
 .modal-head { padding: 32px 32px 0; flex: none; }
 .modal-body { padding: 14px 32px 32px; overflow-y: auto; overscroll-behavior: contain; }
@@ -206,8 +210,8 @@ td small { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; 
 .settings-list textarea { min-height: 72px; padding: 11px; resize: vertical; font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
 
 /* Settlement card: amber while the provider is owed money, green once paid. */
-.metric-card.is-due { border-color: #e6d9b5; background: #fffdf6; }
-.metric-card.is-due .metric-icon { color: #775f24; background: #fbf5e3; }
+.metric-card.is-due { border-color: var(--warn-rim); background: var(--warn-soft); }
+.metric-card.is-due .metric-icon { color: var(--warn-ink); background: color-mix(in srgb, var(--warn-rim) 45%, var(--warn-soft)); }
 .metric-card.is-settled { border-color: var(--ok-rim); background: var(--ok-soft); }
 .metric-card.is-settled .metric-icon { color: var(--ok-ink); background: var(--ok-soft); }
 .metric-card .metric-secondary { margin: 0 0 4px; color: var(--ink-muted); font-size: 12px; font-weight: 600; }
@@ -315,7 +319,7 @@ td small { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; 
 .plan-row {
   display: grid; gap: 10px; align-items: end; width: 100%;
   grid-template-columns: 1fr 1.4fr 1fr 0.8fr auto auto;
-  padding: 14px; border: 1px solid var(--border); border-radius: 14px; background: #fff;
+  padding: 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface);
 }
 .plan-row .switch-row { margin-top: 0; }
 @media (max-width: 900px) { .plan-row { grid-template-columns: 1fr 1fr; } }
@@ -702,7 +706,7 @@ td small { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; 
 .element-card-delete {
   position: absolute; top: 8px; right: 8px;
   width: 28px; height: 28px; display: grid; place-items: center;
-  border: 1px solid var(--border); border-radius: 8px; background: #fff;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--surface);
   color: var(--ink-soft); opacity: 0; transition: opacity .12s ease, color .12s ease;
 }
 .element-card:hover .element-card-delete,
@@ -916,14 +920,18 @@ td small { display: block; max-width: 260px; margin-top: 4px; overflow: hidden; 
  * in it: a true #000 makes every border float and every shadow disappear, and
  * an interface made of cards needs its edges. Ink is held above 8:1 on the
  * canvas and above 4.5:1 everywhere text sits.
+ *
+ * The brand panels (sidebar, insight strip, login story) stay dark at night,
+ * so the `--on-brand` family on them stays light — it once flipped dark along
+ * with the ink and left the sidebar's words at 1.1:1.
  */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) { color-scheme: dark; }
-  :root:not([data-theme="light"]) { --brand-surface: #241B38; --on-brand-solid: #F3F1F8; --brand-panel-deep: #2A1F45; --brand: #A47BF0; --brand-ink: #B99BF5; --brand-deep: #C9B4F8; --brand-soft: #251C38; --brand-tint: #3A2B57; --on-brand: #16111F; --on-brand-dim: #6B5A8E; --on-brand-faint: #4E4168; --canvas: #14131A; --surface: #1B1A23; --surface-muted: #21202B; --field: #23222E; --ink: #F3F1F8; --ink-body: #D6D2E0; --ink-muted: #A29CB4; --ink-soft: #7C7690; --border: #2E2C3A; --border-soft: #262533; --border-strong: #423F53; --ok-ink: #4ED8A8; --ok-soft: #12302A; --ok-rim: #1F5546; --warn-ink: #E3AC5C; --warn-soft: #322512; --warn-rim: #5A4520; --bad-ink: #F58497; --bad-soft: #33161E; --bad-rim: #5C2833; }
+  :root:not([data-theme="light"]) { --brand-surface: #241B38; --on-brand-solid: #F3F1F8; --brand-panel-deep: #2A1F45; --brand: #A47BF0; --brand-ink: #B99BF5; --brand-deep: #C9B4F8; --brand-soft: #251C38; --brand-tint: #3A2B57; --on-brand: #EDE7F8; --on-brand-dim: #B8AAD6; --on-brand-faint: #A193C2; --canvas: #14131A; --surface: #1B1A23; --surface-muted: #21202B; --field: #23222E; --ink: #F3F1F8; --ink-body: #D6D2E0; --ink-muted: #A29CB4; --ink-soft: #7C7690; --border: #2E2C3A; --border-soft: #262533; --border-strong: #423F53; --ok-ink: #4ED8A8; --ok-soft: #12302A; --ok-rim: #1F5546; --warn-ink: #E3AC5C; --warn-soft: #322512; --warn-rim: #5A4520; --bad-ink: #F58497; --bad-soft: #33161E; --bad-rim: #5C2833; }
 }
 
 :root[data-theme="dark"] { color-scheme: dark; }
-:root[data-theme="dark"] { --brand-surface: #241B38; --on-brand-solid: #F3F1F8; --brand-panel-deep: #2A1F45; --brand: #A47BF0; --brand-ink: #B99BF5; --brand-deep: #C9B4F8; --brand-soft: #251C38; --brand-tint: #3A2B57; --on-brand: #16111F; --on-brand-dim: #6B5A8E; --on-brand-faint: #4E4168; --canvas: #14131A; --surface: #1B1A23; --surface-muted: #21202B; --field: #23222E; --ink: #F3F1F8; --ink-body: #D6D2E0; --ink-muted: #A29CB4; --ink-soft: #7C7690; --border: #2E2C3A; --border-soft: #262533; --border-strong: #423F53; --ok-ink: #4ED8A8; --ok-soft: #12302A; --ok-rim: #1F5546; --warn-ink: #E3AC5C; --warn-soft: #322512; --warn-rim: #5A4520; --bad-ink: #F58497; --bad-soft: #33161E; --bad-rim: #5C2833; }
+:root[data-theme="dark"] { --brand-surface: #241B38; --on-brand-solid: #F3F1F8; --brand-panel-deep: #2A1F45; --brand: #A47BF0; --brand-ink: #B99BF5; --brand-deep: #C9B4F8; --brand-soft: #251C38; --brand-tint: #3A2B57; --on-brand: #EDE7F8; --on-brand-dim: #B8AAD6; --on-brand-faint: #A193C2; --canvas: #14131A; --surface: #1B1A23; --surface-muted: #21202B; --field: #23222E; --ink: #F3F1F8; --ink-body: #D6D2E0; --ink-muted: #A29CB4; --ink-soft: #7C7690; --border: #2E2C3A; --border-soft: #262533; --border-strong: #423F53; --ok-ink: #4ED8A8; --ok-soft: #12302A; --ok-rim: #1F5546; --warn-ink: #E3AC5C; --warn-soft: #322512; --warn-rim: #5A4520; --bad-ink: #F58497; --bad-soft: #33161E; --bad-rim: #5C2833; }
 
 /* The theme control in the sidebar. */
 .theme-switch { display: flex; gap: 4px; padding: 4px; border-radius: 12px; background: var(--surface-muted); }

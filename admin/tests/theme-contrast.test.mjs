@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 /**
  * The console's two palettes, measured rather than eyeballed.
@@ -12,7 +12,8 @@ import test from "node:test";
  * using the thing at night.
  */
 
-const css = readFileSync(join(new URL("..", import.meta.url).pathname, "src/styles.css"), "utf8");
+// Through fileURLToPath, not `.pathname`: on Windows the latter is `/C:/…`.
+const css = readFileSync(fileURLToPath(new URL("../src/styles.css", import.meta.url)), "utf8");
 
 function luminance([r, g, b]) {
   const channel = (value) => {
@@ -88,6 +89,44 @@ test("the brand reads as an accent on the canvas, and as a panel under its own i
     const panel = contrast(palette["on-brand-solid"], palette["brand-surface"]);
     assert.ok(panel >= 4.5, `${name}: on-brand-solid on brand-surface is ${panel.toFixed(2)}:1`);
   }
+});
+
+test("the words on a brand panel are there, by day and at night", () => {
+  // The sidebar's title, its menu and its small print; the dashboard's insight
+  // strip. At night the panels stay dark, so their ink has to stay light — it
+  // once flipped dark with the body ink and the sidebar read at 1.1:1.
+  for (const [name, palette, deep] of [["light", light, "brand-deep"], ["dark", dark, "brand-panel-deep"]]) {
+    for (const ground of ["brand-surface", deep]) {
+      const ratio = contrast(palette["on-brand"], palette[ground]);
+      assert.ok(ratio >= 4.5, `${name}: on-brand on ${ground} is ${ratio.toFixed(2)}:1`);
+    }
+  }
+  for (const [name, palette] of [["light", light], ["dark", dark]]) {
+    for (const token of ["on-brand-dim", "on-brand-faint"]) {
+      const ratio = contrast(palette[token], palette["brand-surface"]);
+      assert.ok(ratio >= 4.5, `${name}: ${token} on brand-surface is ${ratio.toFixed(2)}:1`);
+    }
+    // The menu reads above its caption, not the other way round.
+    const dim = contrast(palette["on-brand-dim"], palette["brand-surface"]);
+    const faint = contrast(palette["on-brand-faint"], palette["brand-surface"]);
+    assert.ok(dim > faint, `${name}: on-brand-dim (${dim.toFixed(2)}) is not brighter than on-brand-faint (${faint.toFixed(2)})`);
+  }
+});
+
+test("a card takes its ground from the palette, not a literal white", () => {
+  // `background: #fff` on a card keeps it white at night while its text turns
+  // light, which is how the dashboard's numbers vanished. Only the pictures
+  // that are white by nature — an icon's tile, the checkerboard behind a
+  // transparent PNG, a phone mock-up — may say so.
+  const allowed = new Set([".brand-mark", ".site-icon-frame img", ".sheet-grid img", ".pp-phone", ".pp-sheet"]);
+  const rules = css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g);
+  const offenders = [];
+  for (const [, selector, body] of rules) {
+    if (!/background(-color)?:\s*(#fff\b|#ffffff\b|white\b)/i.test(body)) continue;
+    const name = selector.trim();
+    if (!allowed.has(name)) offenders.push(name);
+  }
+  assert.deepEqual(offenders, []);
 });
 
 test("a status colour is readable on its own soft ground", () => {

@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 
+import logo from "@/assets/logo.png";
 import { errorMessage } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
 
@@ -26,7 +27,7 @@ export function LoginPage() {
   return (
     <main className="login-shell">
       <section className="login-story">
-        <div className="brand-lockup"><span className="brand-mark">J</span><span>Jaxongirman</span></div>
+        <div className="brand-lockup"><img className="brand-mark" src={logo} alt="" width={42} height={42} /><span>Jaxongirman</span></div>
         <div><p className="eyebrow">BOSHQARUV MARKAZI</p><h1>Taqdimot ishlab chiqarish jarayoni, bir qarashda.</h1><p>Foydalanuvchilar, kreditlar, AI xarajatlari va sifat ko‘rsatkichlarini xavfsiz boshqaring.</p></div>
         <small>Admin huquqi serverdagi rol orqali tekshiriladi.</small>
       </section>
