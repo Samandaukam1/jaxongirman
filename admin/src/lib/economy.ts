@@ -50,7 +50,7 @@ export type ServicePrice = {
   is_enabled: boolean;
 };
 
-export type I18n = { uz?: string; en?: string; ru?: string };
+export type I18n = { uz?: string; en?: string; ru?: string; tr?: string };
 
 export type EconomyPlan = {
   id: string;
