@@ -5,6 +5,7 @@ import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { EmptyState, ErrorState, Modal, PageHeader, TableSkeleton } from "@/components/AdminUI";
 import { dateTime, errorMessage } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
+import { listAdminUsers } from "@/lib/user-search";
 
 type UserRow = Database["public"]["Functions"]["admin_list_users"]["Returns"][number];
 type GiftResult = { applied: boolean; amount?: number; balance: number; message?: string };
@@ -49,8 +50,7 @@ export function GiftsPage() {
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
-    const { data, error: requestError } = await supabase.rpc("admin_list_users", { p_search: search || undefined, p_limit: 60, p_offset: 0 });
-    if (requestError) setError(errorMessage(requestError)); else setUsers(data ?? []);
+    try { setUsers(await listAdminUsers(search, 60)); } catch (requestError) { setError(errorMessage(requestError)); }
     setLoading(false);
   }, [search]);
 
