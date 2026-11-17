@@ -123,7 +123,7 @@ export function GiftsPage() {
             <tbody>
               {users.map((user) => (
                 <tr key={user.user_id}>
-                  <td><strong>{user.full_name || "Ism ko‘rsatilmagan"}</strong><small>{user.email}</small></td>
+                  <td><strong>{user.full_name || "Ism ko‘rsatilmagan"}</strong><small>{user.username ? `@${user.username} · ` : ""}{user.email}</small></td>
                   <td><strong>{user.credits}</strong> tanga</td>
                   <td>{user.presentation_count}</td>
                   <td>{dateTime.format(new Date(user.created_at))}</td>
