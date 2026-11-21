@@ -12,13 +12,17 @@ import { MafiaPlayerScreen } from "@/components/Mafia";
 import { GameAnswerInput, GameLeaderboardList, GameRevealPanel, GameStatsSummary } from "@/components/GameAnswerInput";
 import { GameAvatar } from "@/components/GameAvatar";
 import { PrimaryButton } from "@/components/PrimaryButton";
-import { ErrorState } from "@/components/StateBlocks";
+import { ErrorState, InlineError } from "@/components/StateBlocks";
 import { lockedOnWeb } from "@/components/WebLocked";
 import { crosswordLanguage } from "@/lib/crossword";
 import { asErrorMessage } from "@/lib/format";
-import { playerState, submitAnswer, subscribeToSession, type PlayerState } from "@/lib/games";
+import {
+  isNewerState, playerState, submitAnswer, subscribeToSession, type PlayerState, type ShownState,
+} from "@/lib/games";
 import { formatNumber } from "@/lib/money";
+import { isTransport } from "@/lib/retry";
 import { supabase } from "@/lib/supabase";
+import { useMatchScreen } from "@/lib/useMatchScreen";
 import { icon, radius, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
@@ -55,21 +59,28 @@ function PlayGameScreen() {
   const router = useRouter();
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
   const [state, setState] = useState<PlayerState | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [connected, setConnected] = useState(true);
+  // Why the last read of the room failed. Before the first read it is the
+  // whole screen; after it, a strip over a screen that stays usable.
+  const [readError, setReadError] = useState<{ offline: boolean; message: string } | null>(null);
+  // An answer the server did not take, kept with its question, so it shows
+  // under that question only and goes with it.
+  const [answerError, setAnswerError] = useState<{ index: number; message: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState<{ index: number; payload: Record<string, unknown> } | null>(null);
   const celebrated = useRef<number | null>(null);
+  const shown = useRef<ShownState>(null);
 
   const refresh = useCallback(async () => {
     if (!sessionId) return;
     try {
       const next = await playerState(sessionId);
+      setReadError(null);
+      // Reads overlap; one older than the screen is dropped (see isNewerState).
+      if (!isNewerState(shown.current, sessionId, next.state_version)) return;
+      shown.current = { sessionId, version: next.state_version };
       setState(next);
-      setError(null);
-      setConnected(true);
     } catch (failure) {
-      setError(asErrorMessage(failure));
+      setReadError({ offline: isTransport(failure), message: asErrorMessage(failure) });
     }
   }, [sessionId]);
 
@@ -98,6 +109,17 @@ function PlayGameScreen() {
     return () => clearInterval(timer);
   }, [refresh]);
 
+  // Awake while the room is open, read again on return to the app, and a
+  // started match is not left by one stray edge swipe. A Mafia card has no
+  // clock to miss and lies face down for the whole evening, so that phone
+  // sleeps as usual; waking it reads the room.
+  useMatchScreen({
+    status: state?.status ?? null,
+    onResume: refresh,
+    leave: { title: t("leave.title"), body: t("leave.player"), stay: t("leave.stay"), go: t("leave.go") },
+    keepAwake: state?.game_kind !== "mafia",
+  });
+
   const remaining = useCountdown(state?.phase_deadline ?? null);
 
   // The verdict lands with the reveal, which is the moment to celebrate.
@@ -111,24 +133,31 @@ function PlayGameScreen() {
   }, [state?.current_index, state?.reveal?.my_answer, state?.status]);
 
   async function answer(payload: Record<string, unknown>) {
-    if (!sessionId || state?.current_index == null) return;
+    if (!sessionId || !state) return;
+    const index = state.current_index;
     setSubmitting(true);
+    setAnswerError(null);
     try {
-      await submitAnswer(sessionId, state.current_index, payload);
+      await submitAnswer(sessionId, index, payload);
       // Kept for the reveal, which marks a sequence place by place.
-      setSent({ index: state.current_index, payload });
+      setSent({ index, payload });
       await refresh();
     } catch (failure) {
-      setError(asErrorMessage(failure));
+      // Said under the question, with the options open again; it used to be
+      // dropped, and a late tap looked like a tap that did nothing. A refusal
+      // ("Vaqt tugadi.", "Bu savol yopilgan.") usually means this screen was
+      // behind the room, so the room is read now rather than at the next poll.
+      setAnswerError({ index, message: asErrorMessage(failure) });
+      void refresh();
     } finally {
       setSubmitting(false);
     }
   }
 
-  if (error && !state) {
+  if (readError && !state) {
     return (
       <View style={[styles.safe, { paddingTop: Math.max(insets.top, 20) + spacing.xs }]}>
-        <ErrorState message={error} onRetry={() => void refresh()} />
+        <ErrorState message={readError.message} onRetry={() => void refresh()} />
       </View>
     );
   }
@@ -142,15 +171,18 @@ function PlayGameScreen() {
   }
 
   const me = state.me;
+  // A dropped connection says it is reconnecting; a refusal (removed from the
+  // room, the match gone) says what the server said.
+  const readTrouble = readError ? (readError.offline ? t("player.offline") : readError.message) : null;
 
   // Mafia has no questions: the phone is the player's card.
   if (state.game_kind === "mafia" && sessionId) {
-    return <MafiaPlayerScreen sessionId={sessionId} state={state} connected={connected} offlineLabel={t("player.offline")} />;
+    return <MafiaPlayerScreen sessionId={sessionId} state={state} connected={!readTrouble} offlineLabel={readTrouble ?? t("player.offline")} />;
   }
 
   return (
     <View style={[styles.safe, { paddingTop: Math.max(insets.top, 20) + spacing.xs }]}>
-      {!connected ? <View style={styles.offline}><Text style={styles.offlineText}>{t("player.offline")}</Text></View> : null}
+      {readTrouble ? <View style={styles.offline}><Text style={styles.offlineText}>{readTrouble}</Text></View> : null}
 
       <View style={styles.header}>
         <GameAvatar id={me.avatar_id} size={40} />
@@ -223,6 +255,8 @@ function PlayGameScreen() {
           ) : (
             <Text style={styles.prompt}>{t("player.lookUp")}</Text>
           )}
+
+          {answerError?.index === state.current_index && !state.answered ? <InlineError message={answerError.message} /> : null}
 
           {state.answered ? (
             <View style={styles.lockedBanner}>

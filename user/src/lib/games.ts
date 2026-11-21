@@ -4,7 +4,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { i18n } from "../i18n";
 
 import { DEFAULT_HOST } from "./marathon-link-core";
-import { withNetworkRetry } from "./retry";
+import { isTransport, withNetworkRetry } from "./retry";
 import { changesChannel, supabase } from "./supabase";
 import { isWeb, WEB_BASE } from "./web";
 
@@ -180,13 +180,16 @@ export type PlayerState = {
  * joining, answering, advancing. A lost packet used to end the attempt and
  * show a Swift stack trace; now the question is simply asked again, and only a
  * server that actually answered is treated as final.
+ *
+ * `attempts` is 1 for a call that is not safe to repeat blind (see
+ * `advanceSession`), which then does its own checking between tries.
  */
-async function rpc<T>(name: string, args: Record<string, unknown>): Promise<T> {
+async function rpc<T>(name: string, args: Record<string, unknown>, attempts?: number): Promise<T> {
   return withNetworkRetry(async () => {
     const { data, error } = await supabase.rpc(name as never, args as never);
     if (error) throw error;
     return data as T;
-  });
+  }, { attempts });
 }
 
 /**
@@ -247,6 +250,10 @@ export async function liveMatch(userId: string): Promise<{ sessionId: string; ho
       .eq("user_id", userId).neq("status", "kicked").in("game_sessions.status", live).gt("game_sessions.expires_at", now)
       .order("joined_at", { ascending: false }).limit(1),
   ]);
+  // A read that failed is not "nothing running": thrown, so the caller keeps
+  // the way back it last saw instead of hiding it during a network blip.
+  if (hosted.error) throw hosted.error;
+  if (played.error) throw played.error;
   type GameBit = { title: string; kind: string } | null;
   const host = (hosted.data ?? [])[0] as unknown as { id: string; created_at: string; games: GameBit } | undefined;
   const player = (played.data ?? [])[0] as unknown as
@@ -285,9 +292,59 @@ export const configureSession = (sessionId: string, config: {
     ...(config.allowLateJoin === undefined ? {} : { p_allow_late_join: config.allowLateJoin }),
   });
 
-export const advanceSession = (sessionId: string, action: "next" | "finish" | "cancel" = "next") =>
-  rpc<{ status: GameSessionStatus; current_index?: number; phase_deadline?: string | null; state_version?: number }>(
-    "game_session_advance", { p_session_id: sessionId, p_action: action });
+/** Where a match stands, as far as moving it on goes: the phase and its question. */
+export type MatchPhase = { status: GameSessionStatus; current_index: number };
+
+export type AdvanceResult = { status: GameSessionStatus; current_index?: number; phase_deadline?: string | null; state_version?: number };
+
+/** How many times one step is sent over a dropping connection, checking the room between tries. */
+const ADVANCE_ATTEMPTS = 3;
+
+/**
+ * Moves a match on, at most once from the phase the screen showed (`from`).
+ *
+ * `game_session_advance` moves the match every time it is called; it has no
+ * expected-phase check yet. So the client keeps that promise itself, as far
+ * as a client can:
+ *
+ * - "next" first asks where the match is. If it has already left `from`
+ *   (another screen of the same host, or a phone that slept through its own
+ *   timer and woke to a burst of them), it is left alone and the result is
+ *   `null`: the caller reads the room instead of skipping a phase.
+ * - A dropped connection is tried again, like every O‘yingoh call, but only
+ *   after reading the room. A reply lost on its way back may mean the match
+ *   already moved, and sending it again would move it twice; that is `null`
+ *   too. A room that cannot be read is not tried blind: the failure is thrown.
+ *
+ * Two screens can still pass the first check at the same instant. Only the
+ * server can close that gap; until it does, the window is one round trip
+ * instead of however long a screen was asleep.
+ */
+export async function advanceSession(
+  sessionId: string, action: "next" | "finish" | "cancel", from: MatchPhase,
+): Promise<AdvanceResult | null> {
+  // Whether what was asked for has already happened. For "next", the match has left `from`. A cancel or a finish
+  // is done only when the match is cancelled or finished: the host's own clock moves the phase while the Alert is
+  // up, and a cancel whose first try was lost took that move for success — no error, and the match played on to
+  // its podium, paying out the coins it should have handed back. Anything else is sent again (the server refuses a
+  // cancel or a finish twice, so nothing is settled twice), and its refusal is what the host sees.
+  const moved = async () => {
+    const now = await hostState(sessionId);
+    if (action === "cancel") return now.status === "cancelled";
+    if (action === "finish") return now.status === "finished";
+    return now.status !== from.status || now.current_index !== from.current_index;
+  };
+  if (action === "next" && await moved()) return null;
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await rpc<AdvanceResult>("game_session_advance", { p_session_id: sessionId, p_action: action }, 1);
+    } catch (failure) {
+      if (!isTransport(failure) || attempt >= ADVANCE_ATTEMPTS) throw failure;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 700 * attempt));
+    if (await moved()) return null;
+  }
+}
 
 /** What a player is about to join: the teams it offers and whether it still takes newcomers. */
 export type JoinPreview = { status: GameSessionStatus; team_mode: boolean; teams: string[]; allow_late_join: boolean; joinable: boolean };
@@ -379,14 +436,38 @@ export async function generateGame(input: GenerateGameInput): Promise<{ gameId: 
  * the only thing published; every screen refetches its own sanitised state
  * when state_version moves, which keeps payloads identical for 3 players and
  * 100.
+ *
+ * It also calls back each time the channel joins, the first time included. A
+ * socket that dropped (a phone that slept, a hand-over between towers) rejoins
+ * on its own, but the changes sent while it was away are gone for good, and
+ * reading the state again on "SUBSCRIBED" is how a screen catches up. The
+ * first join covers the moment between a screen's first read and the channel
+ * being live.
  */
 export function subscribeToSession(sessionId: string, onChange: () => void): RealtimeChannel {
   return changesChannel(`game-session-${sessionId}`)
     .on("postgres_changes",
       { event: "UPDATE", schema: "public", table: "game_sessions", filter: `id=eq.${sessionId}` },
       onChange)
-    .subscribe();
+    .subscribe((status) => { if (status === "SUBSCRIBED") onChange(); });
 }
+
+/** The newest state a match screen has shown, and for which match. */
+export type ShownState = { sessionId: string; version: number } | null;
+
+/**
+ * Whether a state read from the server may replace the one on screen: only
+ * one older than what is already shown may not.
+ *
+ * A screen has several reads in flight at once (a poll, a realtime wake, a
+ * return to the app, an answer's own read), and on Android they all start in
+ * the same instant, since every timer that came due while the screen was off
+ * fires when it lights up. They answer in any order. An older answer landing
+ * last used to put a closed question back on the host's screen, and its timer
+ * then closed the next one too.
+ */
+export const isNewerState = (shown: ShownState, sessionId: string, version: number): boolean =>
+  shown?.sessionId !== sessionId || version >= shown.version;
 
 // ------------------------------------------------------------------ shelves --
 export const listCategories = async (): Promise<GameCategory[]> => {
@@ -442,16 +523,26 @@ export const listQuestions = async (gameId: string): Promise<GameQuestion[]> => 
   return data ?? [];
 };
 
-/** Recently finished matches this account took part in, newest first. */
-export const listMyMatches = async (): Promise<{ session_id: string; joined_at: string; total_score: number; rank: number | null; game_title: string }[]> => {
+/**
+ * Recently finished matches this account played, newest first: its own rows
+ * only, one per match (a player joins a match once).
+ *
+ * Filtered by player for the same reason as `listMyGames`, and one more:
+ * anyone in a room may read every player in it, so the unfiltered query listed
+ * strangers' scores, one row per player, all under the same session id.
+ */
+export const listMyMatches = async (userId: string): Promise<{ session_id: string; joined_at: string; total_score: number; rank: number | null; game_title: string }[]> => {
   const { data, error } = await supabase
     .from("game_players")
     .select("session_id, joined_at, total_score, rank, game_sessions!inner(status, ended_at, games(title))")
+    .eq("user_id", userId)
+    // Finished ones in the query itself, so the thirty are thirty results
+    // rather than thirty rows with the unfinished ones dropped afterwards.
+    .eq("game_sessions.status", "finished")
     .order("joined_at", { ascending: false })
     .limit(30);
   if (error) throw error;
   return (data ?? [])
-    .filter((row) => (row.game_sessions as unknown as { status: string }).status === "finished")
     .map((row) => ({
       session_id: row.session_id,
       joined_at: row.joined_at,

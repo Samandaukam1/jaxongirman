@@ -62,14 +62,19 @@ export function GameAnswerInput({ question, locked, onSubmit }: Props) {
   const [imageBox, setImageBox] = useState({ width: 1, height: 1 });
 
   // A new question resets everything: state from question 3 must not decide
-  // question 4.
+  // question 4. Keyed by which items were dealt, not by the array carrying
+  // them: every read of the room (a poll, a wake, a return to the app) brings
+  // a new array with the same items, and resetting on it put the dealt order
+  // back under a list the player had already sorted, so the answer sent was
+  // not the one on screen.
+  const dealt = JSON.stringify((question.config.items ?? []).map((item) => item.id));
   useEffect(() => {
     setChoices([]);
     setText("");
-    setOrder((question.config.items ?? []).map((item) => item.id));
+    setOrder(JSON.parse(dealt) as string[]);
     setPairs({});
     setActiveLeft(null);
-  }, [question.id, question.config.items]);
+  }, [question.id, dealt]);
 
   const tap = () => void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 

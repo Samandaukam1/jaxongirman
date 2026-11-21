@@ -1,5 +1,5 @@
 import { GAME_AVATAR_COUNT, GAME_AVATAR_GROUPS, gameAvatarIds, type GameAvatarGroup } from "@jaxongirman/types";
-import { CameraView, useCameraPermissions } from "expo-camera";
+import { CameraView } from "expo-camera";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Camera, Dices, KeyRound, ScanLine } from "lucide-react-native";
@@ -18,6 +18,7 @@ import { lockedOnWeb } from "@/components/WebLocked";
 import { asErrorMessage } from "@/lib/format";
 import { isTransport } from "@/lib/retry";
 import { joinGame, joinGameByCode, previewJoin, type JoinPreview } from "@/lib/games";
+import { useScannerCamera } from "@/lib/useScannerCamera";
 import { useAccount } from "@/providers/AccountProvider";
 import { icon, radius, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
@@ -31,6 +32,14 @@ function extractToken(raw: string): string | null {
 }
 
 type Step = "scan" | "identity";
+
+/**
+ * How far above the keyboard the code field is held: the "Davom etish" button
+ * under it (56 high, 12 below the field) and a margin. Keeping only the field
+ * in view left the button under the number pad on a short Android phone, where
+ * the window no longer shrinks for the keyboard.
+ */
+const CODE_KEYBOARD_OFFSET = spacing.md + 56 + spacing.lg;
 
 /**
  * Joining a match. Two ways in — the QR on the projector, or the six digits
@@ -48,7 +57,10 @@ function JoinGameScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ token?: string; code?: string }>();
   const { profile } = useAccount();
-  const [permission, requestPermission] = useCameraPermissions();
+  const camera = useScannerCamera();
+  // The camera would not start (another app holds it, the phone refused it):
+  // the code is the way in then, and the screen says why it is asking for it.
+  const [cameraFailed, setCameraFailed] = useState(false);
   const [step, setStep] = useState<Step>(params.token || params.code ? "identity" : "scan");
   const [token, setToken] = useState<string | null>(params.token ?? null);
   const [code, setCode] = useState(params.code ?? "");
@@ -138,15 +150,23 @@ function JoinGameScreen() {
   }
 
   if (step === "scan") {
+    const proceed = () => {
+      if (code.length !== 6) return;
+      setToken(null);
+      setStep("identity");
+    };
     return (
       <View style={styles.safe}>
         <ScreenHeader title={t("entry.joinTitle")} subtitle={t("title")} onLeave={() => router.back()} />
-        <ScrollView contentContainerStyle={styles.content}>
+        {/* Keyboard-aware, and taps go through while the pad is up: a plain
+            scroll view shorter than the screen cannot be scrolled to a button
+            the pad covers, and its first tap only closed the pad. */}
+        <KeyboardAwareScrollView bottomOffset={CODE_KEYBOARD_OFFSET} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           {manualCode ? (
             <View style={styles.codeBlock}>
               <KeyRound color={colors.primary} size={36} strokeWidth={icon.stroke} />
               <Text style={styles.blockTitle}>{t("entry.enterCode")}</Text>
-              <Text style={styles.blockHint}>{t("entry.codeHint")}</Text>
+              <Text style={styles.blockHint}>{cameraFailed ? t("entry.cameraFailed") : t("entry.codeHint")}</Text>
               <TextInput
                 style={styles.codeInput}
                 value={code}
@@ -156,22 +176,26 @@ function JoinGameScreen() {
                 placeholderTextColor={colors.inkSoft}
                 maxLength={6}
                 autoFocus
+                // Android's number pad has a "done" key; it continues too.
+                returnKeyType="done"
+                onSubmitEditing={proceed}
               />
               <PrimaryButton
                 label={t("entry.continue")}
                 disabled={code.length !== 6}
-                onPress={() => { setToken(null); setStep("identity"); }}
+                onPress={proceed}
               />
-              <Pressable onPress={() => setManualCode(false)}>
+              <Pressable onPress={() => { setCameraFailed(false); setManualCode(false); }}>
                 <Text style={styles.linkText}>{t("entry.backToQr")}</Text>
               </Pressable>
             </View>
-          ) : !permission?.granted ? (
+          ) : !camera.granted ? (
             <View style={styles.codeBlock}>
               <Camera color={colors.primary} size={36} strokeWidth={icon.stroke} />
               <Text style={styles.blockTitle}>{t("entry.camera")}</Text>
-              <Text style={styles.blockHint}>{t("entry.cameraJoin")}</Text>
-              <PrimaryButton label={t("entry.allow")} onPress={() => void requestPermission()} />
+              {/* A refusal the phone remembers is undone in its settings, not by asking again. */}
+              <Text style={styles.blockHint}>{camera.blocked ? t("entry.cameraBlocked") : t("entry.cameraJoin")}</Text>
+              <PrimaryButton label={camera.blocked ? t("entry.openSettings") : t("entry.allow")} onPress={() => void camera.ask()} />
               <Pressable onPress={() => setManualCode(true)}>
                 <Text style={styles.linkText}>{t("entry.withCode")}</Text>
               </Pressable>
@@ -179,11 +203,16 @@ function JoinGameScreen() {
           ) : (
             <>
               <View style={styles.cameraFrame}>
-                <CameraView
-                  style={StyleSheet.absoluteFill}
-                  barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
-                  onBarcodeScanned={({ data }) => onScan(data)}
-                />
+                {/* Only while this screen is in front, so the camera is not held under another one. */}
+                {camera.live ? (
+                  <CameraView
+                    style={StyleSheet.absoluteFill}
+                    barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+                    onBarcodeScanned={({ data }) => onScan(data)}
+                    // A camera that will not start used to stay a dark box that never read anything.
+                    onMountError={() => { setCameraFailed(true); setManualCode(true); }}
+                  />
+                ) : null}
                 <View pointerEvents="none" style={styles.reticle}>
                   <ScanLine color={colors.onPrimary} size={40} strokeWidth={icon.stroke} />
                 </View>
@@ -195,7 +224,7 @@ function JoinGameScreen() {
             </>
           )}
           {error ? <InlineError message={error} /> : null}
-        </ScrollView>
+        </KeyboardAwareScrollView>
       </View>
     );
   }

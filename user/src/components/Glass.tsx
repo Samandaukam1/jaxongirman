@@ -71,6 +71,10 @@ export function GlassPanel({ children, style, radius: corner = radius.lg, intens
  * Deliberately small. The screens that use it have one main thing — a slide,
  * a script — and the actions around it should be reachable without competing
  * with it.
+ *
+ * A label may take two lines ("Do‘konda sotuvga chiqarish" does not fit one
+ * tile), and every tile in a row stretches to the tallest with its icon and
+ * label centred, so a row of them stays one even band.
  */
 export function GlassAction({ icon: Icon, label, onPress, busy = false, disabled = false, tone = "plain", accessibilityLabel }: {
   icon: LucideIcon;
@@ -93,7 +97,7 @@ export function GlassAction({ icon: Icon, label, onPress, busy = false, disabled
       onPress={onPress}
       style={({ pressed }) => [styles.actionWrap, pressed && styles.pressed, (disabled) && styles.disabled]}
     >
-      <GlassPanel radius={radius.lg} padded={false} style={brand ? styles.brandShadow : undefined}>
+      <GlassPanel radius={radius.lg} padded={false} style={[styles.fill, brand && styles.brandShadow]}>
         {brand ? (
           <LinearGradient colors={[colors.primaryBright, colors.primary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { borderRadius: radius.lg }]} />
         ) : null}
@@ -101,7 +105,7 @@ export function GlassAction({ icon: Icon, label, onPress, busy = false, disabled
           {busy
             ? <ActivityIndicator size="small" color={brand ? colors.onPrimary : colors.primary} />
             : <Icon color={brand ? colors.onPrimary : colors.primary} size={20} strokeWidth={2.1} />}
-          <Text numberOfLines={1} style={[styles.actionLabel, brand && styles.actionLabelBrand]}>{label}</Text>
+          <Text numberOfLines={2} style={[styles.actionLabel, brand && styles.actionLabelBrand]}>{label}</Text>
         </View>
       </GlassPanel>
     </Pressable>
@@ -121,9 +125,10 @@ const useStyles = makeStyles((colors) => ({
   rim: { borderWidth: StyleSheet.hairlineWidth, borderColor: colors.glassRim },
   padded: { padding: spacing.lg },
   actionWrap: { flex: 1 },
+  fill: { flex: 1, justifyContent: "center" },
   pressed: { transform: [{ scale: 0.97 }] },
   disabled: { opacity: 0.45 },
   action: { minHeight: 62, alignItems: "center", justifyContent: "center", gap: 4, paddingVertical: spacing.sm, paddingHorizontal: spacing.xs },
-  actionLabel: { ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", color: colors.ink },
+  actionLabel: { ...typography.caption, fontFamily: "JaxongirmanSans_700Bold", color: colors.ink, textAlign: "center" },
   actionLabelBrand: { color: colors.onPrimary },
 }));

@@ -12,6 +12,14 @@ import { Platform } from "react-native";
 
 export const isWeb = Platform.OS === "web";
 
+/**
+ * Takes a faded-out layer fully out of reach in a browser: no Tab stop, no
+ * screen-reader node, no click. `inert` is a DOM attribute react-native-web
+ * passes through; React Native's own types do not know it, hence the cast.
+ * Spread onto the layer: `<View {...inertOnWeb(hidden)} />`.
+ */
+export const inertOnWeb = (hidden: boolean) => (isWeb ? ({ inert: hidden } as object) : null);
+
 /** "/app" on the website, "" on a phone and in a local `expo start --web`. */
 export const WEB_BASE = isWeb ? (process.env.EXPO_BASE_URL ?? "").replace(/\/+$/, "") : "";
 

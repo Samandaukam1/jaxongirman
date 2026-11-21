@@ -1,4 +1,4 @@
-import { CameraView, useCameraPermissions } from "expo-camera";
+import { CameraView } from "expo-camera";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Camera, MonitorPlay, ScanLine } from "lucide-react-native";
@@ -12,6 +12,7 @@ import { ScreenHeader } from "@/components/ScreenHeader";
 import { InlineError } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
 import { claimPairing, createSession } from "@/lib/games";
+import { useScannerCamera } from "@/lib/useScannerCamera";
 import { icon, radius, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
@@ -40,12 +41,17 @@ function extractToken(raw: string): string | null {
 function HostScanScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
-  const { t } = useTranslation("games");
+  const { t } = useTranslation(["games", "common"]);
   const router = useRouter();
   const params = useLocalSearchParams<{ token?: string; gameId?: string }>();
   /** A game chosen before the board was scanned: it goes up as soon as the board is claimed. */
   const chosenGame = typeof params.gameId === "string" && params.gameId ? params.gameId : undefined;
-  const [permission, requestPermission] = useCameraPermissions();
+  const camera = useScannerCamera();
+  // The camera would not start. The board shows no code to type instead, so
+  // the way on is another try once whatever held the camera lets go; a try
+  // mounts a fresh camera (`cameraTry` is its key).
+  const [cameraFailed, setCameraFailed] = useState(false);
+  const [cameraTry, setCameraTry] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const claiming = useRef(false);
@@ -82,24 +88,43 @@ function HostScanScreen() {
             <ActivityIndicator color={colors.primary} size="large" />
             <Text style={styles.blockTitle}>{t("entry.connecting")}</Text>
           </View>
-        ) : !permission?.granted ? (
+        ) : !camera.granted ? (
           <View style={styles.block}>
             <Camera color={colors.primary} size={36} strokeWidth={icon.stroke} />
             <Text style={styles.blockTitle}>{t("entry.camera")}</Text>
-            <Text style={styles.blockHint}>{t("entry.cameraHost")}</Text>
-            <PrimaryButton label={t("entry.allow")} onPress={() => void requestPermission()} />
+            {/* A refusal the phone remembers is undone in its settings, not by asking again. */}
+            <Text style={styles.blockHint}>{camera.blocked ? t("entry.cameraBlocked") : t("entry.cameraHost")}</Text>
+            <PrimaryButton label={camera.blocked ? t("entry.openSettings") : t("entry.allow")} onPress={() => void camera.ask()} />
+          </View>
+        ) : cameraFailed ? (
+          <View style={styles.block}>
+            <Camera color={colors.primary} size={36} strokeWidth={icon.stroke} />
+            <Text style={styles.blockHint}>{t("entry.cameraFailedHost")}</Text>
+            <PrimaryButton
+              label={t("common:retry")}
+              onPress={() => { setCameraFailed(false); setCameraTry((count) => count + 1); }}
+            />
+            <Pressable onPress={() => router.replace("/(app)/oyingoh/join")}>
+              <Text style={styles.linkText}>{t("entry.notHost")}</Text>
+            </Pressable>
           </View>
         ) : (
           <>
             <View style={styles.cameraFrame}>
-              <CameraView
-                style={StyleSheet.absoluteFill}
-                barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
-                onBarcodeScanned={({ data }) => {
-                  const token = extractToken(data);
-                  if (token) void claim(token);
-                }}
-              />
+              {/* Only while this screen is in front, so the camera is not held under another one. */}
+              {camera.live ? (
+                <CameraView
+                  key={cameraTry}
+                  style={StyleSheet.absoluteFill}
+                  barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+                  onBarcodeScanned={({ data }) => {
+                    const token = extractToken(data);
+                    if (token) void claim(token);
+                  }}
+                  // A camera that will not start used to stay a dark box that never read anything.
+                  onMountError={() => setCameraFailed(true)}
+                />
+              ) : null}
               <View pointerEvents="none" style={styles.reticle}>
                 <ScanLine color={colors.onPrimary} size={40} strokeWidth={icon.stroke} />
               </View>

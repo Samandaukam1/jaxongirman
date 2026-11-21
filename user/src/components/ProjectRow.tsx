@@ -2,8 +2,10 @@ import { LinearGradient } from "expo-linear-gradient";
 import { memo, useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { DeleteWorkButton } from "@/components/DeleteWorkButton";
+import { useDeleteWork, useWorkRowAccessibility, WorkRowEnd } from "@/components/DeleteWorkButton";
 import { Touchable } from "@/components/Touchable";
+import { SelectCheck, useSelectedRowStyle } from "@/components/WorkSelection";
+import { isWeb } from "@/lib/web";
 import { ObjectiveArt, PortraitArt, ScientificArt, SlideCreateArt, type Art } from "@/components/toolArt";
 import { kindLabel, statusLabel, type Project, type ProjectKind } from "@/lib/projects";
 import { withAlpha } from "@/theme/color";
@@ -70,19 +72,45 @@ function ago(iso: string): string {
   return days < 30 ? `${days} kun oldin` : new Date(iso).toLocaleDateString("uz");
 }
 
-export function ProjectRow({ project, onPress, onDeleted }: { project: Project; onPress: () => void; onDeleted?: () => void }) {
+/** A finished deck or scientific work can go to a chat; a photo sheet or an obyektivka cannot. */
+export const projectSendable = (project: Project): boolean =>
+  (project.kind === "presentation" || project.kind === "academic") && project.status === "ready";
+
+export function ProjectRow({ project, onPress, onDeleted, selecting = false, selected = false, onSelect }: {
+  project: Project;
+  onPress: () => void;
+  onDeleted?: () => void;
+  /** Rows are being chosen: a tap ticks this one instead of opening it. */
+  selecting?: boolean;
+  selected?: boolean;
+  /** A long press, or a tap while choosing — see `useWorkSelection`. */
+  onSelect?: () => void;
+}) {
   const { scheme } = useTheme();
   const styles = useStyles();
+  const chosen = useSelectedRowStyle();
   const { art: Art, tint } = MARK[project.kind];
   const status = statusLabel(project.status);
   const loud = project.status ? LOUD.has(project.status) : false;
+  const deletion = useDeleteWork(project.kind, project.id, project.title, onDeleted ?? (() => undefined));
+  const sendable = projectSendable(project);
+  const access = useWorkRowAccessibility({
+    kind: project.kind, id: project.id, title: project.title, sendable, onDeleted, deletion, selecting, onSelect,
+  });
 
   return (
     <Touchable
-      accessibilityRole="button"
+      // While choosing, the row is a checkbox: that is what a tap on it does.
+      accessibilityRole={selecting ? "checkbox" : "button"}
+      accessibilityState={selecting ? { checked: selected } : undefined}
       accessibilityLabel={`${kindLabel(project.kind)}: ${project.title}`}
-      onPress={onPress}
-      style={styles.row}
+      {...access}
+      disabled={deletion.busy}
+      onPress={selecting && onSelect ? onSelect : onPress}
+      onLongPress={onSelect}
+      // Longer in a browser, where a long press is also a slow click.
+      delayLongPress={isWeb ? 600 : 380}
+      style={[styles.row, selected && chosen]}
     >
       <View style={[styles.glyph, { borderColor: withAlpha(tint, scheme === "dark" ? 0.3 : 0.2) }]}>
         <Plate tint={tint} night={scheme === "dark"} />
@@ -104,7 +132,9 @@ export function ProjectRow({ project, onPress, onDeleted }: { project: Project; 
       {status && loud
         ? <View style={styles.badge}><Text style={styles.badgeText}>{status}</Text></View>
         : <View style={styles.dot} />}
-      {onDeleted ? <DeleteWorkButton kind={project.kind} id={project.id} title={project.title} onDeleted={onDeleted} /> : null}
+      {selecting
+        ? <SelectCheck selected={selected} />
+        : <WorkRowEnd kind={project.kind} id={project.id} title={project.title} sendable={sendable} onDeleted={onDeleted} deletion={deletion} />}
     </Touchable>
   );
 }

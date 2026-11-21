@@ -1,7 +1,7 @@
 import * as FileSystem from "expo-file-system/legacy";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import * as Sharing from "expo-sharing";
-import { ArrowLeft, ChevronRight, Download, FileDown, Gamepad2, MessageCircle, MonitorPlay, PenLine, RefreshCw, Sparkles, Store } from "lucide-react-native";
+import { ArrowLeft, Download, FileDown, Gamepad2, MessageCircle, MonitorPlay, PenLine, RefreshCw, Sparkles, Store } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Platform, Pressable, ScrollView, Text, useWindowDimensions, View } from "react-native";
@@ -24,8 +24,8 @@ import { makeStyles, useTheme } from "@/theme/ThemeProvider";
  * The finished deck.
  *
  * Where a person lands when their presentation is ready, and where it opens
- * from Loyihalar: the slides large, three small actions under them, and the
- * spoken script below — because those two things are what they came for. The
+ * from Loyihalar: the slides large, two short rows of action tiles under them,
+ * and the spoken script below — because those two things are what they came for. The
  * editor is one tap away rather than the first thing in their face; it used to
  * be the landing page, and a screen full of tools is the wrong answer to "is my
  * presentation done?".
@@ -203,29 +203,30 @@ export default function DeckScreen() {
           <GlassPanel><Text style={styles.empty}>{t("empty")}</Text></GlassPanel>
         )}
 
-        <View style={styles.actions}>
-          <GlassAction icon={Download} label={t("download")} onPress={() => setExportOpen(true)} />
-          <GlassAction icon={PenLine} label={t("edit")} onPress={() => router.push({ pathname: "/(app)/presentation/[id]/edit", params: { id: presentation.id } })} />
-          <GlassAction icon={MonitorPlay} label={t("present")} tone="brand" onPress={() => router.push({ pathname: "/(app)/present/scan", params: { presentationId: presentation.id } })} />
+        {/**
+          * Five actions, one tile each. On top, what the deck itself is for —
+          * get it, change it, show it, with showing the one tile in colour;
+          * under it, where it can go — to someone in a chat (with its defence
+          * script), or up for sale in the Store (the server says up front
+          * whether it goes live at once). The last two used to be long bars in
+          * a style of their own under three tiles, which read as two kinds of
+          * thing when they are one.
+          */}
+        <View style={styles.actionGrid}>
+          <View style={styles.actions}>
+            <GlassAction icon={Download} label={t("download")} onPress={() => setExportOpen(true)} />
+            <GlassAction icon={PenLine} label={t("edit")} onPress={() => router.push({ pathname: "/(app)/presentation/[id]/edit", params: { id: presentation.id } })} />
+            <GlassAction icon={MonitorPlay} label={t("present")} tone="brand" onPress={() => router.push({ pathname: "/(app)/present/scan", params: { presentationId: presentation.id } })} />
+          </View>
+          <View style={styles.actions}>
+            <GlassAction
+              icon={MessageCircle}
+              label={tChat("sendToChat")}
+              onPress={() => router.push({ pathname: "/(app)/chat/share", params: { kind: "presentation", id: presentation.id, title: presentation.title } })}
+            />
+            <GlassAction icon={Store} label={t("sell")} onPress={() => setPublishOpen(true)} />
+          </View>
         </View>
-
-        {/* To someone in chat: the deck goes with its defence script. */}
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.push({ pathname: "/(app)/chat/share", params: { kind: "presentation", id: presentation.id, title: presentation.title } })}
-          style={styles.gameRow}
-        >
-          <MessageCircle color={colors.primary} size={icon.md} strokeWidth={icon.stroke} />
-          <Text style={styles.gameText} numberOfLines={2}>{tChat("sendToChat")}</Text>
-          <ChevronRight color={colors.inkSoft} size={18} strokeWidth={2} />
-        </Pressable>
-
-        {/* Selling the deck: the server says up front whether it goes live at once. */}
-        <Pressable accessibilityRole="button" onPress={() => setPublishOpen(true)} style={styles.gameRow}>
-          <Store color={colors.primary} size={icon.md} strokeWidth={icon.stroke} />
-          <Text style={styles.gameText} numberOfLines={2}>{t("sell")}</Text>
-          <ChevronRight color={colors.inkSoft} size={18} strokeWidth={2} />
-        </Pressable>
 
         {wantsGame && game.state !== "idle" ? (
           <Pressable
@@ -371,6 +372,7 @@ const useStyles = makeStyles((colors) => ({
   meta: { ...typography.caption, color: colors.inkSoft },
   title: { ...typography.title, fontSize: 24, lineHeight: 31, color: colors.ink },
   empty: { ...typography.body, color: colors.inkMuted, textAlign: "center" },
+  actionGrid: { gap: spacing.sm },
   actions: { flexDirection: "row", gap: spacing.sm },
   gameRow: {
     flexDirection: "row", alignItems: "center", gap: spacing.md,

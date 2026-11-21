@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   Check, ChevronRight, ExternalLink, Gift, Minus, Play, Plus, Square, SquareCheck, Users, Volume2, VolumeX, X,
 } from "lucide-react-native";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
@@ -20,12 +20,14 @@ import { ScreenHeader } from "@/components/ScreenHeader";
 import { ErrorState, InlineError } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
 import {
-  advanceSession, configureSession, gameJoinUrl, hostState, reviewAnswer, subscribeToSession,
-  type HostState, type LeaderboardPayload,
+  advanceSession, configureSession, gameJoinUrl, hostState, isNewerState, reviewAnswer, subscribeToSession,
+  type HostState, type LeaderboardPayload, type MatchPhase, type ShownState,
 } from "@/lib/games";
 import { formatNumber } from "@/lib/money";
+import { isTransport, withNetworkRetry } from "@/lib/retry";
 import { supabase } from "@/lib/supabase";
 import { useRoom } from "@/lib/useDesktop";
+import { isOpenMatch, useMatchScreen } from "@/lib/useMatchScreen";
 import { siteGameScreenUrl } from "@/lib/web";
 import { useAccount } from "@/providers/AccountProvider";
 import { icon, radius, spacing, typography } from "@/theme/tokens";
@@ -64,6 +66,36 @@ const RESULT_SECONDS = 6;
 const CROSSWORD_RESULT_SECONDS = 20;
 const LEADERBOARD_SECONDS = 8;
 
+/**
+ * How often the remote reads the room while it is open.
+ *
+ * Realtime says when the session row changes, but a socket that dropped says
+ * nothing (a phone left on a desk, a hand-over between towers), and a
+ * crossword's race is not a row change at all. The lobby is read too: its
+ * count is what "start" waits for, and it used to sit at nobody.
+ */
+const POLL_MS = 4000;
+
+/** How long the clock waits before trying again a step of its own that failed. */
+const AUTO_RETRY_MS = 5000;
+
+/**
+ * The board: the room's players, best first.
+ *
+ * The host is not a player, so game_player_state is not theirs to call; these
+ * rows are, and RLS already lets the host read them in full. A failed read is
+ * a failure, not an empty room: it used to wipe the lobby on screen.
+ */
+const readBoard = (sessionId: string) => withNetworkRetry(async () => {
+  const { data, error } = await supabase
+    .from("game_players")
+    .select("id, nickname, avatar_id, team, total_score, correct_count, rank")
+    .eq("session_id", sessionId)
+    .order("total_score", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as Player[];
+});
+
 function HostGameScreen() {
   const { colors } = useTheme();
   const styles = useStyles();
@@ -82,7 +114,15 @@ function HostGameScreen() {
   // theirs; running itself is the default, not the rule.
   const [autoPaused, setAutoPaused] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [fatal, setFatal] = useState<string | null>(null);
+  // Why the last read of the room failed. Before the first read it is the
+  // whole screen; after it, a strip over controls that keep working. It used
+  // to be the whole screen either way, so one failed poll took the start,
+  // next and cancel buttons away from a host with a room waiting.
+  const [readError, setReadError] = useState<{ offline: boolean; message: string } | null>(null);
+  // When the clock may try a step of its own again after one failed: until
+  // then it waits, instead of asking the server again in a tight loop.
+  const [autoRetryAt, setAutoRetryAt] = useState(0);
+  const shown = useRef<ShownState>(null);
   // The arena beside the controls needs the site beside the app and a window
   // wide enough for both; anywhere else it is a window of its own, if any.
   const room = useRoom();
@@ -92,18 +132,13 @@ function HostGameScreen() {
   const refresh = useCallback(async () => {
     if (!sessionId) return;
     try {
-      const next = await hostState(sessionId);
+      const [next, list] = await Promise.all([hostState(sessionId), readBoard(sessionId)]);
+      setReadError(null);
+      // Reads overlap; one older than the screen is dropped (see isNewerState).
+      if (!isNewerState(shown.current, sessionId, next.state_version)) return;
+      shown.current = { sessionId, version: next.state_version };
       setState(next);
       setPlan((current) => Object.keys(current).length === 0 ? next.reward_plan ?? {} : current);
-
-      // The host is not a player, so game_player_state is not theirs to call:
-      // the board is these rows, which RLS already lets the host read in full.
-      const { data: rows } = await supabase
-        .from("game_players")
-        .select("id, nickname, avatar_id, team, total_score, correct_count, rank")
-        .eq("session_id", sessionId)
-        .order("total_score", { ascending: false });
-      const list = (rows as Player[]) ?? [];
       setPlayers(list);
       setLeaderboard({
         players: list.map((player, index) => ({
@@ -114,7 +149,7 @@ function HostGameScreen() {
         teams: [],
       });
     } catch (failure) {
-      setFatal(asErrorMessage(failure));
+      setReadError({ offline: isTransport(failure), message: asErrorMessage(failure) });
     }
   }, [sessionId]);
 
@@ -126,17 +161,43 @@ function HostGameScreen() {
     return () => { void supabase.removeChannel(channel); };
   }, [refresh, sessionId]);
 
-  const advance = useCallback(async (action: "next" | "finish" | "cancel") => {
+  // Awake while the room is open, read again on return to the app, and a
+  // started match is not left by one stray edge swipe: this phone is the
+  // room's clock (see below), and leaving it leaves the room waiting.
+  useMatchScreen({
+    status: state?.status ?? null,
+    onResume: refresh,
+    leave: { title: t("leave.title"), body: t("leave.host"), stay: t("leave.stay"), go: t("leave.go") },
+  });
+
+  const open = isOpenMatch(state?.status);
+  useEffect(() => {
+    if (!open) return;
+    const timer = setInterval(() => { void refresh(); }, POLL_MS);
+    return () => clearInterval(timer);
+  }, [open, refresh]);
+
+  /**
+   * One step of the match, sent with the phase it was meant for (`from`).
+   * `automatic` marks the clock's own steps, which wait a little after a
+   * failure before the clock tries again.
+   */
+  const advance = useCallback(async (action: "next" | "finish" | "cancel", from: MatchPhase, automatic = false) => {
     if (!sessionId) return;
     setBusy(true);
     setError(null);
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
-      await advanceSession(sessionId, action);
+      // Null when the match had already left `from`: nothing to move, only
+      // the room to read again (see advanceSession).
+      await advanceSession(sessionId, action, from);
       await refresh();
       if (action === "finish" || action === "cancel") await refreshWallet();
     } catch (failure) {
       setError(asErrorMessage(failure));
+      if (automatic) setAutoRetryAt(Date.now() + AUTO_RETRY_MS);
+      // A refusal usually means this screen was behind the room.
+      void refresh();
     } finally {
       setBusy(false);
     }
@@ -155,45 +216,45 @@ function HostGameScreen() {
    * alone — starting is a decision, not a timeout — and so are open answers,
    * which need a human verdict before anyone's score is right.
    *
-   * `advance` is idempotent through `state_version`: a late tap and this timer
-   * firing together do not skip a question.
+   * The timer follows the phase, not each read of it: the room is read every
+   * few seconds, and a result's six seconds started again on every read would
+   * never run out. Each step carries the phase it was meant for, so a late tap
+   * and this timer firing together, or a burst of timers on a phone that woke
+   * up, move the match once and do not skip a question.
    */
+  const status = state?.status ?? null;
+  const index = state?.current_index ?? 0;
+  const deadline = state?.phase_deadline ?? null;
+  const playerCount = state?.player_count ?? 0;
+  const everyoneAnswered = status === "question" && playerCount > 0 && (state?.answered_count ?? 0) >= playerCount;
+  // A solved crossword stays up long enough for the room to read its answers.
+  const resultSeconds = state?.current_question?.type === "crossword" ? CROSSWORD_RESULT_SECONDS : RESULT_SECONDS;
+  // An open answer is scored by the host, so a result holding one waits.
+  const waitingOnVerdict = status === "question_result" && openAnswers.length > 0;
+
   useEffect(() => {
-    if (!state || busy || autoPaused) return;
-
-    const everyoneAnswered = state.status === "question"
-      && state.player_count > 0
-      && (state.answered_count ?? 0) >= state.player_count;
-
-    // An open answer is scored by the host, so a result holding one waits.
-    const waitingOnVerdict = state.status === "question_result" && openAnswers.length > 0;
+    if (!status || busy || autoPaused) return;
 
     let delay: number | null = null;
-    if (state.status === "question") {
+    if (status === "question") {
       if (everyoneAnswered) {
         // A beat, so the last player sees their own answer land.
         delay = 900;
-      } else if (state.phase_deadline) {
-        delay = Math.max(0, new Date(state.phase_deadline).getTime() - Date.now());
+      } else if (deadline) {
+        delay = Math.max(0, new Date(deadline).getTime() - Date.now());
       }
-    } else if (state.status === "question_result" && !waitingOnVerdict) {
-      // A solved crossword stays up long enough for the room to read its answers.
-      delay = (state.current_question?.type === "crossword" ? CROSSWORD_RESULT_SECONDS : RESULT_SECONDS) * 1000;
-    } else if (state.status === "leaderboard") {
+    } else if (status === "question_result" && !waitingOnVerdict) {
+      delay = resultSeconds * 1000;
+    } else if (status === "leaderboard") {
       delay = LEADERBOARD_SECONDS * 1000;
     }
 
     if (delay === null) return;
-    const timer = setTimeout(() => { void advance("next"); }, delay);
+    const from: MatchPhase = { status, current_index: index };
+    const wait = Math.max(delay, autoRetryAt - Date.now());
+    const timer = setTimeout(() => { void advance("next", from, true); }, wait);
     return () => clearTimeout(timer);
-  }, [advance, autoPaused, busy, openAnswers.length, state]);
-
-  // A crossword's race is not a phase change, so it is read while it runs.
-  useEffect(() => {
-    if (state?.status !== "question" || state.current_question?.type !== "crossword") return;
-    const timer = setInterval(() => { void refresh(); }, 4000);
-    return () => clearInterval(timer);
-  }, [refresh, state?.current_question?.type, state?.status]);
+  }, [advance, autoPaused, autoRetryAt, busy, deadline, everyoneAnswered, index, resultSeconds, status, waitingOnVerdict]);
 
   // Open answers need a human verdict, so they are loaded whenever a result is
   // on screen.
@@ -298,10 +359,23 @@ function HostGameScreen() {
   }
 
   function confirmCancel() {
+    if (!state) return;
+    const from: MatchPhase = { status: state.status, current_index: state.current_index };
     Alert.alert(t("host.cancelTitle"), t("host.cancelBody"), [
       { text: t("common:no"), style: "cancel" },
-      { text: t("common:cancel"), style: "destructive", onPress: () => void advance("cancel") },
+      { text: t("common:cancel"), style: "destructive", onPress: () => void advance("cancel", from) },
     ]);
+  }
+
+  /** The host's verdict on one open answer; a refused one says so instead of vanishing. */
+  async function review(answerId: string, correct: boolean) {
+    try {
+      setError(null);
+      await reviewAnswer(answerId, correct);
+      setOpenAnswers((current) => current.map((row) => row.id === answerId ? { ...row, is_correct: correct } : row));
+    } catch (failure) {
+      setError(asErrorMessage(failure));
+    }
   }
 
   // How many questions a grid game has: its cells are dealt from them.
@@ -313,11 +387,11 @@ function HostGameScreen() {
       .then(({ data }) => setGridQuestions(data?.question_count ?? 0));
   }, [gridGameId]);
 
-  if (fatal) {
+  if (readError && !state) {
     return (
       <View style={styles.safe}>
         <ScreenHeader title={t("games:title")} onLeave={() => router.back()} />
-        <ErrorState message={fatal} onRetry={() => { setFatal(null); void refresh(); }} />
+        <ErrorState message={readError.message} onRetry={() => void refresh()} />
       </View>
     );
   }
@@ -328,6 +402,12 @@ function HostGameScreen() {
       </View>
     );
   }
+
+  // The phase on screen, which every button's step is sent with.
+  const phase: MatchPhase = { status: state.status, current_index: state.current_index };
+  // A dropped connection says it is reconnecting; a refusal says what the
+  // server said. Either way the controls stay where they are.
+  const readTrouble = readError ? (readError.offline ? t("player.offline") : readError.message) : null;
 
   const liability =
     (plan.participant ?? 0) * players.length
@@ -531,20 +611,14 @@ function HostGameScreen() {
               </View>
               <Pressable
                 style={[styles.reviewButton, answer.is_correct === true && styles.reviewGood]}
-                onPress={() => void (async () => {
-                  await reviewAnswer(answer.id, true);
-                  setOpenAnswers((current) => current.map((row) => row.id === answer.id ? { ...row, is_correct: true } : row));
-                })()}
+                onPress={() => void review(answer.id, true)}
                 accessibilityLabel={t("correct")}
               >
                 <Check color={answer.is_correct === true ? colors.onPrimary : colors.success} size={icon.md} strokeWidth={icon.strokeBold} />
               </Pressable>
               <Pressable
                 style={[styles.reviewButton, answer.is_correct === false && styles.reviewBad]}
-                onPress={() => void (async () => {
-                  await reviewAnswer(answer.id, false);
-                  setOpenAnswers((current) => current.map((row) => row.id === answer.id ? { ...row, is_correct: false } : row));
-                })()}
+                onPress={() => void review(answer.id, false)}
                 accessibilityLabel={t("wrong")}
               >
                 <X color={answer.is_correct === false ? colors.onPrimary : colors.danger} size={icon.md} strokeWidth={icon.strokeBold} />
@@ -573,7 +647,7 @@ function HostGameScreen() {
             icon={state.status === "lobby" ? Play : undefined}
             loading={busy}
             disabled={busy || (state.status === "lobby" && (state.player_count < 1 || !affordable))}
-            onPress={() => void advance("next")}
+            onPress={() => void advance("next", phase)}
           />
           {state.status !== "lobby" ? (
             <>
@@ -585,7 +659,7 @@ function HostGameScreen() {
                 disabled={busy}
                 onPress={() => setAutoPaused((value) => !value)}
               />
-              <PrimaryButton label={t("host.finish")} tone="secondary" disabled={busy} onPress={() => void advance("finish")} />
+              <PrimaryButton label={t("host.finish")} tone="secondary" disabled={busy} onPress={() => void advance("finish", phase)} />
             </>
           ) : null}
           <PrimaryButton label={t("common:cancel")} tone="ghost" disabled={busy} onPress={confirmCancel} />
@@ -612,6 +686,7 @@ function HostGameScreen() {
           : state.status === "lobby" ? t("host.lobby") : t("host.question", { number: state.current_index + 1 })}
         onLeave={() => router.back()}
       />
+      {readTrouble ? <View style={styles.offline}><Text style={styles.offlineText}>{readTrouble}</Text></View> : null}
       {beside && screenUrl ? (
         <View style={styles.split}>
           <View style={styles.stage}>
@@ -633,6 +708,9 @@ const useStyles = makeStyles((colors) => ({
   safe: { flex: 1, backgroundColor: colors.canvas },
   center: { alignItems: "center", justifyContent: "center" },
   content: { padding: spacing.xl, gap: spacing.md, paddingBottom: spacing.xxxl },
+  // The same strip as on a player's phone.
+  offline: { backgroundColor: colors.warning, paddingVertical: 6, paddingHorizontal: spacing.lg },
+  offlineText: { ...typography.caption, color: colors.onPrimary, textAlign: "center" },
   codeCard: { alignItems: "center", gap: 4, backgroundColor: colors.primarySoft, borderRadius: radius.lg, padding: spacing.xl },
   codeLabel: { ...typography.caption, color: colors.primaryDeep },
   codeValue: { fontFamily: "JaxongirmanSans_700Bold", fontSize: 40, color: colors.primaryDeep, letterSpacing: 4 },

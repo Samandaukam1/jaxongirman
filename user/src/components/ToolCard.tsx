@@ -1,7 +1,7 @@
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import { memo, useMemo } from "react";
-import { Platform, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { memo, useMemo, useRef, type ComponentProps } from "react";
+import { Platform, StyleSheet, Text, View, type GestureResponderEvent, type StyleProp, type ViewStyle } from "react-native";
 import Animated, { useAnimatedStyle, type SharedValue } from "react-native-reanimated";
 import Svg, { Path } from "react-native-svg";
 
@@ -40,6 +40,12 @@ export type ToolArt = ToolDrawing;
  * moves off one shared value instead of subscribing to the scroll six times.
  */
 type Progress = SharedValue<number>;
+
+/** A Touchable that ignores a release after the finger has travelled, as the cards do: for the folded header's chips. */
+export function StillTouchable({ onPress, ...props }: Omit<ComponentProps<typeof Touchable>, "onPress" | "onPressIn"> & { onPress: () => void }) {
+  const press = useStillPress(onPress);
+  return <Touchable {...props} {...press} />;
+}
 
 const SHRINK_TO = 0.84;
 const FADE_TO = 0.94;
@@ -112,6 +118,33 @@ const tap = () => {
   if (Platform.OS === "web") return;
   void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 };
+
+/** How far a finger may travel between touching a card and letting go and still mean "open it". */
+const STILL = 10;
+
+/**
+ * A press that opens the card only if the finger stayed put.
+ *
+ * The cards ride in a header that floats over the list, so a swipe that starts
+ * on one cannot scroll the list — and a Pressable, left alone, opens on any
+ * release inside the card and its retention margin. A finger that has
+ * travelled was scrolling, not choosing.
+ */
+function useStillPress(onPress: () => void) {
+  const from = useRef<{ x: number; y: number } | null>(null);
+  return {
+    onPressIn: (event: GestureResponderEvent) => {
+      from.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY };
+    },
+    onPress: (event: GestureResponderEvent) => {
+      const start = from.current;
+      from.current = null;
+      if (start && Math.hypot(event.nativeEvent.pageX - start.x, event.nativeEvent.pageY - start.y) > STILL) return;
+      tap();
+      onPress();
+    },
+  };
+}
 
 /**
  * The "opens something" mark on the hero.
@@ -196,29 +229,32 @@ type CardProps = {
   onPress: () => void;
   progress: Progress;
   style?: StyleProp<ViewStyle>;
+  /** How many lines the hero's title and detail may each take; one unless a screen's words need two. */
+  lines?: 1 | 2;
 };
 
 /**
  * The wide one at the top: artwork left, words in the middle, arrow at the end.
  */
 export const HeroToolCard = memo(function HeroToolCard({
-  art, size, title, detail, tint, onPress, progress, style,
+  art, size, title, detail, tint, onPress, progress, style, lines = 1,
 }: CardProps) {
   const styles = useStyles();
   const skin = useSkin(tint);
+  const press = useStillPress(onPress);
 
   return (
     <Touchable
       accessibilityRole="button"
       accessibilityLabel={title}
-      onPress={() => { tap(); onPress(); }}
+      {...press}
       style={[styles.card, styles.hero, { borderColor: skin.rim }, skin.lift, style]}
     >
       <Wash skin={skin} across />
       <Art art={art} size={size} pad={spacing.xs} skin={skin} progress={progress} />
       <View style={styles.heroCopy}>
-        <Text numberOfLines={1} style={styles.heroTitle}>{title}</Text>
-        <Text numberOfLines={1} style={styles.detail}>{detail}</Text>
+        <Text numberOfLines={lines} style={styles.heroTitle}>{title}</Text>
+        <Text numberOfLines={lines} style={styles.detail}>{detail}</Text>
       </View>
       {/* The arrow gets a ground of its own so the hero ends on something that
           looks pressable, rather than on a glyph floating at the margin. */}
@@ -241,12 +277,13 @@ export const ToolCard = memo(function ToolCard({
 }: CardProps) {
   const styles = useStyles();
   const skin = useSkin(tint);
+  const press = useStillPress(onPress);
 
   return (
     <Touchable
       accessibilityRole="button"
       accessibilityLabel={title}
-      onPress={() => { tap(); onPress(); }}
+      {...press}
       style={[styles.card, styles.tile, { borderColor: skin.rim }, skin.lift, style]}
     >
       <Wash skin={skin} />

@@ -6,6 +6,14 @@ export default translations(
     title: "O‘yingoh",
     balance: "J Tanga balansi",
     notifications: "Bildirishnomalar",
+    tiles: {
+      join: { label: "Qo‘shilish", detail: "QR yoki kod" },
+      host: { label: "Mezbonlik", detail: "Katta ekranda", detailWeb: "Shu ekranda" },
+      crossword: { label: "Krossvord", detail: "AI tuzadi" },
+      tests: { label: "Testlar", detail: "Skaner bilan" },
+      mafia: { label: "Mafiya", detail: "Yashirin rollar" },
+      team: { label: "Jamoaviy", detail: "Kataklar o‘yini" },
+    },
     create: { title: "Yangi o‘yin yaratish", subtitle: "AI bilan, matndan yoki qo‘lda" },
     join: { title: "O‘yinga qo‘shilish", subtitle: "QR yoki kod" },
     host: { title: "Mezbon bo‘lish", subtitle: "Katta ekranni ulash", subtitleWeb: "Shu ekranda o‘tkazish" },
@@ -23,6 +31,11 @@ export default translations(
     untitled: "Nomsiz o‘yin",
     fallbackTitle: "O‘yin",
     questions: "{{count}} savol",
+    /** The search over one's own shelf, worded as on Loyihalar. `quiz` names the kind that has no badge of its own. */
+    search: {
+      open: "Qidirish", close: "Qidiruvni yopish", placeholder: "O‘yin nomi yoki turi bo‘yicha qidiring", clear: "Tozalash",
+      found: "Topilganlar", none: "Hech narsa topilmadi", noneBody: "Boshqa so‘z bilan qidirib ko‘ring.", quiz: "Viktorina",
+    },
     form: {
       title: "Yangi o‘yin",
       mode: { topic: "Mavzu bo‘yicha", text: "Matndan", presentation: "Prezentatsiyadan", manual: "Qo‘lda" },
@@ -141,6 +154,10 @@ export default translations(
       connecting: "Ekranga ulanmoqda…",
       hostSteps: "Katta ekranda <b>jaxongirman.app</b> saytini oching, <b>O‘yingohni ochish</b> tugmasini bosing va shu yerdagi QR kodni skaner qiling. Keyin qaysi o‘yinni o‘tkazishni tanlaysiz.",
       notHost: "Mezbon emasmisiz? O‘yinga qo‘shilish",
+      cameraBlocked: "Kameraga ruxsat o‘chirilgan. Telefon sozlamalarida Jaxongirman’ga kamera ruxsatini bering va shu yerga qayting.",
+      openSettings: "Sozlamalarni ochish",
+      cameraFailed: "Kamera ishga tushmadi. Katta ekrandagi 6 xonali kodni kiriting.",
+      cameraFailedHost: "Kamera ishga tushmadi. Kamerani ishlatayotgan boshqa ilovani yoping va qayta urinib ko‘ring.",
     },
     crossword: {
       kindQuiz: "Viktorina",
@@ -318,6 +335,14 @@ export default translations(
     title: "O‘yingoh",
     balance: "J Tanga balance",
     notifications: "Notifications",
+    tiles: {
+      join: { label: "Join", detail: "QR or code" },
+      host: { label: "Host", detail: "Big screen", detailWeb: "This screen" },
+      crossword: { label: "Crossword", detail: "Made by AI" },
+      tests: { label: "Tests", detail: "Scan to check" },
+      mafia: { label: "Mafia", detail: "Secret roles" },
+      team: { label: "Teams", detail: "Grid game" },
+    },
     create: { title: "Create a new game", subtitle: "With AI, from text or by hand" },
     join: { title: "Join a game", subtitle: "QR or code" },
     host: { title: "Host", subtitle: "Connect a big screen", subtitleWeb: "Run it on this screen" },
@@ -335,6 +360,10 @@ export default translations(
     untitled: "Untitled game",
     fallbackTitle: "Game",
     questions: "{{count}} questions",
+    search: {
+      open: "Search", close: "Close search", placeholder: "Search by game name or type", clear: "Clear",
+      found: "Results", none: "Nothing found", noneBody: "Try a different word.", quiz: "Quiz",
+    },
     form: {
       title: "New game",
       mode: { topic: "From a topic", text: "From text", presentation: "From a presentation", manual: "By hand" },
@@ -453,6 +482,10 @@ export default translations(
       connecting: "Connecting to the screen…",
       hostSteps: "On the big screen open <b>jaxongirman.app</b>, press <b>O‘yingohni ochish</b> and scan the QR code shown there. Then you choose which game to run.",
       notHost: "Not the host? Join a game",
+      cameraBlocked: "Camera access is off. Allow the camera for Jaxongirman in the phone’s settings, then come back here.",
+      openSettings: "Open settings",
+      cameraFailed: "The camera didn’t start. Enter the 6-digit code from the big screen.",
+      cameraFailedHost: "The camera didn’t start. Close any other app using the camera and try again.",
     },
     crossword: {
       kindQuiz: "Quiz",
@@ -630,6 +663,14 @@ export default translations(
     title: "O‘yingoh",
     balance: "Баланс J Tanga",
     notifications: "Уведомления",
+    tiles: {
+      join: { label: "Вход в игру", detail: "QR или код" },
+      host: { label: "Ведущий", detail: "Большой экран", detailWeb: "Этот экран" },
+      crossword: { label: "Кроссворд", detail: "Составит ИИ" },
+      tests: { label: "Тесты", detail: "Сканером" },
+      mafia: { label: "Мафия", detail: "Тайные роли" },
+      team: { label: "Команды", detail: "По клеткам" },
+    },
     create: { title: "Создать новую игру", subtitle: "С ИИ, из текста или вручную" },
     join: { title: "Присоединиться", subtitle: "QR или код" },
     host: { title: "Стать ведущим", subtitle: "Подключить большой экран", subtitleWeb: "Провести на этом экране" },
@@ -647,6 +688,10 @@ export default translations(
     untitled: "Игра без названия",
     fallbackTitle: "Игра",
     questions: "Вопросов: {{count}}",
+    search: {
+      open: "Поиск", close: "Закрыть поиск", placeholder: "Поиск по названию или типу игры", clear: "Очистить",
+      found: "Найдено", none: "Ничего не найдено", noneBody: "Попробуйте другое слово.", quiz: "Викторина",
+    },
     form: {
       title: "Новая игра",
       mode: { topic: "По теме", text: "Из текста", presentation: "Из презентации", manual: "Вручную" },
@@ -765,6 +810,10 @@ export default translations(
       connecting: "Подключаемся к экрану…",
       hostSteps: "На большом экране откройте <b>jaxongirman.app</b>, нажмите <b>O‘yingohni ochish</b> и отсканируйте показанный там QR-код. Затем выберете, какую игру провести.",
       notHost: "Не ведущий? Присоединиться к игре",
+      cameraBlocked: "Доступ к камере выключен. Разрешите камеру для Jaxongirman в настройках телефона и вернитесь сюда.",
+      openSettings: "Открыть настройки",
+      cameraFailed: "Камера не запустилась. Введите 6-значный код с большого экрана.",
+      cameraFailedHost: "Камера не запустилась. Закройте другие приложения, которые используют камеру, и попробуйте снова.",
     },
     crossword: {
       kindQuiz: "Викторина",
@@ -942,6 +991,14 @@ export default translations(
     title: "Öyingoh",
     balance: "J Tanga bakiyesi",
     notifications: "Bildirimler",
+    tiles: {
+      join: { label: "Katıl", detail: "QR veya kod" },
+      host: { label: "Sunucu", detail: "Büyük ekran", detailWeb: "Bu ekranda" },
+      crossword: { label: "Bulmaca", detail: "Yapay zekâ ile" },
+      tests: { label: "Testler", detail: "Tarayıcıyla" },
+      mafia: { label: "Mafya", detail: "Gizli roller" },
+      team: { label: "Takımlar", detail: "Kutu oyunu" },
+    },
     create: { title: "Yeni oyun oluştur", subtitle: "Yapay zekâ ile, metinden veya elle" },
     join: { title: "Oyuna katıl", subtitle: "QR veya kod" },
     host: { title: "Sunucu ol", subtitle: "Büyük ekran bağla", subtitleWeb: "Bu ekranda yönet" },
@@ -959,6 +1016,10 @@ export default translations(
     untitled: "Adsız oyun",
     fallbackTitle: "Oyun",
     questions: "{{count}} soru",
+    search: {
+      open: "Ara", close: "Aramayı kapat", placeholder: "Oyun adına veya türüne göre arayın", clear: "Temizle",
+      found: "Sonuçlar", none: "Hiçbir şey bulunamadı", noneBody: "Farklı bir kelime deneyin.", quiz: "Bilgi yarışması",
+    },
     form: {
       title: "Yeni oyun",
       mode: { topic: "Konudan", text: "Metinden", presentation: "Sunumdan", manual: "Elle" },
@@ -1077,6 +1138,10 @@ export default translations(
       connecting: "Ekrana bağlanılıyor…",
       hostSteps: "Büyük ekranda <b>jaxongirman.app</b> sitesini açın, <b>O‘yingohni ochish</b> düğmesine basın ve orada gösterilen QR kodu tarayın. Ardından hangi oyunu yöneteceğinizi seçersiniz.",
       notHost: "Sunucu değil misiniz? Oyuna katılın",
+      cameraBlocked: "Kamera erişimi kapalı. Telefon ayarlarından Jaxongirman'a kamera izni verin, sonra buraya dönün.",
+      openSettings: "Ayarları aç",
+      cameraFailed: "Kamera açılmadı. Büyük ekrandaki 6 haneli kodu girin.",
+      cameraFailedHost: "Kamera açılmadı. Kamerayı kullanan diğer uygulamaları kapatıp tekrar deneyin.",
     },
     crossword: {
       kindQuiz: "Bilgi yarışması",

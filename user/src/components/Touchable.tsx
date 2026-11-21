@@ -23,12 +23,21 @@ export function Touchable({
   style,
   children,
   disabled,
+  onPressIn,
+  onPressOut,
   ...props
 }: Omit<PressableProps, "style"> & { style?: StyleProp<ViewStyle> }) {
   const press = usePressScale(!disabled);
 
+  // A caller's own press-in and press-out run beside the give, not instead of it.
   return (
-    <AnimatedPressable disabled={disabled} {...press.handlers} style={[style, press.style]} {...props}>
+    <AnimatedPressable
+      disabled={disabled}
+      onPressIn={(event) => { press.handlers.onPressIn(); onPressIn?.(event); }}
+      onPressOut={(event) => { press.handlers.onPressOut(); onPressOut?.(event); }}
+      style={[style, press.style]}
+      {...props}
+    >
       {children}
     </AnimatedPressable>
   );

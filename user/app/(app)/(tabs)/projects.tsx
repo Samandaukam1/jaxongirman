@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { Image, Keyboard, Pressable, RefreshControl, Text, TextInput, View, type LayoutChangeEvent } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
-  Easing, Extrapolation, interpolate, runOnJS, useAnimatedReaction, useAnimatedScrollHandler,
+  Easing, Extrapolation, interpolate, runOnJS, runOnUI, scrollTo, useAnimatedReaction, useAnimatedRef, useAnimatedScrollHandler,
   useAnimatedStyle, useDerivedValue, useSharedValue, withTiming,
 } from "react-native-reanimated";
 
@@ -23,15 +23,17 @@ import { Appear } from "@/components/Appear";
 import { BOTTOM_NAV_SPACE, useBottomNavSpace } from "@/components/BottomNav";
 import { MarathonVoteButton } from "@/components/MarathonVoteButton";
 
-import { ProjectRow } from "@/components/ProjectRow";
+import { projectSendable, ProjectRow } from "@/components/ProjectRow";
 import { EmptyState, ErrorState, SkeletonCard } from "@/components/StateBlocks";
-import { HeroToolCard, ToolCard, type ToolArt } from "@/components/ToolCard";
+import { HeroToolCard, StillTouchable, ToolCard, type ToolArt } from "@/components/ToolCard";
 import { ObjectiveArt, PortraitArt, PowerPointArt, PresentArt, ScientificArt, SlideCreateArt } from "@/components/toolArt";
 import { Touchable } from "@/components/Touchable";
+import { SelectionBar, useWorkSelection, type SelectableWork } from "@/components/WorkSelection";
 import { useFocusRefresh } from "@/lib/useFocusRefresh";
 import { asErrorMessage } from "@/lib/format";
 import { blend, withAlpha } from "@/theme/color";
 import { useReduceMotion } from "@/lib/motion";
+import { inertOnWeb } from "@/lib/web";
 import { formatNumber } from "@/lib/money";
 import { listProjects, searchProjects, type Project } from "@/lib/projects";
 import { supabase } from "@/lib/supabase";
@@ -98,8 +100,13 @@ const CHIP_ART = 32;
 /**
  * The pieces the header is built from, named so the two heights it moves
  * between are derived rather than typed twice.
+ *
+ * The title row is one line of title beside the 40-point buttons, centred on
+ * them. It used to stack a small "JAXONGIRMAN" over the name and stand 52
+ * tall; the name alone needs a little air around the buttons and no more.
+ * Large text still grows it: the row is measured, and this is only its floor.
  */
-const TITLE_ROW = 52;
+const TITLE_ROW = 44;
 const SEARCH_ROW = 46;
 const CHIP_ROW = 48;
 
@@ -113,6 +120,15 @@ const CHIP_ROW = 48;
  * number arrives one layout later.
  */
 const ESTIMATED_CARDS = 332;
+
+/**
+ * A project as the selection sees it. Everything on this list was made by
+ * this account (`listProjects` reads by owner), so all of it can be deleted;
+ * only finished decks and scientific works can be sent.
+ */
+const asWork = (project: Project): SelectableWork => ({
+  kind: project.kind, id: project.id, title: project.title, sendable: projectSendable(project), deletable: true,
+});
 
 export default function ProjectsScreen() {
   const bottomSpace = useBottomNavSpace();
@@ -131,16 +147,18 @@ export default function ProjectsScreen() {
   const [query, setQuery] = useState("");
   // The keyboard is up for the search box: the moment to give its results room.
   const [typing, setTyping] = useState(false);
-  const [folded, setFolded] = useState(false);
   const [cards, setCards] = useState(ESTIMATED_CARDS);
+  // The title row grows with large text rather than running into the cards under it.
+  const [titleRow, setTitleRow] = useState(TITLE_ROW);
+  const [viewport, setViewport] = useState(0);
 
   // The status bar's own height, so the header sits under it on every phone.
   const safeTop = Math.max(insets.top, 20) + spacing.xs;
-  const chrome = safeTop + TITLE_ROW + spacing.md + spacing.md + (searching ? SEARCH_ROW + spacing.md : 0);
+  const chrome = safeTop + titleRow + spacing.md + spacing.md + (searching ? SEARCH_ROW + spacing.md : 0);
   const open = chrome + cards;
   // Folded, the header still holds the search box when it is open: the chips
   // sit under it rather than on top of it.
-  const shut = safeTop + TITLE_ROW + spacing.md + (searching ? SEARCH_ROW + spacing.md : 0) + CHIP_ROW + spacing.md;
+  const shut = safeTop + titleRow + spacing.md + (searching ? SEARCH_ROW + spacing.md : 0) + CHIP_ROW + spacing.md;
   const range = Math.max(1, open - shut);
 
   // Measured once. The cards do not resize afterwards, and re-reading a layout
@@ -166,9 +184,6 @@ export default function ProjectsScreen() {
   const reduced = useReduceMotion();
   const searchFold = useSharedValue(0);
   const folding = searching && typing;
-  useEffect(() => {
-    searchFold.value = withTiming(folding ? 1 : 0, { duration: reduced ? 0 : 320, easing: Easing.out(Easing.cubic) });
-  }, [folding, reduced, searchFold]);
   // A keyboard put away with the system's own control leaves the box focused
   // on some phones; its hiding is what counts.
   useEffect(() => {
@@ -176,6 +191,29 @@ export default function ProjectsScreen() {
     return () => hidden.remove();
   }, []);
   const fold = useDerivedValue(() => Math.max(scrollY.value, searchFold.value * range));
+
+  /**
+   * Typing starts the search's fold from wherever the scroll had already
+   * folded the header, and takes the list back to its top in the same frame.
+   * The header does not move at that moment; the results then rise to sit
+   * right under the search box. Without it, a list scrolled before the search
+   * kept its offset, and short results were left under the folded header.
+   */
+  const scrollRef = useAnimatedRef<Animated.ScrollView>();
+  const wasFolding = useRef(false);
+  useEffect(() => {
+    const starting = folding && !wasFolding.current;
+    wasFolding.current = folding;
+    const duration = reduced ? 0 : 320;
+    runOnUI((seed: boolean, span: number) => {
+      "worklet";
+      if (seed) {
+        searchFold.value = Math.min(1, fold.value / span);
+        scrollTo(scrollRef, 0, 0, false);
+      }
+      searchFold.value = withTiming(folding ? 1 : 0, { duration, easing: Easing.out(Easing.cubic) });
+    })(starting, range);
+  }, [folding, reduced, range, fold, scrollRef, searchFold]);
   // What the list gives up while the search holds the header folded, so the
   // first result sits right under the chips instead of under a gap.
   const spacer = useAnimatedStyle(() => ({ height: range * (1 - searchFold.value) }));
@@ -218,10 +256,25 @@ export default function ProjectsScreen() {
   ));
 
   // A style cannot carry `pointerEvents`, and an invisible layer that still
-  // takes taps is worse than no animation at all.
-  useAnimatedReaction(() => fold.value > range * 0.5, (next, previous) => {
-    if (next !== previous) runOnJS(setFolded)(next);
+  // takes taps is worse than no animation at all. So each layer takes touches
+  // only while it can be seen: the cards until they are nearly gone, the chips
+  // once they are nearly there, and neither in between.
+  const [wideLive, setWideLive] = useState(true);
+  const [narrowLive, setNarrowLive] = useState(false);
+  useAnimatedReaction(() => fold.value < range * 0.4, (next, previous) => {
+    if (next !== previous) runOnJS(setWideLive)(next);
   });
+  useAnimatedReaction(() => fold.value > range * 0.6, (next, previous) => {
+    if (next !== previous) runOnJS(setNarrowLive)(next);
+  });
+  const measureTitle = useCallback((event: LayoutChangeEvent) => {
+    const next = Math.max(TITLE_ROW, Math.round(event.nativeEvent.layout.height));
+    setTitleRow((current) => (Math.abs(current - next) > 1 ? next : current));
+  }, []);
+  const measureViewport = useCallback((event: LayoutChangeEvent) => {
+    const next = Math.round(event.nativeEvent.layout.height);
+    setViewport((current) => (Math.abs(current - next) > 1 ? next : current));
+  }, []);
 
   // Only the first read waits behind the skeleton; later ones update the list in place.
   const loaded = useRef(false);
@@ -256,15 +309,27 @@ export default function ProjectsScreen() {
   }), [colors.softCard, scheme]);
 
   const shown = useMemo(() => searchProjects(items, query), [items, query]);
+  // Chosen from everything loaded, not only what the search shows: a row ticked
+  // and then filtered out of view is still ticked.
+  const works = useMemo(() => items.map(asWork), [items]);
+  const selection = useWorkSelection(works, (work) => {
+    setItems((current) => current.filter((item) => !(item.kind === work.kind && item.id === work.id)));
+  });
   const go = (href: string) => router.push(href as never);
 
   return (
     <View style={styles.safe}>
       <Animated.ScrollView
+        ref={scrollRef}
         style={styles.scroll}
         onScroll={onScroll}
+        onLayout={measureViewport}
         scrollEventThrottle={16}
-        contentContainerStyle={[styles.content, { paddingTop: shut + spacing.md, paddingBottom: bottomSpace + spacing.xl }]}
+        contentContainerStyle={[
+          styles.content,
+          // A short list can still be scrolled the whole fold, so the header never rests half-folded.
+          { paddingTop: shut + spacing.md, paddingBottom: bottomSpace + spacing.xl, minHeight: viewport + range },
+        ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -304,6 +369,9 @@ export default function ProjectsScreen() {
                 project={project}
                 onPress={() => go(project.href)}
                 onDeleted={() => setItems((current) => current.filter((item) => !(item.kind === project.kind && item.id === project.id)))}
+                selecting={selection.active}
+                selected={selection.isSelected(project)}
+                onSelect={() => selection.pick(asWork(project))}
               />
             </Appear>
           ))}
@@ -311,10 +379,12 @@ export default function ProjectsScreen() {
       </Animated.ScrollView>
 
       <Animated.View style={[styles.header, { paddingTop: safeTop }, shell]}>
-        <View style={styles.titleRow}>
+        {/* Under the selection bar while rows are being chosen: kept in place, so its measured height holds the fold still. */}
+        <View style={[styles.titleRow, selection.active && styles.underBar]} onLayout={measureTitle}
+          pointerEvents={selection.active ? "none" : "auto"} aria-hidden={selection.active} {...inertOnWeb(selection.active)}>
           <View style={styles.titleCopy}>
-            <Text numberOfLines={1} style={styles.eyebrow}>JAXONGIRMAN</Text>
-            <Text numberOfLines={1} style={styles.brand}>{t("title")}</Text>
+            {/* Shares the row with the buttons beside it; on a narrow phone the name gives a little size rather than letters. */}
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={styles.brand}>{t("title")}</Text>
           </View>
           <View style={styles.titleActions}>
             <MarathonVoteButton variant="compact" />
@@ -328,12 +398,15 @@ export default function ProjectsScreen() {
                 ? <X color={colors.primaryDeep} size={icon.md} strokeWidth={icon.stroke} />
                 : <Search color={colors.primaryDeep} size={icon.md} strokeWidth={icon.stroke} />}
             </Touchable>
-            <Touchable style={styles.coinPill} onPress={() => go("/(app)/coins/buy")} accessibilityLabel={t("balance")}>
+            <Touchable style={styles.coinPill} onPress={() => go("/(app)/coins/buy")} accessibilityRole="button"
+              accessibilityLabel={`${t("balance")}: ${formatNumber(balance)}`}>
               <Image source={coinIcon} resizeMode="contain" style={styles.coinIcon} />
               <Text style={styles.coinText}>{formatNumber(balance)}</Text>
             </Touchable>
           </View>
         </View>
+
+        {selection.active ? <SelectionBar selection={selection} style={[styles.selectionBar, { top: safeTop, height: titleRow }]} /> : null}
 
         {searching ? (
           <View style={styles.searchBox}>
@@ -341,7 +414,7 @@ export default function ProjectsScreen() {
             <TextInput
               autoFocus
               value={query}
-              onChangeText={setQuery}
+              onChangeText={(text) => { setQuery(text); scrollRef.current?.scrollTo({ y: 0, animated: false }); }}
               onFocus={() => setTyping(true)}
               onBlur={() => setTyping(false)}
               placeholder={t("searchPlaceholder")}
@@ -358,7 +431,8 @@ export default function ProjectsScreen() {
         ) : null}
 
         {/* Open: what a person came here to make. */}
-        <Animated.View style={[styles.wide, wide]} onLayout={measure} pointerEvents={folded ? "none" : "auto"}>
+        <Animated.View style={[styles.wide, wide]} onLayout={measure} pointerEvents={wideLive ? "auto" : "none"}
+          aria-hidden={!wideLive} {...inertOnWeb(!wideLive)}>
           <HeroToolCard
             art={SlideCreateArt}
             size={HERO_ART}
@@ -402,17 +476,18 @@ export default function ProjectsScreen() {
         </Animated.View>
 
         {/* Folded: the same six drawings, small, out of the way of the shelf. */}
-        <Animated.View style={[styles.narrow, narrow]} pointerEvents={folded ? "auto" : "none"}>
-          <Touchable
+        <Animated.View style={[styles.narrow, narrow]} pointerEvents={narrowLive ? "auto" : "none"}
+          aria-hidden={!narrowLive} {...inertOnWeb(!narrowLive)}>
+          <StillTouchable
             accessibilityRole="button"
             accessibilityLabel={t("create.title")}
             onPress={() => go("/(app)/create")}
             style={[styles.chip, chipSkin(toolTint.slideCreate)]}
           >
             <SlideCreateArt width={CHIP_ART} height={CHIP_ART} />
-          </Touchable>
+          </StillTouchable>
           {TOOLS.map((tool) => (
-            <Touchable
+            <StillTouchable
               key={tool.key}
               accessibilityRole="button"
               accessibilityLabel={t(`tools.${tool.key}.label`)}
@@ -420,7 +495,7 @@ export default function ProjectsScreen() {
               style={[styles.chip, chipSkin(tool.tint)]}
             >
               <tool.art width={CHIP_ART} height={CHIP_ART} />
-            </Touchable>
+            </StillTouchable>
           ))}
         </Animated.View>
       </Animated.View>
@@ -449,11 +524,13 @@ const useStyles = makeStyles((colors) => ({
     overflow: "hidden",
   },
 
-  titleRow: { height: TITLE_ROW, flexDirection: "row", alignItems: "flex-start", gap: spacing.md },
+  titleRow: { minHeight: TITLE_ROW, flexDirection: "row", alignItems: "center", gap: spacing.md },
   titleCopy: { flex: 1 },
-  eyebrow: { ...typography.caption, color: colors.accent, letterSpacing: 1.7 },
   brand: { ...typography.title, color: colors.ink },
   titleActions: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  underBar: { opacity: 0 },
+  // Inset by hand, as `narrow` is: an absolute child does not sit inside the header's padding.
+  selectionBar: { position: "absolute", left: spacing.xl, right: spacing.xl },
 
   // The search button and the balance are the same object seen twice: one
   // height, one corner, one family. They used to be a violet circle beside a
