@@ -93,10 +93,16 @@ test("every table that refuses to let a user go is a reason the user is told abo
   }
   assert.ok(blockers.size >= 4, `restrict kalitlari o‘qilmadi (${blockers.size})`);
 
-  const reasons = purgeSource.slice(
-    purgeSource.indexOf("create or replace function public.account_retention_reasons"),
-    purgeSource.indexOf("create or replace function public.purge_account_data"),
-  );
+  // The newest definition is the one in force: a later migration that adds a
+  // ledger with a `restrict` key also adds its reason there (202611200200).
+  const reasonFiles = readdirSync(migrationsDir)
+    .filter((name) => name.endsWith(".sql"))
+    .sort()
+    .map((name) => readFileSync(path.join(migrationsDir, name), "utf8"))
+    .filter((text) => text.includes("create or replace function public.account_retention_reasons"));
+  const latest = reasonFiles.at(-1) ?? purgeSource;
+  const start = latest.indexOf("create or replace function public.account_retention_reasons");
+  const reasons = latest.slice(start, latest.indexOf("$$;", latest.indexOf("as $$", start)));
   const unhandled = [...blockers]
     .filter((key) => {
       const [table, column] = key.split(".");

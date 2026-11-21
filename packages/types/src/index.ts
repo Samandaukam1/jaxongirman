@@ -442,6 +442,8 @@ export interface MarketplaceListItem {
   material_label: string | null;
   category_id: string | null;
   base_price: number;
+  /** The listing's optional second price in J Tanga; absent from servers before coin sales, null when not sold for coins. */
+  coin_price?: number | null;
   currency: string;
   cover_path: string | null;
   content_units: number | null;

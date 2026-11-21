@@ -374,6 +374,32 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_hidden: {
+        Row: {
+          created_at: string
+          message_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          message_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          message_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_hidden_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "chat_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_library_copies: {
         Row: {
           created_at: string
@@ -408,21 +434,27 @@ export type Database = {
       }
       chat_members: {
         Row: {
+          cleared_at: string | null
           conversation_id: string
           joined_at: string
           last_read_at: string
+          protect_history: boolean
           user_id: string
         }
         Insert: {
+          cleared_at?: string | null
           conversation_id: string
           joined_at?: string
           last_read_at?: string
+          protect_history?: boolean
           user_id: string
         }
         Update: {
+          cleared_at?: string | null
           conversation_id?: string
           joined_at?: string
           last_read_at?: string
+          protect_history?: boolean
           user_id?: string
         }
         Relationships: [
@@ -441,11 +473,19 @@ export type Database = {
           client_id: string | null
           conversation_id: string
           created_at: string
+          deleted_at: string | null
           edited_at: string | null
+          forward_from_id: string | null
+          forward_from_name: string | null
           id: string
+          items: Json | null
           kind: string
           media: Json
           media_path: string | null
+          pinned_at: string | null
+          pinned_by: string | null
+          reactions: Json
+          reply_to_id: string | null
           sender_id: string | null
           share: Json | null
         }
@@ -454,11 +494,19 @@ export type Database = {
           client_id?: string | null
           conversation_id: string
           created_at?: string
+          deleted_at?: string | null
           edited_at?: string | null
+          forward_from_id?: string | null
+          forward_from_name?: string | null
           id?: string
+          items?: Json | null
           kind: string
           media?: Json
           media_path?: string | null
+          pinned_at?: string | null
+          pinned_by?: string | null
+          reactions?: Json
+          reply_to_id?: string | null
           sender_id?: string | null
           share?: Json | null
         }
@@ -467,11 +515,19 @@ export type Database = {
           client_id?: string | null
           conversation_id?: string
           created_at?: string
+          deleted_at?: string | null
           edited_at?: string | null
+          forward_from_id?: string | null
+          forward_from_name?: string | null
           id?: string
+          items?: Json | null
           kind?: string
           media?: Json
           media_path?: string | null
+          pinned_at?: string | null
+          pinned_by?: string | null
+          reactions?: Json
+          reply_to_id?: string | null
           sender_id?: string | null
           share?: Json | null
         }
@@ -481,6 +537,13 @@ export type Database = {
             columns: ["conversation_id"]
             isOneToOne: false
             referencedRelation: "chat_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_reply_to_id_fkey"
+            columns: ["reply_to_id"]
+            isOneToOne: false
+            referencedRelation: "chat_messages"
             referencedColumns: ["id"]
           },
         ]
@@ -502,6 +565,66 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      chat_reports: {
+        Row: {
+          conversation_id: string | null
+          created_at: string
+          excerpt: string | null
+          id: string
+          message_id: string | null
+          note: string | null
+          reason: string
+          reported_id: string | null
+          reporter_id: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string
+        }
+        Insert: {
+          conversation_id?: string | null
+          created_at?: string
+          excerpt?: string | null
+          id?: string
+          message_id?: string | null
+          note?: string | null
+          reason: string
+          reported_id?: string | null
+          reporter_id?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+        }
+        Update: {
+          conversation_id?: string | null
+          created_at?: string
+          excerpt?: string | null
+          id?: string
+          message_id?: string | null
+          note?: string | null
+          reason?: string
+          reported_id?: string | null
+          reporter_id?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_reports_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "chat_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_reports_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "chat_messages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       coin_lots: {
         Row: {
@@ -634,6 +757,66 @@ export type Database = {
           updated_by?: string | null
         }
         Relationships: []
+      }
+      coin_platform_fees: {
+        Row: {
+          amount: number
+          coin_purchase_id: string | null
+          created_at: string
+          credit_transaction_id: string | null
+          fee_min: number
+          fee_percent: number
+          from_user_id: string | null
+          gross_amount: number
+          id: string
+          idempotency_key: string
+          source: string
+          to_user_id: string | null
+        }
+        Insert: {
+          amount: number
+          coin_purchase_id?: string | null
+          created_at?: string
+          credit_transaction_id?: string | null
+          fee_min?: number
+          fee_percent: number
+          from_user_id?: string | null
+          gross_amount: number
+          id?: string
+          idempotency_key: string
+          source: string
+          to_user_id?: string | null
+        }
+        Update: {
+          amount?: number
+          coin_purchase_id?: string | null
+          created_at?: string
+          credit_transaction_id?: string | null
+          fee_min?: number
+          fee_percent?: number
+          from_user_id?: string | null
+          gross_amount?: number
+          id?: string
+          idempotency_key?: string
+          source?: string
+          to_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coin_platform_fees_coin_purchase_id_fkey"
+            columns: ["coin_purchase_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_coin_purchases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coin_platform_fees_credit_transaction_id_fkey"
+            columns: ["credit_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "credit_transactions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       commission_config: {
         Row: {
@@ -2604,6 +2787,79 @@ export type Database = {
           },
         ]
       }
+      marketplace_coin_purchases: {
+        Row: {
+          buyer_id: string
+          buyer_transaction_id: string
+          fee_amount: number
+          fee_min: number
+          fee_percent: number
+          id: string
+          idempotency_key: string
+          price: number
+          product_id: string
+          purchased_at: string
+          refund_ack: Json
+          seller_id: string
+          seller_net: number
+          seller_transaction_id: string | null
+        }
+        Insert: {
+          buyer_id: string
+          buyer_transaction_id: string
+          fee_amount: number
+          fee_min?: number
+          fee_percent: number
+          id?: string
+          idempotency_key: string
+          price: number
+          product_id: string
+          purchased_at?: string
+          refund_ack?: Json
+          seller_id: string
+          seller_net: number
+          seller_transaction_id?: string | null
+        }
+        Update: {
+          buyer_id?: string
+          buyer_transaction_id?: string
+          fee_amount?: number
+          fee_min?: number
+          fee_percent?: number
+          id?: string
+          idempotency_key?: string
+          price?: number
+          product_id?: string
+          purchased_at?: string
+          refund_ack?: Json
+          seller_id?: string
+          seller_net?: number
+          seller_transaction_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketplace_coin_purchases_buyer_transaction_id_fkey"
+            columns: ["buyer_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "credit_transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketplace_coin_purchases_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketplace_coin_purchases_seller_transaction_id_fkey"
+            columns: ["seller_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "credit_transactions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       marketplace_favorites: {
         Row: {
           created_at: string
@@ -2814,6 +3070,7 @@ export type Database = {
           approval_source: string | null
           base_price: number
           category_id: string | null
+          coin_price: number | null
           content_units: number | null
           cover_path: string | null
           created_at: string
@@ -2845,6 +3102,7 @@ export type Database = {
           approval_source?: string | null
           base_price: number
           category_id?: string | null
+          coin_price?: number | null
           content_units?: number | null
           cover_path?: string | null
           created_at?: string
@@ -2876,6 +3134,7 @@ export type Database = {
           approval_source?: string | null
           base_price?: number
           category_id?: string | null
+          coin_price?: number | null
           content_units?: number | null
           cover_path?: string | null
           created_at?: string
@@ -4673,6 +4932,7 @@ export type Database = {
       }
       purchase_entitlements: {
         Row: {
+          coin_purchase_id: string | null
           granted_at: string
           id: string
           product_id: string
@@ -4682,6 +4942,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          coin_purchase_id?: string | null
           granted_at?: string
           id?: string
           product_id: string
@@ -4691,6 +4952,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          coin_purchase_id?: string | null
           granted_at?: string
           id?: string
           product_id?: string
@@ -4700,6 +4962,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "purchase_entitlements_coin_purchase_id_fkey"
+            columns: ["coin_purchase_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_coin_purchases"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "purchase_entitlements_product_id_fkey"
             columns: ["product_id"]
@@ -6946,6 +7215,15 @@ export type Database = {
         }
         Returns: number
       }
+      admin_chat_report_close: {
+        Args: { p_id: string; p_status: string }
+        Returns: undefined
+      }
+      admin_chat_reports: {
+        Args: { p_limit?: number; p_status?: string }
+        Returns: Json
+      }
+      admin_coin_economy: { Args: never; Returns: Json }
       admin_create_settlement: {
         Args: {
           p_period_end: string
@@ -7320,6 +7598,7 @@ export type Database = {
           approval_source: string | null
           base_price: number
           category_id: string | null
+          coin_price: number | null
           content_units: number | null
           cover_path: string | null
           created_at: string
@@ -7797,6 +8076,17 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      admin_set_coin_fees: {
+        Args: {
+          p_reason: string
+          p_store_enabled: boolean
+          p_store_fee_min: number
+          p_store_fee_percent: number
+          p_transfer_fee_min: number
+          p_transfer_fee_percent: number
+        }
+        Returns: Json
+      }
       admin_set_commission: {
         Args: {
           p_buyer_fee_rate: number
@@ -8148,6 +8438,14 @@ export type Database = {
         Args: { p_a: string; p_b: string }
         Returns: boolean
       }
+      chat_clear: {
+        Args: { p_conversation_id: string; p_for_everyone?: boolean }
+        Returns: undefined
+      }
+      chat_delete: {
+        Args: { p_for_everyone?: boolean; p_message_ids: string[] }
+        Returns: number
+      }
       chat_edit: {
         Args: { p_body: string; p_message_id: string }
         Returns: {
@@ -8155,11 +8453,19 @@ export type Database = {
           client_id: string | null
           conversation_id: string
           created_at: string
+          deleted_at: string | null
           edited_at: string | null
+          forward_from_id: string | null
+          forward_from_name: string | null
           id: string
+          items: Json | null
           kind: string
           media: Json
           media_path: string | null
+          pinned_at: string | null
+          pinned_by: string | null
+          reactions: Json
+          reply_to_id: string | null
           sender_id: string | null
           share: Json | null
         }
@@ -8169,6 +8475,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      chat_forward: {
+        Args: { p_conversation_ids: string[]; p_message_ids: string[] }
+        Returns: number
       }
       chat_is_member: { Args: { p_conversation_id: string }; Returns: boolean }
       chat_library_copy: {
@@ -8184,17 +8494,75 @@ export type Database = {
         Args: { p_conversation_id: string }
         Returns: undefined
       }
+      chat_media_visible: { Args: { p_path: string }; Returns: boolean }
+      chat_message_visible: {
+        Args: {
+          p_conversation_id: string
+          p_created_at: string
+          p_message_id: string
+        }
+        Returns: boolean
+      }
       chat_open_direct: { Args: { p_user: string }; Returns: string }
       chat_peer_status: { Args: { p_user: string }; Returns: Json }
+      chat_pin: {
+        Args: { p_message_id: string; p_pinned?: boolean }
+        Returns: {
+          body: string
+          client_id: string | null
+          conversation_id: string
+          created_at: string
+          deleted_at: string | null
+          edited_at: string | null
+          forward_from_id: string | null
+          forward_from_name: string | null
+          id: string
+          items: Json | null
+          kind: string
+          media: Json
+          media_path: string | null
+          pinned_at: string | null
+          pinned_by: string | null
+          reactions: Json
+          reply_to_id: string | null
+          sender_id: string | null
+          share: Json | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "chat_messages"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       chat_profile: { Args: { p_user: string }; Returns: Json }
+      chat_protect_history: {
+        Args: { p_conversation_id: string; p_on: boolean }
+        Returns: boolean
+      }
+      chat_react: {
+        Args: { p_emoji: string; p_message_id: string }
+        Returns: Json
+      }
+      chat_report: {
+        Args: {
+          p_conversation_id: string
+          p_message_id?: string
+          p_note?: string
+          p_reason: string
+        }
+        Returns: string
+      }
       chat_send: {
         Args: {
           p_body?: string
           p_client_id?: string
           p_conversation_id: string
+          p_items?: Json
           p_kind: string
           p_media?: Json
           p_media_path?: string
+          p_reply_to?: string
           p_share?: Json
         }
         Returns: {
@@ -8202,11 +8570,19 @@ export type Database = {
           client_id: string | null
           conversation_id: string
           created_at: string
+          deleted_at: string | null
           edited_at: string | null
+          forward_from_id: string | null
+          forward_from_name: string | null
           id: string
+          items: Json | null
           kind: string
           media: Json
           media_path: string | null
+          pinned_at: string | null
+          pinned_by: string | null
+          reactions: Json
+          reply_to_id: string | null
           sender_id: string | null
           share: Json | null
         }
@@ -8225,6 +8601,11 @@ export type Database = {
         Returns: boolean
       }
       cleanup_telegram_image_sessions: { Args: never; Returns: Json }
+      coin_fee_quote: {
+        Args: { p_amount: number; p_scope: string }
+        Returns: Json
+      }
+      coin_sales_settings: { Args: never; Returns: Json }
       coins_for_pages: {
         Args: { p_pages: number; p_rate: Json }
         Returns: number
@@ -8670,6 +9051,7 @@ export type Database = {
         }
         Returns: Json
       }
+      game_store_autopublish_enabled: { Args: never; Returns: boolean }
       game_store_autopublish_stop: {
         Args: { p_game_id: string }
         Returns: Json
@@ -8854,11 +9236,22 @@ export type Database = {
         }
         Returns: string
       }
+      marketplace_buy_with_coins: {
+        Args: {
+          p_expected_price: number
+          p_idempotency_key: string
+          p_platform?: string
+          p_product_id: string
+          p_refund_acknowledged?: boolean
+        }
+        Returns: Json
+      }
       marketplace_can_see_product: {
         Args: { p_product_id: string; p_user_id?: string }
         Returns: boolean
       }
       marketplace_claim_free: { Args: { p_product_id: string }; Returns: Json }
+      marketplace_coin_quote: { Args: { p_product_id: string }; Returns: Json }
       marketplace_create_checkout: {
         Args: {
           p_idempotency_key: string
@@ -8943,6 +9336,10 @@ export type Database = {
           p_seller_id?: string
           p_sort?: string
         }
+        Returns: Json
+      }
+      marketplace_set_coin_price: {
+        Args: { p_coin_price: number; p_product_id: string }
         Returns: Json
       }
       marketplace_settle_and_remember_card: {

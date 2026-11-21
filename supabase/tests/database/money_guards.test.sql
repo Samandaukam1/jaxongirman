@@ -18,7 +18,8 @@ select is(
      from pg_class c join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
     where c.relkind = 'r'
       and c.relname in ('credit_wallets', 'credit_transactions', 'coin_lots', 'orders', 'payment_transactions',
-                        'purchase_entitlements', 'user_subscriptions', 'presentation_page_grants')
+                        'purchase_entitlements', 'user_subscriptions', 'presentation_page_grants',
+                        'marketplace_coin_purchases', 'coin_platform_fees')
       and (has_table_privilege('authenticated', c.oid, 'INSERT') or has_table_privilege('authenticated', c.oid, 'UPDATE')
         or has_table_privilege('anon', c.oid, 'INSERT') or has_table_privilege('anon', c.oid, 'UPDATE'))),
   null,
@@ -32,7 +33,9 @@ select is(
       and p.prosrc ~* 'update\s+public\.credit_wallets'
       and has_function_privilege('authenticated', p.oid, 'EXECUTE')
       and p.proname not like 'admin\_%'),
-  array['retry_generation', 'start_generation', 'transfer_credits'],
+  -- Buying a listing with J Tanga (202611200200) moves the buyer's own coins
+  -- to a seller, like a transfer: it is spending, not minting.
+  array['marketplace_buy_with_coins', 'retry_generation', 'start_generation', 'transfer_credits'],
   'outside the admin functions, a signed-in client reaches balances only by spending or by sending its own coins'
 );
 
