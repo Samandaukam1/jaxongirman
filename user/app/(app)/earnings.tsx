@@ -1,6 +1,6 @@
 import { formatUzPhone, normalizeUzPhone } from "@jaxongirman/types";
 import { useFocusEffect } from "expo-router";
-import { CheckCircle2, Clock, CreditCard, Phone, Wallet } from "lucide-react-native";
+import { CheckCircle2, Clock, Coins, CreditCard, Phone, Wallet } from "lucide-react-native";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RefreshControl, Text, TextInput, View } from "react-native";
@@ -13,7 +13,7 @@ import { EmptyState, ErrorState, InlineError, SkeletonCard } from "@/components/
 import { useSuccessToast } from "@/components/SuccessToast";
 import { formatDate, formatShortDateTime } from "@/lib/datetime";
 import { asErrorMessage } from "@/lib/format";
-import { formatSom } from "@/lib/money";
+import { formatCoins, formatSom } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
 import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
 import { useAuth } from "@/providers/AuthProvider";
@@ -42,6 +42,8 @@ type Summary = {
   net_total: number;
   pending_total: number;
   paid_total: number;
+  /** Sales paid in J Tanga: already in the seller's balance, so never part of a payout. Absent on older servers. */
+  coins?: { sales_count: number; gross_total: number; fee_total: number; net_total: number };
   contact: { phone: string; telegram_username: string | null } | null;
   settlements: Settlement[];
 };
@@ -161,6 +163,21 @@ export default function EarningsScreen() {
           </View>
         </View>
 
+        {/* --------------------------------------------------- J Tanga sales */}
+        {summary.coins && summary.coins.sales_count > 0 ? (
+          <View style={styles.panel}>
+            <View style={styles.panelHead}>
+              <Coins color={colors.primary} size={18} strokeWidth={2} />
+              <Text style={styles.panelTitle}>{t("earnings.coins.title")}</Text>
+            </View>
+            <Text style={styles.coinNet}>{formatCoins(summary.coins.net_total)}</Text>
+            <Text style={styles.statLabel}>
+              {t("earnings.coins.net")} · {t("earnings.coins.sales", { count: summary.coins.sales_count })} · {t("earnings.coins.fee", { amount: formatCoins(summary.coins.fee_total) })}
+            </Text>
+            <Text style={styles.panelCopy}>{t("earnings.coins.body")}</Text>
+          </View>
+        ) : null}
+
         {/* ------------------------------------------------- payout contact */}
         <View style={styles.panel}>
           <View style={styles.panelHead}>
@@ -272,6 +289,7 @@ const useStyles = makeStyles((colors) => ({
   panelHead: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   panelTitle: { ...typography.bodyMedium, color: colors.ink },
   panelCopy: { ...typography.caption, color: colors.inkMuted, lineHeight: 18 },
+  coinNet: { fontFamily: "JaxongirmanSans_700Bold", fontSize: 24, lineHeight: 30, color: colors.ink, letterSpacing: -0.4 },
   input: {
     ...typography.body, color: colors.ink, minHeight: 50,
     backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border,

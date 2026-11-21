@@ -8,6 +8,8 @@ import { Image, Platform } from "react-native";
 
 import { i18n } from "../i18n";
 
+import { clientPlatform } from "@/providers/PaymentPolicyProvider";
+
 import { saveInBrowser } from "./browserFile";
 import { localized } from "./content";
 import { formatSom } from "./money";
@@ -298,4 +300,70 @@ export function listingPrice(price: number): string {
 export async function claimFreeProduct(productId: string): Promise<void> {
   const { error } = await supabase.rpc("marketplace_claim_free", { p_product_id: productId });
   if (error) throw error;
+}
+
+/* ---------------------------------------------------------- J Tanga sales */
+
+/**
+ * What paying for one listing in J Tanga looks like for this person, now —
+ * `marketplace_coin_quote`. The confirmation sheet draws these numbers instead
+ * of subtracting anything itself, so the balance shown before and after is the
+ * one the server will charge against.
+ */
+export type CoinQuote = {
+  product_id: string;
+  coin_price: number | null;
+  /** Coin sales are open, the listing is live and carries a coin price. */
+  available: boolean;
+  owned: boolean;
+  own: boolean;
+  balance: number;
+  /** How much of `balance` is this month's tariff, which the store cannot take. */
+  plan_coins: number;
+  spendable: number;
+  balance_after: number;
+  enough: boolean;
+  shortfall: number;
+};
+
+export async function fetchCoinQuote(productId: string): Promise<CoinQuote> {
+  const { data, error } = await supabase.rpc("marketplace_coin_quote", { p_product_id: productId });
+  if (error) throw error;
+  return data as unknown as CoinQuote;
+}
+
+/**
+ * Buys a listing with J Tanga in one server call.
+ *
+ * The key is minted once per confirmation sheet, so pressing again after a
+ * dropped response is the same purchase rather than a second charge; the
+ * expected price is the one the sheet showed, so a price the seller changed in
+ * the meantime is refused instead of charged.
+ */
+export async function buyWithCoins(
+  productId: string,
+  idempotencyKey: string,
+  expectedPrice: number,
+  refundAcknowledged: boolean,
+): Promise<{ applied: boolean; purchase_id: string; balance: number }> {
+  const { data, error } = await supabase.rpc("marketplace_buy_with_coins", {
+    p_product_id: productId,
+    p_idempotency_key: idempotencyKey,
+    p_expected_price: expectedPrice,
+    p_refund_acknowledged: refundAcknowledged,
+    p_platform: clientPlatform,
+  });
+  if (error) throw error;
+  return data as unknown as { applied: boolean; purchase_id: string; balance: number };
+}
+
+/** Sets, changes or (with null) removes a listing's coin price. Setting one on a live listing sends it back to review. */
+export async function setCoinPrice(productId: string, coinPrice: number | null): Promise<{ coin_price: number | null; status: string }> {
+  const { data, error } = await supabase.rpc("marketplace_set_coin_price", {
+    p_product_id: productId,
+    // Sent as a value, never omitted: null is how the price is taken away.
+    p_coin_price: coinPrice as number,
+  });
+  if (error) throw error;
+  return data as unknown as { coin_price: number | null; status: string };
 }

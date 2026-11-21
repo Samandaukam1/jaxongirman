@@ -1,7 +1,8 @@
 import type { MarketplaceQuote } from "@jaxongirman/types";
+import * as Crypto from "expo-crypto";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { BookOpenText, CheckCircle2, Flag, Gamepad2, Heart, Star, Store } from "lucide-react-native";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Alert, Image, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
@@ -14,11 +15,15 @@ import { formatShortDateTime } from "@/lib/datetime";
 import { asErrorMessage } from "@/lib/format";
 import { labelOf } from "@/lib/labels";
 import { createSession } from "@/lib/games";
-import { claimFreeProduct, signPaths, toggleFavorite } from "@/lib/marketplace";
-import { formatSom } from "@/lib/money";
+import {
+  buyWithCoins, claimFreeProduct, fetchCoinQuote, refundPolicy, setCoinPrice, signPaths, toggleFavorite,
+  type CoinQuote, type RefundPolicy,
+} from "@/lib/marketplace";
+import { formatCoins, formatSom } from "@/lib/money";
 import { createMarketplaceOrder } from "@/lib/orders";
-import { refundPolicy, type RefundPolicy } from "@/lib/marketplace";
 import { supabase } from "@/lib/supabase";
+import { useCoinFeeQuote } from "@/lib/wallet";
+import { useAccount } from "@/providers/AccountProvider";
 import { useAuth } from "@/providers/AuthProvider";
 import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
 import { icon, radius, shadow, spacing, typography } from "@/theme/tokens";
@@ -29,6 +34,8 @@ type Detail = {
     id: string; title: string; description: string; status: string;
     material_type: string; material_label: string | null; supports_editor_import: boolean;
     base_price: number; currency: string; cover_path: string | null;
+    /** The optional second price in J Tanga; absent from a server before coin sales. */
+    coin_price?: number | null;
     content_units: number | null; file_format: string | null; has_study_guide: boolean;
     sales_count: number; rating: number | null; rating_count: number;
     created_at: string; updated_at: string; is_own: boolean;
@@ -38,6 +45,8 @@ type Detail = {
   tags: { slug: string; label: string }[];
   reviews: { id: string; rating: number; body: string; created_at: string; author: string }[];
   quote: MarketplaceQuote;
+  /** Whether the store sells for J Tanga at all right now (an admin switch). */
+  coin_sales?: boolean;
   owned: boolean;
   is_favorite: boolean;
 };
@@ -86,6 +95,28 @@ export default function ProductDetailScreen() {
   const [refundAgreed, setRefundAgreed] = useState(false);
   const [reportReason, setReportReason] = useState<string>("copyright");
   const [reportDetail, setReportDetail] = useState("");
+
+  /*
+   * Paying with J Tanga. The sheet shows the server's own quote — the price,
+   * the balance now and after — and the purchase is one server call. Its key is
+   * minted when the sheet opens, so pressing "Tasdiqlash" again after a dropped
+   * response is the same purchase, never a second charge.
+   */
+  const { refresh: refreshAccount } = useAccount();
+  const [coinOpen, setCoinOpen] = useState(false);
+  const [coinQuote, setCoinQuote] = useState<CoinQuote | null>(null);
+  const [coinBusy, setCoinBusy] = useState(false);
+  const [coinError, setCoinError] = useState<string | null>(null);
+  const [coinAgreed, setCoinAgreed] = useState(false);
+  const coinKey = useRef("");
+
+  /** The seller's own coin price, edited from here; the form only sets it at listing time. */
+  const [priceEditOpen, setPriceEditOpen] = useState(false);
+  const [priceText, setPriceText] = useState("");
+  const [priceBusy, setPriceBusy] = useState(false);
+  const [priceError, setPriceError] = useState<string | null>(null);
+  const editedPrice = Number.parseInt(priceText, 10) || 0;
+  const editedFee = useCoinFeeQuote("store", editedPrice);
 
   const load = useCallback(async () => {
     if (!productId) return;
@@ -187,6 +218,76 @@ export default function ProductDetailScreen() {
     }
   }
 
+  /** Opens the J Tanga sheet with a fresh quote, and the refund wording a so‘m purchase also asks for. */
+  async function openCoinBuy() {
+    setActionError(null);
+    setCoinError(null);
+    setCoinBusy(true);
+    try {
+      const [quote, policyText] = await Promise.all([
+        fetchCoinQuote(productId),
+        refund ? Promise.resolve(refund) : refundPolicy().catch(() => null),
+      ]);
+      setRefund(policyText);
+      setCoinQuote(quote);
+      setCoinAgreed(false);
+      coinKey.current = Crypto.randomUUID();
+      setCoinOpen(true);
+    } catch (quoteError) {
+      setActionError(asErrorMessage(quoteError));
+    } finally {
+      setCoinBusy(false);
+    }
+  }
+
+  async function confirmCoinBuy() {
+    if (!coinQuote?.coin_price) return;
+    setCoinBusy(true);
+    setCoinError(null);
+    try {
+      const result = await buyWithCoins(productId, coinKey.current, coinQuote.coin_price, Boolean(refund) && coinAgreed);
+      setCoinOpen(false);
+      notify(t("coins.done"), t("coins.doneBody", { balance: formatCoins(result.balance) }));
+      void refreshAccount();
+      await load();
+    } catch (buyError) {
+      setCoinError(asErrorMessage(buyError));
+      // A price or a balance that moved is shown at once rather than on reopen.
+      void fetchCoinQuote(productId).then(setCoinQuote).catch(() => undefined);
+    } finally {
+      setCoinBusy(false);
+    }
+  }
+
+  /** Short of coins: the existing top-up screen, with this page left where it was. */
+  function topUp() {
+    setCoinOpen(false);
+    router.push("/(app)/coins/buy");
+  }
+
+  function openPriceEdit(current: number | null) {
+    setPriceError(null);
+    setPriceText(current ? String(current) : "");
+    setPriceEditOpen(true);
+  }
+
+  async function savePrice(next: number | null) {
+    if (!detail) return;
+    const wasLive = detail.product.status === "approved";
+    setPriceBusy(true);
+    setPriceError(null);
+    try {
+      const result = await setCoinPrice(productId, next);
+      setPriceEditOpen(false);
+      notify(t("coins.saved"), wasLive && result.status === "pending_review" ? t("coins.savedReview") : undefined);
+      await load();
+    } catch (saveError) {
+      setPriceError(asErrorMessage(saveError));
+    } finally {
+      setPriceBusy(false);
+    }
+  }
+
   async function submitReport() {
     if (!user) return;
     setBusy(true);
@@ -226,6 +327,18 @@ export default function ProductDetailScreen() {
 
   const { product, seller, quote } = detail;
   const cover = product.cover_path ? images[product.cover_path] : undefined;
+  /**
+   * The coin price, where it can be paid: coin sales open, a paid listing, and
+   * a platform whose store is open at all (the server refuses the rest).
+   */
+  const coinPrice = detail.coin_sales && product.base_price > 0 && policy.paymentsEnabled ? product.coin_price ?? null : null;
+  const ownerPrices = product.is_own && product.base_price > 0 && detail.coin_sales === true
+    && policy.paymentsEnabled && product.status !== "archived";
+  const feeLabel = editedFee
+    ? editedFee.fee_min > 0
+      ? t("coins.feeMin", { rate: editedFee.fee_percent, min: formatCoins(editedFee.fee_min) })
+      : t("coins.fee", { rate: editedFee.fee_percent })
+    : "";
 
   return (
     <View style={styles.screen}>
@@ -360,6 +473,17 @@ export default function ProductDetailScreen() {
             <Text style={styles.priceTotalLabel}>{t("product.total")}</Text>
             <Text style={styles.priceTotal}>{formatSom(quote.buyer_total)}</Text>
           </View>
+          {/* The other way to pay, under the same card: the coin price is the
+              whole of it — the platform's share comes out of the seller's side. */}
+          {coinPrice ? (
+            <>
+              <View style={styles.priceDivider} />
+              <View style={styles.priceLine}>
+                <Text style={styles.priceTotalLabel}>{t("coins.label")}</Text>
+                <Text style={styles.priceTotal}>{formatCoins(coinPrice)}</Text>
+              </View>
+            </>
+          ) : null}
         </View>
         ) : null}
 
@@ -391,6 +515,27 @@ export default function ProductDetailScreen() {
           <PrimaryButton label={t("product.take")} loading={busy} onPress={() => void take()} />
         ) : policy.paymentsEnabled ? (
           <PrimaryButton label={t("product.buy", { amount: formatSom(quote.buyer_total) })} loading={busy} onPress={() => void startBuy()} />
+        ) : null}
+
+        {!detail.owned && !product.is_own && coinPrice ? (
+          <PrimaryButton
+            label={t("coins.buy", { amount: formatCoins(coinPrice) })}
+            tone="secondary"
+            loading={coinBusy && !coinOpen}
+            onPress={() => void openCoinBuy()}
+          />
+        ) : null}
+
+        {ownerPrices ? (
+          <View style={styles.coinOwnerRow}>
+            <View style={styles.coinOwnerCopy}>
+              <Text style={styles.priceLabel}>{t("coins.ownerLabel")}</Text>
+              <Text style={styles.coinOwnerValue}>{product.coin_price ? formatCoins(product.coin_price) : t("coins.notSet")}</Text>
+            </View>
+            <Pressable accessibilityRole="button" onPress={() => openPriceEdit(product.coin_price ?? null)} style={styles.coinOwnerEdit}>
+              <Text style={styles.ownedLink}>{t("coins.edit")}</Text>
+            </Pressable>
+          </View>
         ) : null}
 
         {detail.reviews.length > 0 ? (
@@ -467,6 +612,139 @@ export default function ProductDetailScreen() {
             </View>
           </View>
         </View>
+      </Modal>
+
+      {/* Buying with J Tanga: the balance before and after, from the server's
+          quote, and the same refund agreement a so‘m purchase asks for. Short of
+          coins, the one action offered is the existing top-up screen. */}
+      <Modal visible={coinOpen} transparent animationType="fade" onRequestClose={() => setCoinOpen(false)}>
+        <View style={styles.refundBackdrop}>
+          <View style={styles.refundSheet}>
+            <Text style={styles.refundTitle}>{t("coins.confirmTitle")}</Text>
+            <Text style={styles.refundBody}>{t("coins.confirmBody", { title: product.title })}</Text>
+
+            {coinQuote ? (
+              <View style={styles.coinSummary}>
+                <View style={styles.priceLine}>
+                  <Text style={styles.priceLabel}>{t("coins.price")}</Text>
+                  <Text style={styles.priceValue}>{formatCoins(coinQuote.coin_price ?? 0)}</Text>
+                </View>
+                <View style={styles.priceLine}>
+                  <Text style={styles.priceLabel}>{t("coins.balanceNow")}</Text>
+                  <Text style={styles.priceValue}>{formatCoins(coinQuote.balance)}</Text>
+                </View>
+                {coinQuote.plan_coins > 0 ? (
+                  <View style={styles.priceLine}>
+                    <Text style={styles.priceLabel}>{t("coins.planCoins")}</Text>
+                    <Text style={styles.priceValue}>{formatCoins(coinQuote.plan_coins)}</Text>
+                  </View>
+                ) : null}
+                <View style={styles.priceDivider} />
+                {coinQuote.enough ? (
+                  <View style={styles.priceLine}>
+                    <Text style={styles.priceTotalLabel}>{t("coins.balanceAfter")}</Text>
+                    <Text style={styles.priceTotal}>{formatCoins(coinQuote.balance_after)}</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.coinShort}>{t("coins.short", { amount: formatCoins(coinQuote.shortfall) })}</Text>
+                )}
+                {coinQuote.plan_coins > 0 ? <Text style={styles.coinNote}>{t("coins.planNote")}</Text> : null}
+              </View>
+            ) : null}
+
+            {coinQuote?.enough && refund ? (
+              <Pressable
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: coinAgreed }}
+                onPress={() => setCoinAgreed((was) => !was)}
+                style={styles.refundAgree}
+              >
+                <View style={[styles.refundBox, coinAgreed && styles.refundBoxOn]}>
+                  {coinAgreed ? <Text style={styles.refundTick}>✓</Text> : null}
+                </View>
+                <Text style={styles.refundAgreeText}>{refund.checkboxLabel}</Text>
+              </Pressable>
+            ) : null}
+
+            {coinError ? <InlineError message={coinError} /> : null}
+
+            <View style={styles.refundActions}>
+              <Pressable accessibilityRole="button" onPress={() => setCoinOpen(false)} style={styles.refundCancel}>
+                <Text style={styles.refundCancelText}>{t("common:cancel")}</Text>
+              </Pressable>
+              {coinQuote?.enough ? (
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={(Boolean(refund) && !coinAgreed) || coinBusy}
+                  onPress={() => void confirmCoinBuy()}
+                  style={[styles.refundConfirm, ((Boolean(refund) && !coinAgreed) || coinBusy) && styles.refundDisabled]}
+                >
+                  <Text style={styles.refundConfirmText}>{coinBusy ? t("coins.buying") : t("coins.confirm")}</Text>
+                </Pressable>
+              ) : (
+                <Pressable accessibilityRole="button" onPress={topUp} style={styles.refundConfirm}>
+                  <Text style={styles.refundConfirmText}>{t("coins.topUp")}</Text>
+                </Pressable>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* The seller's coin price. What they will receive is the server's
+          figure for the fee in force, and a new price on a live listing is
+          said to send it back to review before they press save. */}
+      <Modal visible={priceEditOpen} transparent animationType="fade" onRequestClose={() => setPriceEditOpen(false)}>
+        <KeyboardAvoidingView behavior="padding" style={styles.flex}>
+          <View style={styles.refundBackdrop}>
+            <View style={styles.refundSheet}>
+              <Text style={styles.refundTitle}>{t("coins.ownerLabel")}</Text>
+              <TextInput
+                value={priceText}
+                onChangeText={(value) => setPriceText(value.replace(/[^0-9]/g, "").slice(0, 7))}
+                placeholder={t("coins.sellPlaceholder")}
+                placeholderTextColor={colors.inkSoft}
+                keyboardType="number-pad"
+                style={styles.coinInput}
+                accessibilityLabel={t("coins.ownerLabel")}
+              />
+              {editedFee ? (
+                <View style={styles.coinSummary}>
+                  <View style={styles.priceLine}>
+                    <Text style={styles.priceLabel}>{feeLabel}</Text>
+                    <Text style={styles.priceValue}>−{formatCoins(editedFee.fee)}</Text>
+                  </View>
+                  <View style={styles.priceLine}>
+                    <Text style={styles.priceTotalLabel}>{t("coins.net")}</Text>
+                    <Text style={styles.priceTotal}>{formatCoins(editedFee.net)}</Text>
+                  </View>
+                </View>
+              ) : null}
+              {product.status === "approved" && editedPrice > 0 && editedPrice !== product.coin_price ? (
+                <Text style={styles.coinNote}>{t("coins.reviewWarning")}</Text>
+              ) : null}
+              {priceError ? <InlineError message={priceError} /> : null}
+              <View style={styles.refundActions}>
+                <Pressable accessibilityRole="button" onPress={() => setPriceEditOpen(false)} style={styles.refundCancel}>
+                  <Text style={styles.refundCancelText}>{t("common:cancel")}</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={editedPrice <= 0 || priceBusy}
+                  onPress={() => void savePrice(editedPrice)}
+                  style={[styles.refundConfirm, (editedPrice <= 0 || priceBusy) && styles.refundDisabled]}
+                >
+                  <Text style={styles.refundConfirmText}>{t("common:save")}</Text>
+                </Pressable>
+              </View>
+              {product.coin_price ? (
+                <Pressable accessibilityRole="button" disabled={priceBusy} onPress={() => void savePrice(null)} style={styles.coinRemove}>
+                  <Text style={styles.coinRemoveText}>{t("coins.remove")}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal visible={reportOpen} transparent animationType="fade" onRequestClose={() => setReportOpen(false)}>
@@ -554,6 +832,22 @@ const useStyles = makeStyles((colors) => ({
   priceDivider: { height: 1, backgroundColor: colors.border, marginVertical: 2 },
   priceTotalLabel: { ...typography.bodyMedium, color: colors.ink },
   priceTotal: { ...typography.heading, color: colors.primaryDeep },
+
+  flex: { flex: 1 },
+  coinSummary: { gap: spacing.sm, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.surfaceMuted },
+  coinShort: { ...typography.bodyMedium, color: colors.danger },
+  coinNote: { ...typography.caption, color: colors.inkMuted, lineHeight: 18 },
+  coinInput: {
+    ...typography.body, color: colors.ink, minHeight: 52, fontFamily: "JaxongirmanSans_700Bold", fontSize: 22,
+    backgroundColor: colors.surfaceMuted, borderWidth: 1, borderColor: colors.border,
+    borderRadius: radius.md, paddingHorizontal: spacing.lg,
+  },
+  coinRemove: { alignSelf: "center", paddingVertical: spacing.sm },
+  coinRemoveText: { ...typography.caption, color: colors.danger },
+  coinOwnerRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  coinOwnerCopy: { flex: 1, gap: 2 },
+  coinOwnerValue: { ...typography.bodyMedium, color: colors.ink },
+  coinOwnerEdit: { paddingVertical: spacing.xs, paddingHorizontal: spacing.sm },
 
   ownedCard: { flexDirection: "row", alignItems: "center", gap: spacing.sm, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.successSoft, borderWidth: 1, borderColor: colors.successBorder },
   ownedText: { ...typography.caption, color: colors.ink, flex: 1 },

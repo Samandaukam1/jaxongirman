@@ -15,10 +15,11 @@ import { PaymentUnavailable } from "@/components/PaymentUnavailable";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { InlineError } from "@/components/StateBlocks";
 import { asErrorMessage } from "@/lib/format";
-import { useMaterialTypes, useQuote } from "@/lib/marketplace";
-import { formatBytes, formatSom } from "@/lib/money";
+import { setCoinPrice, useMaterialTypes, useQuote } from "@/lib/marketplace";
+import { formatBytes, formatCoins, formatSom } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
 import { uploadLocalFile } from "@/lib/upload";
+import { useCoinFeeQuote } from "@/lib/wallet";
 import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
 import { useAuth } from "@/providers/AuthProvider";
 import { radius, shadow, spacing, typography } from "@/theme/tokens";
@@ -107,6 +108,14 @@ export default function SellScreen() {
     return Number.isFinite(parsed) ? parsed : 0;
   }, [free, priceText]);
   const quote = useQuote(price);
+  /**
+   * The optional second price in J Tanga. Only a paid listing has one — a free
+   * listing is taken, not bought — and what the seller keeps of it is the
+   * server's figure for the store fee in force, like the so‘m calculator above.
+   */
+  const [coinText, setCoinText] = useState("");
+  const coinPrice = free ? 0 : Number.parseInt(coinText, 10) || 0;
+  const coinFee = useCoinFeeQuote("store", coinPrice);
 
   const selectedType: MarketplaceMaterialType | undefined = types.find((type) => type.code === materialType);
 
@@ -198,6 +207,10 @@ export default function SellScreen() {
       if (saveError) throw saveError;
       const id = productId as string;
       const base = `${user.id}/${id}`;
+
+      // Right after the listing exists and before anything is uploaded, so a
+      // coin price the server refuses stops the form before the slow part.
+      if (coinPrice > 0) await setCoinPrice(id, coinPrice);
 
       if (cover) {
         const path = `${base}/cover-${Crypto.randomUUID()}.jpg`;
@@ -414,6 +427,41 @@ export default function SellScreen() {
             </View>
           ) : null}
         </View>
+
+        {/* ------------------------------------------------ J Tanga price */}
+        {free ? null : (
+          <View style={styles.block}>
+            <Text style={styles.label}>{t("coins.sellLabel")}</Text>
+            <Text style={styles.hint}>{t("coins.sellHint")}</Text>
+            <TextInput
+              value={coinText}
+              onChangeText={(value) => setCoinText(value.replace(/[^0-9]/g, "").slice(0, 7))}
+              placeholder={t("coins.sellPlaceholder")}
+              placeholderTextColor={colors.inkSoft}
+              keyboardType="number-pad"
+              style={[styles.input, styles.priceInput]}
+              accessibilityLabel={t("coins.sellLabel")}
+            />
+            {coinFee ? (
+              <View style={styles.calculator}>
+                <View style={styles.calcLine}>
+                  <Text style={styles.calcLabel}>
+                    {coinFee.fee_min > 0
+                      ? t("coins.feeMin", { rate: coinFee.fee_percent, min: formatCoins(coinFee.fee_min) })
+                      : t("coins.fee", { rate: coinFee.fee_percent })}
+                  </Text>
+                  <Text style={[styles.calcValue, styles.calcNegative]}>−{formatCoins(coinFee.fee)}</Text>
+                </View>
+                <View style={styles.calcDivider} />
+                <View style={styles.calcLine}>
+                  <Text style={styles.calcTotalLabel}>{t("coins.net")}</Text>
+                  <Text style={styles.calcTotal}>{formatCoins(coinFee.net)}</Text>
+                </View>
+                <Text style={styles.calcNote}>{t("coins.netNote")}</Text>
+              </View>
+            ) : null}
+          </View>
+        )}
 
         {/* ------------------------------------------------------------ files */}
         <View style={styles.block}>

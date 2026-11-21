@@ -18,6 +18,7 @@ import { chatProfile } from "@/lib/chat";
 import { asErrorMessage } from "@/lib/format";
 import { formatCoins, formatNumber } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
+import { useCoinFeeQuote } from "@/lib/wallet";
 import { useAccount } from "@/providers/AccountProvider";
 import { brandInk, gradients, icon, radius, shadow, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
@@ -42,6 +43,11 @@ function initialsFor(match: Match): string {
  * RPC that returns four display fields, and the transfer itself is one atomic
  * server call that locks both wallets. An idempotency key is minted once per
  * confirmed amount, so a dropped response cannot become a second payment.
+ *
+ * The transfer fee an admin may set comes out of what the recipient receives:
+ * the sender's balance goes down by exactly the amount typed. The server's
+ * quote for that amount is shown before the button can be pressed, so nobody
+ * confirms a transfer without seeing what reaches the other side.
  */
 export default function SendCoinsScreen() {
   const { colors } = useTheme();
@@ -69,6 +75,7 @@ export default function SendCoinsScreen() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sentAmount, setSentAmount] = useState<number | null>(null);
+  const [sentFee, setSentFee] = useState<{ fee: number; received: number } | null>(null);
 
   // Regenerated whenever the person changes what they are sending, so a retry of
   // the *same* transfer is idempotent while a genuinely new one is not.
@@ -106,14 +113,20 @@ export default function SendCoinsScreen() {
     return Number.isFinite(parsed) ? parsed : 0;
   }, [amountText]);
 
+  const fee = useCoinFeeQuote("transfer", amount);
+  /** Until the server has priced this amount, the button waits rather than send blind. */
+  const feePending = amount > 0 && fee === null;
+
   const amountProblem = amount <= 0
     ? null
     : amount > balance
       ? t("send.notEnough")
-      : null;
+      : fee && fee.net <= 0
+        ? t("send.belowFee")
+        : null;
 
   async function send() {
-    if (!recipient || amount <= 0 || amountProblem) return;
+    if (!recipient || amount <= 0 || amountProblem || feePending) return;
     setSending(true);
     setError(null);
     const { data, error: transferError } = await supabase.rpc("transfer_credits", {
@@ -127,9 +140,10 @@ export default function SendCoinsScreen() {
       setSending(false);
       return;
     }
-    const result = data as unknown as { applied?: boolean; amount?: number } | null;
+    const result = data as unknown as { applied?: boolean; amount?: number; fee?: number; received?: number } | null;
     // The success tap comes from the emblem, as its tick lands.
     setSentAmount(result?.amount ?? amount);
+    setSentFee(result?.fee ? { fee: result.fee, received: result.received ?? amount - result.fee } : null);
     await refresh();
     setSending(false);
   }
@@ -148,13 +162,18 @@ export default function SendCoinsScreen() {
             <Text style={styles.successCopy}>
               {t("send.sentTo", { name: recipient.full_name?.trim() || `@${recipient.username}` })}
             </Text>
+            {sentFee ? (
+              <Text style={styles.successBalance}>
+                {t("send.sentNet", { received: formatCoins(sentFee.received), fee: formatCoins(sentFee.fee) })}
+              </Text>
+            ) : null}
             <Text style={styles.successBalance}>{t("send.newBalance", { balance: formatCoins(balance) })}</Text>
           </Rise>
           <Rise order={1} style={styles.successActions}>
             <PrimaryButton
               label={t("send.again")}
               tone="secondary"
-              onPress={() => { setSentAmount(null); setRecipient(null); setAmountText(""); setNote(""); setQuery(""); }}
+              onPress={() => { setSentAmount(null); setSentFee(null); setRecipient(null); setAmountText(""); setNote(""); setQuery(""); }}
             />
             <PrimaryButton label={t("common:close")} onPress={() => router.back()} />
           </Rise>
@@ -260,6 +279,30 @@ export default function SendCoinsScreen() {
               <Text style={styles.counter}>{note.length}/200</Text>
             </View>
 
+            {/* What leaves, what the platform keeps and what arrives — shown
+                only when there is a fee, so a free transfer looks as it did. */}
+            {fee && fee.fee > 0 && fee.net > 0 ? (
+              <View style={styles.feeCard}>
+                <View style={styles.feeLine}>
+                  <Text style={styles.feeLabel}>{t("send.youSend")}</Text>
+                  <Text style={styles.feeValue}>{formatCoins(fee.amount)}</Text>
+                </View>
+                <View style={styles.feeLine}>
+                  <Text style={styles.feeLabel}>
+                    {fee.fee_min > 0
+                      ? t("send.feeMin", { rate: fee.fee_percent, min: formatCoins(fee.fee_min) })
+                      : t("send.fee", { rate: fee.fee_percent })}
+                  </Text>
+                  <Text style={styles.feeValue}>−{formatCoins(fee.fee)}</Text>
+                </View>
+                <View style={styles.feeDivider} />
+                <View style={styles.feeLine}>
+                  <Text style={styles.feeTotalLabel}>{t("send.receives")}</Text>
+                  <Text style={styles.feeTotal}>{formatCoins(fee.net)}</Text>
+                </View>
+              </View>
+            ) : null}
+
             {amountProblem ? <InlineError message={amountProblem} /> : null}
             {error ? <InlineError message={error} /> : null}
 
@@ -268,8 +311,8 @@ export default function SendCoinsScreen() {
                 amount it says what is missing, and stays quiet. */}
             <Pressable
               accessibilityRole="button"
-              accessibilityState={{ disabled: amount <= 0 || Boolean(amountProblem) || sending, busy: sending }}
-              disabled={amount <= 0 || Boolean(amountProblem) || sending}
+              accessibilityState={{ disabled: amount <= 0 || Boolean(amountProblem) || feePending || sending, busy: sending || feePending }}
+              disabled={amount <= 0 || Boolean(amountProblem) || feePending || sending}
               onPress={() => void send()}
               style={({ pressed }) => [styles.sendWrap, (amount <= 0 || Boolean(amountProblem)) && styles.sendOff, pressed && styles.sendPressed]}
             >
@@ -430,6 +473,13 @@ const useStyles = makeStyles((colors) => ({
     borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
   },
   counter: { ...typography.caption, color: colors.inkSoft, alignSelf: "flex-end" },
+  feeCard: { gap: spacing.sm, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  feeLine: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md },
+  feeLabel: { ...typography.caption, color: colors.inkMuted, flexShrink: 1 },
+  feeValue: { ...typography.caption, color: colors.ink, fontVariant: ["tabular-nums"] },
+  feeDivider: { height: 1, backgroundColor: colors.border, marginVertical: 2 },
+  feeTotalLabel: { ...typography.bodyMedium, color: colors.ink },
+  feeTotal: { ...typography.heading, color: colors.primaryDeep, fontVariant: ["tabular-nums"] },
   sendWrap: { borderRadius: radius.pill, shadowColor: "#4B1FA8", shadowOpacity: 0.35, shadowRadius: 16, shadowOffset: { width: 0, height: 10 }, elevation: 8 },
   sendOff: { opacity: 0.5, shadowOpacity: 0 },
   sendPressed: { transform: [{ scale: 0.985 }] },

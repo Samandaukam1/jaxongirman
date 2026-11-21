@@ -18,7 +18,7 @@ import { useVoteMarketEnabled } from "@/lib/marathon-market";
 import {
   EMPTY_FILTERS, isDefaultFilters, patchShelfItem, peekShelf, refreshShelf, searchProducts, signPaths, toggleFavorite, useMaterialTypes,
   type SearchFilters, listingPrice } from "@/lib/marketplace";
-import { formatNumber } from "@/lib/money";
+import { formatCoins, formatNumber } from "@/lib/money";
 import { useAuth } from "@/providers/AuthProvider";
 import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
 import { icon, radius, shadow, spacing, typography } from "@/theme/tokens";
@@ -358,6 +358,10 @@ export default function MarketplaceScreen() {
               </View>
 
               <Text style={styles.price}>{listingPrice(item.base_price)}</Text>
+              {/* The second way to pay, quieter than the first. */}
+              {item.coin_price && item.base_price > 0 ? (
+                <Text numberOfLines={1} style={styles.coinPrice}>{t("coins.or", { amount: formatCoins(item.coin_price) })}</Text>
+              ) : null}
             </Pressable>
             </Appear>
           )}
@@ -480,6 +484,7 @@ const useStyles = makeStyles((colors) => ({
   ratingCount: { ...typography.caption, fontSize: 10, color: colors.inkSoft },
   units: { ...typography.caption, fontSize: 10, color: colors.inkSoft },
   price: { ...typography.bodyMedium, color: colors.primaryDeep, fontSize: 14, marginTop: 2 },
+  coinPrice: { ...typography.caption, color: colors.inkSoft, fontSize: 12 },
 
   backdrop: { flex: 1, backgroundColor: "rgba(21,14,36,.45)", justifyContent: "flex-end" },
   sheet: { backgroundColor: colors.surface, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, padding: spacing.xl, gap: spacing.md, paddingBottom: 40 },

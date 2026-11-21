@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 import { i18n } from "../i18n";
 
 import { localized } from "./content";
@@ -130,4 +132,55 @@ export function quoteSummary(quote: Quote): string {
   if (quote.purchasedPages) parts.push(i18n.t("create:quote.purchased", { count: quote.purchasedPages }));
   if (quote.paidPages) parts.push(i18n.t("create:quote.paid", { count: quote.paidPages, coins: quote.coins }));
   return parts.join(" · ");
+}
+
+/* ------------------------------------------------------- J Tanga fees */
+
+/** What `coin_fee_quote` answers: the platform's share of an amount, and what is left. */
+export type CoinFeeQuote = {
+  amount: number;
+  fee_percent: number;
+  fee_min: number;
+  fee: number;
+  /** What the other side receives: the seller of a coin sale, the recipient of a transfer. */
+  net: number;
+};
+
+/**
+ * The platform fee on a J Tanga amount, from the server.
+ *
+ * `store` is a coin sale (the seller receives `net`), `transfer` a send (the
+ * recipient receives `net`). The arithmetic is never done here: an admin can
+ * change either fee at any moment, and a person must see the figure the server
+ * will actually apply. Debounced, because the amount fields fire on every
+ * keystroke; callers should only trust a quote whose `amount` matches theirs.
+ * A failed request is asked again a few times, because a screen that waits on
+ * the quote (the send button does) must not stay stuck after one dropped call.
+ */
+export function useCoinFeeQuote(scope: "store" | "transfer", amount: number): CoinFeeQuote | null {
+  const [quote, setQuote] = useState<CoinFeeQuote | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    let handle: ReturnType<typeof setTimeout> | undefined;
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    const rounded = Math.round(amount);
+    const ask = (attempt: number) => {
+      void supabase.rpc("coin_fee_quote", { p_scope: scope, p_amount: rounded }).then(({ data, error }) => {
+        if (!active) return;
+        if (!error) setQuote(data as unknown as CoinFeeQuote);
+        // A server from before J Tanga fees charges none, and says so by not
+        // knowing the function; that is a real answer, not a failure to wait on.
+        else if (error.code === "PGRST202" || error.code === "42883") {
+          setQuote({ amount: rounded, fee_percent: 0, fee_min: 0, fee: 0, net: rounded });
+        } else if (attempt < 3) {
+          handle = setTimeout(() => ask(attempt + 1), 1500 * attempt);
+        }
+      });
+    };
+    handle = setTimeout(() => ask(1), 250);
+    return () => { active = false; clearTimeout(handle); };
+  }, [amount, scope]);
+
+  return quote && quote.amount === Math.round(amount) ? quote : null;
 }

@@ -14,7 +14,7 @@ import { formatShortDateTime } from "@/lib/datetime";
 import { asErrorMessage } from "@/lib/format";
 import { labelOf } from "@/lib/labels";
 import { listingPrice } from "@/lib/marketplace";
-import { formatSom } from "@/lib/money";
+import { formatCoins, formatSom } from "@/lib/money";
 import { supabase } from "@/lib/supabase";
 import { usePaymentPolicy } from "@/providers/PaymentPolicyProvider";
 import { icon, radius, shadow, spacing, typography } from "@/theme/tokens";
@@ -22,6 +22,7 @@ import { makeStyles, useTheme } from "@/theme/ThemeProvider";
 
 type Product = {
   id: string; title: string; status: MarketplaceProductStatus; base_price: number;
+  coin_price: number | null;
   sales_count: number; rating_sum: number; rating_count: number;
   rejection_reason: string | null; created_at: string;
 };
@@ -46,7 +47,7 @@ export default function SellerDashboardScreen() {
     const [productResult, summaryResult] = await Promise.all([
       supabase
         .from("marketplace_products")
-        .select("id,title,status,base_price,sales_count,rating_sum,rating_count,rejection_reason,created_at")
+        .select("id,title,status,base_price,coin_price,sales_count,rating_sum,rating_count,rejection_reason,created_at")
         .order("created_at", { ascending: false }),
       supabase.rpc("seller_earnings_summary", {}),
     ]);
@@ -144,7 +145,12 @@ export default function SellerDashboardScreen() {
                   </View>
                 </View>
                 <Text style={styles.cardMeta}>
-                  {t("seller.meta", { price: listingPrice(product.base_price), count: product.sales_count, date: formatShortDateTime(product.created_at) })}
+                  {t("seller.meta", {
+                    // Both prices when the listing also sells for J Tanga.
+                    price: product.coin_price ? `${listingPrice(product.base_price)} / ${formatCoins(product.coin_price)}` : listingPrice(product.base_price),
+                    count: product.sales_count,
+                    date: formatShortDateTime(product.created_at),
+                  })}
                 </Text>
                 {product.status === "rejected" && product.rejection_reason ? (
                   <Text style={styles.rejection}>{t("seller.reason", { reason: product.rejection_reason })}</Text>

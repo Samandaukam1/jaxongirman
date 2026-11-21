@@ -46,6 +46,13 @@ export default translations(
       note: "Izoh: {{note}}",
       preparedAt: "Tayyorlangan: {{date}}",
       status: { draft: "Tayyorlanmoqda", pending: "To‘lov kutilmoqda", paid: "To‘langan", cancelled: "Bekor qilingan" },
+      coins: {
+        title: "J Tanga sotuvlari",
+        body: "J Tangaga sotilgan mahsulotlar puli darhol balansingizga tushadi va bu yerdagi so‘m to‘lovlariga qo‘shilmaydi.",
+        net: "Balansingizga tushdi",
+        sales: "{{count}} ta sotuv",
+        fee: "Komissiya: {{amount}}",
+      },
     },
   },
   {
@@ -92,6 +99,13 @@ export default translations(
       note: "Note: {{note}}",
       preparedAt: "Prepared: {{date}}",
       status: { draft: "Preparing", pending: "Awaiting payout", paid: "Paid", cancelled: "Cancelled" },
+      coins: {
+        title: "J Tanga sales",
+        body: "Products sold for J Tanga pay straight into your balance and are not part of the so‘m payouts here.",
+        net: "Added to your balance",
+        sales: "{{count}} sales",
+        fee: "Fee: {{amount}}",
+      },
     },
   },
   {
@@ -138,6 +152,13 @@ export default translations(
       note: "Комментарий: {{note}}",
       preparedAt: "Подготовлено: {{date}}",
       status: { draft: "Готовится", pending: "Ожидает выплаты", paid: "Выплачено", cancelled: "Отменено" },
+      coins: {
+        title: "Продажи за J Tanga",
+        body: "Деньги за товары, проданные за J Tanga, сразу поступают на ваш баланс и не входят в выплаты в сумах.",
+        net: "Поступило на баланс",
+        sales: "Продаж: {{count}}",
+        fee: "Комиссия: {{amount}}",
+      },
     },
   },
   {
@@ -184,6 +205,13 @@ export default translations(
       note: "Not: {{note}}",
       preparedAt: "Hazırlandı: {{date}}",
       status: { draft: "Hazırlanıyor", pending: "Ödeme bekleniyor", paid: "Ödendi", cancelled: "İptal edildi" },
+      coins: {
+        title: "J Tanga satışları",
+        body: "J Tanga ile satılan ürünlerin tutarı hemen bakiyenize geçer ve buradaki so‘m ödemelerine dahil edilmez.",
+        net: "Bakiyenize eklendi",
+        sales: "{{count}} satış",
+        fee: "Komisyon: {{amount}}",
+      },
     },
   },
 );
