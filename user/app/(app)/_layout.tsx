@@ -1,5 +1,7 @@
 import { Redirect, Stack } from "expo-router";
+import { useEffect } from "react";
 
+import { playbackMode } from "@/lib/audioMode";
 import { usePush } from "@/lib/push";
 import { usePresence } from "@/lib/usePresence";
 import { useResumeMarathonInvite } from "@/lib/useResumeMarathonInvite";
@@ -23,6 +25,9 @@ export default function AppLayout() {
   usePush(session?.user.id ?? null);
   // "Online" in chat: this phone says it is here while it is open.
   usePresence(Boolean(session));
+  // The audio session set for playback before anything plays: iOS starts an app in a mode the silent switch
+  // mutes, and a voice message played first thing moved its progress bar in silence.
+  useEffect(() => { void playbackMode(); }, []);
   if (!loading && !session) return <Redirect href="/(auth)/sign-in" />;
   return (
     // Mounted inside the authenticated area so the wallet, profile and inbox
@@ -64,7 +69,11 @@ export default function AppLayout() {
               left edge must move the element, not leave the editor. */}
             <Stack.Screen name="presentation/[id]/edit" options={{ gestureEnabled: false }} />
             <Stack.Screen name="coins/send" />
-            <Stack.Screen name="chat/profile/[userId]" options={{ animation: "fade_from_bottom", animationDuration: 220 }} />
+            {/* Chat moves at half the app's pace: a conversation is opened and left many times a minute. */}
+            <Stack.Screen name="chat/[id]" options={{ animationDuration: 130 }} />
+            <Stack.Screen name="chat/new" options={{ animationDuration: 130 }} />
+            <Stack.Screen name="chat/share" options={{ animationDuration: 130 }} />
+            <Stack.Screen name="chat/profile/[userId]" options={{ animation: "fade_from_bottom", animationDuration: 70 }} />
             <Stack.Screen name="coins/buy" />
             <Stack.Screen name="tarif/index" />
             <Stack.Screen name="support/index" />

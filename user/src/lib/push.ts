@@ -33,6 +33,8 @@ export type PushState = "on" | "off" | "denied" | "unsupported";
 /** The conversation on screen now, whose pushes are not shown while it is. */
 let openConversation: string | null = null;
 export function setOpenConversation(id: string | null) { openConversation = id; }
+/** Leaving a conversation: quiet no longer — unless another conversation took its place meanwhile. */
+export function clearOpenConversation(id: string) { if (openConversation === id) openConversation = null; }
 
 const supported = () => Platform.OS === "ios" || Platform.OS === "android";
 

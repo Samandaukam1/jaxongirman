@@ -1,5 +1,5 @@
 import * as Haptics from "expo-haptics";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import {
   ArrowUpRight, AudioLines, Ban, Bell, BellOff, ChevronLeft, FolderOpen, Gamepad2, Images, Layers, LibraryBig, Pencil, Play, Presentation, Share2,
   UserPlus, type LucideIcon,
@@ -11,18 +11,20 @@ import Animated, { FadeIn, FadeInDown, useAnimatedScrollHandler, useSharedValue 
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle, Defs, FeGaussianBlur, Filter, G, Image as SvgImage, LinearGradient as SvgGradient, Mask, RadialGradient, Rect, Stop } from "react-native-svg";
 
-import { useMedia, VideoNote, VoiceMessage } from "@/components/ChatBubbles";
+import { PictureViewer, usePath, VideoNote, VoiceMessage } from "@/components/ChatBubbles";
 import { ActionSheet } from "@/components/ChatKit";
 import { PrimaryButton } from "@/components/PrimaryButton";
 import { ProfileHeroCard, type CardAction, type CardStat } from "@/components/ProfileHeroCard";
 import { InlineError } from "@/components/StateBlocks";
 import {
-  addToLibrary, blockUser, chatProfile, libraryHref, peerName, saveContact, sharedInConversation, unblockUser, type ChatMessage, type ChatPeer,
+  addToLibrary, blockUser, chatProfile, libraryHref, peerName, saveContact, sharedInConversation, unblockUser,
+  type ChatMessage, type ChatPeer,
 } from "@/lib/chat";
 import { chatListTime, lastSeen, mediaLength } from "@/lib/chatTime";
 import { asErrorMessage } from "@/lib/format";
 import { formatNumber } from "@/lib/money";
 import { useOwnCard } from "@/lib/useOwnCard";
+import { stopVoice } from "@/lib/voicePlayer";
 import { useAuth } from "@/providers/AuthProvider";
 import { radius, spacing, typography } from "@/theme/tokens";
 import { makeStyles, useTheme } from "@/theme/ThemeProvider";
@@ -39,6 +41,8 @@ const TABS: { key: Tab; icon: LucideIcon }[] = [
 const EDGE = 10;
 /** How far above the screen's top the glow is drawn, so a pull never bares its edge. */
 const OVERDRAW = 320;
+/** Voice messages in the tab fetched to the phone ahead of a tap; the older ones wait for theirs. */
+const VOICE_AHEAD = 20;
 
 /**
  * A profile opened from chat: the same card as Profil, a size larger and
@@ -202,6 +206,9 @@ function PeerProfile({ userId, conversation }: { userId: string; conversation: s
   }, [conversation, userId]);
   useEffect(() => { void load(); }, [load]);
 
+  // A voice from the tab plays on the app's one player: leaving the profile stops it.
+  useFocusEffect(useCallback(() => () => { stopVoice(); }, []));
+
   async function contact(patch: { display_name?: string | null; muted?: boolean }) {
     if (!user) return;
     setBusy(true);
@@ -293,7 +300,7 @@ function PeerProfile({ userId, conversation }: { userId: string; conversation: s
         />
 
         {editing ? (
-          <Animated.View entering={FadeInDown.duration(260)} style={[styles.panel, styles.editor]}>
+          <Animated.View entering={FadeInDown.duration(65)} style={[styles.panel, styles.editor]}>
             <Text style={styles.label}>{t("profile.contactName")}</Text>
             <TextInput style={styles.input} value={name} onChangeText={setName} placeholder={t("profile.contactPlaceholder")} placeholderTextColor={colors.inkSoft} maxLength={80} autoFocus />
             <PrimaryButton label={t("profile.save")} loading={busy} onPress={() => void contact({ display_name: name.trim() || null })} />
@@ -301,7 +308,7 @@ function PeerProfile({ userId, conversation }: { userId: string; conversation: s
         ) : null}
         {/* Whether they are here — never shown between two people one of whom blocked the other. */}
         {!peer.blocked && (peer.online || peer.last_seen_at) ? (
-          <Animated.Text entering={FadeIn.delay(300).duration(300)} style={[styles.presence, peer.online && styles.presenceOn]}>
+          <Animated.Text entering={FadeIn.delay(75).duration(75)} style={[styles.presence, peer.online && styles.presenceOn]}>
             {peer.online ? t("online") : lastSeen(peer.last_seen_at!, (key, options) => String(t(key as never, options as never)))}
           </Animated.Text>
         ) : null}
@@ -309,7 +316,7 @@ function PeerProfile({ userId, conversation }: { userId: string; conversation: s
         {error ? <View style={{ paddingHorizontal: spacing.xl }}><InlineError message={error} /></View> : null}
 
         {conversation ? (
-          <Animated.View entering={FadeInDown.delay(450).duration(380)} style={styles.panel}>
+          <Animated.View entering={FadeInDown.delay(112).duration(95)} style={styles.panel}>
             {/* Four tabs, icon over word like the card's own buttons; a count
                 rides on the icon of each that has something in it. */}
             <View style={styles.tabs}>
@@ -336,17 +343,18 @@ function PeerProfile({ userId, conversation }: { userId: string; conversation: s
             </View>
             {!items ? <ActivityIndicator color={colors.primary} style={{ margin: spacing.xl }} />
               : groups[tab].length === 0 ? (
-                <Animated.View key={tab} entering={FadeIn.duration(220)} style={styles.emptyBox}>
+                <Animated.View key={tab} entering={FadeIn.duration(110)} style={styles.emptyBox}>
                   <View style={styles.emptyIcon}><ActiveIcon color={colors.primary} size={26} strokeWidth={2} /></View>
                   <Text style={styles.empty}>{t("tabEmpty")}</Text>
                 </Animated.View>
               )
-              : tab === "media" ? <MediaGrid items={groups.media} />
+              : tab === "media" ? <MediaGrid items={groups.media} conversation={conversation} peerId={userId} />
               : tab === "voice" ? (
                 <View style={styles.list}>
-                  {groups.voice.map((item) => (
+                  {/* Up to three hundred: the newest twenty are fetched ahead, the rest when tapped. */}
+                  {groups.voice.map((item, index) => (
                     <View key={item.id} style={styles.voiceRow}>
-                      <VoiceMessage message={item} mine={false} />
+                      <VoiceMessage message={item} mine={false} prefetch={index < VOICE_AHEAD} />
                       <Text style={styles.when}>{item.sender_id === user?.id ? t("you").trim().replace(/:$/, "") : display} · {chatListTime(item.created_at)}</Text>
                     </View>
                   ))}
@@ -359,7 +367,7 @@ function PeerProfile({ userId, conversation }: { userId: string; conversation: s
           </Animated.View>
         ) : null}
 
-        <Animated.View entering={FadeIn.delay(520).duration(320)}>
+        <Animated.View entering={FadeIn.delay(130).duration(80)}>
           <Pressable
             accessibilityRole="button"
             onPress={() => (peer.blocked ? void setBlocked(false) : setAskBlock(true))}
@@ -384,29 +392,53 @@ function PeerProfile({ userId, conversation }: { userId: string; conversation: s
   );
 }
 
-function MediaGrid({ items }: { items: ChatMessage[] }) {
+/** An album's picture is listed as `<message id>:<n>`: the message it belongs to. */
+const messageOf = (id: string) => id.split(":")[0] ?? id;
+/** A fresh value for each ask, so the same picture asked for twice is answered twice. */
+const askedNow = () => String(Date.now());
+
+function MediaGrid({ items, conversation, peerId }: { items: ChatMessage[]; conversation: string | null; peerId: string }) {
   const styles = useStyles();
+  const router = useRouter();
   const { width } = useWindowDimensions();
   // The panel's inner width: the screen less its edges, the panel's padding and rim.
   const size = Math.floor((Math.min(width, 560) - EDGE * 2 - PANEL_PAD * 2 - 2 - GRID_GAP * 2) / 3);
   const [open, setOpen] = useState<ChatMessage | null>(null);
+  const pictures = items.filter((item) => item.kind === "image");
+  // Back to the conversation, at the picture's message — to see it there, or to answer it.
+  const toChat = (index: number, key: "focus" | "reply") => {
+    const item = pictures[index];
+    if (!conversation || !item) return;
+    router.dismissTo({ pathname: "/(app)/chat/[id]", params: { id: conversation, peer: peerId, [key]: messageOf(item.id), at: askedNow() } });
+  };
   return (
     <>
       <View style={styles.grid}>
         {items.map((item) => <MediaTile key={item.id} item={item} size={size} onPress={() => setOpen(item)} />)}
       </View>
-      <Modal visible={open !== null} transparent animationType="fade" onRequestClose={() => setOpen(null)}>
-        <Pressable style={styles.viewer} onPress={() => setOpen(null)}>
-          {open ? <Viewer item={open} /> : null}
-        </Pressable>
-      </Modal>
+      {open?.kind === "image" ? (
+        <PictureViewer
+          pictures={pictures.map((item) => ({ path: item.media_path, local: null, width: item.media.width ?? 4, height: item.media.height ?? 3 }))}
+          start={Math.max(0, pictures.findIndex((item) => item.id === open.id))}
+          onClose={() => setOpen(null)}
+          onShowInChat={conversation ? (index) => toChat(index, "focus") : undefined}
+          onReply={conversation ? (index) => toChat(index, "reply") : undefined}
+        />
+      ) : (
+        <Modal visible={open !== null} transparent animationType="fade" onRequestClose={() => setOpen(null)}>
+          <Pressable style={styles.viewer} onPress={() => setOpen(null)}>
+            {open ? <Viewer item={open} /> : null}
+          </Pressable>
+        </Modal>
+      )}
     </>
   );
 }
 
 function MediaTile({ item, size, onPress }: { item: ChatMessage; size: number; onPress: () => void }) {
   const styles = useStyles();
-  const url = useMedia(item);
+  // A picture's tile shows the picture; a video message's shows its length only — nothing of it is fetched for that.
+  const url = usePath(item.kind === "image" ? item.media_path : null);
   return (
     <Pressable onPress={onPress} style={[styles.tile, { width: size, height: size }]}>
       {item.kind === "image" && url ? <Image source={{ uri: url }} style={{ width: size, height: size }} resizeMode="cover" /> : null}
@@ -422,11 +454,11 @@ function MediaTile({ item, size, onPress }: { item: ChatMessage; size: number; o
 
 function Viewer({ item }: { item: ChatMessage }) {
   const styles = useStyles();
-  const url = useMedia(item);
+  const url = usePath(item.kind === "image" ? item.media_path : null);
+  // A video message plays from the files on the phone (fetched at once if need be), every part it was recorded in.
+  if (item.kind === "video") return <VideoNote message={item} />;
   if (!url) return <ActivityIndicator color="#fff" />;
-  return item.kind === "video"
-    ? <VideoNote url={url} duration={item.media.duration_ms ?? 0} />
-    : <Image source={{ uri: url }} style={styles.viewerImage} resizeMode="contain" />;
+  return <Image source={{ uri: url }} style={styles.viewerImage} resizeMode="contain" />;
 }
 
 function SharedRow({ item, mine }: { item: ChatMessage; mine: boolean }) {

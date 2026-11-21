@@ -39,6 +39,8 @@ test("the sentences each platform uses for a lost connection are recognised", ()
     "Network request failed",
     "Failed to send a request to the Edge Function",
     "TypeError: Load failed",
+    "TypeError: Failed to fetch",
+    "TypeError: NetworkError when attempting to fetch resource.",
     "read ECONNRESET",
     "The request timed out",
   ]) {

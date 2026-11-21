@@ -63,7 +63,8 @@ const INSET_LARGE = 10;
 /** How far the text — name to figures — rises into the foot of the photograph. */
 const OVERLAP = 134;
 /** Entrance timing: the card first, then its lines in reading order. */
-const ENTER = 90;
+/** The step between the card's parts arriving — halved at the person's request: the card is there at once, not performed. */
+const ENTER = 45;
 
 /**
  * Who you are here, the way a messenger draws a profile.
@@ -154,7 +155,7 @@ export function ProfileHeroCard(props: Props) {
 
   return (
     <Animated.View
-      entering={FadeInDown.duration(520).springify().damping(17)}
+      entering={FadeInDown.duration(260)}
       style={{ marginHorizontal: inset }}
       onLayout={(event) => setSide(event.nativeEvent.layout.width - RIM * 2)}
     >
@@ -225,7 +226,7 @@ export function ProfileHeroCard(props: Props) {
             {/* The way back, in the photograph's own corner, when the card is
                 the whole screen; the badge then answers it from the other one. */}
             {onBack ? (
-              <Animated.View entering={FadeInLeft.delay(ENTER * 2).duration(420)} style={styles.backSlot}>
+              <Animated.View entering={FadeInLeft.delay(ENTER * 2).duration(210)} style={styles.backSlot}>
                 <BackButton label={tc("back")} onPress={onBack} />
               </Animated.View>
             ) : null}
@@ -234,7 +235,7 @@ export function ProfileHeroCard(props: Props) {
                 Sozlamalar row (see tests/profile-screen). */}
             {props.badge === false ? null : (
               <Animated.View
-                entering={(onBack ? FadeInRight : FadeInLeft).delay(ENTER * 3).duration(420)}
+                entering={(onBack ? FadeInRight : FadeInLeft).delay(ENTER * 3).duration(210)}
                 style={onBack ? styles.badgeSlotRight : styles.badgeSlot}
               >
                 <LinearGradient colors={look.metal} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.badge, big && styles.badgeLarge]}>
@@ -252,7 +253,7 @@ export function ProfileHeroCard(props: Props) {
           <View style={[styles.body, big && styles.bodyLarge, { marginTop: -OVERLAP }]}>
             {/* The seal rides at the end of the name's last line, so a name
                 that wraps does not leave it stranded at the card's edge. */}
-            <Animated.View entering={FadeInDown.delay(ENTER * 2).duration(420)}>
+            <Animated.View entering={FadeInDown.delay(ENTER * 2).duration(210)}>
               <Text style={[styles.name, big && styles.nameLarge]} numberOfLines={2}>
                 {name}
                 {tier !== "free" ? (
@@ -265,21 +266,21 @@ export function ProfileHeroCard(props: Props) {
                 ) : null}
               </Text>
             </Animated.View>
-            <Animated.View entering={FadeInDown.delay(ENTER * 3).duration(420)}>
+            <Animated.View entering={FadeInDown.delay(ENTER * 3).duration(210)}>
               <Text style={[styles.handle, big && styles.handleLarge]} numberOfLines={1}>{handle}</Text>
             </Animated.View>
             {bio ? (
-              <Animated.View entering={FadeInDown.delay(ENTER * 4).duration(420)}>
+              <Animated.View entering={FadeInDown.delay(ENTER * 4).duration(210)}>
                 <Text style={[styles.bio, big && styles.bioLarge]} numberOfLines={3}>{bio}</Text>
               </Animated.View>
             ) : null}
             {study ? (
-              <Animated.View entering={FadeIn.delay(ENTER * 4).duration(420)}>
+              <Animated.View entering={FadeIn.delay(ENTER * 4).duration(210)}>
                 <Text style={[styles.study, big && styles.studyLarge]} numberOfLines={1}>{study}</Text>
               </Animated.View>
             ) : null}
 
-            <Animated.View entering={FadeInDown.delay(ENTER * 5).duration(460).springify().damping(18)} style={[styles.stats, big && styles.statsLarge]}>
+            <Animated.View entering={FadeInDown.delay(ENTER * 5).duration(230)} style={[styles.stats, big && styles.statsLarge]}>
               {stats.map((stat, index) => (
                 <View key={stat.key} style={[styles.stat, index > 0 && styles.statRule]}>
                   <View style={styles.statValueRow}>
@@ -296,7 +297,7 @@ export function ProfileHeroCard(props: Props) {
                 and give under a finger like a spring. */}
             <View style={[styles.actions, big && styles.actionsLarge]}>
               {actions.map(({ key, label, glyph: Glyph, onPress }, index) => (
-                <ActionTile key={key} label={label} glyph={Glyph} onPress={onPress} delay={ENTER * 6 + index * 55} big={big} />
+                <ActionTile key={key} label={label} glyph={Glyph} onPress={onPress} delay={ENTER * 6 + index * 28} big={big} />
               ))}
             </View>
           </View>
@@ -323,7 +324,7 @@ function ActionTile({ label, glyph: Glyph, onPress, delay, big }: { label: strin
   const styles = useStyles();
   const press = usePressScale();
   return (
-    <Animated.View entering={ZoomIn.delay(delay).springify().damping(14)} style={styles.actionSlot}>
+    <Animated.View entering={ZoomIn.delay(delay).duration(200)} style={styles.actionSlot}>
       <Animated.View style={[styles.action, big && styles.actionLarge, press.style]}>
         <Pressable
           accessibilityRole="button"

@@ -73,7 +73,7 @@ export default function NewChatScreen() {
         keyExtractor={(person) => person.id}
         keyboardShouldPersistTaps="handled"
         ListEmptyComponent={
-          <Animated.View entering={FadeIn.duration(260)} style={styles.emptyBox}>
+          <Animated.View entering={FadeIn.duration(130)} style={styles.emptyBox}>
             <View style={styles.emptyIcon}><UserSearch color={colors.primary} size={28} strokeWidth={2} /></View>
             <Text style={styles.hint}>{query.trim().replace(/^@/, "").length < 2 ? t("findHint") : searching ? "" : t("noResults")}</Text>
           </Animated.View>
@@ -81,7 +81,7 @@ export default function NewChatScreen() {
         renderItem={({ item, index }) => {
           const name = item.full_name?.trim() || `@${item.username}`;
           return (
-            <Animated.View entering={FadeInDown.delay(Math.min(index, 8) * 40).duration(300)}>
+            <Animated.View entering={FadeInDown.delay(Math.min(index, 8) * 20).duration(150)}>
               <Pressable disabled={opening !== null} onPress={() => void open(item)} style={({ pressed }) => [styles.row, pressed && { backgroundColor: colors.surfaceMuted }]}>
                 <Avatar uri={item.avatar_url} initials={initialsOf(name)} size={50} />
                 <View style={{ flex: 1 }}>

@@ -25,6 +25,10 @@ const TRANSPORT = [
   "failed to send a request",
   "the internet connection appears to be offline",
   "fetch failed",
+  // Chromium and Edge ("TypeError: Failed to fetch"), Firefox ("TypeError: NetworkError when attempting to fetch
+  // resource."): a host running the match in a browser lost its connection, it was not refused.
+  "failed to fetch",
+  "networkerror when attempting to fetch",
   "load failed",
   "timeout",
   "timed out",

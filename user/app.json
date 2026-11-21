@@ -45,6 +45,7 @@
     },
     "android": {
       "package": "uz.jaxongirman.app",
+      "allowBackup": false,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#F8F9FB"
@@ -132,7 +133,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Prezentatsiyadagi rasmlarni almashtirish uchun galereyaga kirish kerak."
+          "photosPermission": "Galereyadan rasm tanlash uchun: taqdimotdagi rasmlarni almashtirish va chatda rasm yuborish."
         }
       ],
       [
@@ -153,6 +154,14 @@
           "microphonePermission": "Chatda ovozli xabar yozish uchun mikrofonga kirish kerak.",
           "recordAudioAndroid": true,
           "enableBackgroundPlayback": false
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Galereyadan rasm tanlash uchun: taqdimotdagi rasmlarni almashtirish va chatda rasm yuborish.",
+          "savePhotosPermission": "Chatdagi rasmlarni galereyangizga saqlash uchun ruxsat kerak.",
+          "isAccessMediaLocationEnabled": false
         }
       ]
     ],

@@ -4,6 +4,8 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<key>CFBundleAllowMixedLocalizations</key>
+	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
@@ -19,17 +21,11 @@
 	<key>CFBundlePackageType</key>
 	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.1.0</string>
+	<string>2.0.0</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
 	<key>CFBundleURLTypes</key>
 	<array>
-		<dict>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>com.googleusercontent.apps.909226398103-dbmc51rvftk519467is0e0u5hhfejcut</string>
-			</array>
-		</dict>
 		<dict>
 			<key>CFBundleURLSchemes</key>
 			<array>
@@ -41,6 +37,12 @@
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>exp+jaxongirman</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.909226398103-dbmc51rvftk519467is0e0u5hhfejcut</string>
 			</array>
 		</dict>
 	</array>
@@ -62,17 +64,19 @@
 		<string>_expo._tcp</string>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>Proyektordagi QR kodni skanerlash uchun kameraga kirish kerak.</string>
+	<string>Proyektordagi QR kodni skanerlash, test varag‘ini tekshirish, chatda video xabar yozish va suratga olish uchun kameraga kirish kerak.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Jaxongirman development serverga ulanish uchun mahalliy tarmoqqa kirishga muhtoj.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Allow $(PRODUCT_NAME) to access your microphone</string>
+	<string>Chatda ovozli va video xabar yozish uchun mikrofonga kirish kerak.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Prezentatsiyadagi rasmlarni almashtirish uchun galereyaga kirish kerak.</string>
+	<string>Galereyadan rasm tanlash uchun: taqdimotdagi rasmlarni almashtirish va chatda rasm yuborish.</string>
 	<key>NSUserActivityTypes</key>
 	<array>
 		<string>$(PRODUCT_BUNDLE_IDENTIFIER).expo.index_route</string>
 	</array>
+	<key>RCTMetroPort</key>
+	<string>$(RCT_METRO_PORT)</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
@@ -101,5 +105,7 @@
 	<string>Light</string>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Chatdagi rasmlarni galereyangizga saqlash uchun ruxsat kerak.</string>
 </dict>
 </plist>

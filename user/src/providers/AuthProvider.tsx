@@ -5,6 +5,7 @@ import { Alert, AppState } from "react-native";
 
 import { i18n } from "@/i18n";
 import { completeAuthRedirect } from "@/lib/authLinking";
+import { dropAllMedia } from "@/lib/chatMedia";
 import { registerDevice } from "@/lib/devices";
 import { asErrorMessage } from "@/lib/format";
 import { unregisterPush } from "@/lib/push";
@@ -28,7 +29,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
       setSession(data.session);
       setLoading(false);
     });
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      // However the session ended — signing out here, taken out from another device, the account deleted, a
+      // refresh refused — the chat's voice and video notes kept on this phone go with it: whoever signs in
+      // next finds none of them.
+      if (event === "SIGNED_OUT") dropAllMedia();
       setSession(nextSession);
       setLoading(false);
     });
