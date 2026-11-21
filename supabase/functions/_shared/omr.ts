@@ -1,7 +1,11 @@
 /**
  * Reading a filled-in answer sheet from a photograph.
  *
- * Dependency-free, so it runs the same in the edge function and in the tests.
+ * Dependency-free, so it runs the same in the edge function, in the tests and
+ * on the phone, which reads camera frames with it live: the app keeps a copy
+ * in `user/src/lib/omr/` (only the `.ts` on the import below differs, which
+ * Deno needs and the app's TypeScript refuses), and
+ * `user/tests/omr-live.test.mjs` fails when the two drift apart.
  * The photograph arrives as luminance; the sheet's own layout says where
  * everything is (`test-sheet.ts`). The steps:
  *

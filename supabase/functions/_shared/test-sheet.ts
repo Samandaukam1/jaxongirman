@@ -5,7 +5,9 @@
  * on the separate answer page, so the scanner never has to guess which one it
  * is looking at. Everything is in PDF points, from the panel's top-left
  * corner, y going down. The PDF draws from this and the scanner reads with it;
- * neither keeps a number of its own.
+ * neither keeps a number of its own. The app reads sheets live with a
+ * byte-for-byte copy in `user/src/lib/omr/` (`user/tests/omr-live.test.mjs`
+ * holds the two together).
  *
  * What the scanner relies on:
  * - four solid squares in the corners, which give the perspective;

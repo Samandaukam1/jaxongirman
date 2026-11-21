@@ -4,11 +4,13 @@ import * as ImageManipulator from "expo-image-manipulator";
 import * as Sharing from "expo-sharing";
 import { Platform } from "react-native";
 
+import { forgetPicture } from "@/lib/omr/frame";
 import { supabase } from "@/lib/supabase";
 
 /**
  * Printed tests: made by AI or by hand, printed with an answer sheet, checked
- * by photographing the filled sheet (`test-scan`) or by typing the answers in.
+ * by holding the camera over the filled sheet (read on the phone, `lib/omr`),
+ * by a photo read on the server (`test-scan`) or by typing the answers in.
  * A result is graded by the database (`test_save_result`), never here.
  */
 
@@ -141,22 +143,42 @@ export type ScanReading = {
 export type ScanOutcome = ScanReading | { ok: false; code: string; error: string };
 
 /**
- * Sends one photo of a filled sheet to be read. The photo is made 1600 px on
- * its long side and sent as a JPEG; the reading comes back in the pixels of
- * that smaller image, which is what `uri` here shows, so the overlay lines up.
+ * Sends one photo of a filled sheet to be read on the server — the gallery,
+ * the web, and the camera when reading on the phone keeps failing. The photo
+ * is made 1600 px on its long side and sent as a JPEG; the reading comes back
+ * in the pixels of that smaller image, which is what `uri` here shows, so the
+ * overlay lines up.
+ *
+ * A sheet carries a child's name, so no copy is left behind: the photo itself
+ * goes as soon as it is made smaller (when it is the app's own — a gallery
+ * original is never touched), and the smaller one goes too unless a reading
+ * came back to show over it; the screen forgets that one when the teacher is
+ * done with it (`forgetPicture`).
  */
 export async function scanSheet(testId: string, photoUri: string, size: { width: number; height: number }): Promise<{ outcome: ScanOutcome; uri: string }> {
   const long = Math.max(size.width, size.height);
   const resize = long > 1600
     ? [size.width >= size.height ? { resize: { width: 1600 } } : { resize: { height: 1600 } }]
     : [];
-  const small = await ImageManipulator.manipulateAsync(photoUri, resize, {
-    compress: 0.82, format: ImageManipulator.SaveFormat.JPEG, base64: true,
-  });
-  if (!small.base64) throw new Error("photo");
-  const { data, error } = await supabase.functions.invoke("test-scan", { body: { testId, image: small.base64 } });
-  if (error) await functionError(error);
-  return { outcome: data as ScanOutcome, uri: small.uri };
+  let small: ImageManipulator.ImageResult;
+  try {
+    small = await ImageManipulator.manipulateAsync(photoUri, resize, {
+      compress: 0.82, format: ImageManipulator.SaveFormat.JPEG, base64: true,
+    });
+  } finally {
+    await forgetPicture(photoUri);
+  }
+  let shown = false;
+  try {
+    if (!small.base64) throw new Error("photo");
+    const { data, error } = await supabase.functions.invoke("test-scan", { body: { testId, image: small.base64 } });
+    if (error) await functionError(error);
+    const outcome = data as ScanOutcome;
+    shown = outcome.ok;
+    return { outcome, uri: small.uri };
+  } finally {
+    if (!shown) await forgetPicture(small.uri);
+  }
 }
 
 export async function saveResult(testId: string, studentName: string, answers: (number | null)[], source: "scan" | "manual"): Promise<TestResult> {
