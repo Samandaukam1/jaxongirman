@@ -1,4 +1,4 @@
-import { AlertTriangle, Gift, History, Pencil, Plus, Send } from "lucide-react";
+import { AlertTriangle, Coins, Gift, History, Pencil, Plus, Send } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { ErrorState, Modal, PageHeader } from "@/components/AdminUI";
@@ -6,12 +6,16 @@ import {
   SERVICE_LABELS,
   backfillWelcome,
   deckCoins,
+  formatCoins,
   formatUzs,
   grantPresentationPages,
+  loadCoinEconomy,
   loadEconomy,
   publishEconomy,
+  saveCoinFees,
   savePackage,
   savePlanEconomy,
+  type CoinEconomy,
   type EconomyOverview,
   type EconomyPackage,
   type EconomyPlan,
@@ -21,7 +25,7 @@ import {
   type ServicePrice,
   type WelcomeSettings,
 } from "@/lib/economy";
-import { errorMessage } from "@/lib/format";
+import { errorMessage, stamp } from "@/lib/format";
 
 /**
  * J Tanga iqtisodiyoti.
@@ -97,6 +101,7 @@ export function EconomyPage() {
       ) : null}
 
       <PricesPanel data={data} onDone={done} />
+      <CoinFeesPanel onDone={done} />
       <PlansPanel data={data} onEdit={setEditingPlan} />
       <PackagesPanel data={data} onEdit={setEditingPackage} />
       <WelcomePanel data={data} onDone={done} />
@@ -213,6 +218,141 @@ function PricesPanel({ data, onDone }: { data: EconomyOverview; onDone: (message
           <Send size={16} /> {busy ? "E’lon qilinmoqda…" : "Yangi versiyani e’lon qilish"}
         </button>
       </div>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------ coin fees */
+
+type CoinFeeDraft = { storeEnabled: boolean; storePercent: string; storeMin: string; transferPercent: string; transferMin: string };
+
+/**
+ * The two J Tanga fees, and what selling and sending in J Tanga has brought in.
+ *
+ * Loaded on its own call so the prices above never wait on it, and saved only
+ * through the audited super-admin RPC — never as a raw settings write, which
+ * would skip the range checks. Both fees come out of what the receiving side
+ * gets: the buyer pays the coin price and the seller receives it less the store
+ * fee; the sender sends the amount and the recipient receives it less the
+ * transfer fee. 0 percent turns a fee off.
+ */
+function CoinFeesPanel({ onDone }: { onDone: (message: string) => Promise<void> }) {
+  const [data, setData] = useState<CoinEconomy | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [draft, setDraft] = useState<CoinFeeDraft | null>(null);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const next = await loadCoinEconomy();
+      setData(next);
+      setDraft({
+        storeEnabled: next.store.enabled,
+        storePercent: String(next.store.fee_percent),
+        storeMin: String(next.store.fee_min),
+        transferPercent: String(next.transfer.fee_percent),
+        transferMin: String(next.transfer.fee_min),
+      });
+      setLoadError(null);
+    } catch (failure) {
+      setLoadError(errorMessage(failure));
+    }
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const set = <K extends keyof CoinFeeDraft>(key: K, value: CoinFeeDraft[K]) =>
+    setDraft((current) => (current ? { ...current, [key]: value } : current));
+
+  async function save() {
+    if (!draft) return;
+    if (!reason.trim()) { setError("O‘zgarish sababini yozing."); return; }
+    setBusy(true);
+    setError(null);
+    try {
+      await saveCoinFees({
+        storeEnabled: draft.storeEnabled,
+        storePercent: Number(draft.storePercent),
+        storeMin: Math.round(Number(draft.storeMin)),
+        transferPercent: Number(draft.transferPercent),
+        transferMin: Math.round(Number(draft.transferMin)),
+      }, reason.trim());
+      setReason("");
+      await load();
+      await onDone("J Tanga komissiyalari saqlandi.");
+    } catch (failure) {
+      setError(errorMessage(failure) === "forbidden" ? "Komissiyani faqat super admin o‘zgartira oladi." : errorMessage(failure));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const month = data?.periods.month;
+  const all = data?.periods.all_time;
+
+  return (
+    <section className="panel economy-section">
+      <h2><Coins size={18} /> J Tanga: do‘kon va o‘tkazma komissiyalari</h2>
+      <p className="muted">
+        Komissiya qabul qiluvchi tomondan olinadi: xaridor J Tanga narxini to‘laydi, sotuvchiga narx minus do‘kon komissiyasi tushadi;
+        yuboruvchi kiritgan miqdorni yuboradi, qabul qiluvchiga miqdor minus o‘tkazma komissiyasi tushadi. Komissiya butun J ga
+        yaxlitlanadi (0,5 yuqoriga), eng kam miqdor faqat foiz qo‘yilganda qo‘llanadi. Foiz 0 bo‘lsa — komissiya olinmaydi.
+      </p>
+      {loadError ? <p className="form-error">{loadError}</p> : null}
+
+      {data && month && all ? (
+        <div className="metric-grid four">
+          <Metric label="J Tanga sotuvlari (oy)" value={`${month.sales_count} ta · ${formatCoins(month.sales_coins)}`} />
+          <Metric label="Do‘kon komissiyasi (oy / jami)" value={`${formatCoins(month.store_fees)} / ${formatCoins(all.store_fees)}`} />
+          <Metric label="O‘tkazma komissiyasi (oy / jami)" value={`${formatCoins(month.transfer_fees)} / ${formatCoins(all.transfer_fees)}`} />
+          <Metric label="J Tangaga ham sotilayotgan e’lonlar" value={`${data.listed} ta`} />
+        </div>
+      ) : null}
+
+      {draft ? (
+        <>
+          <div className="form-grid">
+            <label className="checkbox"><input type="checkbox" checked={draft.storeEnabled} onChange={(e) => set("storeEnabled", e.target.checked)} /> Do‘konda J Tangaga sotish yoqilgan</label>
+            <label>Do‘kon komissiyasi (%)<input type="number" min={0} max={100} step="0.01" value={draft.storePercent} onChange={(e) => set("storePercent", e.target.value)} /></label>
+            <label>Do‘kon: eng kam komissiya (J)<input type="number" min={0} step="1" value={draft.storeMin} onChange={(e) => set("storeMin", e.target.value)} /></label>
+            <label>O‘tkazma komissiyasi (%)<input type="number" min={0} max={100} step="0.01" value={draft.transferPercent} onChange={(e) => set("transferPercent", e.target.value)} /></label>
+            <label>O‘tkazma: eng kam komissiya (J)<input type="number" min={0} step="1" value={draft.transferMin} onChange={(e) => set("transferMin", e.target.value)} /></label>
+            <label className="wide">O‘zgarish sababi (audit jurnaliga yoziladi)<input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Masalan: o‘tkazma komissiyasi 2% qilindi" /></label>
+          </div>
+          {error ? <p className="form-error">{error}</p> : null}
+          <div className="header-actions">
+            <button className="primary-button" type="button" disabled={busy} onClick={() => void save()}>
+              <Send size={16} /> {busy ? "Saqlanmoqda…" : "Komissiyalarni saqlash"}
+            </button>
+          </div>
+        </>
+      ) : null}
+
+      <h3>So‘nggi J Tanga sotuvlari</h3>
+      {data && data.recent_sales.length > 0 ? (
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Vaqt</th><th>Mahsulot</th><th>Xaridor</th><th>Sotuvchi</th><th>Narx</th><th>Komissiya</th><th>Sotuvchiga</th></tr></thead>
+            <tbody>
+              {data.recent_sales.map((sale) => (
+                <tr key={sale.id}>
+                  <td>{stamp(sale.purchased_at)}</td>
+                  <td>{sale.title}</td>
+                  <td>{sale.buyer}</td>
+                  <td>{sale.seller}</td>
+                  <td>{formatCoins(sale.price)}</td>
+                  <td>{formatCoins(sale.fee)} ({Number(sale.fee_percent)}%)</td>
+                  <td>{formatCoins(sale.seller_net)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="muted">{data ? "Hali J Tangaga sotuv bo‘lmagan." : ""}</p>
+      )}
     </section>
   );
 }

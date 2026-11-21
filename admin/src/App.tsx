@@ -28,6 +28,7 @@ import { PricingPage } from "@/pages/PricingPage";
 import { PromosPage } from "@/pages/PromosPage";
 import { PresentationAdsPage } from "@/pages/PresentationAdsPage";
 import { BroadcastPage } from "@/pages/BroadcastPage";
+import { ChatReportsPage } from "@/pages/ChatReportsPage";
 import { EconomyPage } from "@/pages/EconomyPage";
 import { SupportPage } from "@/pages/SupportPage";
 import { QrVideoPage } from "@/pages/QrVideoPage";
@@ -44,6 +45,7 @@ const pages: Record<string, ReactNode> = {
   "/tavsiyalar": <PromosPage />,
   "/taqdimot-reklama": <PresentationAdsPage />,
   "/xabar-yuborish": <BroadcastPage />,
+  "/chat-shikoyatlari": <ChatReportsPage />,
   "/users": <UsersPage />,
   "/presentations": <PresentationsPage />,
   "/jslayd": <JslaydDesignsPage />,

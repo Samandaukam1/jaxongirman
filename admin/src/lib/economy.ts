@@ -133,6 +133,51 @@ export const grantPresentationPages = (userId: string, pages: number, note: stri
 
 export const backfillWelcome = (limit: number) => call<{ checked: number; granted: number }>("admin_welcome_backfill", { p_limit: limit });
 
+/* ------------------------------------------------------- J Tanga fees */
+
+export type CoinPeriod = {
+  sales_count: number;
+  sales_coins: number;
+  store_fees: number;
+  transfer_fees: number;
+  transfers_with_fee: number;
+};
+
+/**
+ * The coin side of the economy, from `admin_coin_economy`: the store fee on
+ * listings sold for J Tanga, the transfer fee on person-to-person sends, what
+ * each has brought in, and the latest coin sales. Both fees come out of what
+ * the receiving side gets (the seller, the recipient); 0 percent turns a fee off.
+ */
+export type CoinEconomy = {
+  store: { enabled: boolean; min_price: number; max_price: number; fee_percent: number; fee_min: number };
+  transfer: { fee_percent: number; fee_min: number; min_amount: number | null; max_amount: number | null };
+  periods: Record<"today" | "week" | "month" | "all_time", CoinPeriod>;
+  /** Live listings that also sell for J Tanga. */
+  listed: number;
+  recent_sales: {
+    id: string; purchased_at: string; product_id: string; title: string; buyer: string; seller: string;
+    price: number; fee: number; seller_net: number; fee_percent: number;
+  }[];
+};
+
+export const loadCoinEconomy = () => call<CoinEconomy>("admin_coin_economy");
+
+/** Super admins only: what every seller and every sender keeps. Audited with the reason. */
+export const saveCoinFees = (fees: {
+  storeEnabled: boolean; storePercent: number; storeMin: number; transferPercent: number; transferMin: number;
+}, reason: string) =>
+  call<unknown>("admin_set_coin_fees", {
+    p_store_enabled: fees.storeEnabled,
+    p_store_fee_percent: fees.storePercent,
+    p_store_fee_min: fees.storeMin,
+    p_transfer_fee_percent: fees.transferPercent,
+    p_transfer_fee_min: fees.transferMin,
+    p_reason: reason,
+  });
+
+export const formatCoins = (value: number) => `${Math.round(value).toLocaleString("uz-UZ")} J`;
+
 /** J Tanga a deck of `pages` costs on a plan, rounded the version's way. */
 export function deckCoins(pages: number, perPage: number, multiplier: number, rounding: Rounding): number {
   const exact = pages * perPage * multiplier;

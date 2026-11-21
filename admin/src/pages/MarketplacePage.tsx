@@ -3,6 +3,7 @@ import { Check, Eye, EyeOff, Flag, History, Search, X } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 
 import { EmptyState, ErrorState, Modal, PageHeader, StatusBadge, TableSkeleton } from "@/components/AdminUI";
+import { formatCoins } from "@/lib/economy";
 import { errorMessage, priceIn, stamp } from "@/lib/format";
 import { supabase } from "@/lib/supabase";
 
@@ -62,6 +63,12 @@ const EMPTY_POLICY: RefundPolicy = { enabled: true, title: "", body: "", checkbo
 export function MarketplacePage() {
   const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("pending_review");
   const [products, setProducts] = useState<ProductRow[]>([]);
+  /**
+   * Each listing's J Tanga price, by id. A coin price is a price the moderator
+   * approves like the so‘m one, so the queue shows it; read beside the list
+   * rather than widening the list function's fixed return type.
+   */
+  const [coinPrices, setCoinPrices] = useState<Record<string, number>>({});
   const [reports, setReports] = useState<ReportRow[]>([]);
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState("");
@@ -96,6 +103,11 @@ export function MarketplacePage() {
     if (requestError) setError(errorMessage(requestError));
     else {
       setProducts(productResult.data ?? []); setReports(reportResult.data ?? []);
+      const ids = (productResult.data ?? []).map((product) => product.id);
+      const coinResult = ids.length > 0
+        ? await supabase.from("marketplace_products").select("id,coin_price").in("id", ids).not("coin_price", "is", null)
+        : null;
+      setCoinPrices(Object.fromEntries((coinResult?.data ?? []).map((row) => [row.id, row.coin_price ?? 0])));
       setPolicy({ ...EMPTY_POLICY, ...((policyResult.data?.value ?? {}) as Partial<RefundPolicy>) });
     }
     setLoading(false);
@@ -288,7 +300,10 @@ export function MarketplacePage() {
                     </small>
                   </td>
                   <td>{product.seller_name || "—"}<small>{product.seller_email}</small></td>
-                  <td>{priceIn(product.base_price, product.currency)}</td>
+                  <td>
+                    {priceIn(product.base_price, product.currency)}
+                    {coinPrices[product.id] ? <small>yoki {formatCoins(coinPrices[product.id] ?? 0)}</small> : null}
+                  </td>
                   <td>
                     <StatusBadge value={product.status} />
                     {product.rejection_reason && <small className="cell-error">{product.rejection_reason}</small>}
